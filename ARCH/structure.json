@@ -1,0 +1,31 @@
+{
+  "modules": {
+    "database": {
+      "path": "SRC/database",
+      "files": ["__init__.py", "models.py", "connection.py"]
+    },
+    "auth": {
+      "path": "SRC/auth", 
+      "files": ["__init__.py", "service.py", "models.py", "utils.py"]
+    },
+    "tasks": {
+      "path": "SRC/tasks",
+      "files": ["__init__.py", "service.py", "models.py", "schemas.py"]
+    },
+    "api": {
+      "path": "SRC/api",
+      "files": ["__init__.py", "main.py", "auth_routes.py", "task_routes.py", "middleware.py"]
+    },
+    "shared": {
+      "path": "SRC/shared",
+      "files": ["__init__.py", "exceptions.py", "config.py", "utils.py"]
+    }
+  },
+  "root_files": [
+    "main.py",
+    "requirements.txt", 
+    "README.md",
+    ".gitignore",
+    "pytest.ini"
+  ]
+}

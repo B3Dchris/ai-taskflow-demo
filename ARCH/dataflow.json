@@ -1,0 +1,77 @@
+{
+  "nodes": ["api", "auth", "tasks", "database"],
+  "edges": [
+    {
+      "from": "api",
+      "to": "auth", 
+      "data_id": "login_request",
+      "type": "LoginRequest",
+      "contract": {
+        "invariants": ["email is valid format", "password is not empty"]
+      }
+    },
+    {
+      "from": "auth",
+      "to": "api",
+      "data_id": "jwt_token", 
+      "type": "JWTToken",
+      "contract": {
+        "invariants": ["token is signed", "token not expired", "contains user_id"]
+      }
+    },
+    {
+      "from": "api",
+      "to": "tasks",
+      "data_id": "task_request",
+      "type": "TaskRequest", 
+      "contract": {
+        "invariants": ["user_id is valid", "task_data is validated"]
+      }
+    },
+    {
+      "from": "tasks",
+      "to": "api",
+      "data_id": "task_response",
+      "type": "TaskResponse",
+      "contract": {
+        "invariants": ["task belongs to user", "task_id exists if update/delete"]
+      }
+    },
+    {
+      "from": "auth",
+      "to": "database",
+      "data_id": "user_data",
+      "type": "UserData",
+      "contract": {
+        "invariants": ["email is unique", "password is hashed"]
+      }
+    },
+    {
+      "from": "tasks", 
+      "to": "database",
+      "data_id": "task_data",
+      "type": "TaskData",
+      "contract": {
+        "invariants": ["user_id exists", "title is not empty", "status is valid enum"]
+      }
+    },
+    {
+      "from": "database",
+      "to": "auth",
+      "data_id": "user_model",
+      "type": "User",
+      "contract": {
+        "invariants": ["user exists or None", "password_hash never exposed"]
+      }
+    },
+    {
+      "from": "database",
+      "to": "tasks", 
+      "data_id": "task_model",
+      "type": "Task",
+      "contract": {
+        "invariants": ["task belongs to requesting user", "all fields populated"]
+      }
+    }
+  ]
+}

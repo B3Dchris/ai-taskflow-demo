@@ -1,0 +1,22 @@
+name: taskflow-api
+domain: task-management
+version: 0.1.0
+stakeholders:
+  - name: AI Development Team
+    role: Product Owner
+  - name: Cascade AI Agent
+    role: Tech Lead
+non_functionals:
+  availability: 99.5%
+  latency_p95_ms: 200
+  compliance: [input-validation, jwt-security]
+  observability: [logs, metrics]
+constraints:
+  languages: [python]
+  min_runtime: python3.11
+  datastore: sqlite
+  third_party: [fastapi, sqlalchemy, pyjwt, bcrypt, pytest]
+acceptance_policy:
+  coverage_min: {lines: 85, branches: 70}
+  security_blockers: [critical, high]
+  performance_budgets: {cpu_ms: 200, mem_mb: 128}

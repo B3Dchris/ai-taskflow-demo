@@ -1,0 +1,77 @@
+coverage:
+  lines_min: 85
+  branches_min: 70
+  exclude_patterns:
+    - "*/tests/*"
+    - "*/migrations/*"
+    - "*/conftest.py"
+
+security:
+  block_levels: [critical, high]
+  tools:
+    - bandit
+    - safety
+  exclude_patterns:
+    - "*/tests/*"
+
+style:
+  format: true
+  formatter: black
+  lint: true
+  linter: flake8
+  types: true
+  type_checker: mypy
+  max_line_length: 88
+  
+performance:
+  budgets:
+    - name: auth_endpoints
+      cpu_ms: 100
+      mem_mb: 32
+      description: "Authentication operations"
+    - name: task_crud
+      cpu_ms: 150
+      mem_mb: 64
+      description: "Task CRUD operations"
+    - name: task_search
+      cpu_ms: 200
+      mem_mb: 96
+      description: "Task search and filtering"
+
+docs:
+  build_api: true
+  api_coverage_min: 100
+  docstring_coverage_min: 90
+  
+testing:
+  unit_tests_required: true
+  integration_tests_required: true
+  min_assertions_per_test: 1
+  test_naming_convention: "test_*"
+  
+dependencies:
+  security_scan: true
+  license_check: true
+  allowed_licenses:
+    - MIT
+    - Apache-2.0
+    - BSD-3-Clause
+    - ISC
+  
+git:
+  conventional_commits: true
+  commit_message_max_length: 72
+  branch_naming: "feature/*|bugfix/*|hotfix/*"
+  
+ci_pipeline:
+  fail_fast: false
+  parallel_jobs: 4
+  timeout_minutes: 30
+  
+notifications:
+  on_failure:
+    - type: log
+      level: error
+  on_success:
+    - type: log  
+      level: info

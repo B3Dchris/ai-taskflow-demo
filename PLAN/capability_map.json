@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TaskFlow API Capability Map",
+  "root": [
+    {
+      "name": "User Authentication",
+      "id": "auth",
+      "priority": "P0",
+      "risk": "medium",
+      "children": [
+        {
+          "name": "User Registration",
+          "id": "auth.register",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "User Login",
+          "id": "auth.login", 
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "JWT Token Validation",
+          "id": "auth.validate",
+          "priority": "P0",
+          "risk": "medium"
+        }
+      ]
+    },
+    {
+      "name": "Task Management",
+      "id": "tasks",
+      "priority": "P0", 
+      "risk": "low",
+      "children": [
+        {
+          "name": "Create Task",
+          "id": "tasks.create",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "List Tasks",
+          "id": "tasks.list",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Get Task by ID",
+          "id": "tasks.get",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Update Task",
+          "id": "tasks.update",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Delete Task",
+          "id": "tasks.delete",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Filter Tasks",
+          "id": "tasks.filter",
+          "priority": "P1",
+          "risk": "low"
+        },
+        {
+          "name": "Search Tasks",
+          "id": "tasks.search",
+          "priority": "P1",
+          "risk": "low"
+        }
+      ]
+    },
+    {
+      "name": "Data Persistence",
+      "id": "database",
+      "priority": "P0",
+      "risk": "low",
+      "children": [
+        {
+          "name": "Database Models",
+          "id": "database.models",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Database Connection",
+          "id": "database.connection",
+          "priority": "P0",
+          "risk": "low"
+        },
+        {
+          "name": "Migration System",
+          "id": "database.migrations",
+          "priority": "P1",
+          "risk": "low"
+        }
+      ]
+    }
+  ]
+}
