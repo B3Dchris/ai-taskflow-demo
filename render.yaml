@@ -16,3 +16,5 @@ services:
         value: sqlite:///./taskflow.db
       - key: NODE_VERSION
         value: "18"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
