@@ -4,13 +4,8 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: |
-      pip install -r requirements.txt &&
-      cd frontend &&
-      npm ci &&
-      npm run build &&
-      cd ..
-    startCommand: "uvicorn SRC.api.main:app --host 0.0.0.0 --port $PORT"
+    buildCommand: ./build.sh
+    startCommand: uvicorn SRC.api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: JWT_SECRET_KEY
@@ -19,3 +14,5 @@ services:
         value: production
       - key: DATABASE_URL
         value: sqlite:///./taskflow.db
+      - key: NODE_VERSION
+        value: "18"
