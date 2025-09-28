@@ -1,14 +1,19 @@
 """FastAPI main application for TaskFlow API."""
 
+import os
+from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from ..config.settings import settings
 from ..database.connection import get_db, init_db
 from ..auth.service import validate_token
 from ..shared.exceptions import (
-    UserExistsError, AuthenticationError, TokenExpiredError, 
+    UserExistsError, AuthenticationError, TokenExpiredError,
     InvalidTokenError, TaskNotFoundError, UnauthorizedError, ValidationError
 )
 from .auth_routes import router as auth_router
@@ -25,7 +30,11 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:3000",  # Development
+        "https://*.onrender.com",  # Render domains
+        "*" if settings.is_development else "https://*.onrender.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,6 +49,26 @@ app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 # Import and configure task router after get_current_user is defined
 from .task_routes import router as task_router
 app.include_router(task_router, prefix="/tasks", tags=["Tasks"])
+
+# Serve static files in production
+static_files_path = Path(__file__).parent.parent.parent / "frontend" / "build"
+if static_files_path.exists() and settings.is_production:
+    app.mount("/static", StaticFiles(directory=static_files_path / "static"), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        """Serve React app for all non-API routes in production."""
+        # Serve API routes normally
+        if full_path.startswith(("auth", "tasks", "health", "docs", "redoc", "openapi.json")):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        # Serve static files
+        file_path = static_files_path / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+
+        # Default to index.html for React Router
+        return FileResponse(static_files_path / "index.html")
 
 
 @app.on_event("startup")
