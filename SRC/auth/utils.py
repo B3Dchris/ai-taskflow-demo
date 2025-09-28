@@ -1,7 +1,7 @@
 """Authentication utilities for password hashing and JWT tokens."""
 
 import bcrypt
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import os
