@@ -6,7 +6,6 @@ import {
   Button,
   TextField,
   InputAdornment,
-  Grid,
   Card,
   CardContent,
   Fab,
@@ -18,6 +17,7 @@ import {
   MenuItem,
   Skeleton,
 } from '@mui/material';
+import Grid from '@mui/material/Grid2';
 import {
   Add as AddIcon,
   Search as SearchIcon,
@@ -157,7 +157,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Stats Cards */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={3}>
+          <Grid xs={12} sm={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="text.secondary">
@@ -167,7 +167,7 @@ export const Dashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid xs={12} sm={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="warning.main">
@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid xs={12} sm={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="info.main">
@@ -187,7 +187,7 @@ export const Dashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid xs={12} sm={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="success.main">
@@ -198,12 +198,11 @@ export const Dashboard: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
-
         {/* Filters */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={4}>
+              <Grid xs={12} md={4}>
                 <TextField
                   fullWidth
                   placeholder="Search tasks..."
@@ -218,7 +217,7 @@ export const Dashboard: React.FC = () => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid xs={12} md={3}>
                 <FormControl fullWidth>
                   <InputLabel>Status Filter</InputLabel>
                   <Select
@@ -233,7 +232,7 @@ export const Dashboard: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid xs={12} md={3}>
                 <FormControl fullWidth>
                   <InputLabel>Priority Filter</InputLabel>
                   <Select
@@ -248,16 +247,16 @@ export const Dashboard: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={2}>
+              <Grid xs={12} md={2}>
                 <Button
                   fullWidth
                   variant="outlined"
+                  startIcon={<FilterIcon />}
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('');
                     setPriorityFilter('');
                   }}
-                  startIcon={<FilterIcon />}
                 >
                   Clear
                 </Button>
@@ -320,7 +319,7 @@ export const Dashboard: React.FC = () => {
         <TaskForm
           open={formOpen}
           onClose={handleCloseForm}
-          onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
+          onSubmit={(data) => editingTask ? handleUpdateTask(data as TaskUpdateRequest) : handleCreateTask(data as TaskCreateRequest)}
           task={editingTask}
           loading={formLoading}
         />
