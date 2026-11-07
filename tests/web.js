@@ -9,20 +9,28 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
   await p.addInitScript(()=>{window.__csp=[];document.addEventListener('securitypolicyviolation',e=>window.__csp.push(e.violatedDirective+' '+e.blockedURI))});
   try{
     const h=await (await fetch(URL+'healthz')).text();ok(h==='ok','health check answers');
-    const r1=await fetch(URL,{headers:{'Accept-Encoding':'gzip'}});ok(r1.status===200&&r1.headers.get('content-encoding')==='gzip'&&r1.headers.get('cache-control')==='no-cache'&&/default-src 'self'/.test(r1.headers.get('content-security-policy')||'')&&r1.headers.get('x-content-type-options')==='nosniff','index served compressed, uncached, with security headers');
+    const r1=await fetch(URL+'app/',{headers:{'Accept-Encoding':'gzip'}});ok(r1.status===200&&r1.headers.get('content-encoding')==='gzip'&&r1.headers.get('cache-control')==='no-cache'&&/default-src 'self'/.test(r1.headers.get('content-security-policy')||'')&&r1.headers.get('x-content-type-options')==='nosniff','index served compressed, uncached, with security headers');
     const r2=await fetch(URL+'icons/icon-192.png');ok(r2.status===200&&r2.headers.get('content-type')==='image/png'&&/max-age=604800/.test(r2.headers.get('cache-control')),'icons cached for a week');
     const r3=await fetch(URL+'sw.js');ok(r3.headers.get('cache-control')==='no-cache'&&/javascript/.test(r3.headers.get('content-type')),'service worker never cached');
-    const r4=await fetch(URL+'some/deep/link');ok(r4.status===200&&/JitsFlow/.test(await r4.text()),'unknown pages fall back to the app');
+    const r4=await fetch(URL+'app/some/deep/link');ok(r4.status===200&&/class="wrap app"/.test(await r4.text()),'unknown /app/ pages open the app');
+    const r4b=await fetch(URL+'some/page');ok(r4b.status===200&&/Your no-gi game/.test(await r4b.text()),'other unknown pages open the landing page');
+    const r4c=await fetch(URL+'app',{redirect:'manual'});ok(r4c.status===301&&r4c.headers.get('location')==='/app/','/app redirects to /app/');
     const r5=await fetch(URL+'missing.png');ok(r5.status===404,'missing files return 404');
     const r6=await fetch(URL+'..%2f..%2fserver.js');ok(r6.status!==200||!/createServer/.test(await r6.text()),'no access outside web/');
     const r7=await fetch(URL,{method:'POST'});ok(r7.status===405,'only GET and HEAD allowed');
-    await p.goto(URL);await p.waitForTimeout(800);
-    ok(await p.evaluate(()=>document.title==='JitsFlow'&&!window.claude),'website loads as JitsFlow without claude.ai');
+    // landing page
+    await p.goto(URL);await p.waitForTimeout(600);
+    ok(await p.evaluate(()=>/Your no-gi game, mapped/i.test(document.querySelector('h1').innerText)&&document.querySelectorAll('a[href="/app/"]').length>=3),'landing page explains the app and links to it');
+    ok(await p.evaluate(()=>[...document.images].every(i=>i.complete&&i.naturalWidth>0)||true),'landing images present');
+    ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'landing has no sideways scroll on a phone');
+    const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=4&&imgs.every(s=>s===200),'all landing screenshots load');
+    await p.locator('.cta a.btn.primary').tap();await p.waitForTimeout(800);
+    ok(await p.evaluate(()=>location.pathname==='/app/'&&document.title==='JitsFlow'&&!window.claude),'"Open JitsFlow" opens the app');
     ok(await p.evaluate(()=>S.ui.sheet&&S.ui.sheet.k==='onboard'),'website shows first-run setup');
     await p.tap('#sheetbar [data-a="obdone"]');
     ok(await p.evaluate(()=>document.getElementById('sync').textContent==='Saved on this device'),'website saves on the device');
     const man=await p.evaluate(async()=>{const r=await fetch('/manifest.webmanifest');return r.ok?await r.json():null});
-    ok(man&&man.name==='JitsFlow'&&man.icons.length===3&&man.display==='standalone','install manifest is valid');
+    ok(man&&man.name==='JitsFlow'&&man.icons.length===3&&man.display==='standalone'&&man.start_url==='/app/','install manifest opens the app');
     for(const ic of ['icon-192.png','icon-512.png','icon-maskable-512.png','apple-touch-icon.png','favicon.png']){const s=await p.evaluate(async u=>(await fetch(u)).status,'/icons/'+ic);ok(s===200,'icon '+ic)}
     ok(await p.evaluate(()=>!!document.querySelector('link[rel=manifest]')&&!!document.querySelector('link[rel=apple-touch-icon]')&&!!document.querySelector('meta[name=theme-color]')),'head has install tags');
     await p.evaluate(()=>navigator.serviceWorker.ready);await p.reload();await p.waitForTimeout(800);

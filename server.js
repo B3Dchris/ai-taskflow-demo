@@ -15,6 +15,7 @@ const TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
@@ -57,7 +58,8 @@ const files = new Map();
 })(ROOT);
 
 function cacheFor(rel) {
-  if (rel === "/index.html" || rel === "/sw.js" || rel === "/manifest.webmanifest") return "no-cache";
+  if (rel.endsWith("/index.html") || rel === "/sw.js" || rel === "/manifest.webmanifest") return "no-cache";
+  if (rel.startsWith("/img/")) return "public, max-age=86400";
   if (rel.startsWith("/icons/")) return "public, max-age=604800";
   return "public, max-age=3600";
 }
@@ -77,8 +79,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === "/") pathname = "/index.html";
-  // Unknown paths fall back to the app (it handles its own #today, #learn... views).
-  const rel = files.has(pathname) ? pathname : (path.extname(pathname) ? null : "/index.html");
+  if (pathname === "/app") { res.writeHead(301, { Location: "/app/", ...SECURITY }); return res.end(); }
+  if (pathname.endsWith("/") && files.has(pathname + "index.html")) pathname += "index.html";
+  // Unknown paths: anything under /app/ opens the app, anything else the landing page.
+  const fallback = pathname.startsWith("/app/") ? "/app/index.html" : "/index.html";
+  const rel = files.has(pathname) ? pathname : (path.extname(pathname) ? null : fallback);
   if (!rel) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY });
     return res.end("Not found");

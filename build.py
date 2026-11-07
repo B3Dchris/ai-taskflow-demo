@@ -2,7 +2,8 @@
 
 Reads src/app.html (the app) and the technique files in src/content-*.js, then writes:
   dist/jitsflow-claude.html  the claude.ai version (published as an Artifact)
-  web/index.html + web/sw.js the standalone website for Render (installable, works offline)
+  web/index.html             the landing page (from src/landing.html)
+  web/app/index.html + sw.js the app on the website (installable, works offline)
 
 Usage: python3 build.py
 """
@@ -81,8 +82,10 @@ def build_web(app):
     head_bits, body = app[:cut], app[cut:]
     head_bits = re.sub(r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', "", head_bits)
     html = HEAD + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
-    write(html, "web", "index.html")
-    version = hashlib.sha256(html.encode()).hexdigest()[:10]
+    write(html, "web", "app", "index.html")
+    landing = read("src", "landing.html")
+    write(landing, "web", "index.html")
+    version = hashlib.sha256((html + landing).encode()).hexdigest()[:10]
     write(read("tools", "sw.template.js").replace("__VERSION__", version), "web", "sw.js")
     return version
 

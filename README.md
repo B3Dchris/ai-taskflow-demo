@@ -7,7 +7,7 @@ There are two versions, built from the same source:
 | Version | Where | What it has |
 |---|---|---|
 | **claude.ai** | `dist/jitsflow-claude.html`, published as a claude.ai Artifact | Everything below, plus saving to your Claude account, your own video clips and photos, and "Explain in more detail" answers from Claude |
-| **Website** | `web/` served by `server.js`, deployed on Render from `render.yaml` (e.g. jitsflow.com) | Installs to your home screen, works offline at the gym, YouTube videos can play inside the app. Progress is saved on the device. |
+| **Website** | `web/` served by `server.js`, deployed on Render from `render.yaml` (e.g. jitsflow.com). `/` is the landing page, `/app/` is the app. | Installs to your home screen, works offline at the gym, YouTube videos can play inside the app. Progress is saved on the device. |
 
 ## What's inside
 
@@ -25,7 +25,7 @@ python3 build.py            # writes dist/jitsflow-claude.html and web/ (index.h
 python3 tools/make_icons.py # only if you change the icon design
 ```
 
-Edit the app in `src/app.html`. Advanced techniques live in `src/content-*.js` (format and rules in `src/content-brief.md`).
+Edit the app in `src/app.html` and the landing page in `src/landing.html`. Landing-page screenshots come from `node tools/screenshots.js` (run after `build.py`, then build again). Picked YouTube videos live in `src/videos.js`; re-check them with `python3 tools/merge_videos.py`. Advanced techniques live in `src/content-*.js` (format and rules in `src/content-brief.md`).
 
 ## Test
 

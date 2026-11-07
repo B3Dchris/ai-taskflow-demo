@@ -1,6 +1,6 @@
 /* JitsFlow service worker: keeps the app working offline at the gym. */
-const CACHE = "jitsflow-0c592d81a1";
-const CORE = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.png"];
+const CACHE = "jitsflow-a39389a3e5";
+const CORE = ["/", "/app/", "/manifest.webmanifest", "/img/today.jpg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -21,10 +21,11 @@ self.addEventListener("fetch", (e) => {
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {
+    const page = url.pathname.startsWith("/app") ? "/app/" : "/";
     e.respondWith(
       fetch(req)
-        .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put("/index.html", copy)); return res; })
-        .catch(() => caches.match("/index.html"))
+        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(page, copy)); } return res; })
+        .catch(() => caches.match(page))
     );
     return;
   }
