@@ -62,8 +62,8 @@ p{margin:0}
 
 /* belt */
 .beltwrap{display:flex;flex-direction:column;gap:12px;border-radius:20px;padding:18px 16px;color:#EEF2FA;border:1px solid rgba(255,255,255,.06);
-  background:radial-gradient(520px 260px at 85% 0%,rgba(47,107,255,.35),transparent 65%),radial-gradient(420px 240px at 0% 100%,rgba(94,45,140,.28),transparent 60%),linear-gradient(180deg,#0B1222,#0F1C36);box-shadow:0 20px 40px -24px rgba(10,16,32,.7)}
-.beltwrap .muted{color:#A9B5CC}.beltwrap .bignum{color:#FFFFFF;text-shadow:0 0 24px rgba(91,140,255,.45)}
+  background:#0D1730}
+.beltwrap .muted{color:#A9B5CC}.beltwrap .bignum{color:#FFFFFF}
 .beltwrap .stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}.beltwrap .stat b{color:#FFFFFF}.beltwrap .stat span{color:#A9B5CC}
 .beltwrap .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#F4F6FB}
 .beltwrap .area .track{background:rgba(255,255,255,.12)}.beltwrap .area .fill{background:linear-gradient(90deg,#5B8CFF,#A9C3FF)}.beltwrap .area.low .fill{background:#E6A84C}.beltwrap .area .mono{color:#A9B5CC}
@@ -2028,7 +2028,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="gymeditform")return gymSave(f);
     if(fid==="gymform"){try{const j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
     if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
-    if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("today");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
+    if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("today");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
   }
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
   if(e.target.id!=="logform")return;e.preventDefault();
@@ -2049,7 +2049,7 @@ function maybeOnboard(){if(S.ui.obChecked)return;S.ui.obChecked=true;const st=P(
   if(!document.getElementById("sheet").hidden)return;S.ui.ob={belt:"white",months:"9",pw:2,hand:st.hand||"left"};onboardSheet()}
 function onboardSheet(keep){const o=S.ui.ob;S.ui.sheet={k:"onboard"};S.ui.stack=[];
   const seg=(k,opts,cls)=>`<div class="${cls}">${opts.map(([v,l])=>`<button data-a="obset" data-k="${k}" data-v="${v}" aria-pressed="${String(o[k])===String(v)}">${l}</button>`).join("")}</div>`;
-  openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><div class="stack"><h1>Welcome to JitsFlow</h1><p class="lead">Your no-gi game, mapped. Every position, chain and escape, to study off the mat. Four quick questions so it fits you.</p></div>
+  openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><div class="stack"><h1>Welcome to JitsFlow</h1><p class="lead">Every position, chain and escape, to study between classes. Four quick questions so it fits you.</p></div>
   <section class="stack"><h2 class="label">Your belt now</h2>${seg("belt",[["white","White"],["blue","Blue"],["purple","Purple"],["brown","Brown"]],"seg4")}</section>
   <section class="stack"><label class="f" for="ob-months">How long have you trained?</label><select id="ob-months" data-ob="months">${[["0","Just starting"],["3","1–6 months"],["9","6–12 months"],["18","1–2 years"],["42","2–5 years"],["84","5+ years"]].map(([v,l])=>`<option value="${v}"${String(o.months)===v?" selected":""}>${l}</option>`).join("")}</select></section>
   <section class="stack"><h2 class="label">Sessions a week</h2>${seg("pw",[[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"],[6,"6+"]],"seg6")}</section>

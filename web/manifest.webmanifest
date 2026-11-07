@@ -1,7 +1,7 @@
 {
   "name": "JitsFlow",
   "short_name": "JitsFlow",
-  "description": "Your no-gi game, mapped. Every position, chain and escape, to study off the mat.",
+  "description": "No-gi technique library and flow map. Every position, chain and escape, to study between classes.",
   "start_url": "/app/",
   "scope": "/",
   "display": "standalone",

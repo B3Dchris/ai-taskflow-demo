@@ -95,15 +95,15 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.tap('[data-a="coachview"][data-v="gym"]'); await co.waitForTimeout(400);
     await co.fill("#gi-url", site.url); await co.tap("#gymimpform [type=submit]");
     await co.waitForSelector("#gymeditform", { timeout: 20000 });
-    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 7 && document.querySelectorAll(".logoopt img").length >= 1 && /Found on 5 pages/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 8 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
     await wide(co, "import preview");
     await co.locator('#gymeditform [data-a="germ"][data-k="timetable"]').last().tap(); await co.waitForTimeout(200);
-    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 6 && !/Open Mat/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 8 && !/Competition Training/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");
     await co.fill('#gymeditform [name="name"]', "JPB Martial Arts Academy");
     await co.locator('[data-a="geadd"][data-v="coaches"]').tap(); await co.waitForTimeout(200); await co.fill('#gymeditform [name="co-name-2"]', "JP Buys"); await co.fill('#gymeditform [name="co-rank-2"]', "Black belt, head coach");
     await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
     ok(await ev(co, () => /Standard fee set to/.test(document.getElementById("toast").textContent)), "monthly rate becomes the standard fee: " + (await toast(co)));
-    ok(await ev(co, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 6 && /JP Buys/.test(g.innerText) && /Witkoppen/.test(g.innerText) && !!g.querySelector("img.gymlogo") && g.querySelector("img.gymlogo").naturalWidth > 0; }), "gym card shows the saved timetable, coaches, address and logo");
+    ok(await ev(co, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 8 && /JP Buys/.test(g.innerText) && /Witkoppen/.test(g.innerText) && !!g.querySelector("img.gymlogo") && g.querySelector("img.gymlogo").naturalWidth > 0; }), "gym card shows the saved timetable, coaches, address and logo");
     ok(await ev(co, () => /JPB Martial Arts Academy/.test(document.querySelector("h1").innerText) && !!document.querySelector(".gymhead img.gymlogo.sm")), "coach header keeps the edited name and shows the logo");
     await wide(co, "coach gym profile");
     const nBefore = await ev(co, () => (COACH.classes || []).length);
@@ -114,11 +114,27 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(/already there/.test(await toast(co)) && (await ev(co, () => (COACH.classes || []).length)) === nAfter, "adding again skips classes already there");
     // ---- the student sees their gym's details
     await st.tap('nav.tabs [data-v="settings"]'); await st.waitForTimeout(1000);
-    ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 6 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
+    ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 8 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
     await wide(st, "student gym card");
     // ---- student signs out
     await st.tap('nav.tabs [data-v="settings"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
     ok(await ev(st, () => !API.me && S.mode === "local" && /Saved on this device/.test(document.getElementById("sync").textContent)), "student signs out");
+    ok(await ev(st, () => lv("knee_cut") === 0 && S.sessions.length === 0 && !localStorage.getItem("rtb.progress") && !localStorage.getItem("rtb.owner")), "signing out clears their progress and log off the phone");
+    // Someone else's data is still on this phone (their session ran out without signing out), and a new person signs up
+    await ev(st, () => { localStorage.setItem("rtb.owner", JSON.stringify("999999")); localStorage.setItem("rtb.progress", JSON.stringify({ ...P(), mastery: { knee_cut: 4, upa: 2 } })); localStorage.setItem("rtb.sessions", JSON.stringify([{ id: "sOld", date: "2026-01-01", type: "Class" }])); });
+    await st.reload(); await st.waitForTimeout(1200);
+    ok(await ev(st, () => lv("knee_cut") === 0 && S.sessions.length === 0), "a previous account's leftovers aren't shown to the next person");
+    await st.goto(URL + "/app/?join=" + invite.split("join=")[1]); await st.waitForTimeout(900);
+    await st.fill("#a-name", "Newbie"); await st.fill("#a-email", "newbie@example.com"); await st.fill("#a-pass", "newbiepass1"); await st.tap("#sheetbar [type=submit]"); await st.waitForTimeout(1200);
+    if (await ev(st, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await st.tap('#sheetbar [data-a="obdone"]');
+    ok(await ev(st, async () => API.me.name === "Newbie" && lv("knee_cut") === 0 && (await (await fetch("/api/logs")).json()).logs.length === 0 && !(await (await fetch("/api/progress")).json()).data.mastery.knee_cut), "a new account on a used phone starts clean (nothing copied from the last person)");
+    // Chris signs in on the same phone: Chris's data, not Newbie's
+    await ev(st, () => { P().mastery.upa = 3; saveProgress(); }); await st.waitForTimeout(1000);
+    await st.tap('nav.tabs [data-v="settings"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
+    await st.goto(URL + "/app/?signin=1"); await st.waitForTimeout(900);
+    await st.fill("#a-email", "chris@example.com"); await st.fill("#a-pass", "studentpass1"); await st.tap("#sheetbar [type=submit]"); await st.waitForTimeout(1500);
+    ok(await ev(st, () => API.me.name === "Chris" && lv("knee_cut") === 3 && lv("upa") !== 3 && S.sessions.length === 1), "signing in on a shared phone shows that account's data, not the last person's");
+    await st.tap('nav.tabs [data-v="settings"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
     // ---- forgotten password by email
     await st.goto(URL + "/app/?signin=1"); await st.waitForTimeout(900);
     await st.locator('#sheet [data-a="authmode"][data-v="forgot"]').tap(); await st.fill("#a-email", "chris@example.com");

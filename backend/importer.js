@@ -135,23 +135,57 @@ function parsePage(html, base) {
 
 /* ---------------- finding the useful pages ---------------- */
 const PAGE_HINT = /time-?table|schedule|class(es)?(-?times?)?\b|rooster|program(me)?s?|pric(e|es|ing)|fees?\b|rates?\b|membership|join|sign-?up|coach(es)?|instructor|team|staff|about|contact|location|find-?us|kids|adults|bjj|jiu|no-?gi|mma/i;
-function pickPages(home, max) {
-  const origin = new URL(home.url).origin, seen = new Set([home.url.replace(/[#?].*$/, "").replace(/\/$/, "")]), out = [];
-  const scored = [];
-  for (const l of home.links) {
-    if (!l.abs) continue;
-    let u; try { u = new URL(l.abs); } catch (e) { continue; }
-    if (u.origin !== origin || /\.(pdf|jpe?g|png|gif|webp|zip|mp4|docx?)$/i.test(u.pathname) || /\/(cart|checkout|login|account|wp-admin|feed)\b/i.test(u.pathname)) continue;
-    const key = (u.origin + u.pathname).replace(/\/$/, "");
-    if (seen.has(key)) continue; seen.add(key);
-    const hay = u.pathname + " " + l.text + " " + l.label;
-    if (!PAGE_HINT.test(hay)) continue;
-    const s = (/time-?table|schedule|class/i.test(hay) ? 5 : 0) + (/pric|fee|rate|member/i.test(hay) ? 4 : 0) + (/coach|instructor|team/i.test(hay) ? 3 : 0) + (/contact|location|find/i.test(hay) ? 2 : 0) + 1;
-    scored.push({ url: u.origin + u.pathname + u.search, s });
+// Crawl the whole site (same address only), most promising pages first, within a page and time budget.
+// Pages are found from links on every page read plus the site's sitemap.xml.
+const SKIP_PATH = /\/(cart|checkout|basket|login|log-in|signin|sign-in|account|my-account|wp-admin|wp-login|feed|cdn-cgi|search|tag|tags|category|categories|author|shop|store|product|products|collections|apparel|merch)(\/|$)|\.(pdf|jpe?g|png|gif|webp|svg|zip|mp4|mov|docx?|xlsx?|ics|xml|json|css|js)$/i;
+function pageScore(path, text, depth) {
+  const hay = (path + " " + text).toLowerCase();
+  let s = 10 - depth * 2;
+  if (/time-?table|schedule|class(es)?\b|class-?times|rooster|program/.test(hay)) s += 8;
+  if (/pric|fee|rates?\b|member|join|sign-?up/.test(hay)) s += 6;
+  if (/coach|instructor|team|staff|about|academy|gym|dojo/.test(hay)) s += 5;
+  if (/contact|location|find|visit/.test(hay)) s += 3;
+  if (/kids|adult|bjj|jiu|no-?gi|mma|wrestl|grappl|muay|box/.test(hay)) s += 3;
+  if (/\/(blog|news|posts?|events?|gallery|press|20\d\d)\//.test(path)) s -= 8;
+  return s;
+}
+function normPage(u) { try { const x = new URL(u); x.hash = ""; if (/^(utm_|fbclid|gclid)/.test([...x.searchParams.keys()].join(" "))) x.search = ""; return x.origin + x.pathname.replace(/\/+$/, "") + x.search; } catch (e) { return null; } }
+// Budgets keep the whole import under Cloudflare's 100-second limit: crawl 20 s + Claude 55 s + logos 8 s.
+async function crawl(home, { maxPages = 30, maxDepth = 4, budgetMs = 20000, concurrency = 5 } = {}) {
+  const t0 = Date.now(), origin = new URL(home.url).origin, pages = [home];
+  const seen = new Set([normPage(home.url), normPage(origin + "/")]);
+  const queue = [];
+  const offer = (u, text, depth) => {
+    const n = normPage(u); if (!n || seen.has(n) || depth > maxDepth) return;
+    let url; try { url = new URL(n); } catch (e) { return; }
+    if (url.origin !== origin || SKIP_PATH.test(url.pathname)) return;
+    seen.add(n); queue.push({ url: n, depth, score: pageScore(url.pathname, text || "", depth) });
+  };
+  for (const l of home.links) offer(l.abs, l.text + " " + l.label, 1);
+  try { // sitemap.xml (also sitemap indexes, one level)
+    const sm = await safeGet(origin + "/sitemap.xml", { timeoutMs: 6000, maxBytes: 800000, accept: "application/xml,text/xml,*/*" });
+    if (sm.status === 200) {
+      let locs = [...sm.body.toString("utf8").matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1]);
+      const subs = locs.filter((l) => /\.xml($|\?)/i.test(l)).slice(0, 4);
+      for (const sub of subs) { try { const r = await safeGet(sub, { timeoutMs: 6000, maxBytes: 800000, accept: "application/xml,*/*" }); if (r.status === 200) locs = locs.concat([...r.body.toString("utf8").matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1])); } catch (e) {} }
+      for (const l of locs.filter((l) => !/\.xml($|\?)/i.test(l)).slice(0, 400)) offer(l, "", 2);
+    }
+  } catch (e) { /* no sitemap */ }
+  while (queue.length && pages.length < maxPages && Date.now() - t0 < budgetMs) {
+    queue.sort((a, b) => b.score - a.score);
+    const batch = queue.splice(0, Math.min(concurrency, maxPages - pages.length));
+    const got = await Promise.all(batch.map(async (q) => {
+      try { const r = await safeGet(q.url, { timeoutMs: 8000 }); return r.status < 400 && /html/.test(r.type) ? { page: parsePage(r.body.toString("utf8"), r.url), depth: q.depth } : null; } catch (e) { return null; }
+    }));
+    for (const g of got) {
+      if (!g || pages.some((x) => normPage(x.url) === normPage(g.page.url))) continue;
+      g.page.depth = g.depth; g.page.score = pageScore(new URL(g.page.url).pathname, g.page.title + " " + g.page.text.slice(0, 3000), g.depth);
+      pages.push(g.page);
+      for (const l of g.page.links) offer(l.abs, l.text + " " + l.label, g.depth + 1);
+    }
   }
-  scored.sort((a, b) => b.s - a.s);
-  for (const x of scored) { if (out.length >= max) break; out.push(x.url); }
-  return out;
+  home.score = 100; home.depth = 0;
+  return pages;
 }
 
 /* ---------------- plain read ---------------- */
@@ -338,13 +372,13 @@ const SCHEMA = {
     logo_choice: { type: "integer", description: "Index of the best logo in the LOGO CANDIDATES list, or -1 if none look like the gym's logo." },
     socials: { type: "object", additionalProperties: false, required: SOCIALS, properties: Object.fromEntries(SOCIALS.map((k) => [k, { ...str, description: "Full URL, or empty." }])) },
     timetable: { type: "array", description: "Every recurring weekly class. One entry per day a class runs.", items: { type: "object", additionalProperties: false,
-      required: ["day", "start", "end", "title", "coach", "level", "quote"],
+      required: ["day", "start", "end", "title", "coach", "level", "source", "quote"],
       properties: { day: { type: "string", enum: DAYS }, start: { ...str, description: "24-hour HH:MM" }, end: { ...str, description: "24-hour HH:MM, or empty if not given" },
-        title: { ...str, description: "Class name, e.g. 'No-Gi Fundamentals'" }, coach: { ...str, description: "Coach for this class, or empty" }, level: { ...str, description: "Kids / Beginners / All levels / Advanced etc, or empty" }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
-    coaches: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "rank", "bio", "quote"],
-      properties: { name: str, rank: { ...str, description: "Belt rank and/or role, e.g. 'Black belt, head coach'" }, bio: { ...str, description: "Up to three sentences from the site." }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
-    rates: { type: "array", description: "Membership prices and fees.", items: { type: "object", additionalProperties: false, required: ["name", "price", "currency", "period", "note", "quote"],
-      properties: { name: str, price: { type: "number" }, currency: { ...str, description: "ISO code such as ZAR, USD, GBP" }, period: { type: "string", enum: PERIODS }, note: { ...str, description: "Conditions, e.g. '3 classes a week' or 'family discount'. Empty if none." }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
+        title: { ...str, description: "Class name, e.g. 'No-Gi Fundamentals'" }, coach: { ...str, description: "Coach for this class, or empty" }, level: { ...str, description: "Kids / Beginners / All levels / Advanced etc, or empty" }, source: { type: "string", enum: ["text", "image"], description: "Where you read it: the page text, or an attached image." }, quote: { ...str, description: "The exact words this came from, copied verbatim from the page text or the image." } } } },
+    coaches: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "rank", "bio", "source", "quote"],
+      properties: { name: str, rank: { ...str, description: "Belt rank and/or role, e.g. 'Black belt, head coach'" }, bio: { ...str, description: "Up to three sentences from the site." }, source: { type: "string", enum: ["text", "image"], description: "Where you read it: the page text, or an attached image." }, quote: { ...str, description: "The exact words this came from, copied verbatim from the page text or the image." } } } },
+    rates: { type: "array", description: "Membership prices and fees.", items: { type: "object", additionalProperties: false, required: ["name", "price", "currency", "period", "note", "source", "quote"],
+      properties: { name: str, price: { type: "number" }, currency: { ...str, description: "ISO code such as ZAR, USD, GBP" }, period: { type: "string", enum: PERIODS }, note: { ...str, description: "Conditions, e.g. '3 classes a week' or 'family discount'. Empty if none." }, source: { type: "string", enum: ["text", "image"], description: "Where you read it: the page text, or an attached image." }, quote: { ...str, description: "The exact words this came from, copied verbatim from the page text or the image." } } } },
     notes: { ...str, description: "Other things a member should know (free trial, kit rules, kids' ages, booking). Empty if none." },
   },
 };
@@ -352,7 +386,8 @@ const SYSTEM = `You read a martial arts gym's public website and pull out the fa
 The gym's own coach will review your output before anything is saved, so accuracy matters more than completeness.
 - Use only what the pages say. Leave a field empty (or a list empty) rather than guessing.
 - Many gym sites have no timetable or prices on the page (only a "join" form, or "DM us"). Then return empty timetable and rates lists. Never fill in typical class times, class names or prices.
-- For every timetable row, rate and coach, put the exact words you took it from in "quote". Each one is checked against the page, and anything that can't be found there is thrown away.
+- Timetables are often an image of a weekly grid (days down the side, classes across). Read every cell.
+- For every timetable row, rate and coach, say whether you read it from the page text or an image ("source"), and put the exact words you took it from in "quote". Each one is checked against the page, and anything that can't be found there is thrown away.
 - Timetables are often grids with days as columns, or lists grouped under day headings. Produce one entry per class per day. Convert times to 24-hour HH:MM. If a time has no am/pm, use context (evening classes after work are pm).
 - Prices: copy the amount as a number and the period it covers. Use the currency the site shows; if the site shows "R" it is ZAR.
 - Ignore shop products, apparel and merchandise prices.
@@ -361,13 +396,14 @@ The gym's own coach will review your output before anything is saved, so accurac
 let anthropicClient = null;
 function getClient() {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  if (!anthropicClient) { const Anthropic = require("@anthropic-ai/sdk"); const A = Anthropic.default || Anthropic; anthropicClient = new A({ timeout: 110000, maxRetries: 1 }); }
+  if (!anthropicClient) { const Anthropic = require("@anthropic-ai/sdk"); const A = Anthropic.default || Anthropic; anthropicClient = new A({ timeout: 55000, maxRetries: 0 }); }
   return anthropicClient;
 }
 async function claudeRead(client, pages, logos, timetableImages) {
   const budget = 90000; let used = 0;
   const parts = [];
-  for (const p of pages) { const t = p.text.slice(0, Math.max(0, Math.min(30000, budget - used))); if (!t) break; used += t.length; parts.push(`<page url="${p.url}" title="${p.title.replace(/"/g, "'")}">\n${t}\n</page>`); }
+  const ranked = pages.slice().sort((a, b) => (b.score || 0) - (a.score || 0));
+  for (const p of ranked) { const t = p.text.slice(0, Math.max(0, Math.min(20000, budget - used))); if (!t) break; used += t.length; parts.push(`<page url="${p.url}" title="${p.title.replace(/"/g, "'")}">\n${t}\n</page>`); }
   const linkList = [...new Set(pages.flatMap((p) => p.links.map((l) => l.abs)).filter((h) => h && (socialOf(h) || /^(tel|mailto):/i.test(h))))].slice(0, 40);
   const text = `WEBSITE: ${pages[0].url}\n\nLOGO CANDIDATES:\n${logos.map((l, i) => `${i}. ${l.url} (${l.why})`).join("\n") || "(none)"}\n\nCONTACT AND SOCIAL LINKS FOUND:\n${linkList.join("\n") || "(none)"}\n\nPAGES:\n${parts.join("\n\n")}${timetableImages.length ? "\n\nThe images attached may be the gym's timetable or price list. Read them too." : ""}`;
   const ask = (withImages) => client.beta.messages.create({
@@ -414,12 +450,12 @@ function verifyAi(ai, pages, usedImages) {
   const corpus = " " + normText(pages.map((p) => p.text + "\n" + p.title).join("\n")) + " ";
   const has = (s) => { const n = normText(s); return n.length >= 3 && corpus.includes(n); };
   const hasToken = (s) => new RegExp("(^|[^0-9a-z])" + normText(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(corpus);
-  const quoted = (it) => (it.quote && has(it.quote)) || (usedImages && /^image\b/i.test(String(it.quote || "").trim()));
+  const quoted = (it) => (it.quote && has(it.quote)) || (usedImages && (it.source === "image" || /\bimage\b/i.test(String(it.quote || ""))));
   const words = (s) => normText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !["class", "classes", "session", "training", "level", "levels"].includes(w));
   const dropped = { timetable: 0, rates: 0, coaches: 0 };
   const keep = (k, test) => { const before = (ai[k] || []).length; ai[k] = (ai[k] || []).filter(test); dropped[k] = before - ai[k].length; };
   const inQuote = (it, forms) => { const q = " " + normText(it.quote) + " "; return forms.some((f) => new RegExp("(^|[^0-9a-z])" + normText(f).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(q)); };
-  const img = (it) => usedImages && /^image\b/i.test(String(it.quote || "").trim());
+  const img = (it) => usedImages && (it.source === "image" || /\bimage\b/i.test(String(it.quote || "")));
   keep("timetable", (r) => img(r) || (quoted(r) && inQuote(r, timeForms(r.start))) || (timeForms(r.start).some(hasToken) && words(r.title).some((w) => hasToken(w))));
   keep("rates", (r) => img(r) || (quoted(r) && inQuote(r, priceForms(r.price))) || priceForms(r.price).some(hasToken));
   keep("coaches", (c) => has(c.name) || img(c) || (quoted(c) && inQuote(c, [c.name])));
@@ -471,7 +507,7 @@ async function fetchImage(url, maxBytes = 400000) {
 }
 
 /* ---------------- the whole import ---------------- */
-async function importSite(rawUrl, { client, maxPages = 8, log = () => {} } = {}) {
+async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMPORT_MAX_PAGES) || 30, log = () => {} } = {}) {
   let start = String(rawUrl || "").trim();
   if (!start) throw new ImportError("Enter your gym's website address.");
   if (!/^[a-z]+:\/\//i.test(start)) start = "https://" + start;
@@ -484,14 +520,14 @@ async function importSite(rawUrl, { client, maxPages = 8, log = () => {} } = {})
   }
   if (home.status >= 400) throw new ImportError(`That site answered with an error (${home.status}). Check the address.`);
   if (!/html|xml|text\/plain/.test(home.type) && home.type) throw new ImportError("That address isn't a web page.");
-  const pages = [parsePage(home.body.toString("utf8"), home.url)];
-  const more = pickPages(pages[0], maxPages);
-  const got = await Promise.all(more.map(async (u) => { try { const r = await safeGet(u, { timeoutMs: 8000 }); return r.status < 400 && /html/.test(r.type) ? parsePage(r.body.toString("utf8"), r.url) : null; } catch (e) { return null; } }));
-  for (const p of got) if (p && !pages.some((x) => x.url === p.url)) pages.push(p);
+  const pages = await crawl(parsePage(home.body.toString("utf8"), home.url), { maxPages });
 
   const plain = cleanProfile(plainRead(pages));
   const logos = logoCandidates(pages);
-  const ttImages = [...new Set(pages.flatMap((p) => p.imgs).filter((im) => /time-?table|schedule|class-?times|rooster|price|pricing/i.test(im.src + " " + im.alt)).map((im) => im.src))].slice(0, 2);
+  // Timetables and price lists are often pictures. Prefer images named like one; then images on schedule/pricing pages.
+  const named = pages.flatMap((p) => p.imgs).filter((im) => /time-?table|schedule|class-?times|rooster|price|pricing|fees|membership/i.test(im.src + " " + im.alt));
+  const onPages = pages.filter((p) => /time-?table|schedule|class-?times|pricing|prices|fees/i.test(p.url + " " + p.title)).flatMap((p) => p.imgs.filter((im) => !/logo|icon|favicon|avatar/i.test(im.src + " " + im.alt + " " + im.cls)).slice(0, 2));
+  const ttImages = [...new Set([...named, ...onPages].map((im) => im.src.replace(/\?format=\d+w$/, "?format=1500w")))].slice(0, 3);
   let profile = plain, method = "basic", aiError = null, logoChoice = -2, dropped = null;
   const c = client === undefined ? getClient() : client;
   if (c) {
@@ -507,10 +543,8 @@ async function importSite(rawUrl, { client, maxPages = 8, log = () => {} } = {})
   // Logo previews (as data URLs so the page's image policy can show them).
   const order = logoChoice >= 0 && logos[logoChoice] ? [logos[logoChoice], ...logos.filter((_, i) => i !== logoChoice)] : logoChoice === -1 ? [] : logos;
   const previews = [];
-  for (const l of order) {
-    if (previews.length >= 3) break;
-    try { const img = await fetchImage(l.url, 300000); const d = img && img.body.toString("base64"); if (img && !previews.some((x) => x.dataUrl.endsWith(d))) previews.push({ url: l.url, why: l.why, dataUrl: `data:${img.type};base64,${img.body.toString("base64")}` }); } catch (e) { /* skip */ }
-  }
+  const imgs = await Promise.all(order.slice(0, 6).map((l) => fetchImage(l.url, 300000).catch(() => null)));
+  order.slice(0, 6).forEach((l, i) => { const img = imgs[i]; if (!img || previews.length >= 3) return; const d = img.body.toString("base64"); if (!previews.some((x) => x.dataUrl.endsWith(d))) previews.push({ url: l.url, why: l.why, dataUrl: `data:${img.type};base64,${d}` }); });
   return { profile, logos: previews, method, aiError, dropped, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
 }
 

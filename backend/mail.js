@@ -24,11 +24,11 @@ function layout(title, paras, button, preheader) {
 </head><body style="margin:0;padding:0;background:${C.bg}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escHtml(preheader || paras[0] || title)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg}"><tr><td align="center" style="padding:0">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.night}" style="background:${C.night};background-image:linear-gradient(180deg,${C.nightTop} 0%,${C.night} 100%)"><tr><td align="center" style="padding:26px 20px 64px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.night}" style="background:${C.night}"><tr><td align="center" style="padding:26px 20px 64px">
  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px"><tr>
   <td style="vertical-align:middle;width:44px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="26" height="12" bgcolor="${C.black}" style="font-size:0;line-height:0;border:1px solid #3A4458;border-right:0">&nbsp;</td><td width="10" height="12" bgcolor="${C.red}" style="font-size:0;line-height:0;border:1px solid #3A4458;border-left:0">&nbsp;</td></tr></table></td>
   <td style="vertical-align:middle;font-family:${F.display};font-size:26px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#F4F6FB"><a href="${escHtml(site)}/" style="color:#F4F6FB;text-decoration:none">JitsFlow</a></td>
-  <td align="right" style="vertical-align:middle;font-family:${F.mono};font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0D0">Your no-gi game, mapped</td>
+  <td align="right" style="vertical-align:middle;font-family:${F.mono};font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0D0">No-gi technique library</td>
  </tr></table>
 </td></tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:-44px auto 0"><tr><td style="padding:0 14px">
@@ -40,7 +40,7 @@ function layout(title, paras, button, preheader) {
  </td></tr></table>
  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding:20px 6px 34px;font-family:${F.body};font-size:13px;line-height:1.6;color:${C.ink2}">
   <a href="${escHtml(site)}/techniques/" style="color:${C.ink2}">Techniques</a> &nbsp;·&nbsp; <a href="${escHtml(site)}/app/" style="color:${C.ink2}">Open the app</a> &nbsp;·&nbsp; <a href="mailto:${escHtml(REPLY_TO())}" style="color:${C.ink2}">${escHtml(REPLY_TO())}</a><br>
-  JitsFlow · A no-gi technique library and flow chart to study off the mat. Reply to this email if you need help.
+  JitsFlow · No-gi technique library and flow map. Reply to this email if you need help.
  </td></tr></table>
 </td></tr></table>
 </td></tr></table></body></html>`;

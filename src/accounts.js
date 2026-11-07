@@ -20,7 +20,8 @@ const beltChip=(b,st)=>`<span class="beltchip" style="--bc:${BCOL[b]||"#F4F4F0"}
 /* ----- sign-in state and sync ----- */
 async function acctInit(){
   if(inClaude()||!/^https?:$/.test(location.protocol))return;
-  try{const j=await api("GET","/me");API.on=true;API.me=j.me;api("GET","/status").then(x=>{API.status=x}).catch(()=>{});if(API.me)await startSync()}
+  try{const j=await api("GET","/me");API.on=true;API.me=j.me;api("GET","/status").then(x=>{API.status=x}).catch(()=>{});
+    if(API.me)await startSync();else if(lsGet("rtb.owner")){wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
@@ -35,21 +36,30 @@ async function acctInit(){
   render();
 }
 let apTimer=null,apDirty=false;
-async function startSync(){
-  S.mode="api";setSync("Saved to your account","db");
+/* Whose data is on this phone? "rtb.owner" holds the account id once someone signs in here.
+   - Data that belongs to a different account is cleared before this account's data loads.
+   - Data from before anyone signed in is only carried into an account that's being created now (adopt).
+   - Signing out clears the phone; the data stays in the account. */
+function wipeLocal(){S.progress=blankProgress();S.sessions=[];try{["rtb.progress","rtb.sessions","rtb.owner"].forEach(k=>localStorage.removeItem(k))}catch(e){}}
+async function startSync(opts){
+  opts=opts||{};S.mode="api";setSync("Saved to your account","db");
+  const owner=lsGet("rtb.owner"),mine=String(API.me.id);
+  const foreign=!!owner&&String(owner)!==mine,adopt=!owner&&!!opts.adopt;
+  if(foreign||(!owner&&!adopt))wipeLocal();
   try{
     const [p,l]=await Promise.all([api("GET","/progress"),api("GET","/logs")]);
-    if(p.data){S.progress=normalize(p.data);lsSet("rtb.progress",S.progress)}else{await api("PUT","/progress",{data:clone(S.progress)})}
-    const have=new Set(l.logs.map(x=>x.id));const extra=S.sessions.filter(x=>x&&x.id&&!have.has(x.id));
+    if(p.data){S.progress=normalize(p.data)}else{if(!adopt)S.progress=blankProgress();await api("PUT","/progress",{data:clone(S.progress)})}
+    lsSet("rtb.progress",S.progress);
+    const have=new Set(l.logs.map(x=>x.id));const extra=adopt?S.sessions.filter(x=>x&&x.id&&!have.has(x.id)):[];
     for(const s of extra.slice(0,200)){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){}}
-    S.sessions=[...l.logs,...extra];lsSet("rtb.sessions",S.sessions);
-  }catch(e){setSync("Saved on this device","err");toast("Couldn't reach your account. Changes are kept on this device for now.")}
+    S.sessions=[...l.logs,...extra];lsSet("rtb.sessions",S.sessions);lsSet("rtb.owner",mine);
+  }catch(e){setSync("Saved on this device","err");toast("Couldn't reach your account. Changes are kept on this device for now.");if(!foreign)lsSet("rtb.owner",mine)}
 }
 function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
 addEventListener("online",()=>{if(S.mode==="api"&&apDirty)apiSaveProgress()});
-async function signedIn(me){API.me=me;API.classes=null;GYM.data=null;await startSync();hideSheet();maybeOnboardAfterSync();go(isCoach()?"coach":"today");toast(`Signed in as ${me.name}.`)}
+async function signedIn(me,opts){API.me=me;API.classes=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();maybeOnboardAfterSync();go(isCoach()?"coach":"today");toast(`Signed in as ${me.name}.`)}
 function maybeOnboardAfterSync(){S.ui.obChecked=false;if(!P().settings.onboarded)maybeOnboard()}
-async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=null;S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress stays saved to your account.")}
+async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress is saved in your account, not on this phone.")}
 
 /* ----- account sheets ----- */
 function authSheet(){
@@ -95,7 +105,7 @@ async function submitAuth(form){
       :m==="register"?await api("POST","/auth/register",{name:v("name"),email:v("email"),password:v("password"),code:v("code")})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
     jfTrack(m==="login"?"login":"sign_up",{method:"email",role:m==="gym"?"coach":j.me.role,with_gym:!!j.me.gym});
-    await signedIn(j.me);
+    await signedIn(j.me,{adopt:m!=="login"});
   }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}}
 }
 function accountSection(){
@@ -355,7 +365,7 @@ function drawGymEdit(keep){
   const logoOpts=[...G.logos.map((l,i)=>[String(i),`<img src="${l.dataUrl}" alt="Logo option ${i+1}">`]),...(API.me.gym.logo?[["keep",`<img src="${esc(API.me.gym.logo)}" alt="Current logo"><span class="small">Keep current</span>`]]:[]),["none",`<span class="small">No logo</span>`]];
   const soc=p.socials||{};
   openSheet(`${sheetHead(G.imported?"Check what we found":"Gym details")}<form id="gymeditform" class="stack-lg" novalidate>
-    ${G.imported?`<div class="panel ${G.method==="claude"?"":"accent"}"><p class="small"><b>Found on ${G.pages.length} page${G.pages.length===1?"":"s"}:</b> ${G.pages.map(x=>esc(x.title||x.url)).join(" · ")}</p>
+    ${G.imported?`<div class="panel ${G.method==="claude"?"":"accent"}"><p class="small"><b>Read ${G.pages.length} page${G.pages.length===1?"":"s"} of your site</b>: ${G.pages.slice(0,6).map(x=>esc((x.title||x.url).split(/\s+[|–—-]\s+/)[0])).join(" · ")}${G.pages.length>6?` and ${G.pages.length-6} more`:""}</p>
       ${G.dropped&&(G.dropped.timetable||G.dropped.rates||G.dropped.coaches)?`<p class="small"><b>Left out ${[G.dropped.timetable?G.dropped.timetable+" class time"+(G.dropped.timetable>1?"s":""):"",G.dropped.rates?G.dropped.rates+" price"+(G.dropped.rates>1?"s":""):"",G.dropped.coaches?G.dropped.coaches+" coach"+(G.dropped.coaches>1?"es":""):""].filter(Boolean).join(", ")}</b> that we couldn't find written on your site. Add the real ones below.</p>`:""}
       ${G.method==="claude"&&!p.timetable.length?`<p class="small">No class times are written on your site${G.pages.length?"":" pages we could read"}. If your timetable is an image or on another site, add the times below.</p>`:""}
       <p class="small muted">${G.method==="claude"?"Read with Claude. Check the times and prices: anything wrong here is what your students will see.":"Basic read: timetables in grids or images, and price cards, are often missed. Check each section and fill in the gaps."}</p></div>`:""}

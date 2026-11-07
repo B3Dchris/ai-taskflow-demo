@@ -2,7 +2,7 @@
 const http = require("http"); const fs = require("fs"); const path = require("path"); const zlib = require("zlib");
 const LOGO = fs.readFileSync(path.resolve(__dirname, "../web/icons/icon-192.png"));
 const nav = `<header><a href="/"><img src="/img/site-logo.png" alt="Fourways Grappling logo" class="logo"></a>
-  <nav><a href="/timetable">Class Timetable</a><a href="/pricing">Membership &amp; Pricing</a><a href="/coaches">Our Coaches</a><a href="/contact">Contact</a><a href="/shop">Shop</a><a href="https://elsewhere.example/timetable">Partner timetable</a></nav></header>`;
+  <nav><a href="/timetable">Class Timetable</a><a href="/pricing">Membership &amp; Pricing</a><a href="/coaches">Our Coaches</a><a href="/contact">Contact</a><a href="/the-academy">The Academy</a><a href="/shop">Shop</a><a href="https://elsewhere.example/timetable">Partner timetable</a></nav></header>`;
 const page = (title, body, extraHead = "") => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${extraHead}</head><body>${nav}<main>${body}</main>
   <footer><a href="https://www.instagram.com/fourwaysgrappling/">Instagram</a> <a href="https://wa.me/27821234567">WhatsApp us</a> <a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a></footer></body></html>`;
 const PAGES = {
@@ -17,13 +17,18 @@ const PAGES = {
   "/coaches": page("Coaches | Fourways Grappling Club", `<h1>Our coaches</h1><h3>Thabo Nkosi</h3><p>Black belt, head coach</p><p>Thabo has trained Brazilian Jiu-Jitsu for 15 years and competes in masters no-gi.</p>
     <h3>Anna Smit</h3><p>Brown belt, instructor</p>`),
   "/contact": page("Contact | Fourways Grappling Club", `<h1>Contact</h1><p>Call or WhatsApp: 082 123 4567</p>`),
-  "/shop": page("Shop", `<p>Rashguard R 450</p>`),
+  "/shop": page("Shop", `<p>Rashguard R 450</p><a href="/shop/rashguard">Rashguard</a>`),
+  "/shop/rashguard": page("Rashguard", `<p>Rashguard R 450</p>`),
+  "/the-academy": page("The Academy | Fourways Grappling Club", `<h1>The academy</h1><p>Founded in 2019.</p><img src="/img/fgc-schedule-2026.png" alt=""><a href="/the-academy/friday">Friday sessions</a>`),
+  "/the-academy/friday": page("Friday | Fourways Grappling Club", `<h3>Friday</h3><p>12:00 - 13:00 Wrestling for BJJ</p>`),
+  "/hidden": page("Weekend | Fourways Grappling Club", `<h3>Sunday</h3><p>10:00 - 11:30 Competition Training</p>`),
 };
 function startGymSite() {
   const hits = [];
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, "http://x"); hits.push(u.pathname);
-    if (u.pathname === "/img/site-logo.png" || u.pathname === "/apple.png") { res.writeHead(200, { "content-type": "image/png" }); return res.end(LOGO); }
+    if (u.pathname === "/sitemap.xml") { res.writeHead(200, { "content-type": "application/xml" }); return res.end(`<?xml version="1.0"?><urlset><url><loc>${"http://" + req.headers.host}/hidden</loc></url><url><loc>${"http://" + req.headers.host}/</loc></url></urlset>`); }
+    if (u.pathname === "/img/site-logo.png" || u.pathname === "/apple.png" || u.pathname === "/img/fgc-schedule-2026.png") { res.writeHead(200, { "content-type": "image/png" }); return res.end(LOGO); }
     if (u.pathname === "/evil.svg") { res.writeHead(200, { "content-type": "image/svg+xml" }); return res.end('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'); }
     if (u.pathname === "/to-metadata") { res.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" }); return res.end(); }
     if (u.pathname === "/huge") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<p>" + "x".repeat(3e6) + "</p>"); }

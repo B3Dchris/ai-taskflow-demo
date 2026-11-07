@@ -40,7 +40,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const tt = p.timetable, find = (d, s) => tt.find((x) => x.day === d && x.start === s);
     ok(find("Mon", "06:00") && find("Wed", "06:00") && find("Mon", "06:00").coach === "Thabo" && find("Mon", "06:00").title === "No-Gi Fundamentals", "list timetable under day headings, with coach");
     ok(find("Tue", "17:00") && find("Tue", "17:00").end === "17:45" && find("Thu", "18:00") && find("Thu", "18:00").end === "19:30" && find("Sat", "09:00"), "table timetable rows and am/pm times");
-    ok(tt.length === 7, "7 class times found: " + tt.length);
+    ok(tt.length === 9 && find("Fri", "12:00") && find("Sun", "10:00"), "9 class times found, including a page two links deep and one only in the sitemap: " + tt.length);
     const rate = (n) => p.rates.find((x) => x.name.includes(n));
     ok(rate("Kids") && rate("Kids").price === 600 && rate("Kids").period === "month" && rate("Drop-in").period === "class" && rate("Joining").period === "once", "rates with periods: " + JSON.stringify(p.rates.map((x) => [x.name, x.price, x.period])));
     ok(p.rates.some((x) => x.price === 850 && x.period === "month" && x.currency === "ZAR"), "R 850 per month read as ZAR monthly");
@@ -48,7 +48,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(p.coaches.length === 2 && p.coaches[0].name === "Thabo Nkosi" && /Black belt/.test(p.coaches[0].rank) && /15 years/.test(p.coaches[0].bio), "coaches with rank and bio");
     ok(r.logos.length >= 1 && /^data:image\/png;base64,/.test(r.logos[0].dataUrl) && /site-logo/.test(r.logos[0].url), "logo found and previewed");
     ok(r.logos.length === 1, "the same logo at two addresses is shown once");
-    ok(!site.hits.includes("/shop") && r.pages.length === 5, "reads the useful pages, not the shop: " + r.pages.map((x) => x.url).join(" "));
+    ok(!site.hits.includes("/shop") && !site.hits.includes("/shop/rashguard") && r.pages.length === 8 && r.pages.some((x) => /\/the-academy\/friday$/.test(x.url)) && r.pages.some((x) => /\/hidden$/.test(x.url)), "crawls the whole site (links and sitemap), skipping the shop: " + r.pages.map((x) => x.url.replace(/^https?:\/\/[^/]+/, "")).join(" "));
 
     // ---- Claude read with a stand-in client
     let sent = null;
@@ -62,10 +62,13 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const c = await im.importSite(site.url, { client: fake(ai) });
     ok(c.method === "claude", "with a client it uses the Claude read");
     ok(sent.model === "claude-opus-5-5" && sent.fallbacks === "default" && sent.betas.includes("server-side-fallback-2026-07-01"), "request uses the model with refusal fallbacks");
+    ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-schedule-2026\.png/.test(b.source.url)), "a timetable picture found anywhere on the site is sent to Claude");
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.find((b) => b.type === "text").text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
     ok(c.profile.timetable.length === 1 && c.profile.timetable[0].day === "Thu", "Claude's timetable replaces the plain one; invalid rows dropped");
+    const fromImg = await im.importSite(site.url, { client: fake({ ...ai, timetable: [{ day: "Mon", start: "17:00", end: "", title: "Kids Gi BJJ", coach: "", level: "Kids", source: "image", quote: "MON 5PM KIDS GI BJJ" }] }) });
+    ok(fromImg.profile.timetable.length === 1 && fromImg.dropped.timetable === 0, "rows Claude read from the timetable picture are kept");
     ok(c.dropped.timetable === 3 && !c.profile.timetable.some((r) => /Sunrise|BJJ$/.test(r.title)), "class times that aren't on the site are thrown away (made-up quote, or a real quote without the time)");
     ok(c.dropped.rates === 1 && c.profile.rates.length === 1 && c.dropped.coaches === 1 && c.profile.coaches.length === 1, "made-up prices and coaches are thrown away too");
     ok(/Never fill in typical class times/.test(sent.system) && sent.output_config.format.schema.properties.timetable.items.required.includes("quote"), "Claude is asked to quote its source for each item");
@@ -75,7 +78,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(c.profile.phone && c.profile.socials.instagram && c.profile.socials.youtube && c.profile.notes === "First class free.", "blank Claude fields are filled from the plain read");
     ok(c.logos[0] && c.logos[0].url !== r.logos[0].url, "Claude's logo choice goes first");
     const refused = await im.importSite(site.url, { client: { beta: { messages: { create: async () => ({ stop_reason: "refusal", content: [] }) } } } });
-    ok(refused.method === "basic" && /declined/.test(refused.aiError) && refused.profile.timetable.length === 7, "a refusal falls back to the plain read");
+    ok(refused.method === "basic" && /declined/.test(refused.aiError) && refused.profile.timetable.length === 9, "a refusal falls back to the plain read");
     const broken = await im.importSite(site.url, { client: { beta: { messages: { create: async () => { throw Object.assign(new Error("overloaded"), { status: 529 }); } } } } });
     ok(broken.method === "basic" && broken.profile.rates.length > 0, "an API error falls back to the plain read");
 

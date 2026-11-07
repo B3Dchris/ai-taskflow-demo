@@ -59,7 +59,7 @@ HEAD = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="JitsFlow: your no-gi game, mapped. A technique database and flow chart for off the mat: every position, attack chain and escape from white to black belt.">
+<meta name="description" content="JitsFlow: a no-gi technique library and flow map to study between classes. Every position, attack chain and escape from white to black belt.">
 <link rel="canonical" href="https://www.jitsflow.com/app/">
 <meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
 <meta name="theme-color" content="#1D4FB5">
@@ -68,7 +68,7 @@ HEAD = """<!doctype html>
 <meta name="apple-mobile-web-app-title" content="JitsFlow">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta property="og:title" content="JitsFlow">
-<meta property="og:description" content="Your no-gi game, mapped.">
+<meta property="og:description" content="No-gi technique library and flow map.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" href="/icons/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -149,7 +149,7 @@ def build_web(app):
     html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
-    landing = landing.replace("@@NTECH@@", str(len(re.findall(r'\bid:"[a-z0-9_]+",n:"', app)))).replace("@@LDJSON@@", landing_ld(landing))
+    landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     version = hashlib.sha256((html + landing).encode()).hexdigest()[:10]

@@ -109,7 +109,7 @@ function client(base) {
     r = await stu2("POST", "/coach/import", { url: site.url }); ok(r.s === 403, "students can't import");
     r = await coach("POST", "/coach/import", { url: "http://10.0.0.5/" }); ok(r.s === 400 && /public website/.test(r.j.error), "private addresses are refused by the API");
     r = await coach("POST", "/coach/import", { url: site.url });
-    ok(r.s === 200 && r.j.method === "basic" && r.j.profile.timetable.length === 7 && r.j.logos.length > 0, "coach imports their website");
+    ok(r.s === 200 && r.j.method === "basic" && r.j.profile.timetable.length === 9 && r.j.logos.length > 0 && r.j.pages.length === 8, "coach imports their whole website");
     const imp = r.j;
     r = await coach("GET", "/gym"); ok(r.s === 200 && !(r.j.gym.profile.timetable || []).length, "nothing is saved until the coach confirms");
     imp.profile.timetable = imp.profile.timetable.filter((x) => x.day !== "Sat");
@@ -119,7 +119,7 @@ function client(base) {
     const lr = await fetch(`http://127.0.0.1:${port}` + logoUrl);
     ok(lr.status === 200 && lr.headers.get("content-type") === "image/png" && /immutable/.test(lr.headers.get("cache-control") || ""), "logo is served from JitsFlow");
     r = await stu2("GET", "/gym");
-    ok(r.s === 200 && r.j.gym.profile.timetable.length === 6 && r.j.gym.profile.rates.length >= 3 && r.j.gym.logo === logoUrl, "students see the saved timetable, rates and logo");
+    ok(r.s === 200 && r.j.gym.profile.timetable.length === 8 && r.j.gym.profile.rates.length >= 3 && r.j.gym.logo === logoUrl, "students see the saved timetable, rates and logo");
     r = await stu2("GET", "/me"); ok(r.j.me.gym.logo === logoUrl, "students' account shows the gym logo");
     r = await coach("GET", "/coach/roster"); ok(r.j.gymFeeCents === 90000, "an existing standard fee is not overwritten by the import");
     r = await other("GET", "/gym"); ok(r.s === 200 && !(r.j.gym.profile.timetable || []).length, "other gyms don't get this profile");

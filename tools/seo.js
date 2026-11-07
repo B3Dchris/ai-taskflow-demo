@@ -65,7 +65,7 @@ ${body}
 </main>
 <footer><div class="wrap">
 <nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
-<p>JitsFlow · Your no-gi game, mapped. A technique library and flow chart to study off the mat. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
+<p>JitsFlow · No-gi technique library and flow map. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
 </div></footer>
 <script>
 document.addEventListener("click",function(e){var b=e.target.closest(".vidbtn");if(b){var id=b.getAttribute("data-v");var f=document.createElement("iframe");f.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1";f.title=b.getAttribute("aria-label");f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.allowFullscreen=true;b.replaceWith(f);window.jfTrack&&jfTrack("video_start",{video_id:id});return}
@@ -78,7 +78,7 @@ var q=document.getElementById("tq");if(q)q.addEventListener("input",function(){v
 `;
 }
 const shareRow = (kind, text) => `<div class="share"><a class="btn" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener" data-share="${kind}">Send to a training partner</a></div>`;
-const appCta = (href, line) => `<section class="panel cta"><h2>Make it stick</h2><p>${line}</p><a class="btn primary" href="${href}" data-ev="open_app">Open in JitsFlow</a><p class="small muted">Free. Works offline at the gym. Add it to your home screen.</p></section>`;
+const appCta = (href, line) => `<section class="panel cta"><h2>Track it in JitsFlow</h2><p>${line}</p><a class="btn primary" href="${href}" data-ev="open_app">Open in JitsFlow</a><p class="small muted">Free. Works offline at the gym. Add it to your home screen.</p></section>`;
 
 /* ---------- linking glossary terms inside text ---------- */
 function termLinker(gloss) {
@@ -104,7 +104,7 @@ function cardHtml({ eyebrow, title, sub, belt }) {
   const bc = BELTC[belt] || "#1D4FB5";
   return `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@700;800&family=Source+Sans+3:wght@600&display=swap">
 <style>*{box-sizing:border-box;margin:0}body{width:1200px;height:630px;overflow:hidden;color:#EEF2FA;font-family:"Source Sans 3",sans-serif;
-background:radial-gradient(900px 500px at 82% 20%,rgba(47,107,255,.35),transparent 60%),radial-gradient(800px 500px at 0% 110%,rgba(94,45,140,.32),transparent 60%),linear-gradient(180deg,#0A1020,#0E1A33);
+background:#0D1730;
 padding:64px 72px;display:flex;flex-direction:column;justify-content:space-between;position:relative}
 .top{display:flex;align-items:center;gap:16px;font-family:"Saira Condensed";font-weight:800;font-size:44px;text-transform:uppercase;letter-spacing:.01em}
 .mark{width:58px;height:20px;background:#151515;border:2px solid #3A4458;position:relative}.mark:after{content:"";position:absolute;right:8px;top:0;bottom:0;width:16px;background:#B3261E}
@@ -115,7 +115,7 @@ h1{font-family:"Saira Condensed";font-weight:800;text-transform:uppercase;line-h
 .belt{position:absolute;left:0;right:0;bottom:0;height:22px;background:${bc}}.belt:after{content:"";position:absolute;right:120px;top:0;bottom:0;width:90px;background:${belt === "black" ? "#B3261E" : "#151515"}}
 </style></head><body><div class="top"><span class="mark"></span>JitsFlow</div>
 <div><p class="eb">${esc(eyebrow)}</p><h1>${esc(title)}</h1>${sub ? `<p class="sub">${esc(sub)}</p>` : ""}</div>
-<div class="foot"><span>Your no-gi game, mapped</span><span>jitsflow.com</span></div><div class="belt"></div></body></html>`;
+<div class="foot"><span>No-gi technique library</span><span>jitsflow.com</span></div><div class="belt"></div></body></html>`;
 }
 async function renderCards(page, cards) {
   const manPath = path.join(ROOT, "tools", "og-manifest.json");
@@ -278,7 +278,7 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   const all = [{ url: "/", pri: 1 }, { url: "/app/", pri: 0.6 }, ...pages];
   write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${all.map((p) => `<url><loc>${SITE}${p.url}</loc><lastmod>${today}</lastmod><priority>${p.pri.toFixed(1)}</priority></url>`).join("\n")}\n</urlset>\n`);
   write("robots.txt", `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
-  cards.push({ file: "og/home.jpg", eyebrow: "No-gi BJJ study app", title: "Your no-gi game, mapped", sub: `${D.tech.length} techniques, every position, attack chain and escape, white to black belt.`, belt: "black" });
+  cards.push({ file: "og/home.jpg", eyebrow: "No-gi BJJ study app", title: "Know what to do from every position", sub: `${D.tech.length} techniques, every position, attack chain and escape, white to black belt.`, belt: "black" });
   return { pages: all.length, cards };
 }
 
@@ -289,6 +289,7 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   const D = await loadData(page);
   const { pages, cards } = build(D);
   const made = await renderCards(page, cards);
+  fs.writeFileSync(path.join(ROOT, "dist", "counts.json"), JSON.stringify({ techniques: D.tech.length, positions: Object.keys(D.pos).length, terms: D.gloss.length }));
   await b.close();
   console.log(`seo: ${pages} pages in the sitemap, ${cards.length} share cards (${made} redrawn)`);
 })().catch((e) => { console.error(e); process.exit(1); });
