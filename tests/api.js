@@ -168,6 +168,16 @@ function client(base) {
     const inv = sink.mails[sink.mails.length - 1];
     ok(r.s === 200 && r.j.sent === 1 && r.j.already.includes("sam@example.com") && sink.mails.length === n + 1, "invites go to new people only, once each");
     ok(inv.to[0] === "lee@example.com" && inv.html.includes("https://www.jitsflow.test/app/?join=" + (await coach("GET", "/me")).j.me.gym.studentCode) && /invited you to/.test(inv.subject), "invite email carries the join link");
+    // --- WhatsApp numbers and student invites
+    r = await stu2("PATCH", "/me", { phone: "082 123 4567<script>" }); ok(r.s === 200 && r.j.me.phone === "082 123 4567", "a student saves a WhatsApp number (junk stripped)");
+    r = await stu2("PATCH", "/me", { phone: "12" }); ok(r.j.me.phone === "", "too-short numbers aren't kept");
+    await stu2("PATCH", "/me", { phone: "+27 82 123 4567" });
+    r = await coach("GET", "/coach/roster"); const samRow = r.j.people.find((p) => p.name === "Sam"); ok(samRow.phone === "+27 82 123 4567", "coaches see the number on the roster");
+    r = await coach("PATCH", `/coach/students/${sam.id}`, { phone: "083 555 0000" }); r = await coach("GET", `/coach/students/${sam.id}`); ok(r.j.student.phone === "083 555 0000", "coaches can set a student's number");
+    r = await stu2("GET", "/me"); const coachGym = (await coach("GET", "/me")).j.me.gym;
+    ok(r.j.me.gym.inviteCode === coachGym.studentCode && !r.j.me.gym.coachCode && !r.j.me.gym.studentCode, "students get the student invite code to share (never the coach code)");
+    await coach("PATCH", "/coach/gym", { studentsInvite: false }); r = await stu2("GET", "/me"); ok(!r.j.me.gym.inviteCode, "a coach can stop students sharing invites");
+    await coach("PATCH", "/coach/gym", { studentsInvite: true });
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");

@@ -106,6 +106,38 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(s3, () => go("today")); await s3.waitForTimeout(500);
     ok(await ev(s3, () => /Competing/i.test(document.getElementById("app").innerText) && /Gauteng Open/.test(document.getElementById("app").innerText)), "Today shows the upcoming competition");
     await wait(300); ok(sink.mails.some((m) => /Cat Diaz wants to compete/.test(m.subject)) && sink.mails.some((m) => m.to[0] === "cat@race.test" && /on the team/.test(m.subject)), "request and decision emails go out");
+    // ---- WhatsApp
+    const waText = (href) => { const u = new globalThis.URL(href); return { num: u.pathname.slice(1), text: u.searchParams.get("text") || "" }; };
+    await ev(co, () => { hideSheet(); }); await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(500);
+    let w = waText(await ev(co, () => document.getElementById("wa-go").href));
+    ok(/\/app\/\?join=[A-Z0-9]{8}/.test(w.text), "WhatsApp: the invite message carries the join link: " + w.text.slice(0, 80));
+    await co.tap('[data-a="wakind"][data-v="week"]'); await co.waitForTimeout(400);
+    w = waText(await ev(co, () => document.getElementById("wa-go").href));
+    ok(/classes this week/.test(w.text) && /Starting soon/.test(w.text) && /spots? left|full/.test(w.text) && /#book/.test(w.text), "WhatsApp: this week's classes, with spots left and a booking link");
+    await co.fill("#wa-text", "Edited message 123"); w = waText(await ev(co, () => document.getElementById("wa-go").href));
+    ok(w.text === "Edited message 123", "WhatsApp: editing the message changes what gets sent");
+    await co.tap('[data-a="wakind"][data-v="comp"]'); await co.waitForTimeout(400);
+    w = waText(await ev(co, () => document.getElementById("wa-go").href));
+    ok(/Gauteng Open/.test(w.text) && /Our team \(2\)/.test(w.text), "WhatsApp: a competition with the team list");
+    ok(await ev(co, () => /coach access/.test(WA_T.coach()) && /join=/.test(WA_T.coach())), "WhatsApp: invite-a-coach message warns it gives coach access");
+    await co.tap('nav.tabs [data-v="coach-today"]'); await co.waitForTimeout(500);
+    ok(await ev(co, () => [...document.querySelectorAll('.quick a[data-wa]')].length === 2), "Today has WhatsApp quick actions");
+    // a student's number becomes a direct chat link
+    await ev(s1, async () => { hideSheet(); go("settings"); }); await s1.waitForTimeout(400);
+    await s1.fill("#a-phone", "082 123 4567"); await s1.tap('#phoneform [type=submit]'); await s1.waitForTimeout(700);
+    ok(/WhatsApp number saved/.test(await toast(s1)), "student saves their WhatsApp number");
+    const anaId = await ev(co, async () => { await coachLoad("roster"); return students().find((p) => p.name === "Ana Lima").id; });
+    await ev(co, (id) => studentSheet(id), anaId); await co.waitForTimeout(800);
+    w = waText(await ev(co, () => document.querySelector('#sheet a[data-wa="student"]').href));
+    ok(w.num === "27821234567" && w.text === "Hi Ana, ", "coach's Message button opens Ana's own chat (082… becomes 27 82…)");
+    // student sharing
+    await ev(s1, () => { API.me = null; }); await ev(s1, async () => { const j = await api("GET", "/me"); API.me = j.me; render(); }); await s1.waitForTimeout(400);
+    w = waText(await ev(s1, () => document.querySelector('a[data-wa="invite_friend"]').href));
+    ok(/Come train with me at Race Gym/.test(w.text) && /join=[A-Z0-9]{8}/.test(w.text), "student invites a friend to the gym on WhatsApp");
+    const tid = await ev(s1, () => TECH.find((t) => t.id === "kimura_sc").id); await ev(s1, (id) => techSheet(id), tid); await s1.waitForTimeout(400);
+    w = waText(await ev(s1, () => document.querySelector('#sheet a[data-wa="technique"]').href));
+    const pageUrl = w.text.match(/https:\/\/www\.jitsflow\.com(\/techniques\/[^\s]+)/);
+    ok(pageUrl && (await fetch(URL + pageUrl[1])).status === 200, "technique share links to its real public page: " + (pageUrl && pageUrl[1]));
     for (const p of [co, s1, s2, s3]) ok(await ev(p, () => document.documentElement.scrollWidth <= 390), "no sideways scroll");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));

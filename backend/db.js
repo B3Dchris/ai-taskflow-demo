@@ -114,6 +114,8 @@ alter table users add column if not exists plan_started date;
 alter table users add column if not exists rank_changed_at timestamptz;
 create index if not exists attendance_user on attendance(user_id);
 create index if not exists attendance_waiting on attendance(class_id, booked_at) where waitlisted;
+alter table users add column if not exists phone text not null default '';
+alter table gyms add column if not exists students_invite boolean not null default true;
 create table if not exists competitions(
   id bigserial primary key,
   gym_id bigint not null references gyms(id) on delete cascade,

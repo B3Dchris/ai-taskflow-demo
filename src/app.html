@@ -262,6 +262,9 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .swipe.cardsw{border-radius:14px}.swipe.cardsw>.sw-front{border-radius:14px}.swipe>.sw-front>.sess{margin:0}
 .swipetip{font-size:13px;color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){.swipe>.sw-front{transition:none}}
+.btn.wa{gap:8px;border-color:#25D366;text-decoration:none;color:var(--ink)}.btn.wa .waico{width:20px;height:20px;fill:none;stroke:#1FAF54;stroke-width:1.8;stroke-linejoin:round;flex:none}
+.btn.wa.primary-wa{background:#1FAF54;border-color:#1FAF54;color:#fff}.btn.wa.primary-wa .waico{stroke:#fff}
+#wa-panel textarea{font-size:15px}
 .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick .btn{min-height:52px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
 .bc-main{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;text-align:left;background:none;border:0;padding:12px 12px 6px;color:inherit;font:inherit}
@@ -1859,6 +1862,7 @@ function techSheet(id,fromBack){
     <p class="lead">${gl(OV[t.id]||"")}</p>
     ${(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):vidOf(t.id)?(inClaude()?posVisual(t.f)+ytPlayer(t.id,t.n):ytPlayer(t.id,t.n)):posVisual(t.f)}
     ${ytBtn(ytName(t.n),vidOf(t.id)?"More "+ytName(t.n)+" videos on YouTube":"Watch "+ytName(t.n)+" on YouTube")}
+    ${inClaude()?"":waBtn(`${t.n} (no-gi), step by step with a video: https://www.jitsflow.com/techniques/${techSlug(t.id)}/`,"Send to a training partner",{kind:"technique"})}
     <div class="fromto"><button class="posbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].L)}</button><span>→</span>${t.t==="sub"?`<span class="cat" data-c="sub">Tap</span>`:`<button class="posbtn" data-a="pos" data-v="${t.t}">${esc(POS[t.t].L)}</button>`}</div>
     ${t.w?`<div class="warnbox">${esc(t.w)}</div>`:""}
     ${UNC.has(t.id)?`<div class="coachbox${coachOK(t.id)?" ok":""}"><b>${coachOK(t.id)?"Coach checked ✓":"Check with your coach"}</b><span class="small">${coachOK(t.id)?"You've gone through this one with your coach.":"Some details of this move vary between coaches or haven't been verified. Go through it with your coach before you drill it hard."}</span><button class="btn" data-a="coachok" data-v="${t.id}">${coachOK(t.id)?"Undo":"My coach checked this"}</button></div>`:""}
@@ -1923,6 +1927,7 @@ function viewSettings(){
   return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Settings</h1>
   ${accountSection()}
   ${isCoach()?"":gymCard(false)}
+  ${studentWaSection()}
   ${appearanceSection()}
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
@@ -1977,6 +1982,7 @@ window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(!TAB
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
+  {const w=e.target.closest("[data-wa]");if(w)jfTrack("share",{method:"whatsapp",content_type:w.dataset.wa})}
   if(e.target.closest(".swipe[data-swiped]")&&!e.target.closest(".sw-btn"))return;
   {const ow=e.target.closest(".swipe.open");if(ow&&!e.target.closest(".sw-btn")){closeSwipes();return}if(!ow)closeSwipes()}
     const bar=e.target.closest(".chart .bar");if(bar){toast(bar.getAttribute("aria-label"));return}
@@ -2040,6 +2046,8 @@ document.addEventListener("click",e=>{
     case "student": studentSheet(v);break;
     case "paynew": paySheet(v||null);break;
     case "copy": copyText(v);break;
+    case "copytext": { const t=document.getElementById(v);if(t)copyText(t.value);break }
+    case "wakind": S.ui.wa={kind:v};render();setTimeout(()=>{const p=document.getElementById("wa-panel");if(p)p.scrollIntoView({block:"start"})},0);break;
     case "theme": setTheme(v);render();toast(v==="system"?"Following your phone's light or dark setting.":v==="dark"?"Dark mode on.":"Light mode on.");break;
     case "gymedit": gymEditOpen();break;
     case "germ": gimpChange(el.dataset.k,Number(v));break;
@@ -2110,6 +2118,7 @@ document.addEventListener("keydown",e=>{
 let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   const t=e.target;
+  if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
   if(t.id==="q"){S.ui.q=t.value;clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
   if(t.dataset.note){P().notes[t.dataset.note]=t.value;saveProgress();return}
@@ -2126,6 +2135,8 @@ document.addEventListener("change",e=>{
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
   if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
   if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}
+  if(t.id==="wa-comp"){S.ui.wa={kind:"comp",comp:t.value};render();return}
+  if(t.id==="g-invite"){api("PATCH","/coach/gym",{studentsInvite:t.checked}).then(j=>{API.me=j.me;toast(t.checked?"Students can invite friends.":"Only coaches can send invites now.")}).catch(e=>toast(e.message));return}
   if(t.id==="g-show"){api("PATCH","/coach/gym",{showAttendees:t.checked}).then(j=>{API.me=j.me;API.classes=null;toast(t.checked?"Students can see who's booked.":"Booking lists are now private.")}).catch(e=>toast(e.message));return}
   if(t.dataset.assign&&t.value){api("PATCH",`/coach/payments/${t.dataset.assign}`,{userId:t.value}).then(async()=>{toast("Payment assigned.");await coachLoad()}).catch(e=>toast(e.message));return}
   if(t.dataset.ob&&S.ui.ob){S.ui.ob[t.dataset.ob]=t.value;return}
@@ -2134,7 +2145,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2145,6 +2156,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="planform")return savePlan(f);
     if(fid==="privform")return savePriv(f);
     if(fid==="compform")return saveComp(f);
+    if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
     if(fid==="compimpform")return compImport(f);
     if(fid==="compreqform")return sendCompReq(f);
     if(fid==="compentryform")return saveCompEntry(f);
@@ -2239,6 +2251,9 @@ async function askAI(id,q){const t=TM[id];if(!SAMPLE||!t||S.ui.aiBusy)return;
 document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){S.ui.openG=S.ui.openG||{};if(d.open)S.ui.openG[d.dataset.g]=1;else delete S.ui.openG[d.dataset.g]}},true);
 
 /* ============ SWIPE ROWS: swipe right to edit, left to delete (both reveal a button; nothing happens until it's tapped) ============ */
+/* The public page for a technique (matches tools/seo.js: name-based address, id added only when two names clash). */
+const techSlug=(()=>{let m=null;const sl=x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  return id=>{if(!m){m={};const seen={};TECH.forEach(t=>{let x=sl(t.n.replace(/&/g,"and"))||sl(t.id);if(seen[x])x=x+"-"+sl(t.id);seen[x]=1;m[t.id]=x})}return m[id]}})();
 function swipeWrap(html,o){const e=o.edit,d=o.del;
   return `<div class="swipe"${e?' data-edit="1"':""}${d?' data-del="1"':""}>${e?`<button class="sw-btn sw-edit" data-a="${e[0]}" data-v="${esc(e[1])}" tabindex="-1">${e[2]||"Edit"}</button>`:""}${d?`<button class="sw-btn sw-del" data-a="${d[0]}" data-v="${esc(d[1])}" tabindex="-1">${d[2]||"Delete"}</button>`:""}<div class="sw-front">${html}</div></div>`}
 function closeSwipes(except){document.querySelectorAll(".swipe.open,.swipe.show-edit,.swipe.show-del").forEach(w=>{if(w===except)return;w.classList.remove("open","show-edit","show-del");const f=w.querySelector(".sw-front");if(f)f.style.transform=""})}

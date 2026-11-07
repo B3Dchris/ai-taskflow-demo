@@ -262,6 +262,9 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .swipe.cardsw{border-radius:14px}.swipe.cardsw>.sw-front{border-radius:14px}.swipe>.sw-front>.sess{margin:0}
 .swipetip{font-size:13px;color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){.swipe>.sw-front{transition:none}}
+.btn.wa{gap:8px;border-color:#25D366;text-decoration:none;color:var(--ink)}.btn.wa .waico{width:20px;height:20px;fill:none;stroke:#1FAF54;stroke-width:1.8;stroke-linejoin:round;flex:none}
+.btn.wa.primary-wa{background:#1FAF54;border-color:#1FAF54;color:#fff}.btn.wa.primary-wa .waico{stroke:#fff}
+#wa-panel textarea{font-size:15px}
 .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick .btn{min-height:52px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
 .bc-main{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;text-align:left;background:none;border:0;padding:12px 12px 6px;color:inherit;font:inherit}
@@ -3666,6 +3669,7 @@ function techSheet(id,fromBack){
     <p class="lead">${gl(OV[t.id]||"")}</p>
     ${(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):vidOf(t.id)?(inClaude()?posVisual(t.f)+ytPlayer(t.id,t.n):ytPlayer(t.id,t.n)):posVisual(t.f)}
     ${ytBtn(ytName(t.n),vidOf(t.id)?"More "+ytName(t.n)+" videos on YouTube":"Watch "+ytName(t.n)+" on YouTube")}
+    ${inClaude()?"":waBtn(`${t.n} (no-gi), step by step with a video: https://www.jitsflow.com/techniques/${techSlug(t.id)}/`,"Send to a training partner",{kind:"technique"})}
     <div class="fromto"><button class="posbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].L)}</button><span>→</span>${t.t==="sub"?`<span class="cat" data-c="sub">Tap</span>`:`<button class="posbtn" data-a="pos" data-v="${t.t}">${esc(POS[t.t].L)}</button>`}</div>
     ${t.w?`<div class="warnbox">${esc(t.w)}</div>`:""}
     ${UNC.has(t.id)?`<div class="coachbox${coachOK(t.id)?" ok":""}"><b>${coachOK(t.id)?"Coach checked ✓":"Check with your coach"}</b><span class="small">${coachOK(t.id)?"You've gone through this one with your coach.":"Some details of this move vary between coaches or haven't been verified. Go through it with your coach before you drill it hard."}</span><button class="btn" data-a="coachok" data-v="${t.id}">${coachOK(t.id)?"Undo":"My coach checked this"}</button></div>`:""}
@@ -3730,6 +3734,7 @@ function viewSettings(){
   return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Settings</h1>
   ${accountSection()}
   ${isCoach()?"":gymCard(false)}
+  ${studentWaSection()}
   ${appearanceSection()}
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
@@ -3784,6 +3789,7 @@ window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(!TAB
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
+  {const w=e.target.closest("[data-wa]");if(w)jfTrack("share",{method:"whatsapp",content_type:w.dataset.wa})}
   if(e.target.closest(".swipe[data-swiped]")&&!e.target.closest(".sw-btn"))return;
   {const ow=e.target.closest(".swipe.open");if(ow&&!e.target.closest(".sw-btn")){closeSwipes();return}if(!ow)closeSwipes()}
     const bar=e.target.closest(".chart .bar");if(bar){toast(bar.getAttribute("aria-label"));return}
@@ -3847,6 +3853,8 @@ document.addEventListener("click",e=>{
     case "student": studentSheet(v);break;
     case "paynew": paySheet(v||null);break;
     case "copy": copyText(v);break;
+    case "copytext": { const t=document.getElementById(v);if(t)copyText(t.value);break }
+    case "wakind": S.ui.wa={kind:v};render();setTimeout(()=>{const p=document.getElementById("wa-panel");if(p)p.scrollIntoView({block:"start"})},0);break;
     case "theme": setTheme(v);render();toast(v==="system"?"Following your phone's light or dark setting.":v==="dark"?"Dark mode on.":"Light mode on.");break;
     case "gymedit": gymEditOpen();break;
     case "germ": gimpChange(el.dataset.k,Number(v));break;
@@ -3917,6 +3925,7 @@ document.addEventListener("keydown",e=>{
 let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   const t=e.target;
+  if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
   if(t.id==="q"){S.ui.q=t.value;clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
   if(t.dataset.note){P().notes[t.dataset.note]=t.value;saveProgress();return}
@@ -3933,6 +3942,8 @@ document.addEventListener("change",e=>{
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
   if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
   if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}
+  if(t.id==="wa-comp"){S.ui.wa={kind:"comp",comp:t.value};render();return}
+  if(t.id==="g-invite"){api("PATCH","/coach/gym",{studentsInvite:t.checked}).then(j=>{API.me=j.me;toast(t.checked?"Students can invite friends.":"Only coaches can send invites now.")}).catch(e=>toast(e.message));return}
   if(t.id==="g-show"){api("PATCH","/coach/gym",{showAttendees:t.checked}).then(j=>{API.me=j.me;API.classes=null;toast(t.checked?"Students can see who's booked.":"Booking lists are now private.")}).catch(e=>toast(e.message));return}
   if(t.dataset.assign&&t.value){api("PATCH",`/coach/payments/${t.dataset.assign}`,{userId:t.value}).then(async()=>{toast("Payment assigned.");await coachLoad()}).catch(e=>toast(e.message));return}
   if(t.dataset.ob&&S.ui.ob){S.ui.ob[t.dataset.ob]=t.value;return}
@@ -3941,7 +3952,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -3952,6 +3963,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="planform")return savePlan(f);
     if(fid==="privform")return savePriv(f);
     if(fid==="compform")return saveComp(f);
+    if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
     if(fid==="compimpform")return compImport(f);
     if(fid==="compreqform")return sendCompReq(f);
     if(fid==="compentryform")return saveCompEntry(f);
@@ -4088,6 +4100,8 @@ function accountSection(){
     <div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button><button class="btn" data-a="auth" data-v="gym">Start a gym</button></div></section>`;
   const g=API.me.gym;
   return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(API.me.name)}</b><br><span class="small muted">${esc(API.me.email)}</span></div>
+    <form id="phoneform" class="row" style="flex-wrap:nowrap"><input id="a-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="WhatsApp number (optional)" value="${esc(API.me.phone||"")}" aria-label="WhatsApp number" style="flex:1"><button class="btn" type="submit">Save</button></form>
+    <p class="small muted" style="margin-top:-6px">${API.me.role==="coach"?"Shown to nobody; used for your own WhatsApp links.":"Lets your coach message you on WhatsApp. Only coaches see it."}</p>
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":"Training at"} <b>${esc(g.name)}</b></p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
     <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
     ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">This permanently deletes your account, progress, training log and attendance from the server. Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>`;
@@ -4164,7 +4178,7 @@ function coachToday(){
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div></div></section>
     <section class="stack"><h2 class="label">Quick actions</h2><div class="quick">
       <button class="btn" data-a="classnew">+ Add a class</button><button class="btn" data-a="paynew">Record a payment</button>
-      <button class="btn" data-a="copy" data-v="${esc(joinURL(API.me.gym.studentCode))}">Copy student invite link</button><button class="btn" data-a="coachgo" data-v="comps">+ Competition</button></div></section>`;
+      ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}<button class="btn" data-a="coachgo" data-v="comps">+ Competition</button></div></section>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
 /* ----- calendar (coach Classes tab and the student Classes tab) ----- */
@@ -4333,6 +4347,7 @@ async function studentSheet(id){
       <label class="f">Status<select id="s-status" name="pstatus">${["active","trial","paused","cancelled"].map(x=>`<option value="${x}"${(s.planStatus||"active")===x?" selected":""}>${cap1(x)}</option>`).join("")}</select></label></div>
       <label class="f">Started<input id="s-started" name="pstarted" type="date" value="${esc(s.planStarted||"")}"></label>
       <label class="f">Monthly fee override (${esc(cur)})<input id="s-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${s.feeOverride!=null?s.feeOverride/100:""}" placeholder="${(s.feeCents||0)/100} from plan or gym fee"></label>
+      <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">WhatsApp number<input id="s-phone" name="phone" type="tel" inputmode="tel" value="${esc(s.phone||"")}" placeholder="e.g. 082 123 4567"></label>${s.phone?waBtn(`Hi ${first(s.name)}, `,"Message",{phone:s.phone,kind:"student"}):""}</div>
       <label class="f">Coach notes (only coaches see these)<textarea id="s-notes" name="notes">${esc(s.notes||"")}</textarea></label>
       <label class="row small"><input id="s-active" name="active" type="checkbox" style="width:auto"${s.active?" checked":""}> Active student</label></form>
     <section class="stack"><div class="row between"><h2 class="label">Payments</h2><button class="btn" data-a="paynew" data-v="${s.id}">Record payment</button></div>
@@ -4342,7 +4357,7 @@ async function studentSheet(id){
   </div>`,false,{act:`<button class="btn primary grow" type="submit" form="studentform">Save</button>`});
 }
 async function submitStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value;const id=S.ui.sheet.id;
-  try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),notes:v("notes"),active:form.querySelector("[name=active]").checked,planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null});
+  try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),notes:v("notes"),phone:v("phone")||"",active:form.querySelector("[name=active]").checked,planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null});
     toast("Student saved.");hideSheet();await coachLoad("roster");coachGo("students")}catch(e){toast(e.message)}}
 function coachPayments(){
   const ps=COACH.payments||[],cur=COACH.roster.currency,ppl=students(),byId=Object.fromEntries((COACH.roster.people||[]).map(p=>[p.id,p]));
@@ -4367,8 +4382,9 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
   try{await api("POST","/coach/payments",{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100),paidOn:v("date"),reference:v("ref"),note:v("note")});
     toast("Payment recorded.");hideSheet();await coachLoad();coachGo("money")}catch(e){toast(e.message)}}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack">${gymCard(true)}
-    <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label></div>
+  return `<section class="stack">${waPanel()}${gymCard(true)}
+    <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
+      <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label></div>
     ${gymImportPanel()}${gymClassesPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
       <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
     ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2><p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
@@ -4580,6 +4596,7 @@ function bookSheet(id){
     ${c.kind!=="private"?`<section class="stack"><h2 class="label">Who's booked${c.capacity?` (${c.going}/${c.capacity})`:` (${c.going})`}</h2>
       ${a?(a.length?`<div class="list">${a.map(x=>`<div class="attrow"><span><b>${esc(x.me?"You":x.name)}</b></span>${beltChip(x.belt,x.stripes)}</div>`).join("")}</div>`:`<p class="small muted">Nobody yet. Be the first.</p>`):`<p class="small muted">Your gym keeps the list private.</p>`}
       ${c.waiting?`<p class="small muted">${c.waiting} on the waitlist.</p>`:""}</section>`:""}
+    ${c.myGoing&&c.kind!=="private"&&!inClaude()?waBtn(`I'm going to ${c.title} at ${gymName()}, ${fmtWhen(c.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask a training partner to come",{kind:"class"}):""}
   </div>`,false,{act:`<div class="row grow" style="flex-wrap:nowrap;gap:8px;justify-content:flex-end">${bookActions(c,true)}</div>`});
 }
 async function doBook(id,going){
@@ -4616,7 +4633,9 @@ function coachInsights(){
   const ids=a=>a.map(s=>s.id).join(",");
   const card=(tone,title,body,act)=>`<div class="insight ${tone}"><b>${title}</b><div class="small">${body}</div>${act?`<div class="row">${act}</div>`:""}</div>`;
   const nm=a=>a.slice(0,6).map(s=>`<button class="linkbtn" data-a="student" data-v="${s.id}">${esc(s.name)}</button>`).join(", ")+(a.length>6?` and ${a.length-6} more`:"");
-  const mailBtn=(kind,a)=>API.status.mail?`<button class="btn" data-a="msgnew" data-k="${kind}" data-v="${ids(a)}">Email ${a.length===1?"them":"all "+a.length}</button>`:"";
+  const byId={};st.forEach(x=>byId[x.id]=x);
+  const mailBtn=(kind,a)=>{const one=a.length===1&&byId[a[0].id]&&byId[a[0].id].phone;const m=MSG[kind]||MSG.blank;
+    return (API.status.mail?`<button class="btn" data-a="msgnew" data-k="${kind}" data-v="${ids(a)}">Email ${a.length===1?"them":"all "+a.length}</button>`:"")+waBtn((one?`Hi ${first(byId[a[0].id].name)}, `:"")+m[1].replace(/\n\n/g,"\n\n"),one?"WhatsApp them":"WhatsApp",{phone:one||"",kind:"insight_"+kind})};
   const cards=[
     atRisk.length&&card("warn",`${atRisk.length} student${atRisk.length>1?"s":""} at risk of dropping off`,`${nm(atRisk)}. They used to come regularly but have stopped or halved in the last 4 weeks. A short personal message often brings people back.`,mailBtn("risk",atRisk)),
     I.revenue.unpaid.length&&card("warn",`${I.revenue.unpaid.length} haven't paid this month`,`${I.revenue.unpaid.slice(0,6).map(u=>`<button class="linkbtn" data-a="student" data-v="${u.id}">${esc(u.name)}</button> (${money(u.dueCents,cur)})`).join(", ")}.`,mailBtn("pay",I.revenue.unpaid)),
@@ -4748,7 +4767,7 @@ function compSheet(id,keep){
   openSheet(`${sheetHead("Competition")}<div class="stack-lg"><div class="stack" style="gap:6px"><h1>${esc(c.name)}</h1>
       <p class="muted">${esc(compDates(c))}${c.venue||c.city?" · "+esc([c.venue,c.city].filter(Boolean).join(", ")):""}</p>${past?"":regLine(c)}
       <p class="small">${[STYLE[c.style],c.fee&&("Entry: "+c.fee),c.organiser&&("By "+c.organiser)].filter(Boolean).map(esc).join(" · ")}</p>
-      ${c.url?`<p><a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Event page</a></p>`:""}</div>
+      <div class="row">${c.url?`<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Event page</a>`:""}${coach?waBtn(WA_T.comp(c),"Share on WhatsApp",{kind:"comp"}):m&&m.status==="entered"?waBtn(`I'm competing at ${c.name} on ${compDates(c)}${m.division?` (${m.division})`:""}! Wish me luck 🤙`,"Share on WhatsApp",{kind:"comp_me"}):""}</div></div>
     ${c.details?`<p class="small">${esc(c.details)}</p>`:""}
     ${(c.divisions||[]).length?`<details class="planbox"><summary>Divisions (${c.divisions.length})</summary><ul class="small" style="margin:8px 0 0;padding-left:18px">${c.divisions.map(d=>`<li>${esc(d)}</li>`).join("")}</ul></details>`:""}
     ${!coach?`<section class="stack"><h2 class="label">You</h2>${!m||m.status==="withdrawn"?(past?`<p class="small muted">This one's over.</p>`:`<p class="small">${m?"You withdrew. Changed your mind?":"Want to compete? Ask your coach here."}</p><button class="btn primary" data-a="compreq" data-v="${c.id}">I want to compete</button>`)
@@ -4783,6 +4802,45 @@ async function compSet(cid,uid,status){try{await api("PUT",`/coach/competitions/
 function compTodayCard(){if(!API.me||!API.me.gym)return "";if(!API.comps){loadComps();return ""}
   const mine=upcomingComps().filter(c=>c.mine&&c.mine.status==="entered").filter(c=>daysTo(c.startsOn)<=45);
   return mine.map(c=>{const n=daysTo(c.startsOn);return `<section class="panel accent"><h2 class="label">Competing</h2><p><b>${esc(c.name)}</b> ${n<=0?"is today. Good luck!":`in ${n} day${n===1?"":"s"}`}</p><p class="small muted">${esc([compDates(c),c.city,c.mine.division].filter(Boolean).join(" · "))}</p><button class="btn" data-a="compopen" data-v="${c.id}">Details and team</button></section>`}).join("")}
+
+/* ----- WhatsApp: opens WhatsApp with the message already written. With a number it opens that person's chat;
+   without one, WhatsApp asks which chat or group to send it to. ----- */
+const WA_CC={"Africa/Johannesburg":"27","Africa/Windhoek":"264","Africa/Gaborone":"267","Africa/Harare":"263","Africa/Maputo":"258","Africa/Nairobi":"254","Africa/Lagos":"234","Europe/London":"44","Europe/Dublin":"353","Europe/Lisbon":"351","Europe/Amsterdam":"31","Australia/Sydney":"61","Australia/Melbourne":"61","Australia/Perth":"61","Pacific/Auckland":"64","America/New_York":"1","America/Chicago":"1","America/Denver":"1","America/Los_Angeles":"1","America/Sao_Paulo":"55","Asia/Dubai":"971"};
+function waNum(ph){const raw=String(ph||"").trim();let d=raw.replace(/\D/g,"");if(!d)return "";if(raw.startsWith("+"))return d;if(d.startsWith("00"))return d.slice(2);
+  if(d.startsWith("0")){const tz=(API.me&&API.me.gym&&API.me.gym.timezone)||"Africa/Johannesburg";return (WA_CC[tz]||"27")+d.slice(1)}return d}
+const waURL=(text,phone)=>`https://wa.me/${phone?waNum(phone):""}?text=${encodeURIComponent(text)}`;
+const WA_ICON=`<svg class="waico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 19.5l1.2-3.6A8 8 0 1 1 8.4 18.6z"/><path d="M9 9.2c.3 2.6 2.2 4.6 4.9 5.4l1.2-1.2 1.9.8-.5 1.8c-3.9.4-8-3.4-8.1-7.6l1.8-.4.7 1.9z"/></svg>`;
+function waBtn(text,label,o){o=o||{};return `<a class="btn wa${o.cls?" "+o.cls:""}" href="${esc(waURL(text,o.phone))}" target="_blank" rel="noopener noreferrer" data-wa="${esc(o.kind||"share")}">${WA_ICON}<span>${esc(label||"WhatsApp")}</span></a>`}
+const first=n=>String(n||"").trim().split(/\s+/)[0]||"";
+const appLink=h=>location.origin+"/app/"+(h||"");
+const gymName=()=>(API.me&&API.me.gym&&API.me.gym.name)||"the gym";
+function classLine(c){const left=c.capacity?Math.max(0,c.capacity-c.going):null;return `${fmtTime(c.startsAt)} ${c.title}${c.level&&!c.title.includes(c.level)?` (${c.level})`:""}${left===null?"":left===0?" (full, waitlist open)":` (${left} spot${left===1?"":"s"} left)`}`}
+function classesText(from,days,heading){const list=(isCoach()?COACH.classes:API.classes)||[];const out=[];
+  for(let i=0;i<days;i++){const k=addDays2(from,i),cs=list.filter(c=>c.kind!=="private"&&dayKey(c.startsAt)===k&&clsEnd(c)>Date.now()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
+    if(cs.length)out.push(`*${fromYmd(k).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"})}*\n${cs.map(c=>"• "+classLine(c)).join("\n")}`)}
+  return out.length?`${heading}\n\n${out.join("\n\n")}\n\nBook your spot in JitsFlow: ${appLink("#book")}`:""}
+const WA_T={
+  invite:()=>`Join ${gymName()} on JitsFlow. You can book classes, see who's training, and study every technique between sessions.\n\nTap to join (our gym code is filled in for you):\n${joinURL(API.me.gym.studentCode)}`,
+  week:()=>classesText(todayK(),7,`*${gymName()}: classes this week*`)||`No classes on the calendar for the next 7 days yet.`,
+  tomorrow:()=>classesText(addDays2(todayK(),1),1,`*Tomorrow at ${gymName()}*`)||`No classes on the calendar tomorrow.`,
+  fees:()=>`Hi everyone, a reminder that ${new Date().toLocaleDateString(undefined,{month:"long"})} fees are due. Please use your name as the payment reference and send your proof of payment to the gym. Thank you!`,
+  coach:()=>`You're invited to coach at ${gymName()} on JitsFlow. This link gives coach access (the roster and payments), so please keep it to yourself:\n${joinURL(API.me.gym.coachCode)}`,
+  comp:(c)=>{if(!c)return "";const team=(c.team||[]).filter(x=>x.status==="entered");
+    return `*${c.name}*\n${compDates(c)}${c.city?" · "+c.city:""}${c.registerBy?`\nRegistration closes ${fromYmd(c.registerBy).toLocaleDateString(undefined,{day:"numeric",month:"long"})}`:""}${c.fee?`\nEntry: ${c.fee}`:""}${team.length?`\n\nOur team (${team.length}): ${team.map(x=>first(x.name)).join(", ")}`:""}\n\nWant to compete? Ask in JitsFlow: ${appLink("#book")}`},
+};
+const WA_KINDS=[["invite","Invite students"],["week","This week's classes"],["tomorrow","Tomorrow's classes"],["fees","Fees reminder"],["comp","A competition"],["coach","Invite a coach"]];
+function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomingComps();if(st.kind==="comp"&&!st.comp&&comps[0])st.comp=comps[0].id;
+  if(st.kind==="week"||st.kind==="tomorrow"){if(!COACH.classes)coachLoad("classes")}
+  const text=st.kind==="comp"?WA_T.comp(comps.find(c=>c.id===st.comp)):WA_T[st.kind]();
+  return `<section class="panel stack" id="wa-panel"><h2 class="label">WhatsApp</h2><p class="small">Pick a message, change anything you like, then open WhatsApp and choose the chat or group to send it to.</p>
+    <div class="chips" role="group" aria-label="Message">${WA_KINDS.map(([k,l])=>`<button class="chip" data-a="wakind" data-v="${k}" aria-pressed="${st.kind===k}">${l}</button>`).join("")}</div>
+    ${st.kind==="comp"?(comps.length?`<select id="wa-comp" aria-label="Competition">${comps.map(c=>`<option value="${c.id}"${c.id===st.comp?" selected":""}>${esc(c.name)}</option>`).join("")}</select>`:`<p class="small muted">Add a competition in Comps first.</p>`):""}
+    ${st.kind==="coach"?`<p class="small warn-t">This link gives coach access. Send it only to people you trust.</p>`:""}
+    <textarea id="wa-text" rows="8" aria-label="Message">${esc(text)}</textarea>
+    <div class="row"><a id="wa-go" class="btn wa primary-wa" href="${esc(waURL(text))}" target="_blank" rel="noopener noreferrer" data-wa="${st.kind}">${WA_ICON}<span>Open WhatsApp</span></a><button class="btn" data-a="copytext" data-v="wa-text">Copy text</button></div></section>`}
+function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";const g=API.me.gym,next=(API.classes||[]).find(c=>c.myGoing&&clsEnd(c)>Date.now());
+  const inv=g.inviteCode?`Come train with me at ${g.name}! I use JitsFlow to book classes and study techniques between sessions. Join here (the gym code is filled in):\n${joinURL(g.inviteCode)}`:`I'm using JitsFlow to study no-gi between classes: every position, attack chain and escape, with videos. ${location.origin}`;
+  return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;S.ui.obChecked=true;const st=P().settings;if(st.onboarded)return;
@@ -4857,6 +4915,9 @@ async function askAI(id,q){const t=TM[id];if(!SAMPLE||!t||S.ui.aiBusy)return;
 document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){S.ui.openG=S.ui.openG||{};if(d.open)S.ui.openG[d.dataset.g]=1;else delete S.ui.openG[d.dataset.g]}},true);
 
 /* ============ SWIPE ROWS: swipe right to edit, left to delete (both reveal a button; nothing happens until it's tapped) ============ */
+/* The public page for a technique (matches tools/seo.js: name-based address, id added only when two names clash). */
+const techSlug=(()=>{let m=null;const sl=x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  return id=>{if(!m){m={};const seen={};TECH.forEach(t=>{let x=sl(t.n.replace(/&/g,"and"))||sl(t.id);if(seen[x])x=x+"-"+sl(t.id);seen[x]=1;m[t.id]=x})}return m[id]}})();
 function swipeWrap(html,o){const e=o.edit,d=o.del;
   return `<div class="swipe"${e?' data-edit="1"':""}${d?' data-del="1"':""}>${e?`<button class="sw-btn sw-edit" data-a="${e[0]}" data-v="${esc(e[1])}" tabindex="-1">${e[2]||"Edit"}</button>`:""}${d?`<button class="sw-btn sw-del" data-a="${d[0]}" data-v="${esc(d[1])}" tabindex="-1">${d[2]||"Delete"}</button>`:""}<div class="sw-front">${html}</div></div>`}
 function closeSwipes(except){document.querySelectorAll(".swipe.open,.swipe.show-edit,.swipe.show-del").forEach(w=>{if(w===except)return;w.classList.remove("open","show-edit","show-del");const f=w.querySelector(".sw-front");if(f)f.style.transform=""})}

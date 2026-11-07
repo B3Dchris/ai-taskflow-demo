@@ -13,6 +13,8 @@ const BELTS = ["white", "blue", "purple", "brown", "black"];
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const code = () => Array.from(crypto.randomBytes(8), (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("");
 const clean = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+// Phone numbers as typed, minus anything that isn't a digit, space, + or dash ("082 123 4567", "+27 82 123 4567").
+const cleanPhone = (v) => { const s = String(v == null ? "" : v).replace(/[^\d+\- ]/g, "").trim().slice(0, 24); return s.replace(/\D/g, "").length >= 7 ? s : ""; };
 const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(e);
 const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d);
 // "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
@@ -58,7 +60,7 @@ function makeApi(pool, { secureCookies }) {
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
     if (tok && tok.length === 64) {
-      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees
+      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite
         from sessions s join users u on u.id=s.user_id left join gyms g on g.id=u.gym_id
         where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
       if (r.rows[0]) {
@@ -78,9 +80,11 @@ function makeApi(pool, { secureCookies }) {
     res.cookie(COOKIE, tok, { httpOnly: true, secure: secureCookies, sameSite: "lax", maxAge: SESSION_DAYS * 864e5, path: "/" });
   }
   function me(u) {
-    const out = { id: String(u.id), name: u.name, email: u.email, role: u.role, belt: u.belt, stripes: u.stripes };
+    const out = { id: String(u.id), name: u.name, email: u.email, role: u.role, belt: u.belt, stripes: u.stripes, phone: u.phone || "" };
     if (u.gym_id) out.gym = { id: String(u.gym_id), name: u.gym_name, currency: u.currency, logo: u.logo_v ? `/api/gyms/${u.gym_id}/logo?v=${u.logo_v}` : null };
-    if (u.gym_id) Object.assign(out.gym, { timezone: u.timezone || "Africa/Johannesburg", showAttendees: u.show_attendees !== false });
+    if (u.gym_id) Object.assign(out.gym, { timezone: u.timezone || "Africa/Johannesburg", showAttendees: u.show_attendees !== false, studentsInvite: u.students_invite !== false });
+    // Students may share the student invite code (to bring friends) when the gym allows it. They never see the coach code.
+    if (u.gym_id && u.role === "student" && u.students_invite !== false) out.gym.inviteCode = u.student_code;
     if (u.role === "coach" && u.gym_id) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, monthlyFeeCents: u.gym_fee });
     return out;
   }
@@ -105,7 +109,7 @@ function makeApi(pool, { secureCookies }) {
       throw e;
     }
   }
-  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees
+  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite
       from users u left join gyms g on g.id=u.gym_id where u.id=$1`, [id])).rows[0];
 
   // ---------- accounts ----------
@@ -195,7 +199,8 @@ function makeApi(pool, { secureCookies }) {
     const u = needUser(req), b = req.body || {};
     const name = b.name !== undefined ? clean(b.name, 80) : u.name;
     if (!name) fail(400, "Enter your name.");
-    await q("update users set name=$1 where id=$2", [name, u.id]);
+    const phone = b.phone !== undefined ? cleanPhone(b.phone) : u.phone || "";
+    await q("update users set name=$1, phone=$2 where id=$3", [name, phone, u.id]);
     res.json({ me: me(await loadMe(u.id)) });
   }));
 
@@ -528,7 +533,7 @@ function makeApi(pool, { secureCookies }) {
   }));
 
   async function rosterRows(u) {
-    const r = await q(`select u.id,u.name,u.email,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
+    const r = await q(`select u.id,u.name,u.email,u.phone,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
       from users u where u.gym_id=$1 order by u.role, u.name`, [u.gym_id]);
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
@@ -539,7 +544,7 @@ function makeApi(pool, { secureCookies }) {
     return { plans, vs, rows: r.rows.map((x) => {
       const plan = pm[String(x.plan_id)] || null;
       const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
-      return { ...person(x, s[x.id]), email: x.email, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
+      return { ...person(x, s[x.id]), email: x.email, phone: x.phone || "", role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
         feeCents: fee || 0, planId: plan ? String(plan.id) : null, planName: plan ? plan.name : null, planStatus: x.plan_status, planStarted: x.plan_started,
         paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
         visits: x.role === "student" ? studentStats(x, visits[x.id]) : null };
@@ -564,7 +569,7 @@ function makeApi(pool, { secureCookies }) {
     const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
       where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
     const plan = st.plan_id ? (await q("select * from plans where id=$1", [st.plan_id])).rows[0] : null;
-    res.json({ student: { ...person(st, s), email: st.email, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
+    res.json({ student: { ...person(st, s), email: st.email, phone: st.phone || "", role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
         notes: st.notes, joined: st.created_at, planId: st.plan_id ? String(st.plan_id) : null, planStatus: st.plan_status, planStarted: st.plan_started, rankChangedAt: st.rank_changed_at,
         visits: studentStats(st, visits[st.id]) },
       classes: recent.rows.map((x) => ({ title: x.title, startsAt: x.starts_at, kind: x.kind, attended: x.attended })),
@@ -583,6 +588,7 @@ function makeApi(pool, { secureCookies }) {
     const planStatus = b.planStatus !== undefined ? (PLAN_STATUS.includes(b.planStatus) ? b.planStatus : fail(400, "Pick a membership status.")) : st.plan_status;
     const planStarted = b.planStarted !== undefined ? (isDay(b.planStarted) ? b.planStarted : null) : st.plan_started;
     const rankChanged = belt !== st.belt || stripes !== st.stripes;
+    if (b.phone !== undefined) await q("update users set phone=$1 where id=$2", [cleanPhone(b.phone), st.id]);
     await q(`update users set belt=$1,stripes=$2,notes=$3,monthly_fee_cents=$4,active=$5,plan_id=$6,plan_status=$7,plan_started=$8,
       rank_changed_at=case when $9 then now() else rank_changed_at end where id=$10`, [belt, stripes, notes, fee, active, planId, planStatus, planStarted, rankChanged, st.id]);
     res.json({ ok: true });
@@ -678,7 +684,7 @@ function makeApi(pool, { secureCookies }) {
       segments: seg, slots: slotList,
       revenue: { collected, expected, unpaid: unpaid.map((p) => ({ id: p.id, name: p.name, dueCents: p.feeCents - p.paidThisMonthCents })) },
       plans: mix, noPlan: studs.filter((p) => !p.planId).length,
-      students: studs.map((p) => ({ id: p.id, name: p.name, belt: p.belt, stripes: p.stripes, joined: p.joined, planName: p.planName, planStatus: p.planStatus,
+      students: studs.map((p) => ({ id: p.id, name: p.name, phone: p.phone, belt: p.belt, stripes: p.stripes, joined: p.joined, planName: p.planName, planStatus: p.planStatus,
         mastery: p.mastery, goal: p.goal, ...p.visits })),
     });
   }));
@@ -806,8 +812,9 @@ function makeApi(pool, { secureCookies }) {
     if (!name) fail(400, "Enter your gym's name.");
     const fee = b.monthlyFeeCents !== undefined ? Math.max(0, intOr(b.monthlyFeeCents, 0)) : u.gym_fee;
     const show = b.showAttendees !== undefined ? !!b.showAttendees : u.show_attendees !== false;
+    const invite = b.studentsInvite !== undefined ? !!b.studentsInvite : u.students_invite !== false;
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
-    await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4 where id=$5", [name, fee, show, tz, u.gym_id]);
+    await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4, students_invite=$5 where id=$6", [name, fee, show, tz, invite, u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
   }));
 
