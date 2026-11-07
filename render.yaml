@@ -1,18 +1,33 @@
-# Render Blueprint for JitsFlow: a Node web service in Frankfurt on the Starter plan.
-# server.js serves the prebuilt app in web/. Run `python3 build.py` locally and commit web/ before pushing changes.
+# Render Blueprint for JitsFlow: a Node web service plus a PostgreSQL database, both in Frankfurt.
+# server.js serves the prebuilt site in web/ and the accounts API under /api.
+# Run `python3 build.py` locally and commit web/ before pushing changes.
+databases:
+  - name: jitsflow-db
+    region: frankfurt
+    plan: basic-256mb
+    databaseName: jitsflow
+    user: jitsflow
+    postgresMajorVersion: "16"
+
 services:
   - type: web
     name: jitsflow-app
     runtime: node
     region: frankfurt
     plan: starter
-    buildCommand: echo "JitsFlow is prebuilt in web/"
+    buildCommand: npm ci --omit=dev
     startCommand: node server.js
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jitsflow-db
+          property: connectionString
     # After you buy the domain, uncomment these two lines and push.
     # Render then shows the DNS records to add at your registrar.
     # domains:

@@ -18,6 +18,8 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // Account data always comes live from the server, never from the offline cache.
+  if (url.origin === location.origin && url.pathname.startsWith("/api/")) return;
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {

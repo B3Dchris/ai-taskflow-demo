@@ -33,7 +33,8 @@ def build_app():
         if os.path.exists(os.path.join(SRC, name)):
             parts.append("/* --- %s --- */\n" % name + read("src", name).strip())
     assert src.count("/*@@ADV_TECH@@*/") == 1, "content marker missing from src/app.html"
-    return src.replace("/*@@ADV_TECH@@*/", "\n".join(parts))
+    assert src.count("/*@@ACCOUNTS@@*/") == 1, "accounts marker missing from src/app.html"
+    return src.replace("/*@@ADV_TECH@@*/", "\n".join(parts)).replace("/*@@ACCOUNTS@@*/", read("src", "accounts.js"))
 
 
 def check_js(html):
@@ -87,7 +88,7 @@ def images(app):
     names = dict(re.findall(r'\b([a-z_]+):\{l:"[^"]*",L:"([^"]+)"', app))
     pos = [k for k in GALLERY if have("positions", k + ".jpg")]
     belts = [b for b in ["blue", "purple", "brown", "black"] if have("belts", b + ".jpg")]
-    return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "names": names}
+    return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "partner": have("partner-logo.png"), "names": names}
 
 
 ROLE = {"back_top": "You're behind", "ashi": "You're attacking", "open_top": "You're passing", "standing": "Neutral", "back_bot": "They're behind", "ashi_def": "Defending your leg", "fhl_bot": "Defending"}
@@ -109,6 +110,9 @@ def fill_landing(landing, img):
         gallery = ('<section class="block wrap" id="positions" style="padding-top:0"><div class="intro"><p class="eyebrow">Every position</p>'
                    '<h2>Know where you are.</h2><p class="muted">%d positions, from best to worst, each with your goals, the dangers, '
                    'and every move that starts there.</p></div><div class="gallery">%s</div></section>') % (len(img["pos"]), cards)
+    partner = ('<a class="partner" href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">%s<span><small>In partnership with</small><b>JPB Martial Arts Academy</b></span></a>'
+               % ('<img src="/img/partner-logo.png" alt="" width="80" height="40">' if img["partner"] else ""))
+    landing = landing.replace("@@PARTNER@@", partner)
     return (landing.replace("@@NIGHT_CLASS@@", " has-art" if img["hero"] else "").replace("@@HERO_ART@@", hero)
             .replace("@@BELT_CARDS@@", belts).replace("@@POS_GALLERY@@", gallery))
 
@@ -119,7 +123,7 @@ def build_web(app):
     head_bits, body = app[:cut], app[cut:]
     head_bits = re.sub(r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', "", head_bits)
     img = images(app)
-    jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"]})
+    jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"], "partner": img["partner"]})
     html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)

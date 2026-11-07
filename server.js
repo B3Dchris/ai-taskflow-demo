@@ -1,6 +1,8 @@
-// JitsFlow web server: serves the prebuilt app in web/ on Render (no dependencies).
+// JitsFlow web server: the website in web/ plus the accounts API under /api (when DATABASE_URL is set).
 "use strict";
-const http = require("http");
+const express = require("express");
+const { makePool, migrate } = require("./backend/db");
+const { makeApi } = require("./backend/api");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
@@ -64,7 +66,7 @@ function cacheFor(rel) {
   return "public, max-age=3600";
 }
 
-const server = http.createServer((req, res) => {
+function serveStatic(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, { Allow: "GET, HEAD", ...SECURITY });
     return res.end();
@@ -96,6 +98,23 @@ const server = http.createServer((req, res) => {
   if (gzip) headers["Content-Encoding"] = "gzip";
   res.writeHead(200, headers);
   res.end(req.method === "HEAD" ? undefined : body);
-});
+}
 
-server.listen(PORT, "0.0.0.0", () => console.log(`JitsFlow listening on port ${PORT} (${files.size} files)`));
+async function main() {
+  const app = express();
+  app.disable("x-powered-by");
+  app.set("trust proxy", 1);
+  app.use((req, res, next) => { res.set(SECURITY); next(); });
+  const pool = makePool();
+  if (pool) {
+    await migrate(pool);
+    app.use("/api", makeApi(pool, { secureCookies: process.env.NODE_ENV === "production" }));
+    console.log("Accounts API on (database connected)");
+  } else {
+    app.use("/api", (req, res) => res.status(503).set("Cache-Control", "no-store").json({ error: "Accounts aren't switched on for this site yet." }));
+    console.log("Accounts API off (no DATABASE_URL)");
+  }
+  app.use(serveStatic);
+  app.listen(PORT, "0.0.0.0", () => console.log(`JitsFlow listening on port ${PORT} (${files.size} files)`));
+}
+main().catch((e) => { console.error("Startup failed:", e); process.exit(1); });

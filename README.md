@@ -36,15 +36,33 @@ node tests/run.js local "iPhone 13"   # claude.ai version, saving on the device
 node tests/run.js db "iPhone SE"      # claude.ai version, simulated account saving, uploads and Claude answers
 node tests/web.js                     # website via server.js: headers, install, service worker, offline
 npm test                              # all of the above
+DATABASE_URL=postgres://localhost/jitsflow_test node tests/api.js       # accounts API (wipes that test database)
+DATABASE_URL=postgres://localhost/jitsflow_test node tests/accounts.js  # coach + student end to end in browsers
 ```
+
+## Accounts and the coach dashboard (website)
+
+When the server has a `DATABASE_URL`, the website adds:
+
+- **Accounts:** students and coaches sign in with email and password. Progress, training logs and settings sync to the server.
+- **Gyms:** a coach starts a gym and gets two codes: a student code (invite link `/app/?join=CODE`) and a coach code for assistant coaches. Codes can be replaced at any time.
+- **Classes:** coaches plan classes ahead with a focus, techniques and notes. Students see the next class on Today and tap "I'm going". The coach sees who's coming with their readiness, weakest area, where they get stuck and what taps them, plus a suggested focus, and marks attendance.
+- **Roster:** every student with belt and stripes, readiness, last session, attendance, monthly fee and paid/due status. Coach notes are private to coaches.
+- **Payments:** record payments by hand, assign unmatched ones, see this month's totals. (Automatic proof-of-payment email import is the next phase.)
+
+Without a database the site works exactly as before, saving on the device.
+
+**Security:** passwords are hashed with bcrypt; sessions are random tokens stored hashed, in HttpOnly SameSite=Lax cookies (Secure in production); every change needs a custom header that cross-site forms can't send; sign-in attempts are rate-limited; coaches only ever see their own gym. Account data is never cached by the offline service worker.
+
+**Privacy (POPIA):** the app stores names, emails, training logs, attendance and payments. Students can delete their account and all their data in Settings. Before launch, publish a privacy notice that says who runs JitsFlow, what's stored, why, and how to ask for deletion, and get the gym's agreement for storing payment records.
 
 ## Deploy on Render (Blueprint)
 
 `render.yaml` at the root defines one service: **`jitsflow-app`**, a Node web service in **Frankfurt** on the **Starter** plan. `server.js` serves the prebuilt app in `web/` with compression, caching rules, security headers, a fallback to the app for unknown paths, and a `/healthz` health check. It has no dependencies.
 
-1. Sign in at [render.com](https://render.com) with GitHub. Starter is a paid plan, so add a payment method under **Billing** first.
+1. Sign in at [render.com](https://render.com) with GitHub. Starter and the database are paid plans, so add a payment method under **Billing** first.
 2. **New → Blueprint**, pick the repository and set the branch to **Jitsflow**.
-3. Render lists `jitsflow-app` (Web Service, Frankfurt, Starter). Click **Apply**.
+3. Render lists `jitsflow-db` (PostgreSQL, Frankfurt) and `jitsflow-app` (Web Service, Frankfurt, Starter). Click **Apply**. The app creates its tables on first start.
 4. The site is live at `https://jitsflow-app.onrender.com` (or the address Render shows). Every push to the Jitsflow branch redeploys it.
 
 To change the app: edit `src/`, run `python3 build.py`, run `npm test`, commit `web/` and push.

@@ -1,3 +1,4 @@
-tests/page.html
-dist/_check.js
 __pycache__/
+dist/_check.js
+node_modules/
+tests/page.html

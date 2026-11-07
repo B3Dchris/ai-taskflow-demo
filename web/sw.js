@@ -1,5 +1,5 @@
 /* JitsFlow service worker: keeps the app working offline at the gym. */
-const CACHE = "jitsflow-dfaebd6d0e";
+const CACHE = "jitsflow-12585306f9";
 const CORE = ["/", "/app/", "/manifest.webmanifest", "/img/today.jpg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.png"];
 
 self.addEventListener("install", (e) => {
@@ -18,6 +18,8 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // Account data always comes live from the server, never from the offline cache.
+  if (url.origin === location.origin && url.pathname.startsWith("/api/")) return;
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {

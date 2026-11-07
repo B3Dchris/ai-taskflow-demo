@@ -37,7 +37,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'service worker controls the page');
     await p.evaluate(()=>{P().mastery.knee_cut=3;saveProgress()});
     await ctx.setOffline(true);await p.reload();await p.waitForTimeout(800);
-    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button').length===5&&lv('knee_cut')===3),'works offline and keeps your data');
+    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button:not([hidden])').length===5&&lv('knee_cut')===3),'works offline and keeps your data');
     await ctx.setOffline(false);
     await p.evaluate(()=>techSheet('knee_cut'));ok(await p.evaluate(()=>/youtube\.com\/results/.test(document.querySelector('#sheet a.yt:not(.ytpick)').href)&&!document.getElementById('explain-box')&&!document.querySelector('label[for^="vid-"]')),'website: YouTube button present, claude.ai-only features hidden');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'no sideways scroll');

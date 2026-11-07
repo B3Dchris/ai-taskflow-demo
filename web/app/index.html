@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="/icons/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": [], "belts": [], "hero": false};</script>
+<script>window.JF_IMG={"pos": [], "belts": [], "hero": false, "partner": false};</script>
 <title>JitsFlow</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -139,7 +139,9 @@ a.btn{color:var(--ink);text-decoration:none}
 
 /* tabs */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .wrap{display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs .wrap{display:flex}
+nav.tabs .wrap button{flex:1 1 0;min-width:0}
+nav.tabs .wrap:has(button[data-v="coach"]:not([hidden])) button{font-size:10.5px;letter-spacing:.01em;padding-inline:0}
 nav.tabs button{background:none;border:0;padding:10px 2px 12px;min-height:60px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase}
 nav.tabs button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button[aria-current="page"]{color:var(--blue)}
@@ -221,6 +223,21 @@ details.grp .body{padding:0 14px 8px}
 .seg4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.seg6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}.seg7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .seg4 button,.seg6 button,.seg7 button{min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:600;font-size:14px;padding:0 2px}
 .seg4 button[aria-pressed="true"],.seg6 button[aria-pressed="true"],.seg7 button[aria-pressed="true"]{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.seg3 button{min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:600;font-size:14px;padding:0 4px}
+.seg3 button[aria-pressed="true"]{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.beltchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:2px 8px 2px 4px;border-radius:999px;background:var(--surface-2);color:var(--ink);white-space:nowrap}
+.beltchip i{width:16px;height:7px;border-radius:2px;background:var(--bc);outline:1px solid var(--belt-edge);display:inline-block}
+.classcard{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:60px}
+.classcard .going{font-size:24px;font-weight:500;text-align:center;line-height:1;color:var(--blue)}.classcard .going small{display:block;font-size:10px;color:var(--ink-2);font-family:var(--f-body)}
+.attrow{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding-block:10px}
+.pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px}.pill.ok{background:var(--good-soft);color:var(--good)}.pill.due{background:var(--warn-soft);color:var(--warn)}
+.codebox{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:13px;word-break:break-all}
+.sync.who{background:var(--blue-soft);color:var(--blue);border-color:transparent;font-weight:700;cursor:pointer}
+.nextclass h3{font-size:24px}
+.partnerline{display:flex;align-items:center;gap:10px;align-self:center;text-decoration:none;color:var(--ink-2);font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.partnerline b{color:var(--ink);font-size:14px}.partnerline small{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.partnerline img{height:32px;width:auto;border-radius:4px}
 .vid{display:flex;flex-direction:column;gap:8px}
 .vid video{width:100%;max-width:100%;max-height:60vh;border-radius:12px;background:#000;display:block}
 .beltpath{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -335,6 +352,7 @@ textarea{min-height:76px;resize:vertical}
   <button data-a="tab" data-v="learn"><svg viewBox="0 0 24 24"><path d="M4 5h11a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h6"/></svg>Belts</button>
   <button data-a="tab" data-v="flow"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7.2 15.6 8M7 8.4 8.4 15.6M10.8 16.4l5.6-6.4"/></svg>Flow map</button>
   <button data-a="tab" data-v="log"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4v3h6V4M9 12h6M9 16h4"/></svg>Log</button>
+  <button data-a="tab" data-v="coach" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Coach</button>
   <button data-a="tab" data-v="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</button>
 </div></nav>
 <div class="sheet" id="sheet" hidden></div>
@@ -2730,6 +2748,7 @@ function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
   if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
   return `<div class="ytbox"><button class="ytface" data-a="ytplay" data-v="${esc(v.v)}" aria-label="Play video: ${esc(v.title||label)}"><img src="${ytThumb(v.v)}" alt="" loading="lazy"><span class="ytbig" aria-hidden="true">▶</span></button>${cap}</div>`}
 const inClaude=()=>!!(window.claude&&window.claude.use);
+const partnerBadge=()=>`<a class="partnerline" href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">${(window.JF_IMG||{}).partner?`<img src="/img/partner-logo.png" alt="">`:""}<span><small>In partnership with</small><b>JPB Martial Arts Academy</b></span></a>`;
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
 /* ============ DESCRIPTIONS ============ */
@@ -3258,6 +3277,7 @@ let SAMPLE=null,explainCol=null;const EXPLAIN={},EXPLAIN_LOADED={};
 let DB=null,progRef=null,sessCol=null,pTimer=null,pWriting=false,pDirty=false;
 function saveProgress(){
   lsSet("rtb.progress",S.progress);
+  if(S.mode==="api"){apiSaveProgress();return}
   if(S.mode!=="db")return;
   clearTimeout(pTimer);pTimer=setTimeout(()=>{pTimer=null;flushProgress()},500);
 }
@@ -3269,6 +3289,8 @@ async function flushProgress(){
   if(pDirty){pDirty=false;flushProgress()}
 }
 async function addSession(s){
+  if(S.mode==="api"){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){toast("Couldn't save the session to your account: "+e.message);return false}
+    S.sessions=[s,...S.sessions.filter(x=>x.id!==s.id)];lsSet("rtb.sessions",S.sessions);return true}
   if(S.mode==="db"){
     try{await sessCol.doc(s.id).set(s)}catch(e){
       if(e&&e.code==="quota_exceeded")toast("Your log is full. Delete old sessions to add new ones.");
@@ -3277,6 +3299,7 @@ async function addSession(s){
   return true;
 }
 async function deleteSession(id){
+  if(S.mode==="api"){try{await api("DELETE","/logs/"+encodeURIComponent(id))}catch(e){toast("Couldn't delete: "+e.message);return}S.sessions=S.sessions.filter(x=>x.id!==id);lsSet("rtb.sessions",S.sessions);render();return}
   if(S.mode==="db"){try{await sessCol.doc(id).delete()}catch(e){toast("Couldn't delete. Try again.")}}
   else{S.sessions=S.sessions.filter(x=>x.id!==id);lsSet("rtb.sessions",S.sessions);render()}
 }
@@ -3285,7 +3308,7 @@ function setSync(t,st){S.sync=t;S.syncState=st;const el=document.getElementById(
 async function connect(){
   const timer=setTimeout(()=>{if(S.mode!=="db"){setSync("Saved on this device","local");maybeOnboard()}},10000);
   try{
-    if(!window.claude||!window.claude.use){clearTimeout(timer);setSync("Saved on this device","local");maybeOnboard();return}
+    if(!window.claude||!window.claude.use){clearTimeout(timer);setSync("Saved on this device","local");acctInit().finally(()=>{if(!API.me)maybeOnboard();else maybeOnboardAfterSync()});return}
     window.claude.use("assets").then(a=>{if(a){ASSETS=a;render()}}).catch(()=>{});
     window.claude.use("sample").then(sm=>{if(sm){SAMPLE=sm;if(S.ui.sheet&&S.ui.sheet.k==="tech"){const y=window.scrollY;techSheet(S.ui.sheet.id,true);window.scrollTo(0,y)}}}).catch(()=>{});
     const [db,user]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
@@ -3388,7 +3411,7 @@ function beltSVG(pct){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
-function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row"><span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
+function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -3428,6 +3451,7 @@ function viewToday(){
   ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what I know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what I know"}</button></section>`:""}
   <section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="settings">Training days</button></div>
     <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="today"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>
+  ${nextClassCard()}${accountNudge()}
   <section class="panel accent"><h2 class="label">Next class mission</h2><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></section>
   <section class="stack"><div class="row between"><h2 class="label">Focus · block ${b.i+1} of ${b.n}</h2><span class="small muted mono">${b.left} days left</span></div>
     <div><h3>${esc(blk.n)}</h3><p class="muted small">${esc(blk.why)}</p></div>
@@ -3438,6 +3462,7 @@ function viewToday(){
   <section class="stack"><div class="row between"><h2 class="label">Off-day solo drills</h2><span class="small muted mono">${solo.length}/${SOLO.length}</span></div>
     <p class="small muted">On the days you don't train, this 10-minute routine on the other days adds mat-free reps.</p>
     <div>${SOLO.map((d,i)=>`<button class="check" data-a="solo" data-v="${i}" aria-pressed="${solo.includes(i)}"><span class="box">${solo.includes(i)?"✓":""}</span><span><span class="ct"><b>${esc(d.n)}</b> · ${esc(d.r)}</span><br><span class="small muted">${esc(d.why)}</span></span></button>`).join("")}</div></section>
+  ${partnerBadge()}
   </div>`;
 }
 
@@ -3622,6 +3647,8 @@ function settingsSheet(){render()}
 function viewSettings(){
   const st=P().settings,b=blockIndex();const hand=st.hand||"left";
   return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Settings</h1>
+  ${accountSection()}
+  ${partnerBadge()}
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Today, ratings and focus blocks aim at.</p>
@@ -3642,13 +3669,14 @@ function viewSettings(){
 }
 
 /* ============ ROUTING & EVENTS ============ */
-const TABS=["today","learn","flow","log","settings"];
+const TABS=["today","learn","flow","log","settings","coach"];
 function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
   const fab=(v==="today"||v==="log")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
-  app.innerHTML=(v==="learn"?viewLearn():v==="flow"?viewFlow():v==="log"?viewLog():v==="settings"?viewSettings():viewToday())+fab;
+  const cb=document.querySelector('nav.tabs [data-v="coach"]');if(cb)cb.hidden=!isCoach();
+  app.innerHTML=(v==="coach"?viewCoach():v==="learn"?viewLearn():v==="flow"?viewFlow():v==="log"?viewLog():v==="settings"?viewSettings():viewToday())+fab;
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===v?"page":"false"));
 }
 function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";S.ui.tab=tab;if(location.hash!=="#"+tab){try{history.replaceState(null,"","#"+tab)}catch(e){location.hash=tab}}render();window.scrollTo(0,0)}
@@ -3663,6 +3691,25 @@ document.addEventListener("click",e=>{
     case "open": techSheet(v); break;
     case "close": closeSheet(); break;
     case "term": showTerm(v); break;
+    case "auth": S.ui.authMode=v;authSheet();break;
+    case "authmode": S.ui.authMode=v;authSheet();break;
+    case "signout": signOut();break;
+    case "delacct": S.ui.delOpen=true;render();break;
+    case "delcancel": S.ui.delOpen=false;render();break;
+    case "rsvp": api("PUT",`/classes/${v}/rsvp`,{going:el.dataset.going==="1"}).then(async r=>{await loadClasses(true);toast(r.going?"See you there.":"Got it. You're not going.")}).catch(e=>toast(e.message));break;
+    case "coachview": COACH.view=v;render();break;
+    case "classnew": S.ui.cplan=null;classForm(null);break;
+    case "classopen": classSheet(v);break;
+    case "classedit": S.ui.cplan=null;classForm(S.ui.classData.class);break;
+    case "classdel": { el.outerHTML=`<div class="row"><span class="small">Delete this class for everyone?</span><button class="btn danger" type="button" data-a="classdelyes" data-v="${v}">Delete</button></div>`;break }
+    case "classdelyes": api("DELETE",`/classes/${v}`).then(async()=>{S.ui.cplan=null;hideSheet();toast("Class deleted.");await coachLoad("classes");go("coach")}).catch(e=>toast(e.message));break;
+    case "cplanrm": { S.ui.cplan.ids=S.ui.cplan.ids.filter(x=>x!==v);const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");break }
+    case "attend": { const cd=S.ui.classData,a=cd.attendees.find(x=>x.id===v);if(!a)break;const nv=!a.attended;api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userId:v,attended:nv}).then(()=>{a.attended=nv;drawClassSheet(true)}).catch(e=>toast(e.message));break }
+    case "addtoplan": { const c=S.ui.classData.class,ids=[...new Set([...(c.plan&&c.plan.ids||[]),v])];api("PUT",`/classes/${c.id}`,{title:c.title,startsAt:c.startsAt,durationMin:c.durationMin,shared:c.shared,plan:{...(c.plan||{}),ids}}).then(()=>{c.plan={...(c.plan||{}),ids};drawClassSheet(true);toast("Added to the plan.");COACH.classes=null;coachLoad("classes")}).catch(e=>toast(e.message));break }
+    case "student": studentSheet(v);break;
+    case "paynew": paySheet(v||null);break;
+    case "copy": copyText(v);break;
+    case "rotate": api("POST","/coach/codes/rotate",{which:v}).then(j=>{API.me=j.me;render();toast("New code made. The old link no longer works.")}).catch(e=>toast(e.message));break;
     case "ytplay": { const box=el.closest(".ytbox");if(box){const t=el.getAttribute("aria-label")||"Video";box.querySelector(".ytface").outerHTML=`<div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v)}?autoplay=1&rel=0&playsinline=1" title="${esc(t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`}break }
     case "coachok": { const c=P().checked||(P().checked={});if(c[v])delete c[v];else c[v]=true;saveProgress();const y=window.scrollY;techSheet(v,true);window.scrollTo(0,y);toast(c[v]?"Marked as checked with your coach.":"Coach check removed.");break }
     case "obset": { S.ui.ob[el.dataset.k]=el.dataset.k==="pw"?Number(v):v;onboardSheet(true);break }
@@ -3727,6 +3774,7 @@ document.addEventListener("keydown",e=>{
 let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   const t=e.target;
+  if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
   if(t.id==="q"){S.ui.q=t.value;clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
   if(t.dataset.note){P().notes[t.dataset.note]=t.value;saveProgress();return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value;return}
@@ -3738,11 +3786,23 @@ document.addEventListener("change",e=>{
   if(t.dataset.pick&&t.value){const f=S.ui.form,k=t.dataset.pick;if(!f[k].includes(t.value))f[k].push(t.value);logSheet(true);return}
   if(t.dataset.blk){const i=Number(t.value);P().settings.cycleStart=addDays(today(),-14*i);saveProgress();toast("Focus set to “"+curBlocks()[i].n+"”.");return}
   if(t.dataset.goal){setGoal(t.value);return}
+  if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
+  if(t.dataset.assign&&t.value){api("PATCH",`/coach/payments/${t.dataset.assign}`,{userId:t.value}).then(async()=>{toast("Payment assigned.");await coachLoad()}).catch(e=>toast(e.message));return}
   if(t.dataset.ob&&S.ui.ob){S.ui.ob[t.dataset.ob]=t.value;return}
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
 document.addEventListener("submit",async e=>{
+  const fid=e.target.id;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform"].includes(fid)){e.preventDefault();const f=e.target;
+    if(fid==="authform")return submitAuth(f);
+    if(fid==="classform")return submitClass(f);
+    if(fid==="studentform")return submitStudent(f);
+    if(fid==="payform")return submitPay(f);
+    if(fid==="gymform"){try{const j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
+    if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
+    if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("today");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
+  }
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
   if(e.target.id!=="logform")return;e.preventDefault();
   const f=S.ui.form;if(!f.date){toast("Pick a date for the session.");return}
@@ -3754,6 +3814,254 @@ document.addEventListener("submit",async e=>{
   const ok=await addSession(s);
   if(ok){toast(f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("log")}
 });
+
+/* ============ ACCOUNTS, SYNC, CLASSES AND THE COACH DASHBOARD (website only) ============ */
+const API={on:false,me:null,classes:null,classesAt:0};
+const COACH={view:"classes",roster:null,classes:null,payments:null,loading:false,q:""};
+async function api(method,url,body){
+  const h=method==="GET"?{}:{"content-type":"application/json","x-jf":"1"};
+  const r=await fetch("/api"+url,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin"});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok){const err=new Error(j.error||"Something went wrong. Try again.");err.status=r.status;throw err}
+  return j;
+}
+const isCoach=()=>!!(API.me&&API.me.role==="coach"&&API.me.gym);
+const money=(c,cur)=>{try{return new Intl.NumberFormat("en-ZA",{style:"currency",currency:cur||"ZAR",maximumFractionDigits:c%100?2:0}).format((c||0)/100)}catch(e){return "R "+((c||0)/100).toFixed(2)}};
+const fmtWhen=iso=>{try{const d=new Date(iso);return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})+" · "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}catch(e){return iso}};
+const joinURL=c=>location.origin+"/app/?join="+encodeURIComponent(c);
+function readinessFor(m,belt){let s=0,w=0;TECH.forEach(t=>{if(t.p==="plus"||beltOf(t)!==belt)return;const k=t.p==="core"?2:1;w+=k;s+=k*Math.min(4,Number((m||{})[t.id])||0)/4});return w?Math.round(100*s/w):0}
+function areasFor(m,belt){return AREAS.map(a=>{const ts=TECH.filter(t=>t.p!=="plus"&&beltOf(t)===belt&&a.f(t));return {n:a.n,f:a.f,pct:ts.length?Math.round(100*ts.reduce((x,t)=>x+Math.min(4,Number((m||{})[t.id])||0),0)/(ts.length*4)):0,count:ts.length}}).filter(a=>a.count)}
+const goalOf=p=>RANK[p.goal]?p.goal:({white:"blue",blue:"purple",purple:"brown",brown:"black",black:"black"})[p.belt]||"blue";
+const beltChip=(b,st)=>`<span class="beltchip" style="--bc:${BCOL[b]||"#F4F4F0"}"><i></i>${esc((b||"white")[0].toUpperCase()+(b||"white").slice(1))}${st?` · ${st} stripe${st>1?"s":""}`:""}</span>`;
+
+/* ----- sign-in state and sync ----- */
+async function acctInit(){
+  if(inClaude()||!/^https?:$/.test(location.protocol))return;
+  try{const j=await api("GET","/me");API.on=true;API.me=j.me;if(API.me)await startSync()}
+  catch(e){API.on=false}
+  const q=new URLSearchParams(location.search).get("join");
+  if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
+    if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
+    else if(API.me&&!API.me.gym){S.ui.joinCode=q.toUpperCase()}}
+  render();
+}
+let apTimer=null,apDirty=false;
+async function startSync(){
+  S.mode="api";setSync("Saved to your account","db");
+  try{
+    const [p,l]=await Promise.all([api("GET","/progress"),api("GET","/logs")]);
+    if(p.data){S.progress=normalize(p.data);lsSet("rtb.progress",S.progress)}else{await api("PUT","/progress",{data:clone(S.progress)})}
+    const have=new Set(l.logs.map(x=>x.id));const extra=S.sessions.filter(x=>x&&x.id&&!have.has(x.id));
+    for(const s of extra.slice(0,200)){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){}}
+    S.sessions=[...l.logs,...extra];lsSet("rtb.sessions",S.sessions);
+  }catch(e){setSync("Saved on this device","err");toast("Couldn't reach your account. Changes are kept on this device for now.")}
+}
+function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
+addEventListener("online",()=>{if(S.mode==="api"&&apDirty)apiSaveProgress()});
+async function signedIn(me){API.me=me;API.classes=null;await startSync();hideSheet();maybeOnboardAfterSync();go(isCoach()?"coach":"today");toast(`Signed in as ${me.name}.`)}
+function maybeOnboardAfterSync(){S.ui.obChecked=false;if(!P().settings.onboarded)maybeOnboard()}
+async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;COACH.roster=COACH.classes=COACH.payments=null;S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress stays saved to your account.")}
+
+/* ----- account sheets ----- */
+function authSheet(){
+  const m=S.ui.authMode||"login",c=S.ui.authCode||"";S.ui.sheet={k:"auth"};S.ui.stack=[];
+  const tabs=[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
+  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
+   <div class="seg3">${tabs.map(([k,l])=>`<button type="button" data-a="authmode" data-v="${k}" aria-pressed="${m===k}">${l}</button>`).join("")}</div>
+   <p class="muted">${m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
+   <form id="authform" class="stack" novalidate>
+    ${m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label>`:""}
+    ${m!=="login"?`<label class="f">Your name<input id="a-name" name="name" autocomplete="name" required></label>`:""}
+    <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required></label>
+    <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
+    ${m==="register"?`<label class="f">Gym code (optional)<input id="a-code" name="code" value="${esc(c)}" autocapitalize="characters" placeholder="From your coach"></label>`:""}
+    ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Settings.</p>`:""}
+   </form></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}</button>`});
+}
+async function submitAuth(form){
+  const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"",m=S.ui.authMode||"login";
+  const btn=document.querySelector('#sheetbar [type=submit]');if(btn){btn.disabled=true;btn.textContent="One moment…"}
+  try{
+    const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password")})
+      :m==="register"?await api("POST","/auth/register",{name:v("name"),email:v("email"),password:v("password"),code:v("code")})
+      :await api("POST","/auth/login",{email:v("email"),password:v("password")});
+    await signedIn(j.me);
+  }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}}
+}
+function accountSection(){
+  if(inClaude()||!API.on)return "";
+  if(!API.me)return `<section class="panel accent"><h2 class="label">Your account</h2><p>Save your progress online so it's safe and on every device. Coaches can start a gym and invite students.</p>
+    <div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button><button class="btn" data-a="auth" data-v="gym">Start a gym</button></div></section>`;
+  const g=API.me.gym;
+  return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(API.me.name)}</b><br><span class="small muted">${esc(API.me.email)}</span></div>
+    ${g?`<p class="small">${API.me.role==="coach"?"Coach at":"Training at"} <b>${esc(g.name)}</b></p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
+    <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
+    ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">This permanently deletes your account, progress, training log and attendance from the server. Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>`;
+}
+
+/* ----- next class (students and coaches) ----- */
+async function loadClasses(force){if(!API.me||!API.me.gym)return;if(!force&&API.classes&&Date.now()-API.classesAt<60000)return;
+  try{const j=await api("GET","/classes");API.classes=j.classes;API.classesAt=Date.now();if(S.ui.tab==="today")render()}catch(e){}}
+function nextClassCard(){
+  if(inClaude()||!API.me||!API.me.gym)return "";
+  if(!API.classes){loadClasses();return ""}
+  const up=API.classes.filter(c=>new Date(c.startsAt).getTime()+c.durationMin*6e4>Date.now());
+  if(!up.length)return `<section class="panel"><h2 class="label">Next class</h2><p class="muted">No classes scheduled yet${isCoach()?". Plan one in the Coach tab.":"."}</p></section>`;
+  const c=up[0],p=c.plan||{};
+  return `<section class="panel nextclass"><div class="row between"><h2 class="label">Next class</h2><span class="small muted mono">${c.going} going</span></div>
+    <div><h3>${esc(c.title)}</h3><p class="small muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min</p></div>
+    ${p.focus||p.ids&&p.ids.length||p.notes?`<div class="stack"><div class="small"><b>Coach's plan${p.focus?": "+esc(p.focus):""}</b></div>${(p.ids||[]).filter(id=>TM[id]).length?`<div class="list">${p.ids.filter(id=>TM[id]).map(id=>tRow(TM[id])).join("")}</div>`:""}${p.notes?`<p class="small">${esc(p.notes)}</p>`:""}<p class="small muted">Study these before class: read the steps and watch the videos.</p></div>`:""}
+    ${isCoach()?"":`<div class="row"><button class="btn${c.myGoing?"":" primary"}" data-a="rsvp" data-v="${c.id}" data-going="${c.myGoing?0:1}">${c.myGoing?"Can't make it":"I'm going"}</button>${c.myGoing?`<span class="small" style="color:var(--good);font-weight:700">✓ You're going</span>`:""}</div>`}
+    ${up.length>1?`<p class="small muted">Then: ${up.slice(1,3).map(x=>esc(x.title)+" ("+esc(fmtWhen(x.startsAt))+")").join(", ")}</p>`:""}</section>`;
+}
+function accountNudge(){if(inClaude()||!API.on||API.me)return "";
+  return `<section class="panel"><h2 class="label">Keep your progress safe</h2><p class="small">Right now it's only on this phone. Create a free account to save it online and join your gym's classes.</p><div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button></div></section>`}
+
+/* ----- coach dashboard ----- */
+async function coachLoad(what){
+  COACH.loading=true;
+  try{
+    if(!what||what==="roster")COACH.roster=await api("GET","/coach/roster");
+    if(!what||what==="classes"){const from=new Date(Date.now()-21*864e5).toISOString(),to=new Date(Date.now()+90*864e5).toISOString();COACH.classes=(await api("GET",`/classes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).classes;API.classes=null}
+    if(!what||what==="payments")COACH.payments=(await api("GET","/coach/payments")).payments;
+  }catch(e){toast(e.message)}
+  COACH.loading=false;if(S.ui.tab==="coach")render();
+}
+function viewCoach(){
+  if(!isCoach())return `${header()}<div class="empty">The Coach tab is for coaches. Start a gym in Settings to use it.</div>`;
+  if(!COACH.roster&&!COACH.loading)coachLoad();
+  const v=COACH.view,tabs=[["classes","Classes"],["roster","Roster"],["payments","Payments"],["gym","Gym"]];
+  const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="roster"?coachRoster():v==="payments"?coachPayments():v==="gym"?coachGym():coachClasses();
+  return `${header()}<div class="stack-lg"><section class="stack"><h1 style="font-size:34px">${esc(API.me.gym.name)}</h1>
+    <div class="seg4">${tabs.map(([k,l])=>`<button data-a="coachview" data-v="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></section>${body}</div>`;
+}
+const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
+function coachClasses(){
+  const now=Date.now(),cs=COACH.classes||[];const up=cs.filter(c=>new Date(c.startsAt).getTime()+c.durationMin*6e4>=now),past=cs.filter(c=>new Date(c.startsAt).getTime()+c.durationMin*6e4<now).reverse();
+  const card=c=>`<button class="classcard" data-a="classopen" data-v="${c.id}"><span><b>${esc(c.title)}</b><br><span class="small muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.plan&&c.plan.focus?" · "+esc(c.plan.focus):""}</span></span><span class="going mono">${c.going}<small>going</small></span></button>`;
+  return `<section class="stack"><button class="btn primary full" data-a="classnew">+ Plan a class</button>
+    <h2 class="label">Coming up</h2>${up.length?`<div class="stack">${up.map(card).join("")}</div>`:`<div class="empty">No classes planned. Plan the next few weeks so students can say they're coming.</div>`}
+    ${past.length?`<h2 class="label">Recent</h2><div class="stack">${past.slice(0,8).map(card).join("")}</div>`:""}</section>`;
+}
+function classForm(c){
+  const d=c?new Date(c.startsAt):new Date(Date.now()+864e5);const pad2=n=>String(n).padStart(2,"0");
+  const date=`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`,time=c?`${pad2(d.getHours())}:${pad2(d.getMinutes())}`:"18:00";
+  S.ui.cplan=S.ui.cplan||{ids:(c&&c.plan&&c.plan.ids||[]).slice()};
+  const picked=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");
+  S.ui.sheet={k:"classform",id:c&&c.id};S.ui.stack=[];
+  openSheet(`${sheetHead(c?"Edit class":"Plan a class")}<form id="classform" class="stack-lg" novalidate>
+    <label class="f">Title<input id="c-title" name="title" value="${esc(c?c.title:"No-gi fundamentals")}"></label>
+    <div class="grid3"><label class="f">Date<input id="c-date" name="date" type="date" value="${date}"></label><label class="f">Time<input id="c-time" name="time" type="time" value="${time}"></label><label class="f">Minutes<input id="c-dur" name="dur" type="number" inputmode="numeric" min="15" max="600" value="${c?c.durationMin:90}"></label></div>
+    <label class="f">Focus<input id="c-focus" name="focus" value="${esc(c&&c.plan?c.plan.focus||"":"")}" placeholder="e.g. Half guard bottom: underhook and dogfight"></label>
+    <div class="stack"><label class="f" for="c-add">Techniques to teach</label><select id="c-add" data-cplan="1"><option value="">Add a technique…</option>${techOptions()}</select><div class="chips" id="cplan-chips">${picked}</div></div>
+    <label class="f">Notes<textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></label>
+    <label class="row small"><input id="c-shared" name="shared" type="checkbox" style="width:auto"${!c||c.shared?" checked":""}> Show the plan to students so they can study before class</label>
+    ${c?`<button class="btn danger" type="button" data-a="classdel" data-v="${c.id}">Delete class</button>`:""}
+  </form>`,false,{act:`<button class="btn primary grow" type="submit" form="classform">${c?"Save class":"Plan class"}</button>`});
+}
+async function submitClass(form){
+  const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
+  const when=new Date(`${v("date")}T${v("time")||"18:00"}`);if(isNaN(when)){toast("Pick a date and time.");return}
+  const body={title:v("title"),startsAt:when.toISOString(),durationMin:Number(v("dur"))||60,shared:form.querySelector("[name=shared]").checked,plan:{focus:v("focus"),notes:v("notes"),ids:(S.ui.cplan||{ids:[]}).ids}};
+  try{const id=S.ui.sheet&&S.ui.sheet.id;await api(id?"PUT":"POST",id?`/classes/${id}`:"/classes",body);S.ui.cplan=null;hideSheet();toast(id?"Class saved.":"Class planned. Students can see it now.");COACH.view="classes";await coachLoad("classes");go("coach")}
+  catch(e){toast(e.message)}
+}
+async function classSheet(id){
+  S.ui.sheet={k:"class",id};S.ui.stack=[];
+  openSheet(`${sheetHead("Class")}<div class="empty">Loading who's coming…</div>`);
+  let j;try{j=await api("GET",`/coach/classes/${id}`)}catch(e){toast(e.message);hideSheet();render();return}
+  S.ui.classData=j;drawClassSheet();
+}
+function drawClassSheet(keep){
+  const {class:c,attendees}=S.ui.classData;const going=attendees.filter(a=>a.going);
+  const rows=attendees.map(a=>{const g=goalOf(a),ar=areasFor(a.mastery,g),lo=ar.slice().sort((x,y)=>x.pct-y.pct)[0];
+    return `<div class="attrow"><div><b>${esc(a.name)}</b> ${beltChip(a.belt,a.stripes)}<br><span class="small muted">${readinessFor(a.mastery,g)}% ready for ${BELT[g].to}${lo?" · weakest: "+esc(lo.n):""}</span></div>
+      <button class="chip" data-a="attend" data-v="${a.id}" aria-pressed="${!!a.attended}">${a.attended?"✓ Here":"Mark here"}</button></div>`}).join("");
+  // Suggested focus from everyone who's coming
+  let sug="";
+  if(going.length){
+    const tot={};going.forEach(a=>areasFor(a.mastery,goalOf(a)).forEach(x=>{(tot[x.n]=tot[x.n]||{n:x.n,f:x.f,s:0,c:0});tot[x.n].s+=x.pct;tot[x.n].c++}));
+    const areas=Object.values(tot).map(x=>({...x,avg:Math.round(x.s/x.c)})).sort((a,b)=>a.avg-b.avg);const weak=areas[0];
+    const stuck={},tapped={};going.forEach(a=>{Object.entries(a.stuck||{}).forEach(([k,n])=>stuck[k]=(stuck[k]||0)+n);Object.entries(a.tapped||{}).forEach(([k,n])=>tapped[k]=(tapped[k]||0)+n)});
+    const topStuck=Object.entries(stuck).filter(([k])=>POS[k]).sort((a,b)=>b[1]-a[1]).slice(0,3),topTap=Object.entries(tapped).filter(([k])=>TM[k]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const pool=TECH.filter(t=>t.p!=="plus"&&beltOf(t)==="blue"&&weak&&weak.f(t)).map(t=>({t,avg:going.reduce((s,a)=>s+Math.min(4,Number((a.mastery||{})[t.id])||0),0)/going.length})).sort((a,b)=>a.avg-b.avg).slice(0,4);
+    const inPlan=new Set((c.plan&&c.plan.ids)||[]);
+    sug=`<section class="panel accent"><h2 class="label">Suggested focus</h2>
+      ${weak?`<p>Weakest area for the ${going.length} coming: <b>${esc(weak.n)}</b> (${weak.avg}% on average).</p>`:""}
+      ${topStuck.length?`<p class="small">Getting stuck in: ${topStuck.map(([k,n])=>`${esc(POS[k].l)} ×${n}`).join(", ")}</p>`:""}
+      ${topTap.length?`<p class="small">Getting tapped by: ${topTap.map(([k,n])=>`${esc(TM[k].n)} ×${n}`).join(", ")}</p>`:""}
+      ${pool.length?`<div class="list">${pool.map(x=>`<div class="row between" style="flex-wrap:nowrap;border-top:1px solid var(--line);padding-block:6px"><span><b>${esc(x.t.n)}</b><br><span class="small muted">Group average: ${LEVELS[Math.round(x.avg)].n}</span></span>${inPlan.has(x.t.id)?`<span class="small" style="color:var(--good);font-weight:700">In plan</span>`:`<button class="btn" data-a="addtoplan" data-v="${x.t.id}">Add to plan</button>`}</div>`).join("")}</div>`:""}</section>`;
+  }
+  const p=c.plan||{};
+  openSheet(`${sheetHead("Class")}<div class="stack-lg"><div><h1>${esc(c.title)}</h1><p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.shared?"":" · plan hidden from students"}</p></div>
+    <section class="stack"><h2 class="label">The plan</h2>${p.focus?`<p><b>${esc(p.focus)}</b></p>`:""}${(p.ids||[]).filter(id=>TM[id]).length?`<div class="list">${p.ids.filter(id=>TM[id]).map(id=>tRow(TM[id])).join("")}</div>`:`<p class="small muted">No techniques picked yet.</p>`}${p.notes?`<p class="small">${esc(p.notes)}</p>`:""}</section>
+    ${sug}
+    <section class="stack"><div class="row between"><h2 class="label">Who's coming</h2><span class="small muted mono">${going.length} going</span></div>${rows||`<div class="empty">Nobody has said they're coming yet. Students tap "I'm going" on their Today screen.</div>`}</section>
+  </div>`,keep,{act:`<button class="btn grow" data-a="classedit" data-v="${c.id}">Edit plan</button>`});
+}
+function coachRoster(){
+  const ppl=students(),cur=COACH.roster.currency,q=COACH.q.trim().toLowerCase();
+  const due=ppl.filter(p=>p.active&&p.feeCents>0&&p.paidThisMonthCents<p.feeCents);
+  const list=ppl.filter(p=>!q||p.name.toLowerCase().includes(q));
+  return `<section class="stack"><div class="stats"><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div><div class="stat"><b>${ppl.filter(p=>p.attended30>0||p.n30>0).length}</b><span>Trained · 30d</span></div><div class="stat"><b>${due.length}</b><span>Fees due</span></div></div>
+    <input id="r-q" type="search" placeholder="Search students" value="${esc(COACH.q)}" aria-label="Search students">
+    <div class="list" id="roster-list">${list.map(p=>{const g=goalOf(p),r=readinessFor(p.mastery,g),paid=p.feeCents>0?(p.paidThisMonthCents>=p.feeCents?`<span class="pill ok">Paid</span>`:`<span class="pill due">Due</span>`):"";
+      return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}</span><span class="meta">${beltChip(p.belt,p.stripes)}<span>${r}% → ${BELT[g].to}</span><span>${p.last?"Trained "+esc(fmtDate(p.last)):"No sessions yet"}</span></span></span>${paid}</button>`}).join("")||`<div class="empty">No students yet. Send them your invite link from the Gym tab.</div>`}</div></section>`;
+}
+async function studentSheet(id){
+  S.ui.sheet={k:"student",id};S.ui.stack=[];openSheet(`${sheetHead("Student")}<div class="empty">Loading…</div>`);
+  let j;try{j=await api("GET",`/coach/students/${id}`)}catch(e){toast(e.message);hideSheet();render();return}
+  const s=j.student,g=goalOf(s),ar=areasFor(s.mastery,g),cur=COACH.roster.currency;
+  const stuck=Object.entries(s.stuck||{}).filter(([k])=>POS[k]).sort((a,b)=>b[1]-a[1]).slice(0,3),tapped=Object.entries(s.tapped||{}).filter(([k])=>TM[k]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  openSheet(`${sheetHead("Student")}<div class="stack-lg"><div><h1>${esc(s.name)}</h1><p class="muted small">${esc(s.email)}</p></div>
+    <section class="beltwrap"><div class="row between"><div><div class="bignum mono">${readinessFor(s.mastery,g)}%</div><p class="muted small">Ready for ${BELT[g].to} belt</p></div>${beltChip(s.belt,s.stripes)}</div>
+      <div class="areas">${ar.map(x=>`<div class="area"><span>${esc(x.n)}</span><span class="track"><span class="fill" style="width:${x.pct}%"></span></span><span class="mono">${x.pct}%</span></div>`).join("")}</div>
+      <p class="small muted">${s.n30} sessions logged and ${s.attended30} classes attended in the last 30 days.${stuck.length?" Stuck in: "+stuck.map(([k,n])=>esc(POS[k].l)+" ×"+n).join(", ")+".":""}${tapped.length?" Tapped by: "+tapped.map(([k,n])=>esc(TM[k].n)+" ×"+n).join(", ")+".":""}</p></section>
+    <form id="studentform" class="stack"><h2 class="label">Rank, fee and notes</h2>
+      <div class="grid2"><label class="f">Belt<select id="s-belt" name="belt">${["white","blue","purple","brown","black"].map(b=>`<option value="${b}"${s.belt===b?" selected":""}>${b[0].toUpperCase()+b.slice(1)}</option>`).join("")}</select></label>
+      <label class="f">Stripes<select id="s-stripes" name="stripes">${[0,1,2,3,4].map(n=>`<option${s.stripes===n?" selected":""}>${n}</option>`).join("")}</select></label></div>
+      <label class="f">Monthly fee (${esc(cur)})<input id="s-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(s.feeCents||0)/100}"></label>
+      <label class="f">Coach notes (only coaches see these)<textarea id="s-notes" name="notes">${esc(s.notes||"")}</textarea></label>
+      <label class="row small"><input id="s-active" name="active" type="checkbox" style="width:auto"${s.active?" checked":""}> Active student</label></form>
+    <section class="stack"><div class="row between"><h2 class="label">Payments</h2><button class="btn" data-a="paynew" data-v="${s.id}">Record payment</button></div>
+      ${j.payments.length?`<div class="list">${j.payments.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div>${p.reference?`<span class="small muted">${esc(p.reference)}</span>`:""}</div>`).join("")}</div>`:`<div class="empty">No payments recorded.</div>`}</section>
+    <section class="stack"><h2 class="label">Recent sessions</h2>${j.logs.length?j.logs.slice(0,8).map(l=>`<div class="sess"><b>${esc(fmtDate(l.date))} · ${esc(l.type||"Class")}</b><span class="small muted">${Number(l.mins)||0} min · ${Number(l.rolls)||0} rolls${(l.tapped||[]).filter(i=>TM[i]).length?" · tapped by "+l.tapped.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", "):""}</span>${l.fix?`<span class="small">Fix: ${esc(l.fix)}</span>`:""}</div>`).join(""):`<div class="empty">No sessions logged yet.</div>`}</section>
+  </div>`,false,{act:`<button class="btn primary grow" type="submit" form="studentform">Save</button>`});
+}
+async function submitStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value;const id=S.ui.sheet.id;
+  try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),feeCents:Math.round(Number(v("fee")||0)*100),notes:v("notes"),active:form.querySelector("[name=active]").checked});
+    toast("Student saved.");hideSheet();await coachLoad("roster");go("coach")}catch(e){toast(e.message)}}
+function coachPayments(){
+  const ps=COACH.payments||[],cur=COACH.roster.currency,ppl=students(),byId=Object.fromEntries((COACH.roster.people||[]).map(p=>[p.id,p]));
+  const mStart=new Date();mStart.setDate(1);const mk=ds(mStart);const month=ps.filter(p=>p.paidOn>=mk);
+  const due=ppl.filter(p=>p.active&&p.feeCents>0&&p.paidThisMonthCents<p.feeCents);const unmatched=ps.filter(p=>!p.userId);
+  return `<section class="stack"><div class="stats"><div class="stat"><b>${money(month.reduce((s,p)=>s+p.amountCents,0),cur)}</b><span>This month</span></div><div class="stat"><b>${ppl.filter(p=>p.active&&p.feeCents>0).length-due.length}</b><span>Paid</span></div><div class="stat"><b>${due.length}</b><span>Due</span></div></div>
+    <button class="btn primary full" data-a="paynew">Record a payment</button>
+    <div class="panel"><h2 class="label">Proof-of-payment emails</h2><p class="small">Coming next: forward bank proof-of-payment emails to your JitsFlow address and they're recorded and matched to the student automatically. Until then, record payments here.</p></div>
+    ${unmatched.length?`<h2 class="label">Not matched to a student (${unmatched.length})</h2><div class="list">${unmatched.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div><span class="small muted">${esc(p.reference||p.emailSubject||"")}</span><select data-assign="${p.id}" aria-label="Assign to a student"><option value="">Assign to…</option>${ppl.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>`).join("")}</div>`:""}
+    ${due.length?`<h2 class="label">Due this month</h2><div class="list">${due.map(p=>`<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}</span><span class="meta">${money(p.paidThisMonthCents,cur)} of ${money(p.feeCents,cur)} paid</span></span><span class="pill due">Due</span></button>`).join("")}</div>`:""}
+    <h2 class="label">Recent payments</h2>${ps.filter(p=>p.userId).length?`<div class="list">${ps.filter(p=>p.userId).slice(0,40).map(p=>`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":""}</span></div>`).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}</section>`;
+}
+function paySheet(forId){
+  const ppl=students(),cur=COACH.roster.currency;S.ui.sheet={k:"pay",back:forId};S.ui.stack=[];
+  openSheet(`${sheetHead("Record a payment")}<form id="payform" class="stack-lg" novalidate>
+    <label class="f">Student<select id="p-user" name="user"><option value="">Not sure yet</option>${ppl.map(s=>`<option value="${s.id}"${s.id===forId?" selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
+    <div class="grid2"><label class="f">Amount (${esc(cur)})<input id="p-amt" name="amount" type="number" inputmode="decimal" min="0" step="0.01" value="${forId?((ppl.find(s=>s.id===forId)||{}).feeCents||0)/100:""}"></label><label class="f">Date paid<input id="p-date" name="date" type="date" value="${today()}"></label></div>
+    <label class="f">Reference<input id="p-ref" name="ref" placeholder="e.g. CHRIS NOV"></label>
+    <label class="f">Note<input id="p-note" name="note"></label></form>`,false,{act:`<button class="btn primary grow" type="submit" form="payform">Record payment</button>`});
+}
+async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
+  try{await api("POST","/coach/payments",{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100),paidOn:v("date"),reference:v("ref"),note:v("note")});
+    toast("Payment recorded.");hideSheet();await coachLoad();go("coach")}catch(e){toast(e.message)}}
+function coachGym(){const g=API.me.gym;
+  return `<section class="stack"><div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
+      <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
+    <div class="panel"><h2 class="label">Add another coach</h2><p class="small">Only share this with coaches: it gives access to the roster and payments.</p><div class="row"><span class="mono"><b>${esc(g.coachCode)}</b></span><button class="btn" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button></div></div>
+    <form id="gymform" class="panel stack"><h2 class="label">Gym details</h2><label class="f">Gym name<input id="g-name" name="name" value="${esc(g.name)}"></label>
+      <label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label><button class="btn primary" type="submit">Save gym</button></form>
+    <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
+    <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p></section>`}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;S.ui.obChecked=true;const st=P().settings;if(st.onboarded)return;

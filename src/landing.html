@@ -88,6 +88,10 @@ p{margin:0}
 .night .beltlabels{color:#9FB0D0}
 .night .beltbar{outline-color:rgba(255,255,255,.18);box-shadow:0 0 30px rgba(91,140,255,.25)}
 .night .phone{box-shadow:0 40px 80px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08) inset,0 0 90px rgba(91,140,255,.35)}
+.partner{display:inline-flex;align-items:center;gap:12px;margin-top:22px;padding:10px 16px 10px 12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#C9D3E6;text-decoration:none;font-size:14px}
+.partner b{color:#F4F6FB;font-size:16px}.partner small{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0D0}
+.partner img{height:40px;width:auto;border-radius:6px;background:#fff;padding:3px}
+.partner:hover{border-color:rgba(255,255,255,.3)}
 /* stats strip */
 .strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
 .stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -167,6 +171,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
       <p class="lede">JitsFlow is the study app for the days off the mat. Every position, every attack chain and every escape, from white to black belt, with a video for each move. Learn how techniques connect, so you walk into class knowing what to work on.</p>
       <div class="cta"><a class="btn primary" href="/app/">Open JitsFlow</a><a class="btn ghost" href="#how">How it works</a></div>
       <div class="facts"><span>Free</span><span>No sign-up</span><span>Works offline</span><span>Installs on iPhone and Android</span></div>
+      @@PARTNER@@
       <div class="beltbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="beltlabels" aria-hidden="true"><span>White</span><span>Blue</span><span>Purple</span><span>Brown</span><span>Black</span></div>
     </div>
@@ -274,7 +279,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
 <footer>
   <div class="wrap">
-    <span><b>JitsFlow</b> · Your no-gi game, mapped.</span>
+    <span><b>JitsFlow</b> · Your no-gi game, mapped. In partnership with <a href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">JPB Martial Arts Academy</a>.</span>
     <span>Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</span>
   </div>
 </footer>
