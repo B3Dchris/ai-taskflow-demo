@@ -208,6 +208,8 @@ function makeApi(pool, { secureCookies }) {
     const u = needUser(req);
     if (!(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
     await q("delete from users where id=$1", [u.id]);
+    // A gym with nobody left in it goes too (its classes, plans and payments with it).
+    if (u.gym_id) await q("delete from gyms g where g.id=$1 and not exists (select 1 from users x where x.gym_id=g.id)", [u.gym_id]);
     res.clearCookie(COOKIE, { path: "/" });
     res.json({ ok: true });
   }));

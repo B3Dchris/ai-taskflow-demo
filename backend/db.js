@@ -131,6 +131,8 @@ async function migrate(pool) {
   await pool.query(SCHEMA);
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
+  // One-off tidy-up: empty test gyms left by deploy checks (named "… (delete me)", nobody in them).
+  await pool.query("delete from gyms g where g.name like '%(delete me)' and not exists (select 1 from users u where u.gym_id=g.id)");
 }
 
 module.exports = { makePool, migrate };
