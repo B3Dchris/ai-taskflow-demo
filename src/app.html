@@ -224,6 +224,23 @@ details.grp .body{padding:0 14px 8px}
 .logopick{display:flex;flex-wrap:wrap;gap:8px}.logoopt{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-height:56px;cursor:pointer}.logoopt input{width:auto}.logoopt img{max-width:110px;max-height:48px;object-fit:contain;background:#fff;border-radius:6px}
 .logoopt:has(input:checked){border-color:var(--blue);box-shadow:0 0 0 2px var(--blue) inset}
 .loadbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}.loadbar i{display:block;height:100%;width:40%;background:var(--blue);animation:lb 1.2s ease-in-out infinite}@keyframes lb{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.calnav{display:flex;align-items:center;gap:8px}.calnav b{flex:1;text-align:center;font-size:16px}.calnav .btn{min-width:44px;font-size:22px;padding:0}
+.wstrip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.wday{display:grid;justify-items:center;gap:1px;padding:8px 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;min-height:64px}
+.wday small{font-size:11px;font-weight:600;color:var(--ink-2);text-transform:uppercase}.wday b{font-size:18px}.wday i{font-style:normal;font-size:11px;font-weight:700;min-height:14px;color:var(--blue)}
+.wday.today{border-color:var(--blue)}.wday.sel,.mcell.sel{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}.wday.sel small,.wday.sel i{color:var(--on-blue)}
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.mdow{text-align:center;font-size:11px;font-weight:700;color:var(--ink-2);padding-bottom:2px}
+.mcell{display:grid;justify-items:center;align-content:center;gap:2px;min-height:46px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:inherit;padding:2px 0}
+.mcell span{font-size:15px;font-weight:600}.mcell i{font-style:normal;font-size:10px;font-weight:700;background:var(--blue-soft);color:var(--blue);border-radius:999px;padding:0 6px}
+.mcell.sel i{background:var(--on-blue);color:var(--blue)}.mcell.out{opacity:.45}.mcell.today{border-color:var(--blue)}
+.calrows{display:grid;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.calrow{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 14px;color:inherit;font:inherit;min-height:60px}
+.calrow:first-child{border-top:0}.calrow.past{opacity:.6}.calrow.priv{background:var(--surface-2)}
+.cr-time{font-size:16px;font-weight:700;display:grid;white-space:nowrap}.cr-time .ap,.bc-time .ap{font-size:11px;font-weight:600;margin-left:2px;color:var(--ink-2)}.bc-time{white-space:nowrap}.cr-time small{font-size:11px;font-weight:500;color:var(--ink-2)}
+.cr-body{display:grid;gap:2px;min-width:0}.cr-body b{font-size:16px;line-height:1.25}.cr-body small{font-size:13px;color:var(--ink-2)}.cr-body small.ok{color:var(--good);font-weight:600}
+.cr-cap{display:grid;justify-items:end;gap:2px;min-width:56px}.cr-cap b{font-size:16px}.cr-cap b small{font-size:12px;color:var(--ink-2);font-weight:500}.cr-cap>small{font-size:11px;color:var(--ink-2)}.cr-cap .cap{width:52px;height:4px}.cr-cap small.w{color:var(--warn)}
+.planbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.planbox summary{font-weight:700;cursor:pointer;min-height:28px}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
 .bc-main{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;text-align:left;background:none;border:0;padding:12px 12px 6px;color:inherit;font:inherit}
 .bc-time{font-size:15px;font-weight:700;display:grid}.bc-time small{font-size:12px;font-weight:500;color:var(--ink-2)}
@@ -1916,6 +1933,12 @@ document.addEventListener("click",e=>{
     case "attendall": { const cd=S.ui.classData,ids=cd.attendees.filter(a=>a.going&&!a.attended).map(a=>a.id);api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userIds:ids,attended:true}).then(()=>{cd.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=true});drawClassSheet(true);toast(`Checked in ${ids.length}.`)}).catch(e=>toast(e.message));break }
     case "coachview": COACH.view=v;render();break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
+    case "classnewday": S.ui.cplan=null;classForm(null,v);break;
+    case "calday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.sel=(el.dataset.k!=="coach"&&st.sel===v)?null:v;st.anchor=v;render();break }
+    case "calnav": calMove(el.dataset.k,Number(v));break;
+    case "caltoday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.anchor=todayK();st.sel=el.dataset.k==="coach"?todayK():null;render();break }
+    case "calmode": { const st=calState("coach");st.mode=v;if(v==="month"&&!st.sel)st.sel=st.anchor;render();break }
+    case "copyweek": el.disabled=true;copyWeek();break;
     case "classopen": classSheet(v);break;
     case "classedit": S.ui.cplan=null;classForm(S.ui.classData.class);break;
     case "classdel": { el.outerHTML=`<div class="row"><span class="small">Delete this class for everyone?</span><button class="btn danger" type="button" data-a="classdelyes" data-v="${v}">Delete</button></div>`;break }
@@ -2008,6 +2031,8 @@ document.addEventListener("change",e=>{
   if(t.dataset.blk){const i=Number(t.value);P().settings.cycleStart=addDays(today(),-14*i);saveProgress();toast("Focus set to “"+curBlocks()[i].n+"”.");return}
   if(t.dataset.goal){setGoal(t.value);return}
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
+  if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
+  if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}
   if(t.id==="g-show"){api("PATCH","/coach/gym",{showAttendees:t.checked}).then(j=>{API.me=j.me;API.classes=null;toast(t.checked?"Students can see who's booked.":"Booking lists are now private.")}).catch(e=>toast(e.message));return}
   if(t.dataset.assign&&t.value){api("PATCH",`/coach/payments/${t.dataset.assign}`,{userId:t.value}).then(async()=>{toast("Payment assigned.");await coachLoad()}).catch(e=>toast(e.message));return}
   if(t.dataset.ob&&S.ui.ob){S.ui.ob[t.dataset.ob]=t.value;return}

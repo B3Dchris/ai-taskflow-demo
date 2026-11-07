@@ -139,11 +139,12 @@ function accountNudge(){if(inClaude()||!API.on||API.me)return "";
   return `<section class="panel"><h2 class="label">Keep your progress safe</h2><p class="small">Right now it's only on this phone. Create a free account to save it online and join your gym's classes.</p><div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button></div></section>`}
 
 /* ----- coach dashboard ----- */
-async function coachLoad(what){
+async function coachLoad(what,around){
   COACH.loading=true;
   try{
     if(!what||what==="roster"){COACH.roster=await api("GET","/coach/roster");COACH.insights=null}
-    if(!what||what==="classes"){const from=new Date(Date.now()-21*864e5).toISOString(),to=new Date(Date.now()+90*864e5).toISOString();COACH.classes=(await api("GET",`/classes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).classes;API.classes=null}
+    if(!what||what==="classes"){const base=fromYmd(around||(COACH.cal&&COACH.cal.anchor)||todayK()),f=new Date(base),t=new Date(base);f.setDate(f.getDate()-60);t.setDate(t.getDate()+100);
+      COACH.classes=(await api("GET",`/classes?from=${encodeURIComponent(f.toISOString())}&to=${encodeURIComponent(t.toISOString())}`)).classes;COACH.rFrom=f;COACH.rTo=t;API.classes=null}
     if(!what||what==="payments")COACH.payments=(await api("GET","/coach/payments")).payments;
   }catch(e){toast(e.message)}
   COACH.loading=false;if(S.ui.tab==="coach")render();
@@ -157,38 +158,107 @@ function viewCoach(){
     <div class="seg5">${tabs.map(([k,l])=>`<button data-a="coachview" data-v="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></section>${body}</div>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
+/* ----- calendar (coach Classes tab and the student Classes tab) ----- */
+const pad2=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const fromYmd=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
+const addDays2=(k,n)=>{const d=fromYmd(k);d.setDate(d.getDate()+n);return ymd(d)};
+const weekStart=k=>{const d=fromYmd(k);d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d)};
+const todayK=()=>ymd(new Date());
+function calState(who){const st=who==="coach"?(COACH.cal=COACH.cal||{mode:"week",sel:todayK(),anchor:todayK()}):(S.ui.bcal=S.ui.bcal||{mode:"week",sel:null,anchor:todayK()});return st}
+function byDay(list){const g={};list.forEach(c=>{const k=dayKey(c.startsAt);(g[k]=g[k]||[]).push(c)});Object.values(g).forEach(a=>a.sort((x,y)=>new Date(x.startsAt)-new Date(y.startsAt)));return g}
+function calHeader(who,st,g){
+  const k=who==="coach"?"coach":"book",t=todayK();
+  if(st.mode==="month"){
+    const first=fromYmd(st.anchor.slice(0,8)+"01"),label=first.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+    let d=weekStart(ymd(first));const cells=[];
+    for(let i=0;i<42;i++){const inM=fromYmd(d).getMonth()===first.getMonth();if(i>=35&&!inM)break;const n=(g[d]||[]).length;
+      cells.push(`<button class="mcell${inM?"":" out"}${d===t?" today":""}${d===st.sel?" sel":""}" data-a="calday" data-k="${k}" data-v="${d}" aria-label="${esc(fromYmd(d).toDateString())}, ${n} class${n===1?"":"es"}"><span>${fromYmd(d).getDate()}</span>${n?`<i>${n}</i>`:""}</button>`);d=addDays2(d,1)}
+    return `<div class="calnav"><button class="btn ghost" data-a="calnav" data-k="${k}" data-v="-1" aria-label="Previous month">‹</button><b>${esc(label)}</b><button class="btn ghost" data-a="calnav" data-k="${k}" data-v="1" aria-label="Next month">›</button></div>
+      <div class="mgrid">${DN.map(n=>`<span class="mdow">${n[0]}</span>`).join("")}${cells.join("")}</div>`}
+  const ws=weekStart(st.anchor),we=addDays2(ws,6),f=x=>fromYmd(x).toLocaleDateString(undefined,{day:"numeric",month:"short"});
+  const days=[0,1,2,3,4,5,6].map(i=>{const d=addDays2(ws,i),n=(g[d]||[]).length;return `<button class="wday${d===t?" today":""}${d===st.sel?" sel":""}" data-a="calday" data-k="${k}" data-v="${d}" aria-label="${esc(fromYmd(d).toDateString())}, ${n} class${n===1?"":"es"}"><small>${DN[i]}</small><b>${fromYmd(d).getDate()}</b><i>${n?n:""}</i></button>`}).join("");
+  return `<div class="calnav"><button class="btn ghost" data-a="calnav" data-k="${k}" data-v="-1" aria-label="Previous week">‹</button><b>${esc(f(ws))} – ${esc(f(we))}</b>${ws!==weekStart(t)?`<button class="linkbtn small" data-a="caltoday" data-k="${k}">Today</button>`:""}<button class="btn ghost" data-a="calnav" data-k="${k}" data-v="1" aria-label="Next week">›</button></div>
+    <div class="wstrip">${days}</div>`}
+function calRow(c){
+  const priv=c.kind==="private",past=clsEnd(c)<Date.now(),fill=c.capacity?Math.min(100,Math.round(100*c.going/c.capacity)):null;
+  const who=priv?(c.attendees&&c.attendees.length?esc(c.attendees.map(a=>a.name).join(", ")):"Open slot"):"";
+  return `<button class="calrow${priv?" priv":""}${past?" past":""}" data-a="classopen" data-v="${c.id}">
+    <span class="cr-time mono"><span>${timeHTML(c.startsAt)}</span><small>${c.durationMin} min</small></span>
+    <span class="cr-body"><b>${esc(c.title)}</b><small>${[priv?"Private":c.level,c.coach,priv&&c.priceCents?money(c.priceCents,API.me.gym.currency):""].filter(Boolean).map(esc).join(" · ")}</small>${priv?`<small class="${c.attendees&&c.attendees.length?"ok":""}">${priv&&c.attendees&&c.attendees.length?"Booked by ":""}${who}</small>`:""}</span>
+    ${priv?"":`<span class="cr-cap mono"><b>${c.going}${c.capacity?`<small>/${c.capacity}</small>`:""}</b><small>${past?"came":"booked"}</small>${fill!==null?`<span class="cap"><i style="width:${fill}%"></i></span>`:""}${c.waiting?`<small class="w">+${c.waiting} waiting</small>`:""}</span>`}</button>`}
 function coachClasses(){
-  const now=Date.now(),cs=COACH.classes||[];const up=cs.filter(c=>new Date(c.startsAt).getTime()+c.durationMin*6e4>=now),past=cs.filter(c=>new Date(c.startsAt).getTime()+c.durationMin*6e4<now).reverse();
-  const card=c=>`<button class="classcard${c.kind==="private"?" priv":""}" data-a="classopen" data-v="${c.id}"><span><b>${c.kind==="private"?"🔒 ":""}${esc(c.title)}</b><br><span class="small muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · "+esc(c.coach):""}${c.plan&&c.plan.focus?" · "+esc(c.plan.focus):""}</span>${c.kind==="private"?`<br><span class="small">${c.attendees&&c.attendees.length?"Booked by "+esc(c.attendees.map(a=>a.name).join(", ")):"Open slot"}${c.priceCents?" · "+money(c.priceCents,API.me.gym.currency):""}</span>`:""}</span><span class="going mono">${c.going}${c.capacity?`<small>of ${c.capacity}</small>`:""}<small>${c.kind==="private"?"booked":"going"}</small>${c.waiting?`<small class="w">+${c.waiting} waiting</small>`:""}</span></button>`;
-  return `<section class="stack"><div class="row" style="flex-wrap:nowrap"><button class="btn primary grow" data-a="classnew">+ Plan a class</button><button class="btn" data-a="privnew">+ Private slots</button></div>
-    <h2 class="label">Coming up</h2>${up.length?`<div class="stack">${up.map(card).join("")}</div>`:`<div class="empty">No classes planned. Plan the next few weeks so students can say they're coming.</div>`}
-    ${past.length?`<h2 class="label">Recent</h2><div class="stack">${past.slice(0,8).map(card).join("")}</div>`:""}</section>`;
-}
-function classForm(c){
-  const d=c?new Date(c.startsAt):new Date(Date.now()+864e5);const pad2=n=>String(n).padStart(2,"0");
-  const date=`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`,time=c?`${pad2(d.getHours())}:${pad2(d.getMinutes())}`:"18:00";
+  const st=calState("coach"),cs=COACH.classes||[],g=byDay(cs),t=todayK();
+  const ws=weekStart(st.anchor),weekHas=[0,1,2,3,4,5,6].some(i=>(g[addDays2(ws,i)]||[]).some(c=>c.kind!=="private"));
+  const day=d=>`<section class="stack calday"><div class="row between"><h2 class="label">${esc(d===t?"Today":fromYmd(d).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"}))}</h2>${d>=t?`<button class="btn sm" data-a="classnewday" data-v="${d}">+ Add</button>`:""}</div>
+    ${(g[d]||[]).length?`<div class="calrows">${g[d].map(calRow).join("")}</div>`:`<p class="small muted">No classes${d>=t?". Tap + Add to plan one.":"."}</p>`}</section>`;
+  return `<section class="stack">
+    <div class="row" style="flex-wrap:nowrap"><button class="btn primary grow" data-a="classnew">+ Plan a class</button><button class="btn" data-a="privnew">+ Private slots</button></div>
+    <div class="seg2"><button data-a="calmode" data-k="coach" data-v="week" aria-pressed="${st.mode==="week"}">Week</button><button data-a="calmode" data-k="coach" data-v="month" aria-pressed="${st.mode==="month"}">Month</button></div>
+    ${calHeader("coach",st,g)}
+    ${day(st.sel||t)}
+    ${st.mode==="week"&&weekHas?`<button class="btn full" data-a="copyweek">Copy this week's classes to next week</button>`:""}
+    ${!cs.length?`<div class="empty">No classes yet. Add them one at a time, or import your timetable in the Gym tab and tap Add classes.</div>`:""}
+  </section>`}
+async function calMove(k,dir){const st=calState(k==="coach"?"coach":"book");
+  if(st.mode==="month"){const d=fromYmd(st.anchor.slice(0,8)+"01");d.setMonth(d.getMonth()+dir);st.anchor=ymd(d);st.sel=ymd(d)}
+  else{st.anchor=addDays2(weekStart(st.anchor),7*dir);st.sel=k==="coach"||st.sel?(st.anchor<todayK()&&addDays2(st.anchor,6)>=todayK()?todayK():st.anchor):null}
+  if(k==="coach")await ensureRange(st.anchor);else{const ok=API.classes;if(!ok)loadClasses(true)}render()}
+async function ensureRange(k){const d=fromYmd(k);if(COACH.rFrom&&d>=COACH.rFrom&&d<=COACH.rTo)return;await coachLoad("classes",k)}
+async function copyWeek(){
+  const st=calState("coach"),ws=weekStart(st.anchor),list=(COACH.classes||[]).filter(c=>c.kind!=="private"&&dayKey(c.startsAt)>=ws&&dayKey(c.startsAt)<=addDays2(ws,6));
+  const out=list.map(c=>{const d=new Date(c.startsAt);d.setDate(d.getDate()+7);return {title:c.title,startsAt:d.toISOString(),durationMin:c.durationMin,capacity:c.capacity,coach:c.coach,level:c.level,kind:"class",shared:c.shared,plan:{focus:"",notes:"",ids:[]}}});
+  if(!out.length)return;
+  try{const j=await api("POST","/coach/classes/bulk",{classes:out});st.anchor=addDays2(ws,7);st.sel=st.anchor;await coachLoad("classes",st.anchor);toast(`Copied ${j.added} class${j.added===1?"":"es"} to next week${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
+
+/* ----- adding and editing a class ----- */
+function knownTitles(){const m=new Map();(gymProfile().timetable||[]).forEach(r=>{const t=r.title+(r.level&&!r.title.toLowerCase().includes(r.level.toLowerCase())?` (${r.level})`:"");if(!m.has(t.toLowerCase()))m.set(t.toLowerCase(),t)});
+  (COACH.classes||[]).filter(c=>c.kind!=="private").forEach(c=>{if(!m.has(c.title.toLowerCase()))m.set(c.title.toLowerCase(),c.title)});return [...m.values()].sort()}
+function classAutofill(title){
+  const f=document.getElementById("classform");if(!f||!title)return;const tl=title.trim().toLowerCase();
+  const last=(COACH.classes||[]).filter(c=>c.title.toLowerCase()===tl).sort((a,b)=>new Date(b.startsAt)-new Date(a.startsAt))[0];
+  const tt=(gymProfile().timetable||[]).find(r=>(r.title+(r.level?` (${r.level})`:"")).toLowerCase()===tl||r.title.toLowerCase()===tl);
+  const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined&&v!==null&&v!=="")el.value=v};
+  if(last){set("c-dur",last.durationMin);set("c-cap",last.capacity||"");set("c-coach",last.coach);set("c-level",last.level);set("c-time",fmtHM(last.startsAt))}
+  else if(tt){set("c-coach",tt.coach);set("c-level",tt.level);set("c-time",tt.start);if(tt.end){const [a,b]=tt.start.split(":").map(Number),[c2,d]=tt.end.split(":").map(Number);const m=(c2*60+d)-(a*60+b);if(m>=15)set("c-dur",m)}}}
+const fmtHM=iso=>{const d=new Date(iso);return pad2(d.getHours())+":"+pad2(d.getMinutes())};
+function classForm(c,onDay){
+  const st=calState("coach"),def=onDay||(st.sel&&st.sel>todayK()?st.sel:addDays2(todayK(),1));
+  const date=c?dayKey(c.startsAt):def,time=c?fmtHM(c.startsAt):"18:00";
   S.ui.cplan=S.ui.cplan||{ids:(c&&c.plan&&c.plan.ids||[]).slice()};
   const picked=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");
+  const priv=c&&c.kind==="private",hasPlan=c&&c.plan&&(c.plan.focus||c.plan.notes||(c.plan.ids||[]).length);
   S.ui.sheet={k:"classform",id:c&&c.id};S.ui.stack=[];
-  openSheet(`${sheetHead(c?"Edit class":"Plan a class")}<form id="classform" class="stack-lg" novalidate>
-    <label class="f">Title<input id="c-title" name="title" value="${esc(c?c.title:"No-gi fundamentals")}"></label>
-    <div class="grid3"><label class="f">Date<input id="c-date" name="date" type="date" value="${date}"></label><label class="f">Time<input id="c-time" name="time" type="time" value="${time}"></label><label class="f">Minutes<input id="c-dur" name="dur" type="number" inputmode="numeric" min="15" max="600" value="${c?c.durationMin:90}"></label></div>
-    <div class="grid2"><label class="f">Type<select id="c-kind" name="kind"><option value="class"${!c||c.kind!=="private"?" selected":""}>Group class</option><option value="private"${c&&c.kind==="private"?" selected":""}>Private lesson</option></select></label><label class="f">Spots<input id="c-cap" name="cap" type="number" inputmode="numeric" min="1" max="500" value="${c&&c.capacity?c.capacity:""}" placeholder="No limit"></label></div>
+  openSheet(`${sheetHead(c?"Edit class":"Add a class")}<form id="classform" class="stack-lg" novalidate>
+    <label class="f">Class<input id="c-title" name="title" list="c-titles" autocomplete="off" value="${esc(c?c.title:"")}" placeholder="e.g. No-gi fundamentals"></label>
+    <datalist id="c-titles">${knownTitles().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+    ${c?"":`<p class="small muted" style="margin-top:-12px">Pick a class you've run before and the rest fills itself in.</p>`}
+    <div class="grid2"><label class="f">Date<input id="c-date" name="date" type="date" value="${date}"></label><label class="f">Start<input id="c-time" name="time" type="time" value="${time}"></label></div>
+    <div class="grid2"><label class="f">Minutes<input id="c-dur" name="dur" type="number" inputmode="numeric" min="15" max="600" value="${c?c.durationMin:60}"></label><label class="f">Spots<input id="c-cap" name="cap" type="number" inputmode="numeric" min="1" max="500" value="${c&&c.capacity?c.capacity:""}" placeholder="No limit"></label></div>
     <div class="grid2"><label class="f">Coach<input id="c-coach" name="coach" value="${esc(c?c.coach||"":API.me.name)}"></label><label class="f">Level<input id="c-level" name="level" value="${esc(c?c.level||"":"")}" placeholder="All levels"></label></div>
-    <label class="f">Price for private lessons (${esc(API.me.gym.currency||"ZAR")})<input id="c-price" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c&&c.priceCents?c.priceCents/100:""}" placeholder="Leave empty for group classes"></label>
-    <label class="f">Focus<input id="c-focus" name="focus" value="${esc(c&&c.plan?c.plan.focus||"":"")}" placeholder="e.g. Half guard bottom: underhook and dogfight"></label>
-    <div class="stack"><label class="f" for="c-add">Techniques to teach</label><select id="c-add" data-cplan="1"><option value="">Add a technique…</option>${techOptions()}</select><div class="chips" id="cplan-chips">${picked}</div></div>
-    <label class="f">Notes<textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></label>
-    <label class="row small"><input id="c-shared" name="shared" type="checkbox" style="width:auto"${!c||c.shared?" checked":""}> Show the plan to students so they can study before class</label>
+    ${c?"":`<label class="f">Repeat<select id="c-repeat" name="repeat"><option value="0">Just this once</option><option value="4">Every week for 4 weeks</option><option value="8">Every week for 8 weeks</option><option value="12">Every week for 12 weeks</option></select></label>`}
+    <div class="grid2"><label class="f">Type<select id="c-kind" name="kind"><option value="class"${priv?"":" selected"}>Group class</option><option value="private"${priv?" selected":""}>Private lesson</option></select></label>
+      <label class="f" id="c-price-wrap"${priv?"":" hidden"}>Price (${esc(API.me.gym.currency||"ZAR")})<input id="c-price" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c&&c.priceCents?c.priceCents/100:""}"></label></div>
+    <details class="planbox"${hasPlan?" open":""}><summary>Lesson plan (optional)</summary><div class="stack-lg" style="padding-top:12px">
+      <label class="f">Focus<input id="c-focus" name="focus" value="${esc(c&&c.plan?c.plan.focus||"":"")}" placeholder="e.g. Half guard bottom: underhook and dogfight"></label>
+      <div class="stack"><label class="f" for="c-add">Techniques to teach</label><select id="c-add" data-cplan="1"><option value="">Add a technique…</option>${techOptions()}</select><div class="chips" id="cplan-chips">${picked}</div></div>
+      <label class="f">Notes<textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></label>
+      <label class="row small"><input id="c-shared" name="shared" type="checkbox" style="width:auto"${!c||c.shared?" checked":""}> Show the plan to students so they can study before class</label></div></details>
     ${c?`<button class="btn danger" type="button" data-a="classdel" data-v="${c.id}">Delete class</button>`:""}
-  </form>`,false,{act:`<button class="btn primary grow" type="submit" form="classform">${c?"Save class":"Plan class"}</button>`});
+  </form>`,false,{act:`<button class="btn primary grow" type="submit" form="classform">${c?"Save class":"Add class"}</button>`});
 }
 async function submitClass(form){
   const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
+  if(!v("title").trim()){toast("Give the class a name.");return}
   const when=new Date(`${v("date")}T${v("time")||"18:00"}`);if(isNaN(when)){toast("Pick a date and time.");return}
-  const body={title:v("title"),startsAt:when.toISOString(),durationMin:Number(v("dur"))||60,shared:form.querySelector("[name=shared]").checked,plan:{focus:v("focus"),notes:v("notes"),ids:(S.ui.cplan||{ids:[]}).ids},
-    kind:v("kind")||"class",capacity:v("cap")?Number(v("cap")):null,coach:v("coach"),level:v("level"),priceCents:v("price")?Math.round(Number(v("price"))*100):null};
-  try{const id=S.ui.sheet&&S.ui.sheet.id;await api(id?"PUT":"POST",id?`/classes/${id}`:"/classes",body);S.ui.cplan=null;hideSheet();toast(id?"Class saved.":"Class planned. Students can see it now.");COACH.view="classes";await coachLoad("classes");go("coach")}
+  const body={title:v("title").trim(),startsAt:when.toISOString(),durationMin:Number(v("dur"))||60,shared:form.querySelector("[name=shared]").checked,plan:{focus:v("focus"),notes:v("notes"),ids:(S.ui.cplan||{ids:[]}).ids},
+    kind:v("kind")||"class",capacity:v("cap")?Number(v("cap")):null,coach:v("coach"),level:v("level"),priceCents:v("kind")==="private"&&v("price")?Math.round(Number(v("price"))*100):null};
+  const id=S.ui.sheet&&S.ui.sheet.id,reps=id?0:Number(v("repeat"))||0;
+  try{
+    if(reps>1){const list=[];for(let i=0;i<reps;i++){const d=new Date(when);d.setDate(d.getDate()+7*i);list.push({...body,startsAt:d.toISOString()})}
+      const j=await api("POST","/coach/classes/bulk",{classes:list});toast(`Added ${j.added} weekly class${j.added===1?"":"es"}${j.skipped?` (${j.skipped} already there)`:""}.`)}
+    else{await api(id?"PUT":"POST",id?`/classes/${id}`:"/classes",body);toast(id?"Class saved.":"Class added. Students can book it now.")}
+    S.ui.cplan=null;hideSheet();const st=calState("coach");st.sel=ymd(when);st.anchor=st.sel;COACH.view="classes";await coachLoad("classes",st.anchor);go("coach")}
   catch(e){toast(e.message)}
 }
 async function classSheet(id){
@@ -431,6 +501,9 @@ async function ttToClasses(weeks){
 
 /* ----- booking classes and private lessons (students) ----- */
 const fmtTime=iso=>{try{return new Date(iso).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}catch(e){return ""}};
+/* Short time for narrow columns: "18:00" on 24-hour phones, "6:00" with a small "pm" on 12-hour ones. */
+const H12=(()=>{try{return /h1[12]/.test(new Intl.DateTimeFormat(undefined,{hour:"numeric"}).resolvedOptions().hourCycle||"")}catch(e){return false}})();
+const timeHTML=iso=>{const d=new Date(iso),m=pad2(d.getMinutes());return H12?`${d.getHours()%12||12}:${m}<span class="ap">${d.getHours()<12?"am":"pm"}</span>`:`${pad2(d.getHours())}:${m}`};
 const dayKey=iso=>{const d=new Date(iso);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 const dayLabel=iso=>{const k=dayKey(iso),t=dayKey(new Date().toISOString()),tm=dayKey(new Date(Date.now()+864e5).toISOString());return k===t?"Today":k===tm?"Tomorrow":new Date(iso).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"})};
 const clsEnd=c=>new Date(c.startsAt).getTime()+c.durationMin*6e4;
@@ -452,7 +525,7 @@ function bookActions(c,big){
 function bookCard(c){
   const fill=c.capacity?Math.min(100,Math.round(100*c.going/c.capacity)):null;
   return `<div class="bookcard${c.myGoing?" mine":""}${c.kind==="private"?" priv":""}">
-    <button class="bc-main" data-a="bookopen" data-v="${c.id}"><span class="bc-time mono">${esc(fmtTime(c.startsAt))}<small>${c.durationMin} min</small></span>
+    <button class="bc-main" data-a="bookopen" data-v="${c.id}"><span class="bc-time mono"><span>${timeHTML(c.startsAt)}</span><small>${c.durationMin} min</small></span>
       <span class="bc-body"><b>${esc(c.title)}</b><span class="small muted">${[c.level,c.coach&&("with "+c.coach)].filter(Boolean).map(esc).join(" · ")}</span>
       <span class="small mono">${esc(spotsTxt(c))}</span>${fill!==null&&c.kind!=="private"?`<span class="cap" aria-hidden="true"><i style="width:${fill}%"></i></span>`:""}${whoLine(c)}</span></button>
     <div class="bc-act row">${bookActions(c)}</div></div>`}
@@ -476,7 +549,10 @@ function viewBook(){
     <div class="seg2"><button data-a="bookview" data-v="classes" aria-pressed="${v==="classes"}">Group classes</button><button data-a="bookview" data-v="private" aria-pressed="${v==="private"}">Private lessons${openP.length?` (${openP.length})`:""}</button></div></section>
     ${v==="classes"?`${membershipCard()}
       ${mine.length?`<p class="small"><b>You're booked for ${mine.filter(c=>c.myGoing).length} class${mine.filter(c=>c.myGoing).length===1?"":"es"}</b>${mine.some(c=>c.myWaitlisted)?` and waiting for ${mine.filter(c=>c.myWaitlisted).length}`:""}.</p>`:""}
-      ${cls.length?groups(cls):`<div class="empty">No classes on the calendar yet. Your coach adds them in the Coach tab.</div>`}`
+      ${(()=>{const st=calState("book"),g=byDay(cls),ws=weekStart(st.anchor);
+        const shown=st.sel?(g[st.sel]||[]):cls.filter(c=>{const k=dayKey(c.startsAt);return k>=ws&&k<=addDays2(ws,6)});
+        return `${calHeader("book",st,g)}${st.sel?`<p class="small muted">Showing ${esc(dayLabel(fromYmd(st.sel).toISOString()))}. <button class="linkbtn small" data-a="calday" data-k="book" data-v="${st.sel}">Show the whole week</button></p>`:""}
+          ${shown.length?groups(shown):`<div class="empty">${cls.length?(st.sel?"No classes that day.":"No classes this week. Try next week."):"No classes on the calendar yet. Your coach adds them in the Coach tab."}</div>`}`})()}`
     :`${mineP.length?`<section class="stack"><h2 class="label">Your private lessons</h2>${mineP.map(bookCard).join("")}</section>`:""}
       ${openP.length?groups(openP):`<div class="empty">No open private lesson slots right now.</div>`}
       <section class="panel stack"><h2 class="label">Want a different time?</h2><p class="small">Ask your coach for a private lesson that suits you.</p>${gymContact({phone:p.phone,email:p.email,socials:{whatsapp:(p.socials||{}).whatsapp}})}</section>`}
@@ -598,4 +674,4 @@ async function savePriv(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{
   const times=v("times").split(/[,;\s]+/).map(t=>t.trim()).filter(Boolean).map(t=>{const m=t.match(/^(\d{1,2})(?:[:h.]?(\d{2}))?$/);return m&&Number(m[1])<24?String(m[1]).padStart(2,"0")+":"+(m[2]||"00"):null});
   if(!times.length||times.includes(null)){toast("Write the start times like 07:00, 12:30, 17:00.");return}
   const classes=times.map(t=>({kind:"private",title:v("title")||"Private lesson",startsAt:new Date(`${v("date")}T${t}`).toISOString(),durationMin:Number(v("dur"))||60,priceCents:v("price")?Math.round(Number(v("price"))*100):null,coach:v("coach"),capacity:Number(v("cap"))||1,shared:true}));
-  try{const j=await api("POST","/coach/classes/bulk",{classes});hideSheet();await coachLoad("classes");COACH.view="classes";go("coach");toast(`Added ${j.added} private slot${j.added===1?"":"s"}${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
+  try{const j=await api("POST","/coach/classes/bulk",{classes});hideSheet();const st=calState("coach");st.sel=v("date");st.anchor=st.sel;await coachLoad("classes",st.anchor);COACH.view="classes";go("coach");toast(`Added ${j.added} private slot${j.added===1?"":"s"}${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}

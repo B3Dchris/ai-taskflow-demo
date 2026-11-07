@@ -315,9 +315,11 @@ function makeApi(pool, { secureCookies }) {
     if (!r.rows[0]) fail(404, "That class doesn't exist.");
     return r.rows[0];
   }
+  // Edits only change what they send: anything left out keeps its current value.
+  const classBody = (r) => ({ title: r.title, startsAt: r.starts_at, durationMin: r.duration_min, plan: r.plan, shared: r.shared, kind: r.kind, capacity: r.capacity, priceCents: r.price_cents, coach: r.coach, level: r.level });
   api.put("/classes/:id", wrap(async (req, res) => {
-    const u = needCoach(req); await ownClass(u, req.params.id);
-    const c = readClass(req.body || {});
+    const u = needCoach(req), cur = await ownClass(u, req.params.id), b = req.body || {};
+    const c = readClass({ ...classBody(cur), ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) });
     const r = await q("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10 where id=$11 returning *",
       [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, intOr(req.params.id, 0)]);
     res.json({ class: classOut(r.rows[0], true) });

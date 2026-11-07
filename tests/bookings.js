@@ -53,6 +53,8 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await coach("GET", `/coach/classes/${cid}`);
     ok(r.j.attendees.length === 2 && r.j.waitlist.length === 1 && r.j.waitlist[0].name === "Ana Silva" && r.j.attendees[0].name === "Chris Buys", "coach sees bookings (full names) and the waitlist");
     r = await other("PUT", `/classes/${cid}/rsvp`, { going: true }); ok(r.s === 404, "another gym can't book");
+    r = await coach("PUT", `/classes/${cid}`, { title: "No-Gi Advanced", startsAt: at(2, 16), plan: { focus: "Leg locks", ids: [] } });
+    ok(r.j.class.capacity === 2 && r.j.class.coach === "JP" && r.j.class.level === "Advanced" && r.j.class.durationMin === 60 && r.j.class.plan.focus === "Leg locks", "editing the plan keeps the class's spots, coach, level and length");
 
     // ---- parallel booking of the last spot
     r = await coach("POST", "/classes", { title: "Open mat", startsAt: at(3, 9), capacity: 1 }); const race = r.j.class.id;
