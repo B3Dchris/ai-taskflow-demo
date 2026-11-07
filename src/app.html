@@ -1877,7 +1877,7 @@ document.addEventListener("click",e=>{
     case "close": closeSheet(); break;
     case "term": showTerm(v); break;
     case "auth": S.ui.authMode=v;authSheet();break;
-    case "authmode": S.ui.authMode=v;authSheet();break;
+    case "authmode": S.ui.authMode=v;S.ui.resetSent=null;authSheet();break;
     case "signout": signOut();break;
     case "delacct": S.ui.delOpen=true;render();break;
     case "delcancel": S.ui.delOpen=false;render();break;
@@ -1983,12 +1983,13 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
     if(fid==="payform")return submitPay(f);
     if(fid==="gymimpform")return gymImport(f);
+    if(fid==="inviteform")return sendInvites(f);
     if(fid==="gymeditform")return gymSave(f);
     if(fid==="gymform"){try{const j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
     if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}

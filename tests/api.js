@@ -1,6 +1,6 @@
 // API tests against a real PostgreSQL. Usage: DATABASE_URL=postgres://... node tests/api.js
 // The database is wiped first, so point this at a throwaway test database only.
-const { spawn } = require("child_process"); const { startGymSite } = require("./fixture-gym"); const path = require("path"); const { Pool } = require("pg");
+const { spawn } = require("child_process"); const { startGymSite, startMailSink } = require("./fixture-gym"); const path = require("path"); const { Pool } = require("pg");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 
@@ -18,11 +18,11 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
-  const site = await startGymSite();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1" }; delete env.ANTHROPIC_API_KEY;
+  const site = await startGymSite(), sink = await startMailSink();
+  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   try {
@@ -134,12 +134,42 @@ function client(base) {
     r = await stu2("POST", "/coach/classes/bulk", { classes: [] }); ok(r.s === 403, "students can't add classes");
     r = await coach("PUT", "/coach/gym/profile", { profile: imp.profile, logoUrl: null });
     ok(r.s === 200 && r.j.me.gym.logo === null, "coach can remove the logo");
+    // --- email: welcome, password reset, invites
+    const wait = () => new Promise((r) => setTimeout(r, 300));
+    r = await anon("GET", "/status"); ok(r.s === 200 && r.j.mail === true && r.j.ai === false, "status says email is on");
+    await wait();
+    const wc = sink.mails.find((m) => m.to[0] === "coach@example.com");
+    ok(wc && /is set up on JitsFlow/.test(wc.subject) && wc.html.includes("https://www.jitsflow.test/app/?join=" + sc) && wc.from === "JitsFlow <no-reply@jitsflow.com>" && wc.reply_to === "hello@jitsflow.com" && wc.text, "coach gets a welcome email with the invite link");
+    ok(sink.mails.some((m) => m.to[0] === "sam@example.com" && /Welcome/.test(m.subject)), "students get a welcome email");
+    let n = sink.mails.length;
+    r = await anon("POST", "/auth/forgot", { email: "nobody@example.com" }); ok(r.s === 200 && sink.mails.length === n, "forgot-password for an unknown email looks the same and sends nothing");
+    r = await anon("POST", "/auth/forgot", { email: "not-an-email" }); ok(r.s === 400, "forgot-password needs an email");
+    r = await anon("POST", "/auth/forgot", { email: "COACH@example.com" }, { host: "evil.example" });
+    const rm = sink.mails[sink.mails.length - 1];
+    ok(r.s === 200 && rm.to[0] === "coach@example.com" && /Reset your JitsFlow password/.test(rm.subject), "reset email is sent");
+    const link = (rm.text.match(/https:\/\/\S+\?reset=([0-9a-f]{64})/) || []);
+    ok(link[0] && link[0].startsWith("https://www.jitsflow.test/app/?reset="), "reset link uses the site address, not the request's Host header");
+    const resetter = client(base);
+    r = await resetter("POST", "/auth/reset", { token: link[1], password: "short" }); ok(r.s === 400 && /8 characters/.test(r.j.error), "new password must be long enough");
+    r = await resetter("POST", "/auth/reset", { token: "0".repeat(64), password: "brand-new-pass" }); ok(r.s === 400 && /expired/.test(r.j.error), "a made-up token is refused");
+    r = await resetter("POST", "/auth/reset", { token: link[1], password: "brand-new-pass" }); ok(r.s === 200 && r.j.me.email === "coach@example.com", "reset sets the new password and signs in");
+    r = await resetter("POST", "/auth/reset", { token: link[1], password: "another-pass1" }); ok(r.s === 400, "a reset link works only once");
+    r = await coach("GET", "/me"); ok(r.j.me === null, "other sessions are signed out after a reset");
+    r = await coach("POST", "/auth/login", { email: "coach@example.com", password: "s3cret-pass" }); ok(r.s === 401, "old password no longer works");
+    r = await coach("POST", "/auth/login", { email: "coach@example.com", password: "brand-new-pass" }); ok(r.s === 200, "new password works");
+    r = await stu2("POST", "/coach/invite", { emails: "x@example.com" }); ok(r.s === 403, "students can't send invites");
+    r = await coach("POST", "/coach/invite", { emails: "lee@example.com, nope" }); ok(r.s === 400 && /nope/.test(r.j.error), "bad addresses are named");
+    n = sink.mails.length;
+    r = await coach("POST", "/coach/invite", { emails: "lee@example.com\nSam@example.com; lee@example.com" });
+    const inv = sink.mails[sink.mails.length - 1];
+    ok(r.s === 200 && r.j.sent === 1 && r.j.already.includes("sam@example.com") && sink.mails.length === n + 1, "invites go to new people only, once each");
+    ok(inv.to[0] === "lee@example.com" && inv.html.includes("https://www.jitsflow.test/app/?join=" + (await coach("GET", "/me")).j.me.gym.studentCode) && /invited you to/.test(inv.subject), "invite email carries the join link");
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");
     r = await anon("GET", "/nope"); ok(r.s === 404, "unknown API path is 404");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
-  srv.kill(); site.close();
+  srv.kill(); site.close(); sink.close();
   console.log(`api: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);
 })();

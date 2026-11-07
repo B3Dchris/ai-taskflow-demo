@@ -36,3 +36,15 @@ function startGymSite() {
   return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ url: `http://127.0.0.1:${srv.address().port}`, close: () => srv.close(), hits })));
 }
 module.exports = { startGymSite };
+// A stand-in for Resend's email API: collects what the app would have sent.
+function startMailSink() {
+  const mails = [];
+  const srv = http.createServer((req, res) => {
+    let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => {
+      if (req.headers.authorization !== "Bearer test-key") { res.writeHead(401); return res.end("{}"); }
+      const m = JSON.parse(b); mails.push(m); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ id: "m" + mails.length }));
+    });
+  });
+  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ url: `http://127.0.0.1:${srv.address().port}/emails`, mails, close: () => srv.close() })));
+}
+module.exports.startMailSink = startMailSink;

@@ -4,6 +4,7 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const importer = require("./importer");
+const mail = require("./mail");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -112,7 +113,9 @@ function makeApi(pool, { secureCookies }) {
     try { id = await newUser({ ...b, role: "coach", gymId: g.rows[0].id }); }
     catch (e) { await q("delete from gyms where id=$1", [g.rows[0].id]); throw e; }
     await startSession(res, id);
-    res.status(201).json({ me: me(await loadMe(id)) });
+    const m = await loadMe(id);
+    mail.sendLater({ to: m.email, ...mail.templates.welcomeCoach(m.name, m.gym_name, mail.appUrl() + "/app/?join=" + m.student_code) });
+    res.status(201).json({ me: me(m) });
   }));
 
   api.post("/auth/register", wrap(async (req, res) => {
@@ -127,7 +130,9 @@ function makeApi(pool, { secureCookies }) {
     }
     const id = await newUser({ ...b, role, gymId });
     await startSession(res, id);
-    res.status(201).json({ me: me(await loadMe(id)) });
+    const m = await loadMe(id);
+    if (m.role === "student") mail.sendLater({ to: m.email, ...mail.templates.welcomeStudent(m.name, m.gym_name) });
+    res.status(201).json({ me: me(m) });
   }));
 
   api.post("/auth/login", wrap(async (req, res) => {
@@ -139,6 +144,37 @@ function makeApi(pool, { secureCookies }) {
     await startSession(res, r.rows[0].id);
     res.json({ me: me(await loadMe(r.rows[0].id)) });
   }));
+
+  // Forgotten password: email a one-time link. The answer is the same whether or not the email has an account.
+  api.post("/auth/forgot", wrap(async (req, res) => {
+    const email = clean(req.body?.email, 254).toLowerCase();
+    if (!isEmail(email)) fail(400, "Enter the email you signed up with.");
+    checkSignIn(req, "reset:" + email);
+    if (!mail.mailOn()) fail(503, "Password reset by email isn't switched on yet. Ask your coach or email hello@jitsflow.com.");
+    const r = await q("select id, name from users where email=$1", [email]);
+    if (r.rows[0]) {
+      const tok = crypto.randomBytes(32).toString("hex");
+      await q("delete from password_resets where user_id=$1", [r.rows[0].id]);
+      await q("insert into password_resets(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 hour')", [sha(tok), r.rows[0].id]);
+      try { await mail.send({ to: email, ...mail.templates.reset(r.rows[0].name, mail.appUrl() + "/app/?reset=" + tok) }); }
+      catch (e) { console.warn("mail:", e.message); fail(502, "Couldn't send the email just now. Try again in a minute."); }
+    }
+    res.json({ ok: true });
+  }));
+  api.post("/auth/reset", wrap(async (req, res) => {
+    const tok = clean(req.body?.token, 100), password = String(req.body?.password || "");
+    if (!/^[0-9a-f]{64}$/.test(tok)) fail(400, "That reset link isn't right. Ask for a new one.");
+    if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
+    if (password.length > 200) fail(400, "That password is too long.");
+    const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
+    if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
+    const uid = r.rows[0].user_id;
+    await q("update users set pass_hash=$1 where id=$2", [await bcrypt.hash(password, 11), uid]);
+    await q("delete from sessions where user_id=$1", [uid]); // sign out everywhere else
+    await startSession(res, uid);
+    res.json({ me: me(await loadMe(uid)) });
+  }));
+  api.get("/status", (req, res) => res.json({ db: true, mail: mail.mailOn(), ai: !!process.env.ANTHROPIC_API_KEY }));
 
   api.post("/auth/logout", wrap(async (req, res) => {
     const tok = cookies(req)[COOKIE];
@@ -353,6 +389,25 @@ function makeApi(pool, { secureCookies }) {
     const fee = b.monthlyFeeCents !== undefined ? Math.max(0, intOr(b.monthlyFeeCents, 0)) : u.gym_fee;
     await q("update gyms set name=$1, monthly_fee_cents=$2 where id=$3", [name, fee, u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
+  }));
+  api.post("/coach/invite", wrap(async (req, res) => {
+    const u = needCoach(req);
+    if (!mail.mailOn()) fail(503, "Email isn't switched on yet. Copy the invite link and send it yourself.");
+    const raw = Array.isArray(req.body?.emails) ? req.body.emails : String(req.body?.emails || "").split(/[\s,;]+/);
+    const emails = [...new Set(raw.map((e) => clean(e, 254).toLowerCase()).filter(Boolean))];
+    const bad = emails.filter((e) => !isEmail(e));
+    if (bad.length) fail(400, `These don't look like email addresses: ${bad.slice(0, 3).join(", ")}`);
+    if (!emails.length) fail(400, "Add at least one email address.");
+    if (emails.length > 30) fail(400, "Send up to 30 invites at a time.");
+    const have = new Set((await q("select email from users where gym_id=$1 and email = any($2)", [u.gym_id, emails])).rows.map((x) => x.email));
+    let sent = 0; const failed = [];
+    for (const e of emails) {
+      if (have.has(e)) continue;
+      if (limited("inv:" + u.gym_id, 100, 24 * 3600e3)) { failed.push(e); continue; } // 100 invite emails per gym per day
+      try { await mail.send({ to: e, ...mail.templates.invite(u.name, u.gym_name, mail.appUrl() + "/app/?join=" + u.student_code) }); sent++; }
+      catch (err) { console.warn("mail:", err.message); failed.push(e); }
+    }
+    res.json({ sent, already: [...have], failed });
   }));
   api.post("/coach/codes/rotate", wrap(async (req, res) => {
     const u = needCoach(req), which = req.body?.which === "coach" ? "coach_code" : "student_code";

@@ -1,14 +1,14 @@
 // End-to-end: a coach and a student using accounts, classes, the roster and payments in real browsers.
 // Usage: DATABASE_URL=postgres://.../<something>test node tests/accounts.js   (wipes that database)
-const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg"); const { startGymSite } = require("./fixture-gym");
+const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg"); const { startGymSite, startMailSink } = require("./fixture-gym");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
-  const site = await startGymSite();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1" }; delete env.ANTHROPIC_API_KEY;
+  const site = await startGymSite(), sink = await startMailSink();
+  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   const b = await chromium.launch(); const errs = [];
@@ -119,9 +119,26 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     // ---- student signs out
     await st.tap('nav.tabs [data-v="settings"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
     ok(await ev(st, () => !API.me && S.mode === "local" && /Saved on this device/.test(document.getElementById("sync").textContent)), "student signs out");
+    // ---- forgotten password by email
+    await st.goto(URL + "/app/?signin=1"); await st.waitForTimeout(900);
+    await st.locator('#sheet [data-a="authmode"][data-v="forgot"]').tap(); await st.fill("#a-email", "chris@example.com");
+    await st.tap("#sheetbar [type=submit]"); await st.waitForTimeout(900);
+    ok(await ev(st, () => /Check your email/.test(document.getElementById("sheet").innerText)), "student asks for a reset link");
+    const rmail = sink.mails.filter((m) => m.to[0] === "chris@example.com" && /Reset/.test(m.subject)).pop();
+    const tok = rmail && (rmail.text.match(/\?reset=([0-9a-f]{64})/) || [])[1];
+    ok(!!tok, "reset email arrives with a link");
+    await st.goto(URL + "/app/?reset=" + tok); await st.waitForTimeout(900);
+    ok(await ev(st, () => /Choose a new password/.test(document.getElementById("sheet").innerText) && !/reset=/.test(location.search)), "reset link opens the new-password sheet (and drops the token from the address bar)");
+    await st.fill("#a-pass", "newstudentpass"); await st.tap("#sheetbar [type=submit]"); await st.waitForTimeout(1200);
+    ok(await ev(st, () => API.me && API.me.email === "chris@example.com"), "student is signed in with the new password");
+    await wide(st, "reset");
+    // ---- coach invites by email
+    await co.tap('[data-a="coachview"][data-v="gym"]'); await co.waitForTimeout(300);
+    await co.fill("#inv-emails", "newkid@example.com, chris@example.com"); await co.tap("#inviteform [type=submit]"); await co.waitForTimeout(900);
+    ok(/Sent 1 invite\. 1 already in your gym/.test(await toast(co)) && sink.mails.some((m) => m.to[0] === "newkid@example.com"), "coach invites students by email: " + (await toast(co)));
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
-  await b.close(); srv.kill(); site.close();
+  await b.close(); srv.kill(); site.close(); sink.close();
   console.log(`accounts: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);
 })();

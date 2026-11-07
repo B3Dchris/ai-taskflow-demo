@@ -88,6 +88,12 @@ alter table gyms add column if not exists logo bytea;
 alter table gyms add column if not exists logo_type text;
 alter table gyms add column if not exists logo_v text;
 alter table gyms add column if not exists profile_updated_at timestamptz;
+create table if not exists password_resets(
+  token_hash text primary key,
+  user_id bigint not null references users(id) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
 `;
 
 function makePool() {
@@ -99,6 +105,7 @@ function makePool() {
 async function migrate(pool) {
   await pool.query(SCHEMA);
   await pool.query("delete from sessions where expires_at < now()");
+  await pool.query("delete from password_resets where expires_at < now()");
 }
 
 module.exports = { makePool, migrate };

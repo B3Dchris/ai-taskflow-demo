@@ -28,6 +28,12 @@ services:
         fromDatabase:
           name: jitsflow-db
           property: connectionString
+      - key: APP_URL            # address used in email links
+        value: https://www.jitsflow.com
+      - key: RESEND_API_KEY     # set in the Render dashboard; turns on email
+        sync: false
+      - key: ANTHROPIC_API_KEY  # optional; smarter gym website import
+        sync: false
     # After you buy the domain, uncomment these two lines and push.
     # Render then shows the DNS records to add at your registrar.
     # domains:

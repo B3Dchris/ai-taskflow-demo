@@ -3684,7 +3684,7 @@ document.addEventListener("click",e=>{
     case "close": closeSheet(); break;
     case "term": showTerm(v); break;
     case "auth": S.ui.authMode=v;authSheet();break;
-    case "authmode": S.ui.authMode=v;authSheet();break;
+    case "authmode": S.ui.authMode=v;S.ui.resetSent=null;authSheet();break;
     case "signout": signOut();break;
     case "delacct": S.ui.delOpen=true;render();break;
     case "delcancel": S.ui.delOpen=false;render();break;
@@ -3790,12 +3790,13 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
     if(fid==="payform")return submitPay(f);
     if(fid==="gymimpform")return gymImport(f);
+    if(fid==="inviteform")return sendInvites(f);
     if(fid==="gymeditform")return gymSave(f);
     if(fid==="gymform"){try{const j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
     if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
@@ -3814,7 +3815,7 @@ document.addEventListener("submit",async e=>{
 });
 
 /* ============ ACCOUNTS, SYNC, CLASSES AND THE COACH DASHBOARD (website only) ============ */
-const API={on:false,me:null,classes:null,classesAt:0};
+const API={on:false,me:null,classes:null,classesAt:0,status:{}};
 const COACH={view:"classes",roster:null,classes:null,payments:null,loading:false,q:""};
 async function api(method,url,body){
   const h=method==="GET"?{}:{"content-type":"application/json","x-jf":"1"};
@@ -3835,11 +3836,14 @@ const beltChip=(b,st)=>`<span class="beltchip" style="--bc:${BCOL[b]||"#F4F4F0"}
 /* ----- sign-in state and sync ----- */
 async function acctInit(){
   if(inClaude()||!/^https?:$/.test(location.protocol))return;
-  try{const j=await api("GET","/me");API.on=true;API.me=j.me;if(API.me)await startSync()}
+  try{const j=await api("GET","/me");API.on=true;API.me=j.me;api("GET","/status").then(x=>{API.status=x}).catch(()=>{});if(API.me)await startSync()}
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
+  const rt=qs.get("reset");
+  if(rt){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
+    if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
   const q=qs.get("join");
   if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
@@ -3866,6 +3870,7 @@ async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.m
 /* ----- account sheets ----- */
 function authSheet(){
   const m=S.ui.authMode||"login",c=S.ui.authCode||"";S.ui.sheet={k:"auth"};S.ui.stack=[];
+  if(m==="forgot"||m==="reset")return resetSheet(m);
   const tabs=[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
   openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
    <div class="seg3">${tabs.map(([k,l])=>`<button type="button" data-a="authmode" data-v="${k}" aria-pressed="${m===k}">${l}</button>`).join("")}</div>
@@ -3876,11 +3881,29 @@ function authSheet(){
     <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required></label>
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
     ${m==="register"?`<label class="f">Gym code (optional)<input id="a-code" name="code" value="${esc(c)}" autocapitalize="characters" placeholder="From your coach"></label>`:""}
+    ${m==="login"?`<p class="small"><button type="button" class="linkbtn" data-a="authmode" data-v="forgot">Forgot your password?</button></p>`:""}
     ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Settings.</p>`:""}
    </form></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}</button>`});
 }
+function resetSheet(m){
+  const sent=S.ui.resetSent;
+  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="reset"?"Choose a new password":"Reset your password"}</h1>
+   ${m==="reset"?`<p class="muted">Pick a new password. You'll be signed out on your other devices.</p>`
+     :sent?`<div class="panel accent"><p><b>Check your email.</b> If ${esc(sent)} has a JitsFlow account, a reset link is on its way. It works for 1 hour. Check spam if it isn't there in a few minutes.</p></div>`
+     :`<p class="muted">Enter the email you signed up with and we'll send you a link to choose a new password.</p>`}
+   <form id="authform" class="stack" novalidate>
+    ${m==="reset"?`<label class="f">New password<input id="a-pass" name="password" type="password" autocomplete="new-password" minlength="8" required></label>`
+      :`<label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required value="${esc(sent||"")}"></label>`}
+   </form>
+   <p class="small"><button type="button" class="linkbtn" data-a="authmode" data-v="login">Back to sign in</button></p></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="reset"?"Save new password":sent?"Send again":"Send reset link"}</button>`});
+}
 async function submitAuth(form){
   const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"",m=S.ui.authMode||"login";
+  if(m==="forgot"||m==="reset"){const btn=document.querySelector('#sheetbar [type=submit]');if(btn)btn.disabled=true;
+    try{if(m==="forgot"){await api("POST","/auth/forgot",{email:v("email")});S.ui.resetSent=v("email").trim();resetSheet("forgot")}
+      else{const j=await api("POST","/auth/reset",{token:S.ui.resetTok,password:v("password")});S.ui.resetTok=null;S.ui.authMode="login";await signedIn(j.me);toast("Password changed. You're signed in.")}}
+    catch(e){toast(e.message);if(btn)btn.disabled=false}
+    return}
   const btn=document.querySelector('#sheetbar [type=submit]');if(btn){btn.disabled=true;btn.textContent="One moment…"}
   try{
     const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password")})
@@ -4058,11 +4081,16 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
 function coachGym(){const g=API.me.gym;
   return `<section class="stack">${gymCard(true)}${gymImportPanel()}${gymClassesPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
       <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
+    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2><p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
     <div class="panel"><h2 class="label">Add another coach</h2><p class="small">Only share this with coaches: it gives access to the roster and payments.</p><div class="row"><span class="mono"><b>${esc(g.coachCode)}</b></span><button class="btn" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button></div></div>
     <form id="gymform" class="panel stack"><h2 class="label">Gym details</h2><label class="f">Gym name<input id="g-name" name="name" value="${esc(g.name)}"></label>
       <label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label><button class="btn primary" type="submit">Save gym</button></form>
     <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
     <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p></section>`}
+async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
+  try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";
+    toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")}.`:""}`)}
+  catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ----- gym profile: import from the gym's website, timetable, coaches, rates ----- */
