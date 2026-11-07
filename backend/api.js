@@ -200,6 +200,7 @@ function makeApi(pool, { secureCookies }) {
     const c = clean(req.body?.code, 20).toUpperCase();
     const g = await q("select id, (coach_code=$1) as coach from gyms where student_code=$1 or coach_code=$1", [c]);
     if (!g.rows[0]) fail(404, "That gym code isn't right. Check it with your coach.");
+    if (u.gym_id && String(u.gym_id) !== String(g.rows[0].id)) await releaseBookings(u.id, u.gym_id, u);
     await q("update users set gym_id=$1, role=$2 where id=$3", [g.rows[0].id, g.rows[0].coach ? "coach" : "student", u.id]);
     res.json({ me: me(await loadMe(u.id)) });
   }));
@@ -207,6 +208,7 @@ function makeApi(pool, { secureCookies }) {
   api.delete("/me", wrap(async (req, res) => {
     const u = needUser(req);
     if (!(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
+    if (u.gym_id) await releaseBookings(u.id, u.gym_id, u);
     await q("delete from users where id=$1", [u.id]);
     // A gym with nobody left in it goes too (its classes, plans and payments with it).
     if (u.gym_id) await q("delete from gyms g where g.id=$1 and not exists (select 1 from users x where x.gym_id=g.id)", [u.gym_id]);
@@ -320,9 +322,17 @@ function makeApi(pool, { secureCookies }) {
   api.put("/classes/:id", wrap(async (req, res) => {
     const u = needCoach(req), cur = await ownClass(u, req.params.id), b = req.body || {};
     const c = readClass({ ...classBody(cur), ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) });
-    const r = await q("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10 where id=$11 returning *",
-      [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, intOr(req.params.id, 0)]);
-    res.json({ class: classOut(r.rows[0], true) });
+    const db = await pool.connect(); let row, ids = [];
+    try {
+      await db.query("begin");
+      await db.query("select id from classes where id=$1 for update", [cur.id]);
+      row = (await db.query("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10 where id=$11 returning *",
+        [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, cur.id])).rows[0];
+      ids = await promoteWaitlist(db, row); // more spots (or no limit any more): people waiting move in
+      await db.query("commit");
+    } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
+    await tellPromoted(ids, row, u);
+    res.json({ class: classOut(row, true), promoted: ids.length });
   }));
   const whenText = (d, tz) => { try { return new Date(d).toLocaleString("en-ZA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); } catch (e) { return new Date(d).toISOString(); } };
   api.delete("/classes/:id", wrap(async (req, res) => {
@@ -334,13 +344,40 @@ function makeApi(pool, { secureCookies }) {
     res.json({ ok: true, notified: new Date(c.starts_at) > new Date() ? booked.rows.length : 0 });
   }));
 
-  // Book or cancel. Runs in a transaction with the class row locked, so two people can't take the last spot.
+  // Fill free spots from the waitlist, longest-waiting first. Call inside a transaction holding the class row lock.
+  async function promoteWaitlist(db, c) {
+    if (new Date(c.starts_at) <= new Date()) return [];
+    const booked = Number((await db.query("select count(*) from attendance where class_id=$1 and going", [c.id])).rows[0].count);
+    const free = c.capacity ? c.capacity - booked : 1e6;
+    if (free <= 0) return [];
+    const r = await db.query(`update attendance set going=true, waitlisted=false, booked_at=clock_timestamp(), updated_at=now()
+      where class_id=$1 and user_id in (select user_id from attendance where class_id=$1 and waitlisted order by booked_at limit $2) returning user_id`, [c.id, Math.min(free, 1000)]);
+    return r.rows.map((x) => x.user_id);
+  }
+  async function tellPromoted(ids, c, u) {
+    if (!ids.length) return;
+    const ppl = (await q("select email, name from users where id = any($1)", [ids])).rows;
+    for (const p of ppl) mail.sendLater({ to: p.email, ...mail.templates.offWaitlist(p.name, u.gym_name, c.title, whenText(c.starts_at, tzOf(u))) });
+  }
+  // Release someone's future bookings at a gym (they left it or deleted their account) and hand the spots on.
+  async function releaseBookings(userId, gymId, u) {
+    const rows = (await q(`update attendance a set going=false, waitlisted=false, updated_at=now() from classes c
+      where c.id=a.class_id and a.user_id=$1 and c.gym_id=$2 and c.starts_at > now() and (a.going or a.waitlisted) returning c.id`, [userId, gymId])).rows;
+    for (const { id } of rows) {
+      const db = await pool.connect();
+      try { await db.query("begin"); const c = (await db.query("select * from classes where id=$1 for update", [id])).rows[0]; const ids = c ? await promoteWaitlist(db, c) : []; await db.query("commit"); if (c) await tellPromoted(ids, c, u); }
+      catch (e) { await db.query("rollback").catch(() => {}); } finally { db.release(); }
+    }
+  }
+  // Book or cancel. Runs in a transaction that locks the student (so weekly limits can't be beaten by booking
+  // several classes at once) and then the class (so two people can't take the last spot).
   api.put("/classes/:id/rsvp", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id) fail(403, "Join a gym first.");
     const want = req.body?.going !== false;
     const db = await pool.connect(); let promoted = null, out;
     try {
       await db.query("begin");
+      await db.query("select id from users where id=$1 for update", [u.id]);
       const c = (await db.query("select * from classes where id=$1 and gym_id=$2 for update", [intOr(req.params.id, 0), u.gym_id])).rows[0];
       if (!c) fail(404, "That class doesn't exist.");
       if (new Date(c.starts_at).getTime() + c.duration_min * 6e4 < Date.now()) fail(400, "That class has already finished.");
@@ -360,45 +397,43 @@ function makeApi(pool, { secureCookies }) {
           }
           const full = c.capacity && booked >= c.capacity;
           if (full && c.kind === "private") fail(409, "Someone just booked that slot. Pick another time.");
-          await db.query(`insert into attendance(class_id,user_id,going,waitlisted,booked_at) values($1,$2,$3,$4,now())
-            on conflict(class_id,user_id) do update set going=excluded.going, waitlisted=excluded.waitlisted, booked_at=now(), updated_at=now()`, [c.id, u.id, !full, !!full]);
+          await db.query(`insert into attendance(class_id,user_id,going,waitlisted,booked_at) values($1,$2,$3,$4,clock_timestamp())
+            on conflict(class_id,user_id) do update set going=excluded.going, waitlisted=excluded.waitlisted, booked_at=clock_timestamp(), updated_at=now()`, [c.id, u.id, !full, !!full]);
           out = { going: !full, waitlisted: !!full };
         }
       } else {
         await db.query("update attendance set going=false, waitlisted=false, updated_at=now() where class_id=$1 and user_id=$2", [c.id, u.id]);
         out = { going: false, waitlisted: false };
-        // A spot opened: give it to the first person waiting.
-        if (mine && mine.going && c.capacity && booked < c.capacity && new Date(c.starts_at) > new Date()) {
-          const w = (await db.query(`update attendance set going=true, waitlisted=false, booked_at=now(), updated_at=now()
-            where class_id=$1 and user_id=(select user_id from attendance where class_id=$1 and waitlisted order by booked_at limit 1) returning user_id`, [c.id])).rows[0];
-          if (w) promoted = { userId: w.user_id, c };
-        }
+        // A spot opened: give it to whoever has waited longest.
+        if (mine && mine.going) { const ids = await promoteWaitlist(db, c); if (ids.length) promoted = { ids, c }; }
       }
       if (out.waitlisted) out.position = Number((await db.query("select count(*) from attendance where class_id=$1 and waitlisted and booked_at <= (select booked_at from attendance where class_id=$1 and user_id=$2)", [c.id, u.id])).rows[0].count);
       await db.query("commit");
     } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
-    if (promoted) {
-      const p = (await q("select email, name from users where id=$1", [promoted.userId])).rows[0];
-      if (p) mail.sendLater({ to: p.email, ...mail.templates.offWaitlist(p.name, u.gym_name, promoted.c.title, whenText(promoted.c.starts_at, tzOf(u))) });
-    }
+    if (promoted) await tellPromoted(promoted.ids, promoted.c, u);
     res.json({ ok: true, ...out });
   }));
   // Students check themselves in from 45 minutes before a class until it ends.
   api.post("/classes/:id/checkin", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id) fail(403, "Join a gym first.");
-    const c = (await q("select * from classes where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id])).rows[0];
-    if (!c) fail(404, "That class doesn't exist.");
-    const start = new Date(c.starts_at).getTime(), now = Date.now();
-    if (now < start - 45 * 6e4) fail(400, "Check-in opens 45 minutes before the class.");
-    if (now > start + c.duration_min * 6e4) fail(400, "That class has finished.");
-    const mine = (await q("select going from attendance where class_id=$1 and user_id=$2", [c.id, u.id])).rows[0];
-    if (!mine || !mine.going) {
-      const booked = Number((await q("select count(*) from attendance where class_id=$1 and going", [c.id])).rows[0].count);
-      if (c.capacity && booked >= c.capacity) fail(409, "This class is full. Ask your coach at the mat.");
-      if (c.kind === "private") fail(403, "That private lesson is booked for someone else.");
-    }
-    await q(`insert into attendance(class_id,user_id,going,attended,checked_in_at) values($1,$2,true,true,now())
-             on conflict(class_id,user_id) do update set going=true, waitlisted=false, attended=true, checked_in_at=now(), updated_at=now()`, [c.id, u.id]);
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      const c = (await db.query("select * from classes where id=$1 and gym_id=$2 for update", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+      if (!c) fail(404, "That class doesn't exist.");
+      const start = new Date(c.starts_at).getTime(), now = Date.now();
+      if (now < start - 45 * 6e4) fail(400, "Check-in opens 45 minutes before the class.");
+      if (now > start + c.duration_min * 6e4) fail(400, "That class has finished.");
+      const mine = (await db.query("select going from attendance where class_id=$1 and user_id=$2", [c.id, u.id])).rows[0];
+      if (!mine || !mine.going) {
+        if (c.kind === "private") fail(403, "That private lesson is booked for someone else.");
+        const booked = Number((await db.query("select count(*) from attendance where class_id=$1 and going", [c.id])).rows[0].count);
+        if (c.capacity && booked >= c.capacity) fail(409, "This class is full. Ask your coach at the mat.");
+      }
+      await db.query(`insert into attendance(class_id,user_id,going,attended,checked_in_at) values($1,$2,true,true,now())
+               on conflict(class_id,user_id) do update set going=true, waitlisted=false, attended=true, checked_in_at=now(), updated_at=now()`, [c.id, u.id]);
+      await db.query("commit");
+    } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
     res.json({ ok: true });
   }));
 
@@ -429,10 +464,10 @@ function makeApi(pool, { secureCookies }) {
     const cls = (await q(`select c.id, c.title, c.kind, c.capacity, c.starts_at,
         extract(isodow from c.starts_at at time zone $2)::int as dow, to_char(c.starts_at at time zone $2,'HH24:MI') as hm,
         to_char(date_trunc('week', c.starts_at at time zone $2),'YYYY-MM-DD') as wk,
-        (select count(*) from attendance a where a.class_id=c.id and a.attended)::int as checked,
-        (select count(*) from attendance a where a.class_id=c.id and a.going)::int as booked,
-        (select count(*) from attendance a where a.class_id=c.id and a.waitlisted)::int as waiting
-      from classes c where c.gym_id=$1 and c.starts_at > now() - interval '180 days' and c.starts_at + (c.duration_min || ' minutes')::interval < now()`, [gymId, tz])).rows;
+        coalesce(a.checked,0)::int as checked, coalesce(a.booked,0)::int as booked, coalesce(a.waiting,0)::int as waiting
+      from classes c left join (select class_id, count(*) filter (where attended) as checked, count(*) filter (where going) as booked, count(*) filter (where waitlisted) as waiting
+          from attendance where class_id in (select id from classes where gym_id=$1 and starts_at > now() - interval '180 days') group by class_id) a on a.class_id=c.id
+      where c.gym_id=$1 and c.starts_at > now() - interval '180 days' and c.starts_at + (c.duration_min || ' minutes')::interval < now()`, [gymId, tz])).rows;
     const byId = Object.fromEntries(cls.map((c) => [c.id, c]));
     const att = (await q(`select a.user_id, a.class_id, a.attended, a.going from attendance a join classes c on c.id=a.class_id
       where c.gym_id=$1 and c.starts_at > now() - interval '180 days' and c.starts_at + (c.duration_min || ' minutes')::interval < now() and (a.attended or a.going)`, [gymId])).rows;
@@ -491,11 +526,11 @@ function makeApi(pool, { secureCookies }) {
       from users u where u.gym_id=$1 order by u.role, u.name`, [u.gym_id]);
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
-    const { visits } = await visitStats(u.gym_id, tzOf(u));
+    const vs = await visitStats(u.gym_id, tzOf(u)), { visits } = vs;
     const pay = await q(`select user_id, sum(amount_cents) filter (where paid_on >= date_trunc('month', current_date)) as month_cents, max(paid_on) as last_paid from payments
       where gym_id=$1 and user_id is not null group by user_id`, [u.gym_id]);
     const paid = Object.fromEntries(pay.rows.map((x) => [x.user_id, x]));
-    return { plans, rows: r.rows.map((x) => {
+    return { plans, vs, rows: r.rows.map((x) => {
       const plan = pm[String(x.plan_id)] || null;
       const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
       return { ...person(x, s[x.id]), email: x.email, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
@@ -598,8 +633,8 @@ function makeApi(pool, { secureCookies }) {
   // ---------- coach: insights ----------
   api.get("/coach/insights", wrap(async (req, res) => {
     const u = needCoach(req), tz = tzOf(u), now = Date.now();
-    const { plans, rows } = await rosterRows(u);
-    const { cls, visits } = await visitStats(u.gym_id, tz);
+    const { plans, rows, vs } = await rosterRows(u);
+    const { cls, visits } = vs;
     const studs = rows.filter((p) => p.role === "student" && p.active);
     // weekly visits for the last 12 weeks
     const wkKey = (t) => { const d = new Date(t); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };

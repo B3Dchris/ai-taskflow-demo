@@ -1,5 +1,7 @@
 <title>JitsFlow</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
+try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -1863,12 +1865,17 @@ function logSheet(keep){
   </form>`,keep,{act:`<button class="btn primary grow" type="submit" form="logform">${f.editId?"Save changes":"Save session"}</button>`});
 }
 function settingsSheet(){render()}
+function themeNow(){try{const t=localStorage.getItem("jf.theme");return t==="light"||t==="dark"?t:"system"}catch(e){return "system"}}
+function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");else localStorage.setItem("jf.theme",t)}catch(e){}
+  if(t==="system")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t);
+  const dark=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",dark?"#0C0F14":"#1D4FB5")}
 function viewSettings(){
   const st=P().settings,b=blockIndex();const hand=st.hand||"left";
   return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Settings</h1>
   ${accountSection()}
   ${isCoach()?"":gymCard(false)}
   ${partnerBadge()}
+  <section class="stack"><h2 class="label">Appearance</h2><div class="seg3">${[["system","Match phone"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-a="theme" data-v="${k}" aria-pressed="${themeNow()===k}">${l}</button>`).join("")}</div></section>
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Today, ratings and focus blocks aim at.</p>
@@ -1949,6 +1956,7 @@ document.addEventListener("click",e=>{
     case "student": studentSheet(v);break;
     case "paynew": paySheet(v||null);break;
     case "copy": copyText(v);break;
+    case "theme": setTheme(v);render();toast(v==="system"?"Following your phone's light or dark setting.":v==="dark"?"Dark mode on.":"Light mode on.");break;
     case "gymedit": gymEditOpen();break;
     case "germ": gimpChange(el.dataset.k,Number(v));break;
     case "geadd": gimpChange(v,null);break;

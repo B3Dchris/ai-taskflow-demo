@@ -113,6 +113,7 @@ alter table users add column if not exists plan_status text not null default 'ac
 alter table users add column if not exists plan_started date;
 alter table users add column if not exists rank_changed_at timestamptz;
 create index if not exists attendance_user on attendance(user_id);
+create index if not exists attendance_waiting on attendance(class_id, booked_at) where waitlisted;
 create table if not exists password_resets(
   token_hash text primary key,
   user_id bigint not null references users(id) on delete cascade,

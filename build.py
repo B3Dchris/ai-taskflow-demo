@@ -41,13 +41,13 @@ def build_app():
 
 
 def check_js(html):
-    js = re.search(r"<script>(.*)</script>", html, re.S).group(1)
     tmp = os.path.join(ROOT, "dist", "_check.js")
-    write(js, "dist", "_check.js")
-    try:
-        subprocess.run(["node", "--check", tmp], check=True)
-    finally:
-        os.remove(tmp)
+    for js in re.findall(r"<script>(.*?)</script>", html, re.S):
+        write(js, "dist", "_check.js")
+        try:
+            subprocess.run(["node", "--check", tmp], check=True)
+        finally:
+            os.remove(tmp)
 
 
 RESET = (":root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}"
