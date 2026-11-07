@@ -175,6 +175,12 @@ details.grp .body{padding:0 14px 8px}
 .coachbox{display:flex;flex-direction:column;gap:6px;align-items:flex-start;border:1px dashed var(--warn);border-radius:10px;padding:10px 12px;background:var(--warn-soft)}
 .coachbox b{color:var(--warn)}.coachbox.ok{border-color:var(--good);background:var(--good-soft)}.coachbox.ok b{color:var(--good)}
 .btag.ok{background:var(--good)}
+.ytbox{display:flex;flex-direction:column;gap:8px}
+.ytface{position:relative;display:block;width:100%;max-width:100%;aspect-ratio:16/9;border:0;padding:0;border-radius:12px;overflow:hidden;background:#000;cursor:pointer}
+.ytface img{width:100%;height:100%;object-fit:cover;display:block}
+.ytbig{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:68px;height:48px;border-radius:12px;background:#E1251B;color:#fff;display:grid;place-items:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.ytcap{display:flex;gap:10px;align-items:flex-start;text-align:left;font-size:15px;line-height:1.35}
+.btn.ytpick{padding:10px 12px}
 .ytembed{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000}
 .ytembed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .week{display:flex;flex-direction:column}
@@ -876,7 +882,15 @@ const BELT=Object.fromEntries(BELTS.map(b=>[b.k,b]));
 const UNC=new Set(["heel_hook","inside_heel_hook","outside_heel_hook","backside_5050_heel","kguard_saddle","saddle_control","fifty_fifty","counter_leglock","kneebar","buggy_choke","ghost_escape","reverse_triangle","truck_back","peterson_roll","leg_weave","hq_pass","rdlr_sweep","crucifix","xguard_sweep","lockdown_sweep","shoulder_clamp","power_half","seated_counter_wrestle","back_handfight","armbar_def","guillotine_def","fhl_escape","ns_choke_def","ns_escape","crucifix_escape","body_tri_escape","mounted_tri_def"].filter(id=>TECH.some(t=>t.id===id)));
 const coachOK=id=>!!(P().checked||{})[id];
 /* hand-picked YouTube videos (id per technique). They play inside the app only on your own website, not on claude.ai. */
-const VIDS={};
+const VIDS=typeof VIDEO_PICKS!=="undefined"?VIDEO_PICKS:{};
+const vidOf=k=>{const v=VIDS[k];if(!v)return null;return typeof v==="string"?{v,title:"",channel:"",nogi:true}:(v.v?v:null)};
+const ytWatch=id=>"https://www.youtube.com/watch?v="+encodeURIComponent(id);
+const ytThumb=(id,q)=>`https://i.ytimg.com/vi/${encodeURIComponent(id)}/${q||"hqdefault"}.jpg`;
+/* website: thumbnail first, the player loads only when tapped. claude.ai: opens the picked video on YouTube. */
+function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
+  const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(v.title||label)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
+  if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
+  return `<div class="ytbox"><button class="ytface" data-a="ytplay" data-v="${esc(v.v)}" aria-label="Play video: ${esc(v.title||label)}"><img src="${ytThumb(v.v)}" alt="" loading="lazy"><span class="ytbig" aria-hidden="true">▶</span></button>${cap}</div>`}
 const inClaude=()=>!!(window.claude&&window.claude.use);
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
@@ -1522,7 +1536,7 @@ const POSQ={standing:"hand fighting stance",fhl_top:"front headlock attacks",fhl
 const ytName=n=>n.split(":")[0].replace(/\(.*?\)/g,"").replace(/\s+/g," ").trim();
 const ytURL=q=>"https://www.youtube.com/results?search_query="+encodeURIComponent(q+" no gi bjj");
 const ytBtn=(q,label)=>`<a class="btn yt" href="${ytURL(q)}" target="_blank" rel="noopener"><span class="ytplay" aria-hidden="true">▶</span>${esc(label||"Watch on YouTube")}</a>`;
-function techThumb(t){const v=(P().videos||{})[t.id];if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return `<span class="thumb">${posPic(t.f,"xs")}</span>`}
+function techThumb(t){const v=(P().videos||{})[t.id];const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return `<span class="thumb">${posPic(t.f,"xs")}</span>`}
 function tRow(t,extra){const b=beltOf(t);return `<button class="trow" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span><span class="meta">${cat(t.c)}<span>${esc(POS[t.f].l)} → ${t.t==="sub"?"Tap":esc(POS[t.t].l)}</span>${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}${extra||""}</span></span>${stripes(lv(t.id))}</button>`}
 function beltSVG(pct){
   const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[goal()];
@@ -1644,7 +1658,7 @@ function viewFlow(){
   return `${header()}<div class="stack-lg">
   <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions ranked from best (top) to worst (bottom). Tap a position to see where you can go from it. A red number counts its submissions.</p>
   <div style="overflow-x:auto">${flowSVG(sel)}</div></section>
-  <section class="panel"><div class="twocol"><div class="stack">${(P().photos||{})[sel]?"":posPic(sel)}${photoBlock(sel)}</div><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></div></section>
+  <section class="panel"><div class="twocol"><div class="stack">${(P().photos||{})[sel]?"":vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</div><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></div></section>
   ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
   ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
   <section class="stack"><div class="row between"><h2 class="label">Every move from here</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
@@ -1706,12 +1720,11 @@ function techSheet(id,fromBack){
    <div class="stack"><h1>${esc(t.n)}</h1>
     ${beltOf(t)!=="blue"?`<div><span class="btag ${beltOf(t)}">${BELT[beltOf(t)].from} → ${BELT[beltOf(t)].to}</span></div>`:""}
     <p class="lead">${gl(OV[t.id]||"")}</p>
-    ${ytBtn(ytName(t.n),"Watch "+ytName(t.n)+" on YouTube")}
-    ${(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):posVisual(t.f)}
+    ${(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):vidOf(t.id)?(inClaude()?posVisual(t.f)+ytPlayer(t.id,t.n):ytPlayer(t.id,t.n)):posVisual(t.f)}
+    ${ytBtn(ytName(t.n),vidOf(t.id)?"More "+ytName(t.n)+" videos on YouTube":"Watch "+ytName(t.n)+" on YouTube")}
     <div class="fromto"><button class="posbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].L)}</button><span>→</span>${t.t==="sub"?`<span class="cat" data-c="sub">Tap</span>`:`<button class="posbtn" data-a="pos" data-v="${t.t}">${esc(POS[t.t].L)}</button>`}</div>
     ${t.w?`<div class="warnbox">${esc(t.w)}</div>`:""}
     ${UNC.has(t.id)?`<div class="coachbox${coachOK(t.id)?" ok":""}"><b>${coachOK(t.id)?"Coach checked ✓":"Check with your coach"}</b><span class="small">${coachOK(t.id)?"You've gone through this one with your coach.":"Some details of this move vary between coaches or haven't been verified. Go through it with your coach before you drill it hard."}</span><button class="btn" data-a="coachok" data-v="${t.id}">${coachOK(t.id)?"Undo":"My coach checked this"}</button></div>`:""}
-    ${VIDS[t.id]&&!inClaude()?`<div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${esc(VIDS[t.id])}" title="${esc(t.n)} video" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`:""}
    </div>
    <section class="stack"><h2 class="label">Your level</h2>
     <div class="levels">${LEVELS.map((L,i)=>`<button data-a="level" data-id="${id}" data-v="${i}" aria-pressed="${l===i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>
@@ -1807,6 +1820,7 @@ document.addEventListener("click",e=>{
     case "open": techSheet(v); break;
     case "close": closeSheet(); break;
     case "term": showTerm(v); break;
+    case "ytplay": { const box=el.closest(".ytbox");if(box){const t=el.getAttribute("aria-label")||"Video";box.querySelector(".ytface").outerHTML=`<div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v)}?autoplay=1&rel=0&playsinline=1" title="${esc(t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`}break }
     case "coachok": { const c=P().checked||(P().checked={});if(c[v])delete c[v];else c[v]=true;saveProgress();const y=window.scrollY;techSheet(v,true);window.scrollTo(0,y);toast(c[v]?"Marked as checked with your coach.":"Coach check removed.");break }
     case "obset": { S.ui.ob[el.dataset.k]=el.dataset.k==="pw"?Number(v):v;onboardSheet(true);break }
     case "obdone": finishOnboard(); break;

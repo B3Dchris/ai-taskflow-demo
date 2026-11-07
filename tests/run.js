@@ -37,7 +37,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   for(const t of ['today','learn','flow','log','settings']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
   // --- every technique sheet
   const ids=await ev(()=>TECH.map(t=>t.id));
-  for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img'),yt:(document.querySelector('#sheet a.yt')||{}).href||''}),id);
+  for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img, #sheet .ytface img, #sheet a.ytpick'),yt:(document.querySelector('#sheet a.yt:not(.ytpick)')||{}).href||''}),id);
     ok(/^https:\/\/www\.youtube\.com\/results\?search_query=.+no%20gi%20bjj$/.test(r.yt),`technique ${id} has a YouTube link`);
     ok(r.h===r.name&&r.lead.length>40&&r.steps===r.n&&r.fig,`technique sheet ${id} incomplete`);}
   await overflow('technique sheet');await ev(()=>closeSheet());
@@ -199,8 +199,18 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="coachok"]').tap();ok(await ev(()=>coachOK('buggy_choke')&&/Coach checked/.test(document.querySelector('.coachbox').innerText)),'coach check can be ticked');await p.tap('#sheetbar .back');
   await p.tap('nav.tabs [data-v="learn"]');await p.locator('.beltchips [data-v="black"]').tap();
   ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltchips [data-v="blue"]').tap();
-  if(MODE==='local'){await ev(()=>{VIDS.knee_cut='dQw4w9WgXcQ';techSheet('knee_cut')});ok(await ev(()=>/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/.test((document.querySelector('.ytembed iframe')||{}).src||'')),'own-site version embeds a picked YouTube video');await ev(()=>{delete VIDS.knee_cut});await p.tap('#sheetbar .back')}
-  else{await ev(()=>{VIDS.knee_cut='dQw4w9WgXcQ';techSheet('knee_cut')});ok(await ev(()=>!document.querySelector('.ytembed')),'no embed inside claude.ai');await ev(()=>{delete VIDS.knee_cut});await p.tap('#sheetbar .back')}
+  await ev(()=>{window.__savedVid=VIDS.knee_cut;VIDS.knee_cut={v:'dQw4w9WgXcQ',title:'Knee cut pass',channel:'Test Channel',nogi:true};techSheet('knee_cut')});
+  if(MODE==='local'){
+    ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault\.jpg/.test((document.querySelector('#sheet .ytface img')||{}).src||'')&&/Test Channel/.test(document.querySelector('#sheet .ytcap').innerText)&&!document.querySelector('#sheet .ytembed')),'website shows the video thumbnail first, no player loaded');
+    await p.locator('#sheet .ytface').tap();ok(await ev(()=>/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?autoplay=1/.test((document.querySelector('#sheet .ytembed iframe')||{}).src||'')),'tapping the thumbnail plays the video in the app');
+    ok(await ev(()=>/More Knee cut pass videos on YouTube/.test(document.querySelector('#sheet a.yt:not(.ytpick)').innerText)),'search button stays as "More videos"');
+    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
+    ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/mqdefault/.test((document.querySelector('.trow[data-v="knee_cut"] .thumb img')||{}).src||'')),'technique list uses the video thumbnail');
+  }else{
+    ok(await ev(()=>!document.querySelector('#sheet .ytembed,#sheet .ytface')&&/youtube\.com\/watch\?v=dQw4w9WgXcQ/.test((document.querySelector('#sheet a.ytpick')||{}).href||'')),'claude.ai links to the picked video instead of embedding');
+    await p.tap('#sheetbar .back');
+  }
+  await ev(()=>{if(window.__savedVid)VIDS.knee_cut=window.__savedVid;else delete VIDS.knee_cut});
   ok(errs.length===0,'page errors: '+errs.join(' | '));
   console.log(`${MODE} on ${DEV}: ${pass} passed, ${fail} failed`);fails.forEach(f=>console.log('  FAIL',f));
   await b.close();fs.unlinkSync(PAGE);process.exit(fail?1:0);

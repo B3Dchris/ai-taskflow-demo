@@ -31,8 +31,13 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await ctx.setOffline(true);await p.reload();await p.waitForTimeout(800);
     ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button').length===5&&lv('knee_cut')===3),'works offline and keeps your data');
     await ctx.setOffline(false);
-    await p.evaluate(()=>techSheet('knee_cut'));ok(await p.evaluate(()=>/youtube\.com\/results/.test(document.querySelector('#sheet a.yt').href)&&!document.getElementById('explain-box')&&!document.querySelector('label[for^="vid-"]')),'website: YouTube button present, claude.ai-only features hidden');
+    await p.evaluate(()=>techSheet('knee_cut'));ok(await p.evaluate(()=>/youtube\.com\/results/.test(document.querySelector('#sheet a.yt:not(.ytpick)').href)&&!document.getElementById('explain-box')&&!document.querySelector('label[for^="vid-"]')),'website: YouTube button present, claude.ai-only features hidden');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'no sideways scroll');
+    const vids=await p.evaluate(()=>({n:Object.keys(VIDS).length,tech:TECH.filter(t=>vidOf(t.id)).length,pos:Object.keys(POS).filter(k=>vidOf('pos:'+k)).length}));
+    ok(vids.n>=140&&vids.tech>=125,`picked videos loaded (${vids.tech} techniques, ${vids.pos} positions)`);
+    await p.evaluate(()=>techSheet('triangle'));ok(await p.evaluate(()=>!!document.querySelector('#sheet .ytface img[src*="i.ytimg.com"]')),'technique page shows its video thumbnail');
+    await p.locator('#sheet .ytface').tap();ok(await p.evaluate(()=>/youtube-nocookie\.com\/embed\//.test((document.querySelector('#sheet .ytembed iframe')||{}).src||'')),'video plays inside the website');
+    await p.waitForTimeout(500);
   }catch(e){fail++;fails.push('CRASH '+e.message)}
   const csp=await p.evaluate(()=>window.__csp||[]).catch(()=>[]);ok(csp.length===0,'no security policy violations: '+csp.join(' | '));
   ok(errs.length===0,'page errors: '+errs.join(' | '));
