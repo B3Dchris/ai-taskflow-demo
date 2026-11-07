@@ -3,6 +3,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const importer = require("./importer");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -54,7 +55,7 @@ function makeApi(pool, { secureCookies }) {
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
     if (tok && tok.length === 64) {
-      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency
+      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v
         from sessions s join users u on u.id=s.user_id left join gyms g on g.id=u.gym_id
         where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
       if (r.rows[0]) {
@@ -74,7 +75,7 @@ function makeApi(pool, { secureCookies }) {
   }
   function me(u) {
     const out = { id: String(u.id), name: u.name, email: u.email, role: u.role, belt: u.belt, stripes: u.stripes };
-    if (u.gym_id) out.gym = { name: u.gym_name, currency: u.currency };
+    if (u.gym_id) out.gym = { id: String(u.gym_id), name: u.gym_name, currency: u.currency, logo: u.logo_v ? `/api/gyms/${u.gym_id}/logo?v=${u.logo_v}` : null };
     if (u.role === "coach" && u.gym_id) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, monthlyFeeCents: u.gym_fee });
     return out;
   }
@@ -97,7 +98,7 @@ function makeApi(pool, { secureCookies }) {
       throw e;
     }
   }
-  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency
+  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v
       from users u left join gyms g on g.id=u.gym_id where u.id=$1`, [id])).rows[0];
 
   // ---------- accounts ----------
@@ -357,6 +358,56 @@ function makeApi(pool, { secureCookies }) {
     const u = needCoach(req), which = req.body?.which === "coach" ? "coach_code" : "student_code";
     await q(`update gyms set ${which}=$1 where id=$2`, [code(), u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
+  }));
+
+  // ---------- gym profile (imported from the gym's website or typed in) ----------
+  api.get("/gym", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) return res.json({ gym: null });
+    const r = await q("select id,name,profile,logo_v,currency,profile_updated_at from gyms where id=$1", [u.gym_id]);
+    const g = r.rows[0];
+    res.json({ gym: { id: String(g.id), name: g.name, currency: g.currency, profile: g.profile || {}, updatedAt: g.profile_updated_at, logo: g.logo_v ? `/api/gyms/${g.id}/logo?v=${g.logo_v}` : null } });
+  }));
+  api.get("/gyms/:id/logo", wrap(async (req, res) => {
+    const r = await q("select logo, logo_type from gyms where id=$1 and logo is not null", [intOr(req.params.id, 0)]);
+    if (!r.rows[0]) return res.status(404).json({ error: "No logo." });
+    res.set({ "Content-Type": r.rows[0].logo_type, "Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'", "X-Content-Type-Options": "nosniff" });
+    res.send(r.rows[0].logo);
+  }));
+  // Read a gym website and return what was found. Nothing is saved until the coach confirms.
+  api.post("/coach/import", wrap(async (req, res) => {
+    const u = needCoach(req);
+    if (limited("imp:" + u.gym_id, 12, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
+    try { res.json(await importer.importSite(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
+  }));
+  api.put("/coach/gym/profile", wrap(async (req, res) => {
+    const u = needCoach(req), b = req.body || {};
+    const profile = importer.cleanProfile(b.profile);
+    const name = profile.name || u.gym_name;
+    let fee = u.gym_fee;
+    if (!fee) { const m = profile.rates.find((r) => r.period === "month" && (!r.currency || r.currency === (u.currency || "ZAR"))); if (m) fee = Math.round(m.price * 100); }
+    await q("update gyms set name=$1, profile=$2, monthly_fee_cents=$3, profile_updated_at=now() where id=$4", [name, profile, fee, u.gym_id]);
+    let logoNote = null;
+    if (b.logoUrl === null) await q("update gyms set logo=null, logo_type=null, logo_v=null where id=$1", [u.gym_id]);
+    else if (typeof b.logoUrl === "string" && b.logoUrl) {
+      let img = null; try { img = await importer.fetchImage(clean(b.logoUrl, 600)); } catch (e) { img = null; }
+      if (img) await q("update gyms set logo=$1, logo_type=$2, logo_v=$3 where id=$4", [img.body, img.type, sha(img.body.toString("base64")).slice(0, 10), u.gym_id]);
+      else logoNote = "Couldn't download that logo. Everything else is saved.";
+    }
+    res.json({ me: me(await loadMe(u.id)), feeSet: !u.gym_fee && fee ? fee : 0, logoNote });
+  }));
+  // Add several classes at once (from the weekly timetable). Skips ones that already exist.
+  api.post("/coach/classes/bulk", wrap(async (req, res) => {
+    const u = needCoach(req), list = Array.isArray(req.body?.classes) ? req.body.classes.slice(0, 300) : fail(400, "No classes to add.");
+    let added = 0, skipped = 0;
+    for (const raw of list) {
+      const c = readClass(raw || {});
+      const dup = await q("select 1 from classes where gym_id=$1 and starts_at=$2 and lower(title)=lower($3)", [u.gym_id, c.startsAt, c.title]);
+      if (dup.rows[0]) { skipped++; continue; }
+      await q("insert into classes(gym_id,title,starts_at,duration_min,plan,shared,created_by) values($1,$2,$3,$4,$5,$6,$7)", [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id]);
+      added++;
+    }
+    res.status(201).json({ added, skipped });
   }));
 
   // ---------- coach: payments ----------

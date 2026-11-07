@@ -83,6 +83,11 @@ create table if not exists payments(
   created_at timestamptz not null default now()
 );
 create index if not exists payments_gym_date on payments(gym_id, paid_on);
+alter table gyms add column if not exists profile jsonb not null default '{}';
+alter table gyms add column if not exists logo bytea;
+alter table gyms add column if not exists logo_type text;
+alter table gyms add column if not exists logo_v text;
+alter table gyms add column if not exists profile_updated_at timestamptz;
 `;
 
 function makePool() {

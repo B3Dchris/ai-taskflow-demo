@@ -1,6 +1,6 @@
 // API tests against a real PostgreSQL. Usage: DATABASE_URL=postgres://... node tests/api.js
 // The database is wiped first, so point this at a throwaway test database only.
-const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg");
+const { spawn } = require("child_process"); const { startGymSite } = require("./fixture-gym"); const path = require("path"); const { Pool } = require("pg");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 
@@ -21,7 +21,9 @@ function client(base) {
   await pool.query("drop table if exists payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
-  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB }, stdio: ["ignore", "ignore", "inherit"] });
+  const site = await startGymSite();
+  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1" }; delete env.ANTHROPIC_API_KEY;
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   try {
     const coach = client(base), stu = client(base), stu2 = client(base), other = client(base), anon = client(base);
@@ -103,12 +105,41 @@ function client(base) {
     const left = await pool2.query("select (select count(*) from progress where user_id=$1) p, (select count(*) from training_logs where user_id=$1) l", [chris.id]);
     ok(Number(left.rows[0].p) === 0 && Number(left.rows[0].l) === 0, "their progress and sessions are deleted too");
     await pool2.end();
+    // --- gym website import
+    r = await stu2("POST", "/coach/import", { url: site.url }); ok(r.s === 403, "students can't import");
+    r = await coach("POST", "/coach/import", { url: "http://10.0.0.5/" }); ok(r.s === 400 && /public website/.test(r.j.error), "private addresses are refused by the API");
+    r = await coach("POST", "/coach/import", { url: site.url });
+    ok(r.s === 200 && r.j.method === "basic" && r.j.profile.timetable.length === 7 && r.j.logos.length > 0, "coach imports their website");
+    const imp = r.j;
+    r = await coach("GET", "/gym"); ok(r.s === 200 && !(r.j.gym.profile.timetable || []).length, "nothing is saved until the coach confirms");
+    imp.profile.timetable = imp.profile.timetable.filter((x) => x.day !== "Sat");
+    r = await coach("PUT", "/coach/gym/profile", { profile: imp.profile, logoUrl: imp.logos[0].url });
+    ok(r.s === 200 && r.j.me.gym.logo && r.j.me.gym.name === "Fourways Grappling Club", "coach saves the import with a logo");
+    const logoUrl = r.j.me.gym.logo;
+    const lr = await fetch(`http://127.0.0.1:${port}` + logoUrl);
+    ok(lr.status === 200 && lr.headers.get("content-type") === "image/png" && /immutable/.test(lr.headers.get("cache-control") || ""), "logo is served from JitsFlow");
+    r = await stu2("GET", "/gym");
+    ok(r.s === 200 && r.j.gym.profile.timetable.length === 6 && r.j.gym.profile.rates.length >= 3 && r.j.gym.logo === logoUrl, "students see the saved timetable, rates and logo");
+    r = await stu2("GET", "/me"); ok(r.j.me.gym.logo === logoUrl, "students' account shows the gym logo");
+    r = await coach("GET", "/coach/roster"); ok(r.j.gymFeeCents === 90000, "an existing standard fee is not overwritten by the import");
+    r = await other("GET", "/gym"); ok(r.s === 200 && !(r.j.gym.profile.timetable || []).length, "other gyms don't get this profile");
+    r = await coach("PUT", "/coach/gym/profile", { profile: { ...imp.profile, website: "javascript:alert(1)" }, logoUrl: site.url + "/evil.svg" });
+    ok(r.s === 200 && /Couldn't download/.test(r.j.logoNote) && r.j.me.gym.logo === logoUrl, "an SVG logo is refused and the old one kept");
+    r = await coach("GET", "/gym"); ok(r.j.gym.profile.website === "", "unsafe website links are dropped");
+    const t1 = new Date(Date.now() + 3 * 864e5).toISOString(), t2 = new Date(Date.now() + 4 * 864e5).toISOString();
+    r = await coach("POST", "/coach/classes/bulk", { classes: [{ title: "No-Gi All Levels", startsAt: t1, durationMin: 90 }, { title: "Kids BJJ", startsAt: t2, durationMin: 45 }] });
+    ok(r.s === 201 && r.j.added === 2 && r.j.skipped === 0, "timetable classes are added in one go");
+    r = await coach("POST", "/coach/classes/bulk", { classes: [{ title: "no-gi all levels", startsAt: t1, durationMin: 90 }] });
+    ok(r.s === 201 && r.j.added === 0 && r.j.skipped === 1, "classes already there are skipped");
+    r = await stu2("POST", "/coach/classes/bulk", { classes: [] }); ok(r.s === 403, "students can't add classes");
+    r = await coach("PUT", "/coach/gym/profile", { profile: imp.profile, logoUrl: null });
+    ok(r.s === 200 && r.j.me.gym.logo === null, "coach can remove the logo");
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");
     r = await anon("GET", "/nope"); ok(r.s === 404, "unknown API path is 404");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
-  srv.kill();
+  srv.kill(); site.close();
   console.log(`api: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);
 })();

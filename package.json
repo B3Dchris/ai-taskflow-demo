@@ -7,13 +7,14 @@
   "scripts": {
     "start": "node server.js",
     "build": "python3 build.py",
-    "test": "node tests/web.js && node tests/run.js local \"iPhone 13\" && node tests/run.js db \"iPhone SE\"",
+    "test": "node tests/web.js && node tests/importer.js && node tests/run.js local \"iPhone 13\" && node tests/run.js db \"iPhone SE\"",
     "test:db": "node tests/api.js && node tests/accounts.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "bcryptjs": "^2.4.3",
     "express": "^4.22.3",
     "pg": "^8.23.1"

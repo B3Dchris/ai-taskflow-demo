@@ -1,13 +1,15 @@
 // End-to-end: a coach and a student using accounts, classes, the roster and payments in real browsers.
 // Usage: DATABASE_URL=postgres://.../<something>test node tests/accounts.js   (wipes that database)
-const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg");
+const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg"); const { startGymSite } = require("./fixture-gym");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
   await pool.query("drop table if exists payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
-  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB }, stdio: ["ignore", "ignore", "inherit"] });
+  const site = await startGymSite();
+  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1" }; delete env.ANTHROPIC_API_KEY;
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   const b = await chromium.launch(); const errs = [];
   const phone = async () => { const c = await b.newContext({ ...devices["iPhone 13"] }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(e.message)); return { c, p }; };
@@ -89,12 +91,37 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.tap('[data-a="coachview"][data-v="roster"]');
     ok(await ev(co, () => /Paid/.test(document.getElementById("roster-list").innerText)), "roster shows the student as paid");
     await wide(co, "coach payments/roster");
+    // ---- coach imports the gym's website, checks it and saves
+    await co.tap('[data-a="coachview"][data-v="gym"]'); await co.waitForTimeout(400);
+    await co.fill("#gi-url", site.url); await co.tap("#gymimpform [type=submit]");
+    await co.waitForSelector("#gymeditform", { timeout: 20000 });
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 7 && document.querySelectorAll(".logoopt img").length >= 1 && /Found on 5 pages/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
+    await wide(co, "import preview");
+    await co.locator('#gymeditform [data-a="germ"][data-k="timetable"]').last().tap(); await co.waitForTimeout(200);
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 6 && !/Open Mat/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");
+    await co.fill('#gymeditform [name="name"]', "JPB Martial Arts Academy");
+    await co.locator('[data-a="geadd"][data-v="coaches"]').tap(); await co.waitForTimeout(200); await co.fill('#gymeditform [name="co-name-2"]', "JP Buys"); await co.fill('#gymeditform [name="co-rank-2"]', "Black belt, head coach");
+    await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+    ok(await ev(co, () => /Standard fee set to/.test(document.getElementById("toast").textContent)), "monthly rate becomes the standard fee: " + (await toast(co)));
+    ok(await ev(co, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 6 && /JP Buys/.test(g.innerText) && /Witkoppen/.test(g.innerText) && !!g.querySelector("img.gymlogo") && g.querySelector("img.gymlogo").naturalWidth > 0; }), "gym card shows the saved timetable, coaches, address and logo");
+    ok(await ev(co, () => /JPB Martial Arts Academy/.test(document.querySelector("h1").innerText) && !!document.querySelector(".gymhead img.gymlogo.sm")), "coach header keeps the edited name and shows the logo");
+    await wide(co, "coach gym profile");
+    const nBefore = await ev(co, () => (COACH.classes || []).length);
+    await co.selectOption("#tt-weeks", "1"); await co.tap('[data-a="ttclasses"]'); await co.waitForTimeout(1500);
+    const nAfter = await ev(co, () => (COACH.classes || []).length);
+    ok(nAfter >= nBefore + 5 && /Added \d+ class/.test(await toast(co)), `timetable is added to Classes (${nBefore} → ${nAfter})`);
+    await co.tap('[data-a="coachview"][data-v="gym"]'); await co.selectOption("#tt-weeks", "1"); await co.tap('[data-a="ttclasses"]'); await co.waitForTimeout(1500);
+    ok(/already there/.test(await toast(co)) && (await ev(co, () => (COACH.classes || []).length)) === nAfter, "adding again skips classes already there");
+    // ---- the student sees their gym's details
+    await st.tap('nav.tabs [data-v="settings"]'); await st.waitForTimeout(1000);
+    ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 6 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
+    await wide(st, "student gym card");
     // ---- student signs out
     await st.tap('nav.tabs [data-v="settings"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
     ok(await ev(st, () => !API.me && S.mode === "local" && /Saved on this device/.test(document.getElementById("sync").textContent)), "student signs out");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
-  await b.close(); srv.kill();
+  await b.close(); srv.kill(); site.close();
   console.log(`accounts: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);
 })();

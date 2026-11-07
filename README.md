@@ -35,6 +35,7 @@ Needs Node and Playwright with Chromium.
 node tests/run.js local "iPhone 13"   # claude.ai version, saving on the device
 node tests/run.js db "iPhone SE"      # claude.ai version, simulated account saving, uploads and Claude answers
 node tests/web.js                     # website via server.js: headers, install, service worker, offline
+node tests/importer.js                # gym website import against a fake gym site (no database or API key)
 npm test                              # all of the above
 DATABASE_URL=postgres://localhost/jitsflow_test node tests/api.js       # accounts API (wipes that test database)
 DATABASE_URL=postgres://localhost/jitsflow_test node tests/accounts.js  # coach + student end to end in browsers
@@ -48,9 +49,14 @@ When the server has a `DATABASE_URL`, the website adds:
 - **Gyms:** a coach starts a gym and gets two codes: a student code (invite link `/app/?join=CODE`) and a coach code for assistant coaches. Codes can be replaced at any time.
 - **Classes:** coaches plan classes ahead with a focus, techniques and notes. Students see the next class on Today and tap "I'm going". The coach sees who's coming with their readiness, weakest area, where they get stuck and what taps them, plus a suggested focus, and marks attendance.
 - **Roster:** every student with belt and stripes, readiness, last session, attendance, monthly fee and paid/due status. Coach notes are private to coaches.
+- **Import from your website (Coach › Gym):** paste the gym's website and JitsFlow reads the home page plus up to 8 pages that look like timetable, prices, coaches or contact. It pulls out the name, logo, address, phone, email, social links, weekly timetable, coaches and rates, and shows them in an editable preview. Nothing is saved until the coach taps **Save to my gym**. Students then see the timetable, rates, coaches and Call / WhatsApp / Directions buttons in Settings, and the timetable fills the Next class card when no classes are planned. **Add classes** turns the timetable into real classes for the next 1–8 weeks (duplicates are skipped) so students can RSVP. If the gym has no standard fee yet, the first monthly rate becomes it.
 - **Payments:** record payments by hand, assign unmatched ones, see this month's totals. (Automatic proof-of-payment email import is the next phase.)
 
 Without a database the site works exactly as before, saving on the device.
+
+**Smarter import with Claude (optional):** without a key the import uses a plain read (site data, meta tags, links and simple text patterns): good for contact details, logos, list-style timetables and "R 850 per month" prices, weak on timetable grids, price cards and timetables posted as images. Add an `ANTHROPIC_API_KEY` environment variable to the `jitsflow-app` service on Render (Environment → Add) and the import also sends the pages' text (and up to two timetable or price images) to Claude, which reads those layouts. Override the model with `JF_IMPORT_MODEL`. A failed or declined Claude read falls back to the plain read. Cost is roughly one request per import; imports are limited to 12 per gym per hour.
+
+**Import safety:** only public `http(s)` sites on ports 80/443 are fetched. Private, loopback, link-local and cloud-metadata addresses are refused, including after redirects and at connect time (so DNS tricks don't get around it). Pages are capped at 1.5 MB and 10 seconds; logos must be real PNG/JPEG/WebP/GIF/ICO files under 400 KB (SVG is refused because it can carry script) and are stored in the database and served from JitsFlow. Page text is treated as untrusted: Claude is told to ignore instructions in it, and everything goes through the coach's review.
 
 **Security:** passwords are hashed with bcrypt; sessions are random tokens stored hashed, in HttpOnly SameSite=Lax cookies (Secure in production); every change needs a custom header that cross-site forms can't send; sign-in attempts are rate-limited; coaches only ever see their own gym. Account data is never cached by the offline service worker.
 
