@@ -60,6 +60,8 @@ HEAD = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="JitsFlow: your no-gi game, mapped. A technique database and flow chart for off the mat: every position, attack chain and escape from white to black belt.">
+<link rel="canonical" href="https://www.jitsflow.com/app/">
+<meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
 <meta name="theme-color" content="#1D4FB5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,6 +122,23 @@ def fill_landing(landing, img):
             .replace("@@BELT_CARDS@@", belts).replace("@@POS_GALLERY@@", gallery))
 
 
+def landing_ld(landing):
+    """Structured data for the home page: the site, the app, and the FAQ (read from the page itself)."""
+    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
+    faq = [{"@type": "Question", "name": strip(q), "acceptedAnswer": {"@type": "Answer", "text": strip(a)}}
+           for q, a in re.findall(r"<details><summary>(.*?)</summary><p>(.*?)</p></details>", landing, re.S)]
+    site = "https://www.jitsflow.com"
+    data = [
+        {"@context": "https://schema.org", "@type": "WebSite", "name": "JitsFlow", "url": site + "/"},
+        {"@context": "https://schema.org", "@type": "WebApplication", "name": "JitsFlow", "url": site + "/app/",
+         "applicationCategory": "SportsApplication", "operatingSystem": "iOS, Android, any modern browser",
+         "description": "A no-gi Brazilian Jiu-Jitsu study app: technique library, flow chart of positions, attack chains and escapes, belt curriculum and training log.",
+         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "ZAR"}, "image": site + "/og/home.jpg"},
+        {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": faq},
+    ]
+    return "\n".join('<script type="application/ld+json">%s</script>' % json.dumps(d, ensure_ascii=False).replace("<", "\\u003c") for d in data)
+
+
 def build_web(app):
     # Everything before the app's own markup (title, meta, font links, styles) goes in <head>.
     cut = app.index('<div class="wrap app"')
@@ -130,6 +149,7 @@ def build_web(app):
     html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
+    landing = landing.replace("@@NTECH@@", str(len(re.findall(r'\bid:"[a-z0-9_]+",n:"', app)))).replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     version = hashlib.sha256((html + landing).encode()).hexdigest()[:10]
@@ -141,5 +161,12 @@ if __name__ == "__main__":
     app = build_app()
     check_js(app)
     write(app, "dist", "jitsflow-claude.html")
+    with open(os.path.join(ROOT, "web", "analytics.js"), "w", encoding="utf-8") as f:
+        f.write(read("src", "analytics.js"))
+    # Public pages (techniques, positions, belts, glossary), share cards, sitemap. Needs Node + Playwright.
+    try:
+        subprocess.run(["node", os.path.join(ROOT, "tools", "seo.js")], check=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        sys.exit("SEO pages failed to build (%s). Install Playwright: npm i -D playwright" % e)
     v = build_web(app)
     print("built dist/jitsflow-claude.html and web/ (version %s)" % v)

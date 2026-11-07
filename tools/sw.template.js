@@ -23,11 +23,12 @@ self.addEventListener("fetch", (e) => {
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {
-    const page = url.pathname.startsWith("/app") ? "/app/" : "/";
+    // The app and the home page are kept under fixed keys; other pages (techniques…) under their own address.
+    const page = url.pathname.startsWith("/app") ? "/app/" : url.pathname === "/" || url.pathname === "/index.html" ? "/" : url.pathname;
     e.respondWith(
       fetch(req)
         .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(page, copy)); } return res; })
-        .catch(() => caches.match(page))
+        .catch(() => caches.match(page).then((hit) => hit || caches.match("/")))
     );
     return;
   }

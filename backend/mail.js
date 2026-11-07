@@ -8,21 +8,49 @@ const appUrl = () => (process.env.APP_URL || "https://www.jitsflow.com").replace
 const mailOn = () => !!process.env.RESEND_API_KEY;
 
 const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-function layout(title, paras, button) {
-  const html = `<!doctype html><html><body style="margin:0;background:#EEF1F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
-<div style="max-width:520px;margin:0 auto;padding:28px 18px"><div style="font-weight:800;letter-spacing:.04em;font-size:18px;color:#1D4ED8;margin-bottom:18px">JITSFLOW</div>
-<div style="background:#fff;border-radius:14px;padding:24px 22px;border:1px solid #DDE3EC"><h1 style="font-size:22px;margin:0 0 12px">${escHtml(title)}</h1>
-${paras.map((p) => `<p style="font-size:16px;line-height:1.5;margin:0 0 12px">${escHtml(p)}</p>`).join("")}
-${button ? `<p style="margin:20px 0 8px"><a href="${escHtml(button.url)}" style="display:inline-block;background:#1D4ED8;color:#fff;text-decoration:none;font-weight:700;padding:13px 20px;border-radius:10px">${escHtml(button.label)}</a></p>
-<p style="font-size:13px;color:#6B7280;word-break:break-all;margin:12px 0 0">Or open this link: ${escHtml(button.url)}</p>` : ""}</div>
-<p style="font-size:12px;color:#6B7280;margin-top:16px">JitsFlow · Your no-gi game, mapped. Reply to this email if you need help.</p></div></body></html>`;
-  const text = [title, "", ...paras, ...(button ? ["", `${button.label}: ${button.url}`] : []), "", "JitsFlow"].join("\n");
+// Matches the website: navy "night" band with the belt-bar mark, white card, site blue, Saira Condensed headings.
+// Table layout and inline styles so Gmail, Outlook and Apple Mail all render it; no images, so nothing is blocked.
+const C = { night: "#0E1A33", nightTop: "#0A1020", bg: "#EEF1F5", card: "#FFFFFF", ink: "#111722", ink2: "#4E5869", line: "#D3DAE4", blue: "#1D4FB5", red: "#B3261E", black: "#151515" };
+const F = { display: "'Saira Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", body: "'Source Sans 3',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif", mono: "'IBM Plex Mono',Menlo,Consolas,monospace" };
+function layout(title, paras, button, preheader) {
+  const site = appUrl();
+  const p = (t) => `<p style="margin:0 0 14px;font-family:${F.body};font-size:17px;line-height:1.55;color:${C.ink}">${escHtml(t)}</p>`;
+  const btn = button ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 6px"><tr><td bgcolor="${C.blue}" style="border-radius:12px">
+<a href="${escHtml(button.url)}" style="display:inline-block;padding:15px 24px;font-family:${F.body};font-size:17px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:12px">${escHtml(button.label)}</a></td></tr></table>
+<p style="margin:14px 0 0;font-family:${F.body};font-size:13px;line-height:1.5;color:${C.ink2};word-break:break-all">Button not working? Open this link:<br><a href="${escHtml(button.url)}" style="color:${C.blue}">${escHtml(button.url)}</a></p>` : "";
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escHtml(title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@700;800&family=Source+Sans+3:wght@400;700&display=swap" rel="stylesheet">
+</head><body style="margin:0;padding:0;background:${C.bg}">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escHtml(preheader || paras[0] || title)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg}"><tr><td align="center" style="padding:0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.night}" style="background:${C.night};background-image:linear-gradient(180deg,${C.nightTop} 0%,${C.night} 100%)"><tr><td align="center" style="padding:26px 20px 64px">
+ <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px"><tr>
+  <td style="vertical-align:middle;width:44px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="26" height="12" bgcolor="${C.black}" style="font-size:0;line-height:0;border:1px solid #3A4458;border-right:0">&nbsp;</td><td width="10" height="12" bgcolor="${C.red}" style="font-size:0;line-height:0;border:1px solid #3A4458;border-left:0">&nbsp;</td></tr></table></td>
+  <td style="vertical-align:middle;font-family:${F.display};font-size:26px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#F4F6FB"><a href="${escHtml(site)}/" style="color:#F4F6FB;text-decoration:none">JitsFlow</a></td>
+  <td align="right" style="vertical-align:middle;font-family:${F.mono};font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0D0">Your no-gi game, mapped</td>
+ </tr></table>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:-44px auto 0"><tr><td style="padding:0 14px">
+ <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.line};border-radius:16px"><tr><td style="padding:28px 24px 26px">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr><td width="56" height="6" bgcolor="${C.blue}" style="font-size:0;line-height:0;border-radius:3px">&nbsp;</td></tr></table>
+  <h1 style="margin:0 0 16px;font-family:${F.display};font-size:32px;line-height:1.05;font-weight:800;text-transform:uppercase;color:${C.ink}">${escHtml(title)}</h1>
+  ${paras.map(p).join("\n  ")}
+  ${btn}
+ </td></tr></table>
+ <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding:20px 6px 34px;font-family:${F.body};font-size:13px;line-height:1.6;color:${C.ink2}">
+  <a href="${escHtml(site)}/techniques/" style="color:${C.ink2}">Techniques</a> &nbsp;·&nbsp; <a href="${escHtml(site)}/app/" style="color:${C.ink2}">Open the app</a> &nbsp;·&nbsp; <a href="mailto:${escHtml(REPLY_TO())}" style="color:${C.ink2}">${escHtml(REPLY_TO())}</a><br>
+  JitsFlow · A no-gi technique library and flow chart to study off the mat. Reply to this email if you need help.
+ </td></tr></table>
+</td></tr></table>
+</td></tr></table></body></html>`;
+  const text = [title, "", ...paras, ...(button ? ["", `${button.label}: ${button.url}`] : []), "", "JitsFlow · " + site].join("\n");
   return { html, text };
 }
 
-async function send({ to, subject, title, paras, button }) {
+async function send({ to, subject, title, paras, button, preheader }) {
   if (!mailOn()) return { sent: false, reason: "off" };
-  const { html, text } = layout(title || subject, paras, button);
+  const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },

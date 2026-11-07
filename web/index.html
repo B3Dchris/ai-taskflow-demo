@@ -3,12 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>JitsFlow</title>
-<meta name="description" content="JitsFlow: your no-gi game, mapped. A study app for off the mat with every position, attack chain and escape from white to black belt, and a video for each move.">
+<title>JitsFlow: no-gi BJJ technique library, flow chart and belt curriculum</title>
+<meta name="description" content="Your no-gi game, mapped. A free Jiu-Jitsu study app with every position, attack chain and escape from white to black belt, step-by-step instructions and a video for each move.">
+<link rel="canonical" href="https://www.jitsflow.com/">
 <meta name="theme-color" content="#1D4FB5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:url" content="https://www.jitsflow.com/">
 <meta property="og:title" content="JitsFlow: your no-gi game, mapped">
-<meta property="og:description" content="Every position, chain and escape from white to black belt, to study off the mat.">
-<meta property="og:image" content="/icons/icon-512.png">
+<meta property="og:description" content="Every position, chain and escape from white to black belt, to study off the mat. Free.">
+<meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "JitsFlow", "url": "https://www.jitsflow.com/"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "JitsFlow", "url": "https://www.jitsflow.com/app/", "applicationCategory": "SportsApplication", "operatingSystem": "iOS, Android, any modern browser", "description": "A no-gi Brazilian Jiu-Jitsu study app: technique library, flow chart of positions, attack chains and escapes, belt curriculum and training log.", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "ZAR"}, "image": "https://www.jitsflow.com/og/home.jpg"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Does it replace my coach?", "acceptedAnswer": {"@type": "Answer", "text": "No. JitsFlow is for study between classes. Coaches teach details differently, so moves where that matters are flagged with \"Check with your coach\", and each belt has a coach review list to go through together."}}, {"@type": "Question", "name": "Where do coaches sign in?", "acceptedAnswer": {"@type": "Answer", "text": "Tap Coach sign in at the top of this page. New coaches choose Start a gym, then send students the invite link from the Coach tab's Gym page."}}, {"@type": "Question", "name": "What does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "It's free to use, with no account needed."}}, {"@type": "Question", "name": "Can I read the techniques without the app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every move has its own page in the technique library, with steps, details, common mistakes, a drill and a video. There's also a glossary of BJJ terms and the belt curriculum."}}, {"@type": "Question", "name": "Where's my data?", "acceptedAnswer": {"@type": "Answer", "text": "On your phone, unless you create a free account. Then your progress and training log are saved to your account so they're on any device, and you can delete everything in Settings. See the privacy notice."}}, {"@type": "Question", "name": "Does it work at the gym with no signal?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Once opened, JitsFlow works offline. Videos need a connection."}}, {"@type": "Question", "name": "How do I put it on my home screen?", "acceptedAnswer": {"@type": "Answer", "text": "iPhone: open jitsflow.com in Safari, tap Share, then Add to Home Screen. Android: open it in Chrome and tap Install app. It opens full screen, like any app."}}, {"@type": "Question", "name": "Who made the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Instructors on YouTube. JitsFlow links each move to a clear instructional video and plays it from YouTube; the videos belong to their creators."}}, {"@type": "Question", "name": "Is it safe to learn leg locks from an app?", "acceptedAnswer": {"@type": "Answer", "text": "Learn the basics here, but always learn finishes, especially heel hooks, from a coach in person. JitsFlow deliberately leaves out heel hook finishing directions. Tap early in training."}}]}</script>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" href="/icons/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -93,6 +102,10 @@ p{margin:0}
 .partner img{height:46px;width:auto;border-radius:8px;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
 .partner:hover{border-color:rgba(255,255,255,.3)}
 .toplinks{display:flex;align-items:center;gap:16px}
+.browse{display:grid;gap:12px;margin:8px 0 28px}@media (min-width:720px){.browse{grid-template-columns:1fr 1fr}}
+.browse a{display:grid;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink)}
+.browse a b{font-family:var(--f-display);font-size:24px;text-transform:uppercase}.browse a span{color:var(--ink-2);font-size:16px}
+.footlinks a{color:inherit}
 .toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
 .toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
 /* stats strip */
@@ -260,11 +273,19 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
       <div><h3>White belt to purple</h3><p class="muted">The stage where a map helps most, with brown and black belt material for when you get there.</p></div>
     </div>
 
+    <nav class="browse" aria-label="Browse the curriculum">
+      <a href="/techniques/"><b>Technique library</b><span>0 moves, step by step, with video</span></a>
+      <a href="/positions/"><b>Positions</b><span>Every position, best to worst, with moves in and out</span></a>
+      <a href="/belts/blue/"><b>Blue belt curriculum</b><span>What coaches look for, and every technique</span></a>
+      <a href="/glossary/"><b>BJJ glossary</b><span>Crossface, underhook, kuzushi and more, explained</span></a>
+    </nav>
+
     <div class="faq">
       <details><summary>Does it replace my coach?</summary><p>No. JitsFlow is for study between classes. Coaches teach details differently, so moves where that matters are flagged with "Check with your coach", and each belt has a coach review list to go through together.</p></details>
       <details><summary>Where do coaches sign in?</summary><p>Tap <a href="/app/?signin=1">Coach sign in</a> at the top of this page. New coaches choose <a href="/app/?start=1">Start a gym</a>, then send students the invite link from the Coach tab's Gym page.</p></details>
       <details><summary>What does it cost?</summary><p>It's free to use, with no account needed.</p></details>
-      <details><summary>Where's my data?</summary><p>On your phone. Nothing is uploaded. Settings › Backup copies everything so you can move it to another device.</p></details>
+      <details><summary>Can I read the techniques without the app?</summary><p>Yes. Every move has its own page in the <a href="/techniques/">technique library</a>, with steps, details, common mistakes, a drill and a video. There's also a <a href="/glossary/">glossary</a> of BJJ terms and the <a href="/belts/">belt curriculum</a>.</p></details>
+      <details><summary>Where's my data?</summary><p>On your phone, unless you create a free account. Then your progress and training log are saved to your account so they're on any device, and you can delete everything in Settings. See the <a href="/privacy/">privacy notice</a>.</p></details>
       <details><summary>Does it work at the gym with no signal?</summary><p>Yes. Once opened, JitsFlow works offline. Videos need a connection.</p></details>
       <details><summary>How do I put it on my home screen?</summary><p>iPhone: open jitsflow.com in Safari, tap Share, then Add to Home Screen. Android: open it in Chrome and tap Install app. It opens full screen, like any app.</p></details>
       <details><summary>Who made the videos?</summary><p>Instructors on YouTube. JitsFlow links each move to a clear instructional video and plays it from YouTube; the videos belong to their creators.</p></details>
@@ -285,6 +306,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
   <div class="wrap">
     <span><b>JitsFlow</b> · Your no-gi game, mapped. In partnership with <a href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">JPB Martial Arts Academy</a>.</span>
     <span>Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</span>
+    <span class="footlinks"><a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/glossary/">Glossary</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
   </div>
 </footer>
 <script>

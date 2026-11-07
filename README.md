@@ -64,6 +64,21 @@ Without a database the site works exactly as before, saving on the device.
 
 **Privacy (POPIA):** the app stores names, emails, training logs, attendance and payments. Students can delete their account and all their data in Settings. Before launch, publish a privacy notice that says who runs JitsFlow, what's stored, why, and how to ask for deletion, and get the gym's agreement for storing payment records.
 
+## Search and sharing (SEO)
+
+`python3 build.py` also runs `tools/seo.js` (needs Playwright), which turns the app's content into plain pages search engines can read and people can share:
+
+- `/techniques/` and a page per technique (steps, details, mistakes, drill, video, what comes next, how to defend it), `/positions/` and a page per position, `/belts/<belt>/`, `/glossary/`, `/privacy/` and a 404 page.
+- Each page has a title and description written for search, a canonical address, structured data (HowTo, BreadcrumbList, ItemList, DefinedTermSet, FAQPage on the home page), and its own 1200×630 share card in `web/og/` so links look good in WhatsApp, Instagram and X. Cards are only redrawn when their text changes (`tools/og-manifest.json`).
+- `sitemap.xml` and `robots.txt`. Unknown addresses now return a real 404, and `/techniques/x` redirects to `/techniques/x/`, so every page has one address.
+- "Open in JitsFlow" on a technique page opens `/app/?t=<id>`, which opens that technique in the app. "Send to a training partner" shares the page on WhatsApp (or the phone's share sheet).
+
+After deploying: add jitsflow.com to [Google Search Console](https://search.google.com/search-console) (Domain property, verify with the TXT record in Cloudflare) and submit `https://www.jitsflow.com/sitemap.xml`.
+
+## Analytics
+
+Set `GA_ID` (your Google Analytics 4 measurement ID, `G-…`) on the `jitsflow-app` service. The server then adds `analytics.js` to every page. Nothing is sent to Google until the visitor taps **Allow** on the consent card (Consent Mode v2, ads storage always denied); the choice is remembered and can be changed from **Cookie settings** in the footer. Events: page views (including app tabs), `sign_up`, `login`, `share` (invite link copied or emailed, technique pages shared), `select_content` (technique opened), `log_session`, `rsvp`, `gym_import`, `video_start`, `open_app`. Without `GA_ID` nothing is added.
+
 ## Deploy on Render (Blueprint)
 
 `render.yaml` at the root defines one service: **`jitsflow-app`**, a Node web service in **Frankfurt** on the **Starter** plan. `server.js` serves the prebuilt app in `web/` with compression, caching rules, security headers, a fallback to the app for unknown paths, and a `/healthz` health check. It has no dependencies.

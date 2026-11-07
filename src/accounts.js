@@ -93,6 +93,7 @@ async function submitAuth(form){
     const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password")})
       :m==="register"?await api("POST","/auth/register",{name:v("name"),email:v("email"),password:v("password"),code:v("code")})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
+    jfTrack(m==="login"?"login":"sign_up",{method:"email",role:m==="gym"?"coach":j.me.role,with_gym:!!j.me.gym});
     await signedIn(j.me);
   }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}}
 }
@@ -272,10 +273,10 @@ function coachGym(){const g=API.me.gym;
     <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
     <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p></section>`}
 async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
-  try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";
+  try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";if(j.sent)jfTrack("share",{method:"email",content_type:"gym_invite",count:j.sent});
     toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")}.`:""}`)}
   catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
-async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
+async function copyText(t){if(/[?&]join=/.test(t))jfTrack("share",{method:"copy",content_type:"gym_invite"});try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ----- gym profile: import from the gym's website, timetable, coaches, rates ----- */
 const GYM={data:null,at:0,loading:false};
@@ -327,7 +328,7 @@ async function gymImport(form){
   const url=form.querySelector("[name=url]").value.trim();if(!url){toast("Paste your gym's website address first.");return}
   const btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Reading…";
   S.ui.sheet={k:"gymedit"};S.ui.stack=[];openSheet(`${sheetHead("Import your gym")}<div class="stack-lg"><h1>Reading your site…</h1><p class="muted">Looking through the home page and pages like timetable, prices, coaches and contact. This can take up to a minute.</p><div class="loadbar"><i></i></div></div>`);
-  try{const j=await api("POST","/coach/import",{url});S.ui.gimp={profile:j.profile,logos:j.logos||[],logoPick:j.logos&&j.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:j.method,pages:j.pages||[],imported:true};drawGymEdit()}
+  try{const j=await api("POST","/coach/import",{url});jfTrack("gym_import",{method:j.method,classes:(j.profile.timetable||[]).length});S.ui.gimp={profile:j.profile,logos:j.logos||[],logoPick:j.logos&&j.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:j.method,pages:j.pages||[],imported:true};drawGymEdit()}
   catch(e){hideSheet();render();toast(e.message)}
 }
 function gymEditOpen(){const p=clone(gymProfile());p.name=p.name||API.me.gym.name;

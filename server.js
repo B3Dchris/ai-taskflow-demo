@@ -21,8 +21,12 @@ const TYPES = {
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
 };
-const COMPRESS = new Set([".html", ".js", ".json", ".webmanifest", ".css", ".svg", ".txt"]);
+const COMPRESS = new Set([".html", ".js", ".json", ".webmanifest", ".css", ".svg", ".txt", ".xml"]);
+// Google Analytics 4: only when GA_ID looks like a real measurement ID. analytics.js waits for the visitor's consent.
+const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_ID || "") ? process.env.GA_ID : null;
+const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/analytics.js" defer></script>` : "";
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -30,13 +34,13 @@ const SECURITY = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://i.ytimg.com",
+    "img-src 'self' data: blob: https://i.ytimg.com https://*.google-analytics.com https://www.googletagmanager.com",
     "media-src 'self' blob:",
     "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
-    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
+    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
     "manifest-src 'self'",
     "worker-src 'self'",
     "base-uri 'self'",
@@ -53,7 +57,8 @@ const files = new Map();
     if (fs.statSync(full).isDirectory()) { load(full); continue; }
     const rel = "/" + path.relative(ROOT, full).split(path.sep).join("/");
     const ext = path.extname(name).toLowerCase();
-    const body = fs.readFileSync(full);
+    let body = fs.readFileSync(full);
+    if (ext === ".html" && GA_TAG) body = Buffer.from(body.toString("utf8").replace("</head>", GA_TAG + "\n</head>"));
     files.set(rel, { body, gz: COMPRESS.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null, ext,
       type: TYPES[ext] || "application/octet-stream" });
   }
@@ -61,7 +66,7 @@ const files = new Map();
 
 function cacheFor(rel) {
   if (rel.endsWith("/index.html") || rel === "/sw.js" || rel === "/manifest.webmanifest") return "no-cache";
-  if (rel.startsWith("/img/")) return "public, max-age=86400";
+  if (rel.startsWith("/img/") || rel.startsWith("/og/")) return "public, max-age=86400";
   if (rel.startsWith("/icons/")) return "public, max-age=604800";
   return "public, max-age=3600";
 }
@@ -82,11 +87,18 @@ function serveStatic(req, res) {
 
   if (pathname === "/") pathname = "/index.html";
   if (pathname === "/app") { res.writeHead(301, { Location: "/app/", ...SECURITY }); return res.end(); }
+  // Content pages live at /techniques/kimura/ ; send /techniques/kimura there so each page has one address.
+  if (!pathname.endsWith("/") && !path.extname(pathname) && files.has(pathname + "/index.html")) {
+    const q = req.url.indexOf("?");
+    res.writeHead(301, { Location: pathname + "/" + (q >= 0 ? req.url.slice(q) : ""), ...SECURITY });
+    return res.end();
+  }
   if (pathname.endsWith("/") && files.has(pathname + "index.html")) pathname += "index.html";
-  // Unknown paths: anything under /app/ opens the app, anything else the landing page.
-  const fallback = pathname.startsWith("/app/") ? "/app/index.html" : "/index.html";
-  const rel = files.has(pathname) ? pathname : (path.extname(pathname) ? null : fallback);
+  // Unknown paths: anything under /app/ opens the app; anything else is a real 404 (so search engines don't index junk).
+  const rel = files.has(pathname) ? pathname : pathname.startsWith("/app/") && !path.extname(pathname) ? "/app/index.html" : null;
   if (!rel) {
+    const nf = files.get("/404.html");
+    if (nf && !path.extname(pathname)) { res.writeHead(404, { "Content-Type": nf.type, "Cache-Control": "no-cache", ...SECURITY }); return res.end(req.method === "HEAD" ? undefined : nf.body); }
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY });
     return res.end("Not found");
   }

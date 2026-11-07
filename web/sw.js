@@ -1,5 +1,5 @@
 /* JitsFlow service worker: keeps the app working offline at the gym. */
-const CACHE = "jitsflow-72a0e45aa3";
+const CACHE = "jitsflow-72478c717c";
 const CORE = ["/", "/app/", "/manifest.webmanifest", "/img/today.jpg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.png"];
 
 self.addEventListener("install", (e) => {
@@ -23,11 +23,12 @@ self.addEventListener("fetch", (e) => {
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {
-    const page = url.pathname.startsWith("/app") ? "/app/" : "/";
+    // The app and the home page are kept under fixed keys; other pages (techniques…) under their own address.
+    const page = url.pathname.startsWith("/app") ? "/app/" : url.pathname === "/" || url.pathname === "/index.html" ? "/" : url.pathname;
     e.respondWith(
       fetch(req)
         .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(page, copy)); } return res; })
-        .catch(() => caches.match(page))
+        .catch(() => caches.match(page).then((hit) => hit || caches.match("/")))
     );
     return;
   }

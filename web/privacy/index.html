@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Privacy | JitsFlow</title>
+<meta name="description" content="What JitsFlow stores, why, where, and how to delete it.">
+<link rel="canonical" href="https://www.jitsflow.com/privacy/">
+<meta name="theme-color" content="#0E1A33">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:title" content="Privacy | JitsFlow">
+<meta property="og:description" content="What JitsFlow stores, why, where, and how to delete it.">
+<meta property="og:url" content="https://www.jitsflow.com/privacy/">
+<meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/site.css?v=4b9b54ce">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"JitsFlow","item":"https://www.jitsflow.com/"},{"@type":"ListItem","position":2,"name":"Privacy","item":"https://www.jitsflow.com/privacy/"}]}</script>
+</head>
+<body>
+<header class="night"><div class="wrap top"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
+<nav class="toplinks"><a href="/techniques/">Techniques</a><a href="/positions/">Positions</a><a class="hide-s" href="/glossary/">Glossary</a><a class="btn primary sm" href="/app/" data-ev="open_app">Open the app</a></nav></div></header>
+<nav class="wrap crumbs" aria-label="Breadcrumb"><a href="/">JitsFlow</a><span aria-hidden="true">›</span><span aria-current="page">Privacy</span></nav>
+<main class="wrap">
+<article class="stack-lg"><header class="stack"><p class="eyebrow">Privacy</p><h1>Your data</h1><p class="lead">Short version: without an account everything stays on your phone. With an account we keep what's needed to sync your training and run your gym, nothing is sold, and you can delete it all yourself.</p></header>
+<section class="stack"><h2>Without an account</h2><p>Your ratings, notes, training log, photos and videos are stored only in your browser on your device. Nothing is sent to us.</p></section>
+<section class="stack"><h2>With an account</h2><ul class="ticks"><li>Your name, email and a scrambled (hashed) password, so you can sign in.</li><li>Your technique ratings, settings and training log, so they're on every device.</li><li>If you join a gym: your belt, the classes you say you're going to and attend, and any payments your coach records. Your coach can see these; other students can't.</li><li>Coaches' gym details, which can be imported from the gym's public website.</li></ul></section>
+<section class="stack"><h2>Who else handles it</h2><ul class="ticks"><li>Render hosts the site and database in Frankfurt, Germany.</li><li>Resend sends account emails (welcome, password reset, invites).</li><li>Cloudflare routes traffic and email for jitsflow.com.</li><li>YouTube plays a technique video only when you tap it (in privacy-enhanced mode).</li><li>Anthropic (Claude) reads a gym's public website when a coach imports it, and answers "explain this" questions in the app.</li><li>Google Analytics counts visits and which pages are used, only if you tap Allow. You can change that any time with Cookie settings at the bottom of the page.</li></ul></section>
+<section class="stack"><h2>Deleting it</h2><p>Signed in, go to Settings › Your account › Delete account. That removes your account, progress, training log and attendance straight away. Payment records your coach keeps for their gym are unlinked from you. For anything else, email <a href="mailto:hello@jitsflow.com">hello@jitsflow.com</a>.</p></section>
+<p class="small muted">Questions or requests under POPIA or GDPR: <a href="mailto:hello@jitsflow.com">hello@jitsflow.com</a>.</p></article>
+</main>
+<footer><div class="wrap">
+<nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
+<p>JitsFlow · Your no-gi game, mapped. A technique library and flow chart to study off the mat. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
+</div></footer>
+<script>
+document.addEventListener("click",function(e){var b=e.target.closest(".vidbtn");if(b){var id=b.getAttribute("data-v");var f=document.createElement("iframe");f.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1";f.title=b.getAttribute("aria-label");f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.allowFullscreen=true;b.replaceWith(f);window.jfTrack&&jfTrack("video_start",{video_id:id});return}
+var s=e.target.closest("[data-share]");if(s){var u=location.href.split("#")[0],t=document.title;if(navigator.share){e.preventDefault();navigator.share({title:t,url:u}).then(function(){window.jfTrack&&jfTrack("share",{method:"native",content_type:s.getAttribute("data-share"),item_id:location.pathname})}).catch(function(){})}else{window.jfTrack&&jfTrack("share",{method:"whatsapp",content_type:s.getAttribute("data-share"),item_id:location.pathname})}return}
+var w=e.target.closest("[data-ev]");if(w&&window.jfTrack)jfTrack(w.getAttribute("data-ev"),{from:location.pathname})});
+var q=document.getElementById("tq");if(q)q.addEventListener("input",function(){var v=q.value.trim().toLowerCase();document.querySelectorAll("[data-find]").forEach(function(li){li.hidden=!!v&&li.getAttribute("data-find").indexOf(v)<0});document.querySelectorAll("[data-group]").forEach(function(g){g.hidden=!g.querySelector("[data-find]:not([hidden])")})});
+</script>
+</body>
+</html>

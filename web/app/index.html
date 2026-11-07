@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="JitsFlow: your no-gi game, mapped. A technique database and flow chart for off the mat: every position, attack chain and escape from white to black belt.">
+<link rel="canonical" href="https://www.jitsflow.com/app/">
+<meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
 <meta name="theme-color" content="#1D4FB5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -3590,7 +3592,7 @@ function closeSheet(){hideSheet();render();const y=S.ui.backY||0;window.scrollTo
 const sheetHead=(t)=>`<div class="sheettitle small muted">${t}</div>`;
 
 function techSheet(id,fromBack){
-  const t=TM[id];
+  const t=TM[id];if(!fromBack&&t)jfTrack("select_content",{content_type:"technique",item_id:id});
   if(!fromBack){if(!S.ui.sheet||S.ui.sheet.k!=="tech")S.ui.stack=[];const st=S.ui.stack;if(st[st.length-1]!==id)st.push(id)}
   S.ui.sheet={k:"tech",id};const l=lv(id),c=P().srs[id];
   openSheet(`${sheetHead(`${CATS[t.c]} · <span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)}
@@ -3690,7 +3692,9 @@ function render(){
   app.innerHTML=(v==="coach"?viewCoach():v==="learn"?viewLearn():v==="flow"?viewFlow():v==="log"?viewLog():v==="settings"?viewSettings():viewToday())+fab;
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===v?"page":"false"));
 }
-function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";S.ui.tab=tab;if(location.hash!=="#"+tab){try{history.replaceState(null,"","#"+tab)}catch(e){location.hash=tab}}render();window.scrollTo(0,0)}
+function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";const was=S.ui.tab;S.ui.tab=tab;if(location.hash!=="#"+tab){try{history.replaceState(null,"","#"+tab)}catch(e){location.hash=tab}}render();window.scrollTo(0,0);if(was!==tab&&window.jfPage)jfPage()}
+/* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
+function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
 window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)&&h!==S.ui.tab){S.ui.tab=h;render()}});
 
 document.addEventListener("click",e=>{
@@ -3707,7 +3711,7 @@ document.addEventListener("click",e=>{
     case "signout": signOut();break;
     case "delacct": S.ui.delOpen=true;render();break;
     case "delcancel": S.ui.delOpen=false;render();break;
-    case "rsvp": api("PUT",`/classes/${v}/rsvp`,{going:el.dataset.going==="1"}).then(async r=>{await loadClasses(true);toast(r.going?"See you there.":"Got it. You're not going.")}).catch(e=>toast(e.message));break;
+    case "rsvp": api("PUT",`/classes/${v}/rsvp`,{going:el.dataset.going==="1"}).then(async r=>{jfTrack("rsvp",{going:r.going});await loadClasses(true);toast(r.going?"See you there.":"Got it. You're not going.")}).catch(e=>toast(e.message));break;
     case "coachview": COACH.view=v;render();break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
     case "classopen": classSheet(v);break;
@@ -3829,7 +3833,7 @@ document.addEventListener("submit",async e=>{
   f.taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id)}});
   f.hits.forEach(id=>{if(lv(id)<4){P().mastery[id]=4;ensureCard(id)}});
   saveProgress();
-  const ok=await addSession(s);
+  const ok=await addSession(s);if(ok&&!f.editId)jfTrack("log_session",{mins:s.mins,rolls:s.rolls});
   if(ok){toast(f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("log")}
 });
 
@@ -3928,6 +3932,7 @@ async function submitAuth(form){
     const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password")})
       :m==="register"?await api("POST","/auth/register",{name:v("name"),email:v("email"),password:v("password"),code:v("code")})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
+    jfTrack(m==="login"?"login":"sign_up",{method:"email",role:m==="gym"?"coach":j.me.role,with_gym:!!j.me.gym});
     await signedIn(j.me);
   }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}}
 }
@@ -4107,10 +4112,10 @@ function coachGym(){const g=API.me.gym;
     <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
     <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p></section>`}
 async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
-  try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";
+  try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";if(j.sent)jfTrack("share",{method:"email",content_type:"gym_invite",count:j.sent});
     toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")}.`:""}`)}
   catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
-async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
+async function copyText(t){if(/[?&]join=/.test(t))jfTrack("share",{method:"copy",content_type:"gym_invite"});try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ----- gym profile: import from the gym's website, timetable, coaches, rates ----- */
 const GYM={data:null,at:0,loading:false};
@@ -4162,7 +4167,7 @@ async function gymImport(form){
   const url=form.querySelector("[name=url]").value.trim();if(!url){toast("Paste your gym's website address first.");return}
   const btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Reading…";
   S.ui.sheet={k:"gymedit"};S.ui.stack=[];openSheet(`${sheetHead("Import your gym")}<div class="stack-lg"><h1>Reading your site…</h1><p class="muted">Looking through the home page and pages like timetable, prices, coaches and contact. This can take up to a minute.</p><div class="loadbar"><i></i></div></div>`);
-  try{const j=await api("POST","/coach/import",{url});S.ui.gimp={profile:j.profile,logos:j.logos||[],logoPick:j.logos&&j.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:j.method,pages:j.pages||[],imported:true};drawGymEdit()}
+  try{const j=await api("POST","/coach/import",{url});jfTrack("gym_import",{method:j.method,classes:(j.profile.timetable||[]).length});S.ui.gimp={profile:j.profile,logos:j.logos||[],logoPick:j.logos&&j.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:j.method,pages:j.pages||[],imported:true};drawGymEdit()}
   catch(e){hideSheet();render();toast(e.message)}
 }
 function gymEditOpen(){const p=clone(gymProfile());p.name=p.name||API.me.gym.name;
@@ -4313,6 +4318,8 @@ document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.datas
   if(!lsGet("rtb.progress"))lsSet("rtb.progress",S.progress);
   const h=location.hash.slice(1);S.ui.tab=TABS.includes(h)?h:"today";
   render();setSync(S.sync,"");connect();
+  // Links from the technique pages: /app/?t=kimura opens that technique.
+  try{const qs=new URLSearchParams(location.search),t=qs.get("t");if(t){qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash);if(TM[t])setTimeout(()=>{techSheet(t);jfTrack("select_content",{content_type:"technique",item_id:t,from:"web_page"})},60)}}catch(e){}
 })();
 </script>
 

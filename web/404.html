@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Page not found | JitsFlow</title>
+<meta name="description" content="That page isn&#39;t here.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0E1A33">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:title" content="Page not found | JitsFlow">
+<meta property="og:description" content="That page isn&#39;t here.">
+<meta property="og:url" content="https://www.jitsflow.com/404">
+<meta property="og:image" content="https://www.jitsflow.com/og/techniques.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/site.css?v=4b9b54ce">
+
+</head>
+<body>
+<header class="night"><div class="wrap top"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
+<nav class="toplinks"><a href="/techniques/">Techniques</a><a href="/positions/">Positions</a><a class="hide-s" href="/glossary/">Glossary</a><a class="btn primary sm" href="/app/" data-ev="open_app">Open the app</a></nav></div></header>
+
+<main class="wrap">
+<div class="stack-lg"><header class="stack"><p class="eyebrow">404</p><h1>That page isn't here</h1><p class="lead">It may have moved. Try the technique library or open the app.</p></header><p class="row"><a class="btn primary" href="/techniques/">Browse techniques</a><a class="btn" href="/app/">Open the app</a></p></div>
+</main>
+<footer><div class="wrap">
+<nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
+<p>JitsFlow · Your no-gi game, mapped. A technique library and flow chart to study off the mat. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
+</div></footer>
+<script>
+document.addEventListener("click",function(e){var b=e.target.closest(".vidbtn");if(b){var id=b.getAttribute("data-v");var f=document.createElement("iframe");f.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1";f.title=b.getAttribute("aria-label");f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.allowFullscreen=true;b.replaceWith(f);window.jfTrack&&jfTrack("video_start",{video_id:id});return}
+var s=e.target.closest("[data-share]");if(s){var u=location.href.split("#")[0],t=document.title;if(navigator.share){e.preventDefault();navigator.share({title:t,url:u}).then(function(){window.jfTrack&&jfTrack("share",{method:"native",content_type:s.getAttribute("data-share"),item_id:location.pathname})}).catch(function(){})}else{window.jfTrack&&jfTrack("share",{method:"whatsapp",content_type:s.getAttribute("data-share"),item_id:location.pathname})}return}
+var w=e.target.closest("[data-ev]");if(w&&window.jfTrack)jfTrack(w.getAttribute("data-ev"),{from:location.pathname})});
+var q=document.getElementById("tq");if(q)q.addEventListener("input",function(){var v=q.value.trim().toLowerCase();document.querySelectorAll("[data-find]").forEach(function(li){li.hidden=!!v&&li.getAttribute("data-find").indexOf(v)<0});document.querySelectorAll("[data-group]").forEach(function(g){g.hidden=!g.querySelector("[data-find]:not([hidden])")})});
+</script>
+</body>
+</html>
