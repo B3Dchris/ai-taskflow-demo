@@ -40,14 +40,16 @@ npm test                              # all of the above
 
 ## Deploy on Render (Blueprint)
 
-This branch has a `render.yaml` at the root, so Render can set everything up from it.
+`render.yaml` at the root defines one service: **`jitsflow-app`**, a Node web service in **Frankfurt** on the **Starter** plan. `server.js` serves the prebuilt app in `web/` with compression, caching rules, security headers, a fallback to the app for unknown paths, and a `/healthz` health check. It has no dependencies.
 
-1. Sign in at [render.com](https://render.com) with GitHub.
-2. **New → Blueprint**, pick the repository and the **Jitsflow** branch.
-3. Render reads `render.yaml` and creates a static site called `jitsflow` with the rewrite rule and cache headers already set. Click **Apply**.
-4. The site is live at `https://jitsflow.onrender.com` (or the address Render shows).
+1. Sign in at [render.com](https://render.com) with GitHub. Starter is a paid plan, so add a payment method under **Billing** first.
+2. **New → Blueprint**, pick the repository and set the branch to **Jitsflow**.
+3. Render lists `jitsflow-app` (Web Service, Frankfurt, Starter). Click **Apply**.
+4. The site is live at `https://jitsflow-app.onrender.com` (or the address Render shows). Every push to the Jitsflow branch redeploys it.
 
-The site in `web/` is prebuilt, so Render doesn't need to run anything. When you change the app: run `python3 build.py`, run the tests, commit `web/` and push. Render redeploys automatically.
+To change the app: edit `src/`, run `python3 build.py`, run `npm test`, commit `web/` and push.
+
+Run it locally with `npm start` (port 10000, or set `PORT`).
 
 ## Connect jitsflow.com
 
