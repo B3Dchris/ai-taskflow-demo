@@ -220,7 +220,7 @@ details.grp .body{padding:0 14px 8px}
 .nextclass h3{font-size:24px}
 .partnerline{display:flex;align-items:center;gap:10px;align-self:center;text-decoration:none;color:var(--ink-2);font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .partnerline b{color:var(--ink);font-size:14px}.partnerline small{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
-.partnerline img{height:32px;width:auto;border-radius:4px}
+.partnerline img{height:36px;width:auto;border-radius:6px}
 .vid{display:flex;flex-direction:column;gap:8px}
 .vid video{width:100%;max-width:100%;max-height:60vh;border-radius:12px;background:#000;display:block}
 .beltpath{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -922,7 +922,8 @@ function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
   if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
   return `<div class="ytbox"><button class="ytface" data-a="ytplay" data-v="${esc(v.v)}" aria-label="Play video: ${esc(v.title||label)}"><img src="${ytThumb(v.v)}" alt="" loading="lazy"><span class="ytbig" aria-hidden="true">▶</span></button>${cap}</div>`}
 const inClaude=()=>!!(window.claude&&window.claude.use);
-const partnerBadge=()=>`<a class="partnerline" href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">${(window.JF_IMG||{}).partner?`<img src="/img/partner-logo.png" alt="">`:""}<span><small>In partnership with</small><b>JPB Martial Arts Academy</b></span></a>`;
+const PARTNER_LOGO="__PARTNER_LOGO__";
+const partnerBadge=()=>`<a class="partnerline" href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">${/^data:/.test(PARTNER_LOGO)?`<img src="${PARTNER_LOGO}" alt="JPB Martial Arts Academy logo">`:""}<span><small>In partnership with</small><b>JPB Martial Arts Academy</b></span></a>`;
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
 /* ============ DESCRIPTIONS ============ */

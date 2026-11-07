@@ -7,7 +7,7 @@ Reads src/app.html (the app) and the technique files in src/content-*.js, then w
 
 Usage: python3 build.py
 """
-import hashlib, json, os, re, subprocess, sys
+import base64, hashlib, json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, "src")
@@ -34,7 +34,10 @@ def build_app():
             parts.append("/* --- %s --- */\n" % name + read("src", name).strip())
     assert src.count("/*@@ADV_TECH@@*/") == 1, "content marker missing from src/app.html"
     assert src.count("/*@@ACCOUNTS@@*/") == 1, "accounts marker missing from src/app.html"
-    return src.replace("/*@@ADV_TECH@@*/", "\n".join(parts)).replace("/*@@ACCOUNTS@@*/", read("src", "accounts.js"))
+    logo = os.path.join(ROOT, "web", "img", "partner-logo.png")
+    uri = "data:image/png;base64," + base64.b64encode(open(logo, "rb").read()).decode() if os.path.exists(logo) else ""
+    return (src.replace("/*@@ADV_TECH@@*/", "\n".join(parts)).replace("/*@@ACCOUNTS@@*/", read("src", "accounts.js"))
+            .replace("__PARTNER_LOGO__", uri))
 
 
 def check_js(html):
