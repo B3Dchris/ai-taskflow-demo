@@ -7,7 +7,7 @@ Reads src/app.html (the app) and the technique files in src/content-*.js, then w
 
 Usage: python3 build.py
 """
-import hashlib, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, "src")
@@ -76,14 +76,54 @@ if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostnam
 </script>"""
 
 
+GALLERY = ["back_top", "mount_top", "sc_top", "fhl_top", "turtle_top", "ashi", "standing", "open_top", "cg_top", "hg_top",
+           "seated", "bfly_bot", "cg_bot", "hg_bot", "sc_bot", "fhl_bot", "turtle_bot", "ashi_def", "mount_bot", "back_bot"]
+
+
+def images(app):
+    """Which optional images exist in web/img (positions, belts, hero), plus position names from the app."""
+    def have(*p):
+        return os.path.exists(os.path.join(ROOT, "web", "img", *p))
+    names = dict(re.findall(r'\b([a-z_]+):\{l:"[^"]*",L:"([^"]+)"', app))
+    pos = [k for k in GALLERY if have("positions", k + ".jpg")]
+    belts = [b for b in ["blue", "purple", "brown", "black"] if have("belts", b + ".jpg")]
+    return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "names": names}
+
+
+ROLE = {"back_top": "You're behind", "ashi": "You're attacking", "open_top": "You're passing", "standing": "Neutral", "back_bot": "They're behind", "ashi_def": "Defending your leg", "fhl_bot": "Defending"}
+
+
+def fill_landing(landing, img):
+    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    hero = '<img class="heroart" src="/img/hero.jpg" alt="" aria-hidden="true">' if img["hero"] else ""
+    belts = ""
+    if len(img["belts"]) == 4:
+        belts = '<div class="beltcards">' + "".join(
+            '<img src="/img/belts/%s.jpg" alt="%s belt" loading="lazy" width="300" height="300">' % (b, b.capitalize()) for b in img["belts"]) + "</div>"
+    gallery = ""
+    if len(img["pos"]) >= 6:
+        cards = "".join(
+            '<figure><img src="/img/positions/%s.jpg" alt="%s" loading="lazy" width="600" height="600"><figcaption>%s<span>%s</span></figcaption></figure>'
+            % (k, esc(img["names"].get(k, k)), esc(img["names"].get(k, k)), ROLE.get(k, "You on top" if k.endswith("_top") else "You underneath"))
+            for k in img["pos"])
+        gallery = ('<section class="block wrap" id="positions" style="padding-top:0"><div class="intro"><p class="eyebrow">Every position</p>'
+                   '<h2>Know where you are.</h2><p class="muted">%d positions, from best to worst, each with your goals, the dangers, '
+                   'and every move that starts there.</p></div><div class="gallery">%s</div></section>') % (len(img["pos"]), cards)
+    return (landing.replace("@@NIGHT_CLASS@@", " has-art" if img["hero"] else "").replace("@@HERO_ART@@", hero)
+            .replace("@@BELT_CARDS@@", belts).replace("@@POS_GALLERY@@", gallery))
+
+
 def build_web(app):
     # Everything before the app's own markup (title, meta, font links, styles) goes in <head>.
     cut = app.index('<div class="wrap app"')
     head_bits, body = app[:cut], app[cut:]
     head_bits = re.sub(r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', "", head_bits)
-    html = HEAD + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
+    img = images(app)
+    jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"]})
+    html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
     write(html, "web", "app", "index.html")
-    landing = read("src", "landing.html")
+    landing = fill_landing(read("src", "landing.html"), img)
+    assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     version = hashlib.sha256((html + landing).encode()).hexdigest()[:10]
     write(read("tools", "sw.template.js").replace("__VERSION__", version), "web", "sw.js")

@@ -70,6 +70,18 @@ In the claude.ai version: **Settings → Backup → Copy backup**. On the websit
 
 On the website, a technique plays a YouTube video inside the page when it has one picked in `VIDS` in `src/app.html` (technique id → YouTube video id). Without one, the "Watch on YouTube" button opens a search. claude.ai blocks embedded video, so the claude.ai version always uses the button.
 
+## Images
+
+The site picks these up automatically when the files exist (then run `python3 build.py`). Prompts for all of them: see the JitsFlow image prompts page.
+
+| File | Size | Used for |
+|---|---|---|
+| `web/img/positions/<position id>.jpg` (20) | 1024×1024 | Flow map, technique pages and thumbnails without a video, landing-page gallery (shown once 6+ exist) |
+| `web/img/hero.jpg` | 1536×1024 | Landing-page hero background |
+| `web/img/belts/{blue,purple,brown,black}.jpg` | 1024×1024 | Belt stage banners; landing-page belt row (shown when all 4 exist) |
+
+Position ids: back_top, mount_top, sc_top, fhl_top, turtle_top, ashi, standing, open_top, cg_top, hg_top, seated, bfly_bot, cg_bot, hg_bot, sc_bot, fhl_bot, turtle_bot, ashi_def, mount_bot, back_bot.
+
 ## Before charging money
 
 Have a black belt review the content, starting with the **Coach review list** on each belt page.

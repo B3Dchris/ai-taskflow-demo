@@ -61,7 +61,17 @@ p{margin:0}
 .panel.warnp{border-color:var(--warn)}
 
 /* belt */
-.beltwrap{display:flex;flex-direction:column;gap:10px}
+.beltwrap{display:flex;flex-direction:column;gap:12px;border-radius:20px;padding:18px 16px;color:#EEF2FA;border:1px solid rgba(255,255,255,.06);
+  background:radial-gradient(520px 260px at 85% 0%,rgba(47,107,255,.35),transparent 65%),radial-gradient(420px 240px at 0% 100%,rgba(94,45,140,.28),transparent 60%),linear-gradient(180deg,#0B1222,#0F1C36);box-shadow:0 20px 40px -24px rgba(10,16,32,.7)}
+.beltwrap .muted{color:#A9B5CC}.beltwrap .bignum{color:#FFFFFF;text-shadow:0 0 24px rgba(91,140,255,.45)}
+.beltwrap .stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}.beltwrap .stat b{color:#FFFFFF}.beltwrap .stat span{color:#A9B5CC}
+.beltwrap .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#F4F6FB}
+.beltwrap .area .track{background:rgba(255,255,255,.12)}.beltwrap .area .fill{background:linear-gradient(90deg,#5B8CFF,#A9C3FF)}.beltwrap .area.low .fill{background:#E6A84C}.beltwrap .area .mono{color:#A9B5CC}
+.beltwrap .small b,.beltwrap p b{color:#FFFFFF}
+.beltwrap svg.belt{filter:drop-shadow(0 6px 16px rgba(0,0,0,.45))}
+.posimg{margin:0;border-radius:14px;overflow:hidden;background:#0E1626}.posimg img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}.posimg.sm{max-width:260px}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.beltbanner{width:100%;aspect-ratio:16/7;object-fit:cover;border-radius:12px}
 svg.belt{width:100%;height:auto;display:block;max-width:100%}
 .belt .b{fill:var(--belt);stroke:var(--belt-edge);stroke-width:1}
 .belt .b.blue{fill:#1F4FB0}.belt .b.purple{fill:#5E2D8C}.belt .b.brown{fill:#6A4326}
@@ -260,7 +270,9 @@ textarea{min-height:76px;resize:vertical}
 .flowsvg .node.dest rect{fill:var(--blue-soft)}
 .flowsvg .node{cursor:pointer}
 .flowsvg .tier{font-family:var(--f-display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;fill:var(--ink-2);font-weight:700}
-.flowsvg .edge{fill:none;stroke:var(--blue);stroke-width:1.6;opacity:.75}
+.flowsvg .edge{fill:none;stroke:var(--blue);stroke-width:1.8;opacity:.8;stroke-dasharray:5 5}
+@media (prefers-reduced-motion: no-preference){.flowsvg .edge{animation:flowdash 1.1s linear infinite}@keyframes flowdash{to{stroke-dashoffset:-20}}}
+.flowsvg .node.sel rect{filter:drop-shadow(0 0 6px rgba(91,140,255,.6))}
 .flowsvg .arrow{fill:var(--blue)}
 .flowsvg .badge{fill:var(--bad)} .flowsvg .badgetx{fill:var(--surface);font-family:var(--f-mono);font-size:9px;font-weight:500}
 .chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -3003,7 +3015,12 @@ function posPic(p,size){const m=POSFIG[p];if(!m)return "";const sc=SCENES[m[0]];
   const w=x1-x0;if(y1-y0<w*0.5)y0=y1-w*0.5;
   return `<figure class="posfig ${size||""}"><svg viewBox="${x0} ${y0} ${w} ${y1-y0}" role="img" aria-label="Diagram of ${esc(POS[p].L)}: you in blue, partner in grey"><line class="mat" x1="${x0}" y1="114" x2="${x1}" y2="114"/>${order.map(k=>figSVG(sc[k],k===me?"you":"them")).join("")}</svg>${size==="sm"||size==="xs"?"":`<figcaption><span class="key you"></span>You <span class="key them"></span>Partner</figcaption>`}</figure>`}
 /* picture for a position: your photo if you've added one, otherwise the diagram */
-function posVisual(p,size){const id=(P().photos||{})[p];return id?`<figure class="photo"><img src="/_blob/${esc(id)}" alt="Your photo of ${esc(POS[p].L)}"></figure>`:posPic(p,size)}
+/* illustrated position images (website): listed by the build in window.JF_IMG */
+const JFI=window.JF_IMG||{pos:[],belts:[],hero:false};
+const posImg=p=>(JFI.pos||[]).includes(p)?"/img/positions/"+p+".jpg":null;
+const beltImg=b=>(JFI.belts||[]).includes(b)?"/img/belts/"+b+".jpg":null;
+const posImgFig=(p,size)=>`<figure class="posimg ${size||""}"><img src="${posImg(p)}" alt="${esc(POS[p].L)}" loading="lazy"></figure>`;
+function posVisual(p,size){const id=(P().photos||{})[p];return id?`<figure class="photo"><img src="/_blob/${esc(id)}" alt="Your photo of ${esc(POS[p].L)}"></figure>`:posImg(p)?posImgFig(p,size):posPic(p,size)}
 
 /* ============ YOUR VIDEOS ============ */
 function techMedia(t,size){const v=(P().videos||{})[t.id];if(v)return `<div class="vid"><video controls playsinline preload="metadata" ${v.th?`poster="/_blob/${esc(v.th)}"`:""} src="/_blob/${esc(v.v)}"></video></div>`;return posVisual(t.f,size)}
@@ -3343,7 +3360,7 @@ const POSQ={standing:"hand fighting stance",fhl_top:"front headlock attacks",fhl
 const ytName=n=>n.split(":")[0].replace(/\(.*?\)/g,"").replace(/\s+/g," ").trim();
 const ytURL=q=>"https://www.youtube.com/results?search_query="+encodeURIComponent(q+" no gi bjj");
 const ytBtn=(q,label)=>`<a class="btn yt" href="${ytURL(q)}" target="_blank" rel="noopener"><span class="ytplay" aria-hidden="true">▶</span>${esc(label||"Watch on YouTube")}</a>`;
-function techThumb(t){const v=(P().videos||{})[t.id];const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return `<span class="thumb">${posPic(t.f,"xs")}</span>`}
+function techThumb(t){const v=(P().videos||{})[t.id];const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
 function tRow(t,extra){const b=beltOf(t);return `<button class="trow" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span><span class="meta">${cat(t.c)}<span>${esc(POS[t.f].l)} → ${t.t==="sub"?"Tap":esc(POS[t.t].l)}</span>${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}${extra||""}</span></span>${stripes(lv(t.id))}</button>`}
 function beltSVG(pct){
   const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[goal()];
@@ -3414,7 +3431,7 @@ function viewLearn(){
    <p class="small muted">Pick a belt to see everything you need for it, from white to black.</p>
    <div class="beltchips" role="group" aria-label="Belt stage">${BELTS.map(b=>`<button data-a="belt" data-v="${b.k}" aria-pressed="${bk===b.k}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div>
   </section>
-  <section class="panel bstage"><h2 class="label">${B.from} → ${B.to} belt</h2><p>${gl(B.about)}</p><p class="small muted">${esc(B.time)}</p>
+  <section class="panel bstage">${beltImg(bk)?`<img class="beltbanner" src="${beltImg(bk)}" alt="${B.to} belt" loading="lazy">`:""}<h2 class="label">${B.from} → ${B.to} belt</h2><p>${gl(B.about)}</p><p class="small muted">${esc(B.time)}</p>
    <div class="row between"><span class="small"><b class="mono">${readiness(bk)}%</b> ready · ${stage.length} techniques</span>${bk!==goal()?`<button class="btn" data-a="setgoal" data-v="${bk}">Make this my goal</button>`:`<span class="small muted">Your current goal</span>`}</div>
    <details class="grp"><summary><span><b>What coaches look for</b><br><span class="small muted">${comp.length} of ${B.look.length} ticked</span></span><span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body">${B.look.map((x,i)=>`<button class="check" data-a="comp" data-k="${bk}" data-v="${i}" aria-pressed="${comp.includes(i)}"><span class="box">${comp.includes(i)?"✓":""}</span><span class="ct">${esc(x)}</span></button>`).join("")}</div></details>
    ${(()=>{const fl=TECH.filter(t=>beltOf(t)===bk&&UNC.has(t.id));if(!fl.length)return "";const done=fl.filter(t=>coachOK(t.id)).length;
@@ -3465,7 +3482,7 @@ function viewFlow(){
   return `${header()}<div class="stack-lg">
   <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions ranked from best (top) to worst (bottom). Tap a position to see where you can go from it. A red number counts its submissions.</p>
   <div style="overflow-x:auto">${flowSVG(sel)}</div></section>
-  <section class="panel"><div class="twocol"><div class="stack">${(P().photos||{})[sel]?"":vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</div><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></div></section>
+  <section class="panel"><div class="twocol"><div class="stack">${(P().photos||{})[sel]?"":posImg(sel)?posImgFig(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):""):vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</div><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></div></section>
   ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
   ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
   <section class="stack"><div class="row between"><h2 class="label">Every move from here</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>

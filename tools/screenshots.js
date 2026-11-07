@@ -13,5 +13,4 @@ fs.writeFileSync(PAGE,'<meta name="viewport" content="width=device-width,initial
   await shot('chains',async()=>{await p.evaluate(()=>{S.ui.flowSel='cg_bot';go('flow')});await p.evaluate(()=>{const h=[...document.querySelectorAll('h2.label')].find(x=>/Your attack chains/.test(x.textContent));window.scrollTo(0,h.getBoundingClientRect().top+window.scrollY-12)})});
   await shot('defense',async()=>{await p.evaluate(()=>{S.ui.flowSel='mount_bot';go('flow')});await p.evaluate(()=>{const h=[...document.querySelectorAll('h2.label')].find(x=>/Their attacks/.test(x.textContent));window.scrollTo(0,h.getBoundingClientRect().top+window.scrollY-12)})});
   await shot('belts',async()=>{await p.evaluate(()=>{S.ui.belt='purple';go('learn')})});
-  await shot('map',async()=>{await p.evaluate(()=>{S.ui.flowSel='hg_bot';go('flow')})});
   await b.close();fs.unlinkSync(PAGE);console.log('screenshots written');})();
