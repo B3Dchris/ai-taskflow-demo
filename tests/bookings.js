@@ -64,7 +64,7 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // ---- attendee lists can be switched off
     r = await coach("PATCH", "/coach/gym", { showAttendees: false }); ok(r.j.me.gym.showAttendees === false, "coach hides who's booked");
     r = await chris("GET", "/classes"); ok(!r.j.classes.find((c) => c.id === cid).attendees && r.j.showAttendees === false, "students then only see counts");
-    r = await coach("GET", "/classes"); ok(r.j.classes.find((c) => c.id === cid).attendees.length === 2, "coaches still see names");
+    r = await coach("GET", `/coach/classes/${cid}`); ok(r.j.attendees.length === 2 && r.j.attendees[0].name === "Chris Buys", "coaches still see names (in the class)");
     await coach("PATCH", "/coach/gym", { showAttendees: true });
 
     // ---- private lessons

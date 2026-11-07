@@ -8,7 +8,8 @@
     "start": "node server.js",
     "build": "python3 build.py",
     "test": "node tests/web.js && node tests/importer.js && node tests/run.js local \"iPhone 13\" && node tests/run.js db \"iPhone SE\"",
-    "test:db": "node tests/api.js && node tests/bookings.js && node tests/comps.js && node tests/stress.js && node tests/booking-ui.js && node tests/accounts.js"
+    "test:db": "node tests/api.js && node tests/bookings.js && node tests/comps.js && node tests/stress.js && node tests/booking-ui.js && node tests/accounts.js",
+    "test:stress": "node tests/site-stress.js && node tests/ui-sweep.js"
   },
   "engines": {
     "node": ">=20"

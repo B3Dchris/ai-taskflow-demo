@@ -25,7 +25,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await signup(s2, "/app/?join=" + code, { "#a-name": "Ben Cole", "#a-email": "ben@race.test", "#a-pass": "benpass11" });
     await signup(s3, "/app/?join=" + code, { "#a-name": "Cat Diaz", "#a-email": "cat@race.test", "#a-pass": "catpass11" });
     // coach adds a one-spot class tomorrow
-    await co.tap('nav.tabs [data-v="coach"]'); await co.waitForTimeout(600);
+    await co.tap('nav.tabs [data-v="coach-classes"]'); await co.waitForTimeout(600);
     await co.tap('[data-a="classnew"]'); await co.fill("#c-title", "Last spot"); await co.fill("#c-cap", "1"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
     ok(await ev(co, () => /Last spot/.test(document.querySelector(".calrow").innerText) && /0\s*\/1/.test(document.querySelector(".calrow").innerText)), "coach sees the class with 0/1 booked");
     // two students open Classes and tap Book at the same moment
@@ -84,7 +84,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(co, (id) => classSheet(id), soonId); await co.waitForTimeout(800);
     ok(await ev(co, () => /Checked in/.test(document.getElementById("sheet").innerText)), "coach sees the student checked themselves in");
     // ---- competitions: coach imports an event, a student asks in, the coach enters them
-    await ev(co, () => hideSheet()); await co.tap('[data-a="coachview"][data-v="comps"]'); await co.waitForTimeout(500);
+    await ev(co, () => hideSheet()); await co.tap('nav.tabs [data-v="coach-comps"]'); await co.waitForTimeout(500);
     await co.fill("#ci-url", site.url + "/events/gauteng-open"); await co.tap("#compimpform [type=submit]"); await co.waitForSelector("#compform", { timeout: 15000 });
     ok(await ev(co, () => document.getElementById("cp-name").value === "Gauteng Open No-Gi 2026" && document.getElementById("cp-start").value === "2026-12-12" && document.getElementById("cp-reg").value === "2026-12-05" && /date was found/.test(document.getElementById("sheet").innerText)), "coach pastes an event link and the form fills in");
     await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);

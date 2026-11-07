@@ -158,7 +158,7 @@ create table if not exists password_resets(
 function makePool() {
   if (!process.env.DATABASE_URL) return null;
   const ssl = process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false;
-  return new Pool({ connectionString: process.env.DATABASE_URL, ssl, max: 10, idleTimeoutMillis: 30000 });
+  return new Pool({ connectionString: process.env.DATABASE_URL, ssl, max: Number(process.env.DB_POOL_MAX) || 20, idleTimeoutMillis: 30000 });
 }
 
 async function migrate(pool) {

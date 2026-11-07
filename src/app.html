@@ -29,6 +29,7 @@ try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")documen
   --good:#52C78E; --good-soft:#15301F; --warn:#E6A84C; --warn-soft:#33260F; --bad:#F2786D; --bad-soft:#3A1916;
   color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{background:var(--bg)}
 body{color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -126,7 +127,7 @@ a.btn{color:var(--ink);text-decoration:none}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs .wrap{display:flex}
 nav.tabs .wrap button{flex:1 1 0;min-width:0}
-nav.tabs .wrap:has(button[data-v="coach"]:not([hidden])) button,nav.tabs .wrap:has(button[data-v="book"]:not([hidden])) button{font-size:10.5px;letter-spacing:.01em;padding-inline:0}
+nav.tabs .wrap:has(button[data-v="coach-today"]:not([hidden])) button,nav.tabs .wrap:has(button[data-studycoach]:not([hidden])) button,nav.tabs .wrap:has(button[data-v="book"]:not([hidden])) button{font-size:10.5px;letter-spacing:.01em;padding-inline:0}
 nav.tabs button{background:none;border:0;padding:10px 2px 12px;min-height:60px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase}
 nav.tabs button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button[aria-current="page"]{color:var(--blue)}
@@ -251,6 +252,17 @@ details.grp .body{padding:0 14px 8px}
 .cc-body{display:grid;gap:4px;min-width:0}.cc-body b{font-size:16px}.cc-body small{font-size:13px;color:var(--ink-2)}.cc-body .pill{justify-self:start}
 .warn-t{color:var(--warn)!important}.ok-t{color:var(--good)}
 .compbar{display:block;width:100%;text-align:left;border:1px dashed var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;font-weight:700}.compbar small{font-weight:500;color:var(--ink-2)}
+details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}details.more>summary{font-weight:700;cursor:pointer;min-height:32px;display:flex;align-items:center}
+.today-card{display:grid;gap:12px}
+.swipe{position:relative;overflow:hidden}.swipe>.sw-front{position:relative;z-index:1;background:var(--surface);transition:transform .2s ease;touch-action:pan-y}
+.sw-btn{position:absolute;top:0;bottom:0;width:88px;border:0;font:inherit;font-weight:700;z-index:0;visibility:hidden}
+.sw-edit{left:0;background:var(--blue);color:var(--on-blue)}.sw-del{right:0;background:var(--bad);color:#fff}
+.swipe.show-edit>.sw-edit,.swipe.show-del>.sw-del{visibility:visible}
+.calrows>.swipe+.swipe{border-top:1px solid var(--line)}.swipe .calrow{border-top:0}
+.swipe.cardsw{border-radius:14px}.swipe.cardsw>.sw-front{border-radius:14px}.swipe>.sw-front>.sess{margin:0}
+.swipetip{font-size:13px;color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){.swipe>.sw-front{transition:none}}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick .btn{min-height:52px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
 .bc-main{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;text-align:left;background:none;border:0;padding:12px 12px 6px;color:inherit;font:inherit}
 .bc-time{font-size:15px;font-weight:700;display:grid}.bc-time small{font-size:12px;font-weight:500;color:var(--ink-2)}
@@ -387,6 +399,13 @@ textarea{min-height:76px;resize:vertical}
   <button data-a="tab" data-v="flow"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7.2 15.6 8M7 8.4 8.4 15.6M10.8 16.4l5.6-6.4"/></svg>Flow map</button>
   <button data-a="tab" data-v="log"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4v3h6V4M9 12h6M9 16h4"/></svg>Log</button>
   <button data-a="tab" data-v="book" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg>Classes</button>
+  <button data-a="tab" data-v="coach-today" data-coach hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Today</button>
+  <button data-a="tab" data-v="coach-classes" data-coach hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Classes</button>
+  <button data-a="tab" data-v="coach-students" data-coach hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Students</button>
+  <button data-a="tab" data-v="coach-comps" data-coach hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/></svg>Comps</button>
+  <button data-a="tab" data-v="coach-money" data-coach hidden><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/></svg>Money</button>
+  <button data-a="tab" data-v="coach-gym" data-coach hidden><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></svg>Gym</button>
+  <button data-a="coachmode" data-v="manage" data-studycoach hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Coach</button>
   <button data-a="tab" data-v="coach" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Coach</button>
   <button data-a="tab" data-v="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</button>
 </div></nav>
@@ -1665,33 +1684,31 @@ function viewToday(){
   {const tc={};recent(30).forEach(s=>(s.tapped||[]).forEach(id=>{tc[id]=(tc[id]||0)+1}));const top=Object.entries(tc).sort((a,b)=>b[1]-a[1]).find(([id])=>defFor(id));
    if(top){const d=defFor(top[0]);weak+=`<section class="panel warnp"><h2 class="label">Tapped most by · last 30 days</h2><p><b>${esc(TM[top[0]].n)}</b> got you ${top[1]}×. Drill the defense this week:</p><div class="list">${tRow(d)}</div></section>`}}
   const solo=P().solo.date===today()?P().solo.done:[];
+  const inGym=!!(API.me&&API.me.gym);
   return `${header()}<div class="stack-lg">
-  <section class="stack" aria-label="Your belt path"><h2 class="label">Your belt path</h2>
-    <div class="beltpath">${BELTS.map(b=>{const r=readiness(b.k);const st=RANK[b.k]<RANK[goal()]?"done":b.k===goal()?"now":"next";return `<button data-a="openbelt" data-v="${b.k}" class="bp ${st}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${st==="done"?"✓":r+"%"}</span></button>`}).join("")}</div>
-    <p class="small muted">Tap a belt to see its curriculum.</p></section>
-  <section class="beltwrap" aria-label="Progress">
-    ${beltSVG(pct)}
-    <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${G.to}-belt skill readiness (core + key techniques)</p></div>
-    <button class="btn" data-a="qr">Rate techniques</button></div>
-    <div class="stats"><div class="stat"><b>${Math.round(hrs)}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${due.length}</b><span>Reviews due</span></div></div>
-    ${(()=>{const a=areaScores();const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return `<div class="areas" aria-label="Skill by area">${a.map(x=>`<div class="area${any&&x===lo?" low":""}"><span>${esc(x.n)}</span><span class="track"><span class="fill" style="width:${x.pct}%"></span></span><span class="mono">${x.pct}%</span></div>`).join("")}</div>${any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>. Pick one of these for your next class mission.</p>`:""}`})()}
-    ${g!=="blue"?`<p class="small muted">${esc(G.time)} Your coach promotes on skill and consistency; the timeline is a guide.</p>`:`<p class="small muted">At ${st.perWeek||2}×/week you're about <b class="mono">${m2.toFixed(0)}</b> months from ${st.targetHours||300} mat hours (a rough typical blue-belt mark). At ${Math.max(3,(st.perWeek||2)+1)}×/week: <b class="mono">${m3.toFixed(0)}</b> months. Your coach promotes on skill, not hours; use this to check your pace.</p>`}
-  </section>
+  ${nextClassCard()}${compTodayCard()}
+  <section class="panel today-card"><h2 class="label">Today</h2>
+    ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
+    <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></div></section>
   ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what I know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what I know"}</button></section>`:""}
-  <section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="settings">Training days</button></div>
-    <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="today"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>
-  ${nextClassCard()}${compTodayCard()}${accountNudge()}
-  <section class="panel accent"><h2 class="label">Next class mission</h2><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></section>
+  ${weak}
+  <section class="beltwrap" aria-label="Progress">
+    <div class="beltpath">${BELTS.map(b=>{const r=readiness(b.k);const st=RANK[b.k]<RANK[goal()]?"done":b.k===goal()?"now":"next";return `<button data-a="openbelt" data-v="${b.k}" class="bp ${st}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${st==="done"?"✓":r+"%"}</span></button>`}).join("")}</div>
+    ${beltSVG(pct)}
+    <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${G.to}-belt skill readiness (core + key techniques)</p></div>${rq.length?"":`<button class="btn" data-a="qr">Re-rate</button>`}</div>
+    <div class="stats"><div class="stat"><b>${Math.round(hrs)}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${rDone}/${rTotal}</b><span>Rated</span></div></div>
+    ${(()=>{const a=areaScores();const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>.</p>`:""})()}
+  </section>
+  ${inGym?"":`<section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="settings">Training days</button></div>
+    <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="today"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>`}
+  ${accountNudge()}
+  <details class="more" data-g="today-more"${(S.ui.openG||{})["today-more"]?" open":""}><summary>Focus block and off-day drills</summary><div class="stack-lg" style="padding-top:14px">
   <section class="stack"><div class="row between"><h2 class="label">Focus · block ${b.i+1} of ${b.n}</h2><span class="small muted mono">${b.left} days left</span></div>
     <div><h3>${esc(blk.n)}</h3><p class="muted small">${esc(blk.why)}</p></div>
     <div class="list">${blk.ids.map(id=>tRow(TM[id])).join("")}</div></section>
-  <section class="stack"><div class="row between"><h2 class="label">Review queue</h2><span class="small muted mono">${due.length} due</span></div>
-    ${due.length?`<p class="small muted">Say the steps out loud from memory, then check yourself. About 30 seconds per card.</p><button class="btn primary full" data-a="review">Start review (${due.length})</button>`:`<div class="empty">Nothing due today. Techniques join the queue once you mark them “Seen” or higher.</div>`}</section>
-  ${weak}
   <section class="stack"><div class="row between"><h2 class="label">Off-day solo drills</h2><span class="small muted mono">${solo.length}/${SOLO.length}</span></div>
     <p class="small muted">On the days you don't train, this 10-minute routine on the other days adds mat-free reps.</p>
-    <div>${SOLO.map((d,i)=>`<button class="check" data-a="solo" data-v="${i}" aria-pressed="${solo.includes(i)}"><span class="box">${solo.includes(i)?"✓":""}</span><span><span class="ct"><b>${esc(d.n)}</b> · ${esc(d.r)}</span><br><span class="small muted">${esc(d.why)}</span></span></button>`).join("")}</div></section>
-  ${partnerBadge()}
+    <div>${SOLO.map((d,i)=>`<button class="check" data-a="solo" data-v="${i}" aria-pressed="${solo.includes(i)}"><span class="box">${solo.includes(i)?"✓":""}</span><span><span class="ct"><b>${esc(d.n)}</b> · ${esc(d.r)}</span><br><span class="small muted">${esc(d.why)}</span></span></button>`).join("")}</div></section></div></details>
   </div>`;
 }
 
@@ -1782,14 +1799,14 @@ function viewLog(){
   ${tb.length?`<div class="stack"><h2 class="label">Tapped by · 30 days</h2><div class="list">${tb.map(([id,c])=>{const d=defFor(id);return `<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(TM[id]?TM[id].n:id)}</b> <span class="mono small muted">×${c}</span></span>${d?`<button class="btn" data-a="open" data-v="${d.id}">Drill the defense</button>`:""}</div>`}).join("")}</div></div>`:""}
   </section>
   <section class="stack"><h2 class="label">Sessions</h2>
-  ${S.sessions.length?`<div>${S.sessions.slice().sort((a,b)=>a.date<b.date?1:-1).map(s=>`<div class="sess"><div class="row between"><b>${esc(fmtDate(s.date))} · ${esc(s.type||"Class")}</b><span class="mono small muted">${Number(s.mins)||0} min · ${Number(s.rolls)||0} rolls</span></div>
+  ${S.sessions.length?`<div>${S.sessions.slice().sort((a,b)=>a.date<b.date?1:-1).map(s=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc(fmtDate(s.date))} · ${esc(s.type||"Class")}</b><span class="mono small muted">${Number(s.mins)||0} min · ${Number(s.rolls)||0} rolls</span></div>
   ${(s.taught||[]).length?`<div class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>`<button class="linkbtn" data-a="open" data-v="${i}">${esc(TM[i].n)}</button>`).join(", ")}</div>`:""}
   ${(s.hits||[]).length?`<div class="small"><span class="muted">Hit:</span> ${s.hits.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}</div>`:""}
   ${(s.tapped||[]).length?`<div class="small"><span class="muted">Tapped by:</span> ${s.tapped.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}</div>`:""}
   ${(s.stuck||[]).length?`<div class="small"><span class="muted">Stuck in:</span> ${s.stuck.filter(p=>POS[p]).map(p=>esc(POS[p].l)).join(", ")}</div>`:""}
   ${s.worked?`<div class="small"><span class="muted">Worked:</span> ${esc(s.worked)}</div>`:""}
   ${s.fix?`<div class="small"><span class="muted">Fix:</span> ${esc(s.fix)}</div>`:""}
-  <div>${S.ui.confirmDel===s.id?`<div class="row"><span class="small">Delete this session?</span><button class="btn danger" data-a="delyes" data-v="${s.id}">Delete</button><button class="btn" data-a="delno">Keep</button></div>`:`<div class="row"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div>`}</div></div>`).join("")}</div>`:`<div class="empty">No sessions yet. After your next class, tap <b>Log session</b>: what was taught, how many rolls, what you hit, what got you, and where you got stuck. About a minute.</div>`}
+  <div>${S.ui.confirmDel===s.id?`<div class="row"><span class="small">Delete this session?</span><button class="btn danger" data-a="delyes" data-v="${s.id}">Delete</button><button class="btn" data-a="delno">Keep</button></div>`:`<div class="row"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div>`}</div></div>`,{edit:["editlog",s.id],del:["del",s.id]})).join("")}</div>`:`<div class="empty">No sessions yet. After your next class, tap <b>Log session</b>: what was taught, how many rolls, what you hit, what got you, and where you got stuck. About a minute.</div>`}
   </section></div>`;
 }
 function fmtDate(s){try{return parseD(s).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}catch(e){return s}}
@@ -1873,6 +1890,7 @@ function logSheet(keep){
   </form>`,keep,{act:`<button class="btn primary grow" type="submit" form="logform">${f.editId?"Save changes":"Save session"}</button>`});
 }
 function settingsSheet(){render()}
+function appearanceSection(){return `<section class="stack"><h2 class="label">Appearance</h2><div class="seg3">${[["system","Match phone"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-a="theme" data-v="${k}" aria-pressed="${themeNow()===k}">${l}</button>`).join("")}</div></section>`}
 function themeNow(){try{const t=localStorage.getItem("jf.theme");return t==="light"||t==="dark"?t:"system"}catch(e){return "system"}}
 function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");else localStorage.setItem("jf.theme",t)}catch(e){}
   if(t==="system")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t);
@@ -1882,48 +1900,63 @@ function viewSettings(){
   return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Settings</h1>
   ${accountSection()}
   ${isCoach()?"":gymCard(false)}
-  ${partnerBadge()}
-  <section class="stack"><h2 class="label">Appearance</h2><div class="seg3">${[["system","Match phone"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-a="theme" data-v="${k}" aria-pressed="${themeNow()===k}">${l}</button>`).join("")}</div></section>
+  ${appearanceSection()}
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Today, ratings and focus blocks aim at.</p>
   <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2><div class="seg"><button data-a="hand" data-v="left" aria-pressed="${hand==="left"}">Left hand</button><button data-a="hand" data-v="right" aria-pressed="${hand==="right"}">Right hand</button></div><p class="small muted">Back, Close and the Log button sit on this side so your thumb reaches them. Swipe right on any open page to go back.</p></section>
+  <details class="more" data-g="set-hours"${(S.ui.openG||{})["set-hours"]?" open":""}><summary>Hours, targets and focus block</summary><div class="stack" style="padding-top:12px">
   <div class="grid2"><label class="f">Sessions per week<input id="s-pw" type="number" min="1" max="14" data-s="perWeek" value="${st.perWeek}"></label>
   <label class="f">Usual session (min)<input id="s-sm" type="number" min="30" max="300" data-s="sessionMins" value="${st.sessionMins}"></label>
   <label class="f">Mat hours before this app<input id="s-ph" type="number" min="0" max="5000" data-s="priorHours" value="${st.priorHours}"></label>
   <label class="f">Target hours for blue<input id="s-th" type="number" min="50" max="2000" data-s="targetHours" value="${st.targetHours}"></label></div>
   <p class="small muted">Hours before the app: 9 months at 2×/week of 90-minute classes is roughly 115 hours. The 300-hour target is a rough guide; ask your coach what they look for.</p>
   <label class="f">Current focus block<select id="s-blk" data-blk="1">${curBlocks().map((x,i)=>`<option value="${i}"${i===b.i?" selected":""}>${i+1}. ${esc(x.n)}</option>`).join("")}</select></label>
-  <p class="small muted">Blocks rotate every 2 weeks. If your gym's curriculum is on something else, switch to match it.</p>
+  <p class="small muted">Blocks rotate every 2 weeks. If your gym's curriculum is on something else, switch to match it.</p></div></details>
+  <details class="more" data-g="set-data"${S.ui.importOpen||S.ui.confirmReset||(S.ui.openG||{})["set-data"]?" open":""}><summary>Backup and reset</summary><div class="stack-lg" style="padding-top:12px">
   <section class="stack"><h2 class="label">Backup</h2><p class="small muted">Copy your data as text to keep a backup, or paste a backup to restore.</p>
   <div class="row"><button class="btn" data-a="export">Copy backup</button><button class="btn" data-a="importshow">Restore from backup</button></div>
   ${S.ui.importOpen?`<textarea id="importtxt" placeholder="Paste backup text here"></textarea><div class="row"><button class="btn danger" data-a="importdo">Replace my data</button></div>`:""}
   <textarea id="exporttxt" readonly hidden></textarea></section>
   <section class="stack"><h2 class="label">Reset</h2>${S.ui.confirmReset?`<div class="row"><span class="small">Clear all ratings, reviews and notes? Sessions stay.</span><button class="btn danger" data-a="resetyes">Clear</button><button class="btn" data-a="resetno">Cancel</button></div>`:`<button class="btn danger" data-a="reset">Clear ratings & reviews</button>`}</section>
+  </div></details>
+  ${partnerBadge()}
   <p class="small muted credit" style="text-align:center;padding-block:8px 4px">Built and developed by <a class="link" href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
   </div>`;
 }
 
 /* ============ ROUTING & EVENTS ============ */
-const TABS=["today","learn","flow","log","settings","coach","book"];
+const TABS=["today","learn","flow","log","settings","coach","book","coach-today","coach-classes","coach-students","coach-comps","coach-money","coach-gym"];
 function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
   const fab=(v==="today"||v==="log")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
-  const cb=document.querySelector('nav.tabs [data-v="coach"]');if(cb)cb.hidden=!isCoach();
-  const bb=document.querySelector('nav.tabs [data-v="book"]');if(bb)bb.hidden=!(API.me&&API.me.gym&&!isCoach());
+  // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
+  const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}
+  if(!mg&&v==="coach"&&isCoach()&&coachMode()==="study"){}
+  document.querySelectorAll("nav.tabs [data-coach]").forEach(b=>b.hidden=!mg);
+  ["today","learn","flow","log","settings"].forEach(k=>{const b=document.querySelector(`nav.tabs [data-v="${k}"]:not([data-coach])`);if(b)b.hidden=mg});
+  const sb=document.querySelector("nav.tabs [data-studycoach]");if(sb)sb.hidden=!(isCoach()&&!mg);
+  const cb=document.querySelector('nav.tabs [data-v="coach"]');if(cb)cb.hidden=true;
+  const bb=document.querySelector('nav.tabs [data-v="book"]');if(bb)bb.hidden=mg||!(API.me&&API.me.gym&&!isCoach());
   app.innerHTML=(v==="coach"?viewCoach():v==="book"?viewBook():v==="learn"?viewLearn():v==="flow"?viewFlow():v==="log"?viewLog():v==="settings"?viewSettings():viewToday())+fab;
-  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===v?"page":"false"));
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",(b.dataset.v===v&&v!=="coach")||(v==="coach"&&b.dataset.v==="coach-"+COACH.view)?"page":"false"));
 }
-function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";const was=S.ui.tab;S.ui.tab=tab;if(location.hash!=="#"+tab){try{history.replaceState(null,"","#"+tab)}catch(e){location.hash=tab}}render();window.scrollTo(0,0);if(was!==tab&&window.jfPage)jfPage()}
+function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";
+  // Coach screens are "coach" plus a section; the address keeps the section so links and back work.
+  if(tab==="coach")tab="coach-"+(COACH.view||"today");
+  let h=tab;if(tab.startsWith("coach-")){COACH.view=tab.slice(6);tab="coach"}
+  const was=S.ui.tab+"/"+COACH.view;S.ui.tab=tab;if(location.hash!=="#"+h){try{history.replaceState(null,"","#"+h)}catch(e){location.hash=h}}render();window.scrollTo(0,0);if(was!==S.ui.tab+"/"+COACH.view&&window.jfPage)jfPage()}
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)&&h!==S.ui.tab){S.ui.tab=h;render()}});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(!TABS.includes(h))return;if(h.startsWith("coach-")){if(S.ui.tab!=="coach"||COACH.view!==h.slice(6)){COACH.view=h.slice(6);S.ui.tab="coach";render()}}else if(h!==S.ui.tab){S.ui.tab=h;render()}});
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
-  const bar=e.target.closest(".chart .bar");if(bar){toast(bar.getAttribute("aria-label"));return}
+  if(e.target.closest(".swipe[data-swiped]")&&!e.target.closest(".sw-btn"))return;
+  {const ow=e.target.closest(".swipe.open");if(ow&&!e.target.closest(".sw-btn")){closeSwipes();return}if(!ow)closeSwipes()}
+    const bar=e.target.closest(".chart .bar");if(bar){toast(bar.getAttribute("aria-label"));return}
   const el=e.target.closest("[data-a]");if(!el)return;
   const a=el.dataset.a,v=el.dataset.v;
   switch(a){
@@ -1946,7 +1979,9 @@ document.addEventListener("click",e=>{
     case "plansfromrates": api("POST","/coach/plans/from-rates",{}).then(async j=>{await coachLoad("roster");toast(`Added ${j.added} plan${j.added===1?"":"s"} from your website prices.`)}).catch(e=>toast(e.message));break;
     case "privnew": privSheet();break;
     case "attendall": { const cd=S.ui.classData,ids=cd.attendees.filter(a=>a.going&&!a.attended).map(a=>a.id);api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userIds:ids,attended:true}).then(()=>{cd.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=true});drawClassSheet(true);toast(`Checked in ${ids.length}.`)}).catch(e=>toast(e.message));break }
-    case "coachview": COACH.view=v;render();break;
+    case "coachview": case "coachgo": coachGo(v);break;
+    case "stuview": COACH.stuView=v;render();break;
+    case "coachmode": setCoachMode(v);if(v==="study"){go("today");toast("Study tools. Tap Coach in the bottom bar to go back.")}else coachGo("today");break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
     case "classnewday": S.ui.cplan=null;classForm(null,v);break;
     case "calday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.sel=(el.dataset.k!=="coach"&&st.sel===v)?null:v;st.anchor=v;render();break }
@@ -1954,6 +1989,12 @@ document.addEventListener("click",e=>{
     case "caltoday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.anchor=todayK();st.sel=el.dataset.k==="coach"?todayK():null;render();break }
     case "calmode": { const st=calState("coach");st.mode=v;if(v==="month"&&!st.sel)st.sel=st.anchor;render();break }
     case "copyweek": el.disabled=true;copyWeek();break;
+    case "classeditid": { const c=(COACH.classes||[]).find(x=>x.id===v);if(c){S.ui.cplan=null;classForm(c)}break }
+    case "classdelask": { const c=(COACH.classes||[]).find(x=>x.id===v);if(!c)break;const n=c.going+(c.waiting||0);
+      confirmSheet("Delete this class?",`<b>${esc(c.title)}</b>, ${esc(fmtWhen(c.startsAt))}. ${n&&clsEnd(c)>Date.now()?`${n} ${n===1?"person has":"people have"} booked or are waiting; they'll get an email saying it's cancelled.`:"Nobody is booked."}`,["classdelyes",v],"Delete class");break }
+    case "paydelask": { const p=(COACH.payments||[]).find(x=>x.id===v);if(!p)break;confirmSheet("Delete this payment?",`${esc(money(p.amountCents,p.currency))} paid ${esc(fmtDate(p.paidOn))}${p.reference?" ("+esc(p.reference)+")":""}. The student will show as unpaid again if this was their payment for the month.`,["paydelyes",v],"Delete payment");break }
+    case "paydelyes": api("DELETE",`/coach/payments/${v}`).then(async()=>{hideSheet();await coachLoad();render();toast("Payment deleted.")}).catch(e=>toast(e.message));break;
+    case "compdelask": { const c=(API.comps||[]).find(x=>x.id===v);if(!c)break;confirmSheet("Delete this competition?",`<b>${esc(c.name)}</b> and its team list (${c.entered} entered, ${c.requested} asking). Students won't be emailed.`,["compdelyes",v],"Delete competition");break }
     case "compnew": S.ui.compImp=null;compForm(null,null);break;
     case "compopen": loadComps();compSheet(v);if(isCoach()&&(!COACH.roster||Date.now()-(COACH.rosterAt||0)>60000))coachLoad("roster").then(()=>{if(S.ui.sheet&&S.ui.sheet.k==="comp"&&S.ui.sheet.id===v)compSheet(v,true)});break;
     case "compedit": { const c=(API.comps||[]).find(x=>x.id===v);S.ui.compImp=null;compForm(c,null);break }
@@ -1969,7 +2010,7 @@ document.addEventListener("click",e=>{
     case "classopen": classSheet(v);break;
     case "classedit": S.ui.cplan=null;classForm(S.ui.classData.class);break;
     case "classdel": { el.outerHTML=`<div class="row"><span class="small">Delete this class for everyone?</span><button class="btn danger" type="button" data-a="classdelyes" data-v="${v}">Delete</button></div>`;break }
-    case "classdelyes": api("DELETE",`/classes/${v}`).then(async()=>{S.ui.cplan=null;hideSheet();toast("Class deleted.");await coachLoad("classes");go("coach")}).catch(e=>toast(e.message));break;
+    case "classdelyes": api("DELETE",`/classes/${v}`).then(async()=>{S.ui.cplan=null;hideSheet();toast("Class deleted.");await coachLoad("classes");coachGo("classes")}).catch(e=>toast(e.message));break;
     case "cplanrm": { S.ui.cplan.ids=S.ui.cplan.ids.filter(x=>x!==v);const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");break }
     case "attend": { const cd=S.ui.classData,a=cd.attendees.find(x=>x.id===v);if(!a)break;const nv=!a.attended;api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userId:v,attended:nv}).then(()=>{a.attended=nv;drawClassSheet(true)}).catch(e=>toast(e.message));break }
     case "addtoplan": { const c=S.ui.classData.class,ids=[...new Set([...(c.plan&&c.plan.ids||[]),v])];api("PUT",`/classes/${c.id}`,{title:c.title,startsAt:c.startsAt,durationMin:c.durationMin,shared:c.shared,plan:{...(c.plan||{}),ids}}).then(()=>{c.plan={...(c.plan||{}),ids};drawClassSheet(true);toast("Added to the plan.");COACH.classes=null;coachLoad("classes")}).catch(e=>toast(e.message));break }
@@ -2172,10 +2213,32 @@ async function askAI(id,q){const t=TM[id];if(!SAMPLE||!t||S.ui.aiBusy)return;
 })();
 /* remember which curriculum groups are open */
 document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){S.ui.openG=S.ui.openG||{};if(d.open)S.ui.openG[d.dataset.g]=1;else delete S.ui.openG[d.dataset.g]}},true);
+
+/* ============ SWIPE ROWS: swipe right to edit, left to delete (both reveal a button; nothing happens until it's tapped) ============ */
+function swipeWrap(html,o){const e=o.edit,d=o.del;
+  return `<div class="swipe"${e?' data-edit="1"':""}${d?' data-del="1"':""}>${e?`<button class="sw-btn sw-edit" data-a="${e[0]}" data-v="${esc(e[1])}" tabindex="-1">${e[2]||"Edit"}</button>`:""}${d?`<button class="sw-btn sw-del" data-a="${d[0]}" data-v="${esc(d[1])}" tabindex="-1">${d[2]||"Delete"}</button>`:""}<div class="sw-front">${html}</div></div>`}
+function closeSwipes(except){document.querySelectorAll(".swipe.open,.swipe.show-edit,.swipe.show-del").forEach(w=>{if(w===except)return;w.classList.remove("open","show-edit","show-del");const f=w.querySelector(".sw-front");if(f)f.style.transform=""})}
+(function(){let el=null,sx=0,sy=0,dx=0,drag=false,base=0;
+  document.addEventListener("touchstart",e=>{const f=e.target.closest(".swipe>.sw-front");if(e.target.closest(".sw-btn"))return;closeSwipes(f&&f.parentNode);if(!f)return;
+    el=f;sx=e.touches[0].clientX;sy=e.touches[0].clientY;dx=0;drag=false;const m=/translateX\((-?\d+)/.exec(f.style.transform||"");base=m?Number(m[1]):0;f.style.transition="none"},{passive:true});
+  document.addEventListener("touchmove",e=>{if(!el)return;const x=e.touches[0].clientX-sx,y=e.touches[0].clientY-sy;
+    if(!drag){if(Math.abs(x)>10&&Math.abs(x)>Math.abs(y)*1.4)drag=true;else{if(Math.abs(y)>10){el.style.transition="";el=null}return}}
+    const w=el.parentNode;let t=base+x;if(t>0&&!w.dataset.edit)t=t/6;if(t<0&&!w.dataset.del)t=t/6;t=Math.max(-120,Math.min(120,t));dx=t;
+    el.style.transform=`translateX(${t}px)`;w.classList.toggle("show-edit",t>0);w.classList.toggle("show-del",t<0)},{passive:true});
+  document.addEventListener("touchend",()=>{if(!el)return;const w=el.parentNode;el.style.transition="";
+    if(drag){w.dataset.swiped="1";setTimeout(()=>{delete w.dataset.swiped},350);
+      if(dx>56&&w.dataset.edit){el.style.transform="translateX(88px)";w.classList.add("open","show-edit");w.classList.remove("show-del")}
+      else if(dx<-56&&w.dataset.del){el.style.transform="translateX(-88px)";w.classList.add("open","show-del");w.classList.remove("show-edit")}
+      else{el.style.transform="";w.classList.remove("open","show-edit","show-del")}
+      try{localStorage.setItem("jf.swiped","1")}catch(x){}}
+    el=null},{passive:true});
+})();
+function confirmSheet(title,text,yes,label){S.ui.sheet={k:"confirm"};S.ui.stack=[];
+  openSheet(`${sheetHead(title)}<div class="stack-lg"><h1>${esc(title)}</h1><p>${text}</p></div>`,false,{act:`<button class="btn grow" data-a="close">Keep it</button><button class="btn danger grow" data-a="${yes[0]}" data-v="${esc(yes[1])}">${esc(label)}</button>`})}
 /* ============ BOOT ============ */
 (function boot(){
   if(!lsGet("rtb.progress"))lsSet("rtb.progress",S.progress);
-  const h=location.hash.slice(1);S.ui.tab=TABS.includes(h)?h:"today";
+  const h=location.hash.slice(1);S.ui.tab=TABS.includes(h)?h:"today";if(S.ui.tab.startsWith("coach-")){COACH.view=S.ui.tab.slice(6);S.ui.tab="coach"}
   render();setSync(S.sync,"");connect();
   // Links from the technique pages: /app/?t=kimura opens that technique.
   try{const qs=new URLSearchParams(location.search),t=qs.get("t");if(t){qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash);if(TM[t])setTimeout(()=>{techSheet(t);jfTrack("select_content",{content_type:"technique",item_id:t,from:"web_page"})},60)}}catch(e){}

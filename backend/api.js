@@ -15,6 +15,8 @@ const code = () => Array.from(crypto.randomBytes(8), (b) => "ABCDEFGHJKLMNPQRSTU
 const clean = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
 const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(e);
 const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d);
+// "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && (() => { const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; })();
 
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const fail = (status, msg) => { throw new HttpError(status, msg); };
@@ -83,7 +85,9 @@ function makeApi(pool, { secureCookies }) {
     return out;
   }
   function checkSignIn(req, email) {
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || "?";
+    // Not the first X-Forwarded-For entry: a visitor can put anything there. Cloudflare sets cf-connecting-ip;
+    // otherwise use the address Express trusts (the proxy hop in front of us).
+    const ip = (req.headers["cf-connecting-ip"] || req.ip || req.socket.remoteAddress || "?").toString();
     if (limited("ip:" + ip, 30, 15 * 60e3) || limited("em:" + email, 10, 15 * 60e3)) fail(429, "Too many attempts. Wait 15 minutes and try again.");
   }
   async function newUser({ name, email, password, role, gymId }) {
@@ -244,7 +248,7 @@ function makeApi(pool, { secureCookies }) {
     const u = needUser(req), id = req.params.id, d = req.body?.data;
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail(400, "Bad session id.");
     if (!d || typeof d !== "object" || JSON.stringify(d).length > 20000) fail(400, "Bad session.");
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(d.date || "") ? d.date : null;
+    const date = isDay(d.date) ? d.date : null;
     await q(`insert into training_logs(user_id,id,date,data) values($1,$2,$3,$4)
              on conflict(user_id,id) do update set date=excluded.date, data=excluded.data, updated_at=now()`, [u.id, id, date, d]);
     res.json({ ok: true });
@@ -278,10 +282,12 @@ function makeApi(pool, { secureCookies }) {
       from classes c left join attendance m on m.class_id=c.id and m.user_id=$2
       where c.gym_id=$1 and c.starts_at between $3 and $4
         and ($5 or c.kind <> 'private' or coalesce(m.going,false) or not exists (select 1 from attendance o where o.class_id=c.id and o.going))
-      order by c.starts_at limit 300`, [u.gym_id, u.id, from, to, coach]);
+      order by c.starts_at limit 2000`, [u.gym_id, u.id, from, to, coach]);
     const out = r.rows.map((c) => classOut(c, coach));
-    // Who's booked: coaches see everyone; students see group classes only, first name + initial, if the gym allows it.
-    const ids = r.rows.filter((c) => coach || (c.kind !== "private" && u.show_attendees !== false)).map((c) => c.id);
+    // Who's booked, for classes still to come and only where a screen shows it: coaches get names for private
+    // lessons ("Booked by"); students get group classes (first name + initial) if the gym allows it.
+    const soon = Date.now() - 864e5;
+    const ids = r.rows.filter((c) => new Date(c.starts_at).getTime() > soon && (coach ? c.kind === "private" : c.kind !== "private" && u.show_attendees !== false)).map((c) => c.id);
     if (ids.length) {
       const a = await q(`select a.class_id, u.id, u.name, u.belt, u.stripes from attendance a join users u on u.id=a.user_id
         where a.class_id = any($1) and a.going order by a.booked_at`, [ids]);
@@ -575,7 +581,7 @@ function makeApi(pool, { secureCookies }) {
     let planId = st.plan_id;
     if (b.planId !== undefined) { planId = b.planId ? intOr(b.planId, 0) : null; if (planId && !(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
     const planStatus = b.planStatus !== undefined ? (PLAN_STATUS.includes(b.planStatus) ? b.planStatus : fail(400, "Pick a membership status.")) : st.plan_status;
-    const planStarted = b.planStarted !== undefined ? (/^\d{4}-\d{2}-\d{2}$/.test(b.planStarted || "") ? b.planStarted : null) : st.plan_started;
+    const planStarted = b.planStarted !== undefined ? (isDay(b.planStarted) ? b.planStarted : null) : st.plan_started;
     const rankChanged = belt !== st.belt || stripes !== st.stripes;
     await q(`update users set belt=$1,stripes=$2,notes=$3,monthly_fee_cents=$4,active=$5,plan_id=$6,plan_status=$7,plan_started=$8,
       rank_changed_at=case when $9 then now() else rank_changed_at end where id=$10`, [belt, stripes, notes, fee, active, planId, planStatus, planStarted, rankChanged, st.id]);
@@ -624,9 +630,13 @@ function makeApi(pool, { secureCookies }) {
     const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null;
     const wk = Number((await q(`select count(*) from attendance a join classes k on k.id=a.class_id where a.user_id=$1 and a.going and k.kind<>'private'
       and date_trunc('week', k.starts_at at time zone $2) = date_trunc('week', now() at time zone $2)`, [u.id, tzOf(u)])).rows[0].count);
-    const { visits } = await visitStats(u.gym_id, tzOf(u));
-    const st = studentStats(u, visits[u.id]);
-    const month = (visits[u.id] || []).filter((v) => new Date(v.at).getMonth() === new Date().getMonth() && Date.now() - v.at < 32 * DAY).length;
+    const mine = (await q(`select c.starts_at, c.kind, to_char(date_trunc('week', c.starts_at at time zone $3),'YYYY-MM-DD') as wk, a.attended,
+        (a.attended or (a.going and not exists (select 1 from attendance x where x.class_id=c.id and x.attended))) as counts
+      from attendance a join classes c on c.id=a.class_id where a.user_id=$1 and c.gym_id=$2 and c.starts_at > now() - interval '180 days'
+        and c.starts_at + (c.duration_min || ' minutes')::interval < now() and (a.attended or a.going)`, [u.id, u.gym_id, tzOf(u)])).rows
+      .filter((x) => x.counts).map((x) => ({ at: new Date(x.starts_at).getTime(), wk: x.wk, kind: x.kind }));
+    const st = studentStats(u, mine);
+    const month = mine.filter((v) => new Date(v.at).getMonth() === new Date().getMonth() && Date.now() - v.at < 32 * DAY).length;
     res.json({ membership: { plan: plan ? planOut(plan) : null, status: u.plan_status, started: u.plan_started, bookedThisWeek: wk, visitsThisMonth: month, streak: st.streak, perWeek: st.perWeek, total180: st.total180 } });
   }));
 
@@ -682,7 +692,7 @@ function makeApi(pool, { secureCookies }) {
     url: c.url, registerBy: dateOut(c.register_by), fee: c.fee, style: c.style, divisions: c.divisions || [], details: c.details });
   function readComp(b) {
     const name = clean(b.name, 140); if (!name) fail(400, "Give the competition a name.");
-    const d = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : null);
+    const d = (v) => (isDay(v) ? v : null);
     const startsOn = d(b.startsOn) || fail(400, "Pick the competition date.");
     const endsOn = d(b.endsOn) && b.endsOn >= startsOn ? b.endsOn : null;
     const url = /^https?:\/\//i.test(b.url || "") ? clean(b.url, 400) : "";
@@ -890,7 +900,7 @@ function makeApi(pool, { secureCookies }) {
     const u = needCoach(req), b = req.body || {};
     const amount = intOr(b.amountCents, NaN);
     if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000) fail(400, "Enter the amount paid.");
-    const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(b.paidOn || "") ? b.paidOn : fail(400, "Pick the date it was paid.");
+    const paidOn = isDay(b.paidOn) ? b.paidOn : fail(400, "Pick the date it was paid.");
     let userId = null;
     if (b.userId) userId = (await ownStudent(u, b.userId)).id;
     const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source) values($1,$2,$3,$4,$5,$6,$7,'manual') returning *`,
@@ -907,7 +917,8 @@ function makeApi(pool, { secureCookies }) {
   }));
   api.delete("/coach/payments/:id", wrap(async (req, res) => {
     const u = needCoach(req);
-    await q("delete from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
+    const r = await q("delete from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
+    if (!r.rowCount) fail(404, "That payment doesn't exist.");
     res.json({ ok: true });
   }));
 

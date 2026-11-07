@@ -83,13 +83,13 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>location.hash==='#log'&&document.querySelectorAll('.sess').length===1),'session saved and listed');
   ok(await ev(()=>lv('triangle')===4&&lv('over_under')>=1),'logging updates technique levels');
   ok(await ev(()=>document.body.innerText.includes('Half guard')&&!!document.querySelector('.bar')),'stuck chart shows');
-  await p.locator('[data-a="editlog"]').tap();ok((await ev(()=>document.querySelector('.sheettitle').innerText))==='Edit session','edit opens with title');
+  await p.locator('.linkbtn[data-a="editlog"]').tap();ok((await ev(()=>document.querySelector('.sheettitle').innerText))==='Edit session','edit opens with title');
   ok(await ev(()=>document.getElementById('f-worked').value==='Knee shield held up'),'edit form prefilled');
   await p.locator('#f-mins').fill('75');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>S.sessions.length===1&&Number(S.sessions[0].mins)===75),'edit updates the same session');
   await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
   ok(await ev(()=>document.querySelector('.stat b')&&weekStreak()===1),'week streak counts this week');
-  await p.tap('nav.tabs [data-v="log"]');await p.locator('[data-a="del"]').tap();await p.locator('[data-a="delyes"]').tap();await p.waitForTimeout(150);
+  await p.tap('nav.tabs [data-v="log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.locator('[data-a="delyes"]').tap();await p.waitForTimeout(150);
   ok(await ev(()=>S.sessions.length===0),'session deleted after confirm');
   // --- curriculum search keeps keyboard focus; filters; collapsible
   await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
@@ -100,9 +100,9 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="filter"][data-v="plus"]').tap();ok(await ev(()=>document.querySelectorAll('#learn-groups .trow').length===TECH.filter(t=>t.p==='plus'&&beltOf(t)==='blue').length),'bonus filter');
   await p.locator('[data-a="filter"][data-v="all"]').first().tap();
   // --- solo drills
-  await p.tap('nav.tabs [data-v="today"]');const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
+  await p.tap('nav.tabs [data-v="today"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
   // --- settings: hand, numbers, backup, import, reset
-  await p.tap('nav.tabs [data-v="settings"]');await p.locator('[data-a="hand"][data-v="right"]').tap();ok(await ev(()=>document.documentElement.classList.contains('righty')),'right-hand mode');
+  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.locator('[data-a="hand"][data-v="right"]').tap();ok(await ev(()=>document.documentElement.classList.contains('righty')),'right-hand mode');
   await p.locator('[data-a="hand"][data-v="left"]').tap();
   await p.locator('#s-pw').fill('3');ok(await ev(()=>P().settings.perWeek===3),'sessions per week saved');
   await p.locator('[data-a="export"]').tap();await p.waitForTimeout(100);
@@ -121,7 +121,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     // reload: data comes back from the account
     await p.waitForTimeout(900);await p.reload();await p.waitForTimeout(500);
     ok(await ev(()=>Object.keys(P().mastery).length>=54&&P().notes.knee_cut==='Underhook first!'),'db: progress survives reload');
-    await p.tap('nav.tabs [data-v="today"]');const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
+    await p.tap('nav.tabs [data-v="today"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
   }
   // --- belt stages
   await p.tap('nav.tabs [data-v="learn"]');
@@ -133,7 +133,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.tap('nav.tabs [data-v="flow"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
   const upTo=await ev(()=>document.querySelectorAll('.list .trow').length);await p.locator('[data-a="flowbelt"][data-v="black"]').tap();const all=await ev(()=>document.querySelectorAll('.list .trow').length);
   await p.locator('[data-a="flowbelt"][data-v="blue"]').tap();const blueOnly=await ev(()=>document.querySelectorAll('.list .trow').length);ok(all>=upTo&&upTo>=blueOnly&&all>blueOnly,`flow belt filter (${blueOnly} ≤ ${upTo} ≤ ${all})`);
-  await p.tap('nav.tabs [data-v="settings"]');await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
+  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
   // --- video (account mode)
   if(MODE==='db'){await ev(()=>techSheet('knee_cut'));
     await p.setInputFiles('#vid-knee_cut',{name:'big.mp4',mimeType:'video/mp4',buffer:Buffer.alloc(21*1024*1024,1)});await p.waitForTimeout(200);
@@ -193,7 +193,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.tap('nav.tabs [data-v="today"]');
   ok(await ev(()=>document.querySelectorAll('.week .wd').length===7&&document.querySelectorAll('.week .wd.cls').length===(P().settings.days||[]).length&&!!document.querySelector('.week .wd.today')),'this week shows 7 days with class days and today');
   await p.locator('.week .wd.cls').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'class day opens its technique');await p.tap('#sheetbar .back');
-  await p.tap('nav.tabs [data-v="settings"]');const before=await ev(()=>P().settings.days.length);await p.locator('[data-a="day"][data-v="5"]').tap();
+  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));const before=await ev(()=>P().settings.days.length);await p.locator('[data-a="day"][data-v="5"]').tap();
   ok(await ev(n=>P().settings.days.length===n+1&&P().settings.perWeek===n+1,before),'adding a training day updates the plan');await p.locator('[data-a="day"][data-v="5"]').tap();
   await ev(()=>techSheet('buggy_choke'));ok(await ev(()=>/Check with your coach/.test(document.querySelector('.coachbox').innerText)),'flagged move asks for a coach check');
   await p.locator('[data-a="coachok"]').tap();ok(await ev(()=>coachOK('buggy_choke')&&/Coach checked/.test(document.querySelector('.coachbox').innerText)),'coach check can be ticked');await p.tap('#sheetbar .back');

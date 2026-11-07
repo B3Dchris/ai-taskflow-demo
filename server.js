@@ -117,7 +117,8 @@ function serveStatic(req, res) {
 async function main() {
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", 1);
+  // Render puts one proxy in front of the app; trust exactly that hop for the visitor's address (TRUST_PROXY=0 when nothing is in front).
+  app.set("trust proxy", process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : 1);
   app.use((req, res, next) => { res.set(SECURITY); next(); });
   const pool = makePool();
   if (pool) {

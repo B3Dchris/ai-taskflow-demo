@@ -39,9 +39,14 @@ node tests/importer.js                # gym website import against a fake gym si
 npm test                              # all of the above
 DATABASE_URL=postgres://localhost/jitsflow_test node tests/api.js       # accounts API (wipes that test database)
 DATABASE_URL=postgres://localhost/jitsflow_test node tests/accounts.js  # coach + student end to end in browsers
+npm run test:db                       # all database suites: API, bookings, competitions, booking races, booking screens, accounts
+npm run test:stress                   # whole site: access rules, bad input, sign-in limits, 150 students at once, every public page and link;
+                                      # then every screen for visitor/student/coach/coach-study on 5 screen sizes in light and dark, plus swipes
 ```
 
 ## Accounts and the coach dashboard (website)
+
+Coaches get their own bottom bar: **Today** (today's classes, what needs attention, this week, quick actions), **Classes** (calendar), **Students** (roster and insights), **Comps**, **Money** (payments and plans) and **Gym** (profile, website import, invites, account, appearance). Belts, Flow map and Log are hidden for coaches; Gym › "Open study tools" switches to them and a Coach button switches back. Rows of classes, training-log sessions, payments and competitions can be swiped right to edit and left to delete (delete always asks first).
 
 When the server has a `DATABASE_URL`, the website adds:
 
