@@ -1,0 +1,17 @@
+{
+  "name": "JitsFlow",
+  "short_name": "JitsFlow",
+  "description": "Your no-gi game, mapped. Every position, chain and escape, to study off the mat.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF1F5",
+  "theme_color": "#1D4FB5",
+  "categories": ["sports", "health", "education"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,72 @@
+# JitsFlow
+
+**Your no-gi game, mapped.** An off-the-mat technique database and flow chart: every position, attack chain and escape from white to black belt, plus a training log that points you at what to study next.
+
+There are two versions, built from the same source:
+
+| Version | Where | What it has |
+|---|---|---|
+| **claude.ai** | `dist/jitsflow-claude.html`, published as a claude.ai Artifact | Everything below, plus saving to your Claude account, your own video clips and photos, and "Explain in more detail" answers from Claude |
+| **Website** | `web/`, deployed on Render from `render.yaml` (e.g. jitsflow.com) | Installs to your home screen, works offline at the gym, YouTube videos can play inside the app. Progress is saved on the device. |
+
+## What's inside
+
+- **137 no-gi techniques** across four stages (white→blue 74, blue→purple 31, purple→brown 18, brown→black 14), each with steps, key details, common mistakes, a drill and what it chains into.
+- **Flow map**: 20 positions, ranked best to worst, with attack chains ("if they defend like this, go there") and the mirrored defense view.
+- **Defense & escapes**: 24 submission defenses and escapes; anything you log as tapping you links to its defense.
+- **Today**: belt path, skill readiness, skill map, weekly plan, next-class mission, focus block, spaced review, weak spots and off-day solo drills.
+- **Glossary**: 89 jiu-jitsu terms; tap any underlined word for its meaning.
+- **Coach review list**: moves whose details vary between coaches are flagged until your coach checks them.
+
+## Build
+
+```bash
+python3 build.py            # writes dist/jitsflow-claude.html and web/ (index.html + sw.js)
+python3 tools/make_icons.py # only if you change the icon design
+```
+
+Edit the app in `src/app.html`. Advanced techniques live in `src/content-*.js` (format and rules in `src/content-brief.md`).
+
+## Test
+
+Needs Node and Playwright with Chromium.
+
+```bash
+node tests/run.js local "iPhone 13"   # claude.ai version, saving on the device
+node tests/run.js db "iPhone SE"      # claude.ai version, simulated account saving, uploads and Claude answers
+node tests/web.js                     # website: install manifest, icons, service worker, offline
+```
+
+## Deploy on Render (Blueprint)
+
+This branch has a `render.yaml` at the root, so Render can set everything up from it.
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. **New → Blueprint**, pick the repository and the **Jitsflow** branch.
+3. Render reads `render.yaml` and creates a static site called `jitsflow` with the rewrite rule and cache headers already set. Click **Apply**.
+4. The site is live at `https://jitsflow.onrender.com` (or the address Render shows).
+
+The site in `web/` is prebuilt, so Render doesn't need to run anything. When you change the app: run `python3 build.py`, run the tests, commit `web/` and push. Render redeploys automatically.
+
+## Connect jitsflow.com
+
+1. Buy the domain (Cloudflare Registrar, Porkbun or Namecheap).
+2. In `render.yaml`, uncomment the `domains:` lines and push. (Or add it in Render under **Settings → Custom Domains**.)
+3. Render shows the DNS records to create. Add them exactly as shown at your registrar.
+4. Render verifies the domain and issues the HTTPS certificate automatically.
+
+## Install on iPhone
+
+Open the site in Safari → Share → **Add to Home Screen**. It opens full screen, like an app, and works without signal.
+
+## Move your progress from claude.ai to the website
+
+In the claude.ai version: **Settings → Backup → Copy backup**. On the website: **Settings → Restore from backup**, paste, **Replace my data**. Your own video clips and photos stay on claude.ai.
+
+## YouTube videos inside the app
+
+On the website, a technique plays a YouTube video inside the page when it has one picked in `VIDS` in `src/app.html` (technique id → YouTube video id). Without one, the "Watch on YouTube" button opens a search. claude.ai blocks embedded video, so the claude.ai version always uses the button.
+
+## Before charging money
+
+Have a black belt review the content, starting with the **Coach review list** on each belt page.
