@@ -87,7 +87,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await gp.evaluate(()=>{go('learn')});await gp.waitForTimeout(200);
     ok(await gp.evaluate(()=>dataLayer.some(a=>a[0]==='event'&&a[1]==='page_view'&&/\/app\/learn$/.test(a[2].page_location))),'app tab changes are counted as page views');
     await gp.reload();await gp.waitForTimeout(1500);ok(await gp.evaluate(()=>!document.querySelector('.jf-consent')),'the choice is remembered');
-    const nh=await (await fetch(G)).text();ok(/window\.JF_GA="G-TEST12345"/.test(nh),'GA tag is added to every page');
+    const nh=await (await fetch(G)).text();ok(/window\.JF_GA="G-TEST12345"/.test(nh)&&/analytics\.js\?v=[0-9a-f]{8}/.test(nh),'GA tag is added to every page, with a versioned script address');
     await gc.close();gs.kill();
     const bs=spawn('node',[path.resolve(__dirname,'../server.js')],{env:{...process.env,PORT:String(gport+1),GA_ID:'"><script>alert(1)</script>'},stdio:'ignore'});
     await new Promise(r=>setTimeout(r,900));const bh=await (await fetch(`http://localhost:${gport+1}/`)).text();bs.kill();

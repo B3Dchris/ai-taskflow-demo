@@ -26,7 +26,9 @@ const TYPES = {
 const COMPRESS = new Set([".html", ".js", ".json", ".webmanifest", ".css", ".svg", ".txt", ".xml"]);
 // Google Analytics 4: only when GA_ID looks like a real measurement ID. analytics.js waits for the visitor's consent.
 const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_ID || "") ? process.env.GA_ID : null;
-const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/analytics.js" defer></script>` : "";
+// The file's hash goes in the address, so Cloudflare and browsers fetch a new copy whenever it changes.
+const GA_VER = (() => { try { return require("crypto").createHash("sha256").update(fs.readFileSync(path.join(ROOT, "analytics.js"))).digest("hex").slice(0, 8); } catch (e) { return "1"; } })();
+const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/analytics.js?v=${GA_VER}" defer></script>` : "";
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
