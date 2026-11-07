@@ -64,6 +64,12 @@ async function send({ to, subject, title, paras, button, preheader, replyTo }) {
 const sendLater = (msg) => { send(msg).catch((e) => console.warn("mail:", e.message)); };
 
 const templates = {
+  compRequest: (coach, student, comp, when, division) => ({ subject: `${student} wants to compete at ${comp}`, title: "Competition request",
+    paras: [`Hi ${coach},`, `${student} asked to enter ${comp} (${when})${division ? `, ${division}` : ""}.`, "Approve or decline it in the Coach tab › Comps."],
+    button: { label: "Open Comps", url: appUrl() + "/app/#coach" } }),
+  compDecision: (name, comp, when, entered, note) => ({ subject: entered ? `You're on the team for ${comp}` : `About ${comp}`, title: entered ? "You're on the team" : "Not this time",
+    paras: [`Hi ${name},`, entered ? `Your coach has entered you for ${comp} (${when}).` : `Your coach hasn't entered you for ${comp} (${when}) this time.`, ...(note ? [`Coach's note: ${note}`] : []), entered ? "Check the details and the rest of the team in JitsFlow." : "Talk to your coach about what to work on for the next one."],
+    button: { label: "See the competition", url: appUrl() + "/app/#book" } }),
   offWaitlist: (name, gym, cls, when) => ({ subject: `You're in: ${cls}`, title: "A spot opened up",
     paras: [`Hi ${name},`, `Someone cancelled, so you've moved off the waitlist and you're booked for ${cls} at ${gym}: ${when}.`, "Can't make it any more? Cancel in the app so the next person gets the spot."],
     button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),

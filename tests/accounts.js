@@ -5,7 +5,7 @@ const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.erro
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;

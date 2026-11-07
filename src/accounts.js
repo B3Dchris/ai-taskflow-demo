@@ -57,9 +57,9 @@ async function startSync(opts){
 }
 function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
 addEventListener("online",()=>{if(S.mode==="api"&&apDirty)apiSaveProgress()});
-async function signedIn(me,opts){API.me=me;API.classes=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();maybeOnboardAfterSync();go(isCoach()?"coach":"today");toast(`Signed in as ${me.name}.`)}
+async function signedIn(me,opts){API.me=me;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();maybeOnboardAfterSync();go(isCoach()?"coach":"today");toast(`Signed in as ${me.name}.`)}
 function maybeOnboardAfterSync(){S.ui.obChecked=false;if(!P().settings.onboarded)maybeOnboard()}
-async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress is saved in your account, not on this phone.")}
+async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress is saved in your account, not on this phone.")}
 
 /* ----- account sheets ----- */
 function authSheet(){
@@ -142,7 +142,7 @@ function accountNudge(){if(inClaude()||!API.on||API.me)return "";
 async function coachLoad(what,around){
   COACH.loading=true;
   try{
-    if(!what||what==="roster"){COACH.roster=await api("GET","/coach/roster");COACH.insights=null}
+    if(!what||what==="roster"){COACH.roster=await api("GET","/coach/roster");COACH.rosterAt=Date.now();COACH.insights=null}
     if(!what||what==="classes"){const base=fromYmd(around||(COACH.cal&&COACH.cal.anchor)||todayK()),f=new Date(base),t=new Date(base);f.setDate(f.getDate()-60);t.setDate(t.getDate()+100);
       COACH.classes=(await api("GET",`/classes?from=${encodeURIComponent(f.toISOString())}&to=${encodeURIComponent(t.toISOString())}`)).classes;COACH.rFrom=f;COACH.rTo=t;API.classes=null}
     if(!what||what==="payments")COACH.payments=(await api("GET","/coach/payments")).payments;
@@ -152,10 +152,10 @@ async function coachLoad(what,around){
 function viewCoach(){
   if(!isCoach())return `${header()}<div class="empty">The Coach tab is for coaches. Start a gym in Settings to use it.</div>`;
   if(!COACH.roster&&!COACH.loading)coachLoad();
-  const v=COACH.view,tabs=[["classes","Classes"],["roster","Roster"],["insights","Insights"],["payments","Payments"],["gym","Gym"]];
-  const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="roster"?coachRoster():v==="insights"?coachInsights():v==="payments"?coachPayments():v==="gym"?coachGym():coachClasses();
+  const v=COACH.view,tabs=[["classes","Classes"],["comps","Comps"],["roster","Roster"],["insights","Insights"],["payments","Payments"],["gym","Gym"]];
+  const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="roster"?coachRoster():v==="insights"?coachInsights():v==="payments"?coachPayments():v==="gym"?coachGym():v==="comps"?coachComps():coachClasses();
   return `${header()}<div class="stack-lg"><section class="stack"><div class="gymhead">${API.me.gym.logo?`<img src="${esc(API.me.gym.logo)}" alt="" class="gymlogo sm">`:""}<h1 style="font-size:34px">${esc(API.me.gym.name)}</h1></div>
-    <div class="seg5">${tabs.map(([k,l])=>`<button data-a="coachview" data-v="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></section>${body}</div>`;
+    <div class="segrow" role="tablist">${tabs.map(([k,l])=>`<button data-a="coachview" data-v="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></section>${body}</div>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
 /* ----- calendar (coach Classes tab and the student Classes tab) ----- */
@@ -188,9 +188,11 @@ function calRow(c){
     <span class="cr-body"><b>${esc(c.title)}</b><small>${[priv?"Private":c.level,c.coach,priv&&c.priceCents?money(c.priceCents,API.me.gym.currency):""].filter(Boolean).map(esc).join(" · ")}</small>${priv?`<small class="${c.attendees&&c.attendees.length?"ok":""}">${priv&&c.attendees&&c.attendees.length?"Booked by ":""}${who}</small>`:""}</span>
     ${priv?"":`<span class="cr-cap mono"><b>${c.going}${c.capacity?`<small>/${c.capacity}</small>`:""}</b><small>${past?"came":"booked"}</small>${fill!==null?`<span class="cap"><i style="width:${fill}%"></i></span>`:""}${c.waiting?`<small class="w">+${c.waiting} waiting</small>`:""}</span>`}</button>`}
 function coachClasses(){
+  if(!API.comps)loadComps();
   const st=calState("coach"),cs=COACH.classes||[],g=byDay(cs),t=todayK();
   const ws=weekStart(st.anchor),weekHas=[0,1,2,3,4,5,6].some(i=>(g[addDays2(ws,i)]||[]).some(c=>c.kind!=="private"));
   const day=d=>`<section class="stack calday"><div class="row between"><h2 class="label">${esc(d===t?"Today":fromYmd(d).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"}))}</h2>${d>=t?`<button class="btn sm" data-a="classnewday" data-v="${d}">+ Add</button>`:""}</div>
+    ${(API.comps||[]).filter(c=>c.startsOn<=d&&(c.endsOn||c.startsOn)>=d).map(c=>`<button class="compbar" data-a="compopen" data-v="${c.id}">🏆 ${esc(c.name)} <small>${c.entered} on the team</small></button>`).join("")}
     ${(g[d]||[]).length?`<div class="calrows">${g[d].map(calRow).join("")}</div>`:`<p class="small muted">No classes${d>=t?". Tap + Add to plan one.":"."}</p>`}</section>`;
   return `<section class="stack">
     <div class="row" style="flex-wrap:nowrap"><button class="btn primary grow" data-a="classnew">+ Plan a class</button><button class="btn" data-a="privnew">+ Private slots</button></div>
@@ -546,8 +548,8 @@ function viewBook(){
   const mine=cls.filter(c=>c.myGoing||c.myWaitlisted);
   const p=gymProfile();
   return `${header()}<div class="stack-lg"><section class="stack"><h1 style="font-size:34px">Classes</h1>
-    <div class="seg2"><button data-a="bookview" data-v="classes" aria-pressed="${v==="classes"}">Group classes</button><button data-a="bookview" data-v="private" aria-pressed="${v==="private"}">Private lessons${openP.length?` (${openP.length})`:""}</button></div></section>
-    ${v==="classes"?`${membershipCard()}
+    <div class="seg3"><button data-a="bookview" data-v="classes" aria-pressed="${v==="classes"}">Classes</button><button data-a="bookview" data-v="private" aria-pressed="${v==="private"}">Privates${openP.length?` (${openP.length})`:""}</button><button data-a="bookview" data-v="comps" aria-pressed="${v==="comps"}">Comps${API.comps&&upcomingComps().length?` (${upcomingComps().length})`:""}</button></div></section>
+    ${v==="comps"?compsList(false):v==="classes"?`${membershipCard()}
       ${mine.length?`<p class="small"><b>You're booked for ${mine.filter(c=>c.myGoing).length} class${mine.filter(c=>c.myGoing).length===1?"":"es"}</b>${mine.some(c=>c.myWaitlisted)?` and waiting for ${mine.filter(c=>c.myWaitlisted).length}`:""}.</p>`:""}
       ${(()=>{const st=calState("book"),g=byDay(cls),ws=weekStart(st.anchor);
         const shown=st.sel?(g[st.sel]||[]):cls.filter(c=>{const k=dayKey(c.startsAt);return k>=ws&&k<=addDays2(ws,6)});
@@ -632,6 +634,7 @@ function coachInsights(){
 
 /* ----- coach: email students ----- */
 const MSG={risk:["Missed you on the mats","Hey! We haven't seen you at training for a little while and wanted to check in.\n\nIf something's getting in the way (time, an injury, anything), reply and let us know. We'd love to see you back. Have a look at this week's classes in the app and book one."],
+  comp:["Competition: what you need to know","Hi team!\n\nHere's what you need for the competition: weigh-in time, what to bring, and when we're meeting.\n\n"],
   pay:["Membership payment for this month","Hi! A quick reminder that this month's membership hasn't come through yet.\n\nIf you've already paid, reply with your proof of payment and we'll sort it out. Thanks!"],
   welcome:["How's your first month going?","Welcome to the gym! We noticed you haven't made it to many classes yet.\n\nThe first few weeks are the hardest. Book two classes this week in the app and come say hi. Questions? Just reply to this email."],
   blank:["",""]};
@@ -675,3 +678,95 @@ async function savePriv(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{
   if(!times.length||times.includes(null)){toast("Write the start times like 07:00, 12:30, 17:00.");return}
   const classes=times.map(t=>({kind:"private",title:v("title")||"Private lesson",startsAt:new Date(`${v("date")}T${t}`).toISOString(),durationMin:Number(v("dur"))||60,priceCents:v("price")?Math.round(Number(v("price"))*100):null,coach:v("coach"),capacity:Number(v("cap"))||1,shared:true}));
   try{const j=await api("POST","/coach/classes/bulk",{classes});hideSheet();const st=calState("coach");st.sel=v("date");st.anchor=st.sel;await coachLoad("classes",st.anchor);COACH.view="classes";go("coach");toast(`Added ${j.added} private slot${j.added===1?"":"s"}${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
+
+/* ----- competitions ----- */
+const CSTAT={requested:["Asked to enter","due"],entered:["On the team","ok"],declined:["Not this time",""],withdrawn:["Withdrawn",""]};
+const STYLE={gi:"Gi",nogi:"No-gi",both:"Gi and no-gi"};
+const compDates=c=>{const f=d=>fromYmd(d).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"});return c.endsOn&&c.endsOn!==c.startsOn?`${f(c.startsOn)} – ${f(c.endsOn)}`:f(c.startsOn)};
+const daysTo=d=>Math.round((fromYmd(d)-fromYmd(todayK()))/864e5);
+const regLine=c=>{if(!c.registerBy)return "";const n=daysTo(c.registerBy);return n<0?`<span class="small muted">Registration closed</span>`:n===0?`<span class="small warn-t">Registration closes today</span>`:`<span class="small${n<=7?" warn-t":" muted"}">Registration closes in ${n} day${n===1?"":"s"}</span>`};
+async function loadComps(force){if(!API.me||!API.me.gym)return;if(!force&&API.comps&&Date.now()-API.compsAt<60000)return;
+  try{API.comps=(await api("GET","/competitions")).competitions;API.compsAt=Date.now();if(["book","coach","today"].includes(S.ui.tab)&&!S.ui.sheet)render();else if(S.ui.sheet&&S.ui.sheet.k==="comp")compSheet(S.ui.sheet.id,true)}catch(e){}}
+const upcomingComps=()=>(API.comps||[]).filter(c=>(c.endsOn||c.startsOn)>=todayK());
+function teamChips(c,max){const t=(c.team||[]).filter(x=>x.status==="entered");if(!t.length)return "";const n=max||5;
+  return `<span class="who-line">${t.slice(0,n).map(x=>`<span class="whochip${x.me?" me":""}"><i style="--bc:${BCOL[x.belt]||"#F4F4F0"}"></i>${esc(x.me?"You":x.name)}</span>`).join("")}${t.length>n?`<span class="small muted">+${t.length-n}</span>`:""}</span>`}
+function compCard(c,coach){const past=(c.endsOn||c.startsOn)<todayK(),m=c.mine,st=m&&CSTAT[m.status];
+  return `<button class="compcard${past?" past":""}" data-a="compopen" data-v="${c.id}"><span class="cc-date mono"><b>${fromYmd(c.startsOn).getDate()}</b><small>${esc(fromYmd(c.startsOn).toLocaleDateString(undefined,{month:"short"}))}</small></span>
+    <span class="cc-body"><b>${esc(c.name)}</b><small>${[compDates(c),c.city,STYLE[c.style]].filter(Boolean).map(esc).join(" · ")}</small>${past?"":regLine(c)}
+    ${coach?`<small><b>${c.entered}</b> on the team${c.requested?` · <b class="warn-t">${c.requested} asking</b>`:""}</small>`:st?`<span class="pill ${st[1]}">${esc(st[0])}${m.status==="entered"&&m.division?" · "+esc(m.division):""}</span>`:""}${teamChips(c,4)}</span></button>`}
+function compsList(coach){
+  if(!API.comps){loadComps(true);return `<div class="empty">Loading competitions…</div>`}
+  const up=upcomingComps(),past=(API.comps||[]).filter(c=>(c.endsOn||c.startsOn)<todayK()).reverse();
+  return `${up.length?`<div class="stack">${up.map(c=>compCard(c,coach)).join("")}</div>`:`<div class="empty">${coach?"No competitions yet. Paste an event link above, or add one by hand.":"No competitions coming up yet. Your coach adds the ones the gym is entering."}</div>`}
+    ${past.length?`<h2 class="label">Recent</h2><div class="stack">${past.map(c=>compCard(c,coach)).join("")}</div>`:""}`}
+function coachComps(){
+  return `<section class="stack">
+    <form id="compimpform" class="panel stack"><h2 class="label">Add a competition from its web page</h2>
+      <div class="row" style="flex-wrap:nowrap"><input id="ci-url" name="url" type="url" inputmode="url" autocapitalize="none" placeholder="Paste the event link" style="flex:1" aria-label="Competition web page"><button class="btn primary" type="submit">Read</button></div>
+      <p class="small muted">JitsFlow reads the name, dates, venue, entry deadline, fees and divisions. You check them before saving.</p></form>
+    <button class="btn" data-a="compnew">+ Add a competition by hand</button>
+    ${compsList(true)}</section>`}
+function compForm(c,imp){
+  c=c||{};const cur=API.me.gym.currency||"ZAR";S.ui.sheet={k:"compform",id:c.id||null};S.ui.stack=[];
+  openSheet(`${sheetHead(c.id?"Edit competition":"Add a competition")}<form id="compform" class="stack-lg" novalidate>
+    ${imp?`<div class="panel ${imp.dateChecked?"":"accent"}"><p class="small"><b>Read from ${imp.pages.length} page${imp.pages.length===1?"":"s"}${imp.method==="claude"?" with Claude":""}.</b> ${imp.dateChecked?"The date was found on the page.":"Couldn't confirm the date on the page: check it."} Check everything before saving.</p></div>`:""}
+    <label class="f">Name<input id="cp-name" name="name" value="${esc(c.name||"")}" placeholder="e.g. Gauteng Open No-Gi"></label>
+    <div class="grid2"><label class="f">Date<input id="cp-start" name="startsOn" type="date" value="${esc(c.startsOn||"")}"></label><label class="f">Last day (if longer)<input id="cp-end" name="endsOn" type="date" value="${esc(c.endsOn||"")}"></label></div>
+    <div class="grid2"><label class="f">Venue<input name="venue" value="${esc(c.venue||"")}"></label><label class="f">City<input name="city" value="${esc(c.city||"")}"></label></div>
+    <div class="grid2"><label class="f">Registration closes<input id="cp-reg" name="registerBy" type="date" value="${esc(c.registerBy||"")}"></label><label class="f">Gi or no-gi<select name="style"><option value="">Not sure</option>${Object.entries(STYLE).map(([k,l])=>`<option value="${k}"${c.style===k?" selected":""}>${l}</option>`).join("")}</select></label></div>
+    <label class="f">Entry fee<input name="fee" value="${esc(c.fee||"")}" placeholder="e.g. ${esc(cur)} 650, ${esc(cur)} 800 after the 1st"></label>
+    <label class="f">Organiser<input name="organiser" value="${esc(c.organiser||"")}"></label>
+    <label class="f">Event page<input name="url" type="url" value="${esc(c.url||"")}" placeholder="https://"></label>
+    <label class="f">Divisions (one per line)<textarea name="divisions" rows="4" placeholder="Adult blue belt -76kg&#10;Masters white belt">${esc((c.divisions||[]).join("\n"))}</textarea></label>
+    <label class="f">Details for students<textarea name="details" rows="3" placeholder="Weigh-in, rules, what to bring">${esc(c.details||"")}</textarea></label>
+    ${c.id?`<button class="btn danger" type="button" data-a="compdel" data-v="${c.id}">Delete competition</button>`:""}
+  </form>`,false,{act:`<button class="btn primary grow" type="submit" form="compform">${c.id?"Save":"Add competition"}</button>`})}
+async function saveComp(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";const id=S.ui.sheet&&S.ui.sheet.id;
+  const body={name:v("name"),startsOn:v("startsOn"),endsOn:v("endsOn")||null,venue:v("venue"),city:v("city"),registerBy:v("registerBy")||null,style:v("style"),fee:v("fee"),organiser:v("organiser"),url:v("url"),divisions:v("divisions").split("\n").map(x=>x.trim()).filter(Boolean),details:v("details")};
+  try{const j=await api(id?"PUT":"POST",id?`/coach/competitions/${id}`:"/coach/competitions",body);jfTrack("competition_saved",{imported:!!S.ui.compImp});S.ui.compImp=null;await loadComps(true);compSheet(j.competition.id);toast(id?"Saved.":"Competition added. Students can see it and ask to enter.")}catch(e){toast(e.message)}}
+async function compImport(form){const url=form.querySelector("[name=url]").value.trim();if(!url){toast("Paste the competition's link first.");return}
+  const btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Reading…";
+  try{const j=await api("POST","/coach/competitions/import",{url});S.ui.compImp=j;compForm(j.event,j)}catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Read"}
+function compSheet(id,keep){
+  const c=(API.comps||[]).find(x=>x.id===id);if(!c)return;S.ui.sheet={k:"comp",id};S.ui.stack=[];const coach=isCoach(),m=c.mine,past=(c.endsOn||c.startsOn)<todayK();
+  const req=(c.team||[]).filter(x=>x.status==="requested"),team=(c.team||[]).filter(x=>x.status==="entered"),other=(c.team||[]).filter(x=>x.status==="declined"||x.status==="withdrawn");
+  const row=x=>`<div class="attrow"><span><b>${esc(x.me?"You":x.name)}</b> ${beltChip(x.belt,x.stripes)}<br><span class="small muted">${[x.division,x.weight,coach&&x.note?`“${x.note}”`:"",x.result?cap1(x.result):""].filter(Boolean).map(esc).join(" · ")||"Division not set"}${coach&&x.paid?" · <b class='ok-t'>Paid</b>":""}</span></span>${coach?`<button class="btn sm" data-a="compentry" data-v="${x.id}">Edit</button>`:""}</div>`;
+  const notIn=coach&&COACH.roster?students().filter(p=>p.active&&!(c.team||[]).some(x=>x.id===p.id)):[];
+  openSheet(`${sheetHead("Competition")}<div class="stack-lg"><div class="stack" style="gap:6px"><h1>${esc(c.name)}</h1>
+      <p class="muted">${esc(compDates(c))}${c.venue||c.city?" · "+esc([c.venue,c.city].filter(Boolean).join(", ")):""}</p>${past?"":regLine(c)}
+      <p class="small">${[STYLE[c.style],c.fee&&("Entry: "+c.fee),c.organiser&&("By "+c.organiser)].filter(Boolean).map(esc).join(" · ")}</p>
+      ${c.url?`<p><a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Event page</a></p>`:""}</div>
+    ${c.details?`<p class="small">${esc(c.details)}</p>`:""}
+    ${(c.divisions||[]).length?`<details class="planbox"><summary>Divisions (${c.divisions.length})</summary><ul class="small" style="margin:8px 0 0;padding-left:18px">${c.divisions.map(d=>`<li>${esc(d)}</li>`).join("")}</ul></details>`:""}
+    ${!coach?`<section class="stack"><h2 class="label">You</h2>${!m||m.status==="withdrawn"?(past?`<p class="small muted">This one's over.</p>`:`<p class="small">${m?"You withdrew. Changed your mind?":"Want to compete? Ask your coach here."}</p><button class="btn primary" data-a="compreq" data-v="${c.id}">I want to compete</button>`)
+      :m.status==="requested"?`<p><span class="pill due">Asked to enter</span> ${m.division?esc(m.division):""}</p><p class="small muted">Your coach will let you know. Usually it's about readiness and whether there's a division for you.</p><button class="btn ghost" data-a="compwithdraw" data-v="${c.id}">Withdraw request</button>`
+      :m.status==="entered"?`<p><span class="pill ok">You're on the team</span> ${esc([m.division,m.weight].filter(Boolean).join(" · "))}</p>${m.coachNote?`<p class="small">Coach: ${esc(m.coachNote)}</p>`:""}${m.result?`<p><b>Result: ${esc(cap1(m.result))}</b></p>`:""}${past?"":`<button class="btn ghost" data-a="compwithdraw" data-v="${c.id}">Withdraw</button>`}`
+      :`<p><span class="pill">Not this time</span></p>${m.coachNote?`<p class="small">Coach: ${esc(m.coachNote)}</p>`:""}`}</section>`:""}
+    ${coach&&req.length?`<section class="stack"><h2 class="label">Asking to enter (${req.length})</h2><div class="list">${req.map(x=>`<div class="attrow"><span><b>${esc(x.name)}</b> ${beltChip(x.belt,x.stripes)}<br><span class="small muted">${esc([x.division,x.weight,x.note&&`“${x.note}”`].filter(Boolean).join(" · ")||"No division given")}</span></span><span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm primary" data-a="compyes" data-v="${x.id}">Enter</button><button class="btn sm" data-a="compno" data-v="${x.id}">Not now</button></span></div>`).join("")}</div></section>`:""}
+    <section class="stack"><div class="row between"><h2 class="label">The team (${team.length})</h2>${coach&&team.length&&API.status.mail?`<button class="btn sm" data-a="msgnew" data-k="comp" data-v="${team.map(x=>x.id).join(",")}">Email the team</button>`:""}</div>
+      ${team.length?`<div class="list">${team.map(row).join("")}</div>`:`<p class="small muted">Nobody entered yet.</p>`}
+      ${coach&&notIn.length&&!past?`<div class="row" style="flex-wrap:nowrap"><select id="comp-add" aria-label="Add a student" style="flex:1"><option value="">Add a student…</option>${notIn.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select><button class="btn" data-a="compadd" data-v="${c.id}">Add</button></div>`:""}</section>
+    ${coach&&other.length?`<details class="planbox"><summary>Not entered (${other.length})</summary><div class="list">${other.map(x=>`<div class="attrow"><span>${esc(x.name)} <span class="small muted">· ${esc(CSTAT[x.status][0])}</span></span><button class="btn sm" data-a="compyes" data-v="${x.id}">Enter</button></div>`).join("")}</div></details>`:""}
+  </div>`,keep,coach?{act:`<button class="btn grow" data-a="compedit" data-v="${c.id}">Edit details</button>`}:undefined)}
+function compReqSheet(id){const c=(API.comps||[]).find(x=>x.id===id);if(!c)return;S.ui.sheet={k:"compreq",id};S.ui.stack=[];const m=c.mine||{};
+  openSheet(`${sheetHead("Ask to compete")}<form id="compreqform" class="stack-lg" novalidate><div><h1>${esc(c.name)}</h1><p class="muted">${esc(compDates(c))}</p></div>
+    <label class="f">Division<input name="division" list="cr-div" value="${esc(m.division||"")}" placeholder="e.g. Adult blue belt -76kg"><datalist id="cr-div">${(c.divisions||[]).map(d=>`<option value="${esc(d)}">`).join("")}</datalist></label>
+    <label class="f">Your weight (kg)<input name="weight" inputmode="decimal" value="${esc(m.weight||"")}" placeholder="e.g. 74"></label>
+    <label class="f">Anything your coach should know<textarea name="note" rows="3" placeholder="First competition, injuries, travel…">${esc(m.note||"")}</textarea></label>
+    <p class="small muted">Your coach gets a message and decides who goes. You'll get an email either way.</p></form>`,false,{act:`<button class="btn primary grow" type="submit" form="compreqform">Send request</button>`})}
+async function sendCompReq(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";const id=S.ui.sheet.id;
+  try{await api("POST",`/competitions/${id}/request`,{division:v("division"),weight:v("weight"),note:v("note")});jfTrack("competition_request",{});toast("Request sent to your coach.");await loadComps(true);compSheet(id)}catch(e){toast(e.message)}}
+function compEntrySheet(cid,uid){const c=(API.comps||[]).find(x=>x.id===cid),x=c&&(c.team||[]).find(t=>t.id===uid);if(!x)return;S.ui.sheet={k:"compentry",id:cid,uid};S.ui.stack=[];const past=(c.endsOn||c.startsOn)<todayK();
+  openSheet(`${sheetHead("Competitor")}<form id="compentryform" class="stack-lg" novalidate><div><h1>${esc(x.name)}</h1><p class="muted">${esc(c.name)}</p></div>
+    <label class="f">Division<input name="division" list="ce-div" value="${esc(x.division||"")}"><datalist id="ce-div">${(c.divisions||[]).map(d=>`<option value="${esc(d)}">`).join("")}</datalist></label>
+    <div class="grid2"><label class="f">Weight (kg)<input name="weight" inputmode="decimal" value="${esc(x.weight||"")}"></label><label class="f">Status<select name="status">${Object.entries(CSTAT).map(([k,l])=>`<option value="${k}"${x.status===k?" selected":""}>${l[0]}</option>`).join("")}</select></label></div>
+    <label class="row small"><input name="paid" type="checkbox" style="width:auto"${x.paid?" checked":""}> Entry fee paid</label>
+    <label class="f">Result${past?"":" (after the event)"}<select name="result">${["","gold","silver","bronze","competed","didn't compete"].map(r=>`<option value="${r}"${x.result===r?" selected":""}>${r?cap1(r):"Not yet"}</option>`).join("")}</select></label>
+    <label class="f">Note to the student<textarea name="coachNote" rows="2">${esc(x.coachNote||"")}</textarea></label>
+    <button class="btn danger" type="button" data-a="compremove" data-v="${uid}">Remove from this competition</button></form>`,false,{act:`<button class="btn primary grow" type="submit" form="compentryform">Save</button>`})}
+async function saveCompEntry(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";const {id,uid}=S.ui.sheet;
+  try{await api("PUT",`/coach/competitions/${id}/competitors/${uid}`,{division:v("division"),weight:v("weight"),status:v("status"),paid:form.querySelector("[name=paid]").checked,result:v("result"),coachNote:v("coachNote")});await loadComps(true);compSheet(id);toast("Saved.")}catch(e){toast(e.message)}}
+async function compSet(cid,uid,status){try{await api("PUT",`/coach/competitions/${cid}/competitors/${uid}`,{status});await loadComps(true);compSheet(cid,true);toast(status==="entered"?"Entered. They'll get an email.":"Done. They'll get an email.")}catch(e){toast(e.message)}}
+function compTodayCard(){if(!API.me||!API.me.gym)return "";if(!API.comps){loadComps();return ""}
+  const mine=upcomingComps().filter(c=>c.mine&&c.mine.status==="entered").filter(c=>daysTo(c.startsOn)<=45);
+  return mine.map(c=>{const n=daysTo(c.startsOn);return `<section class="panel accent"><h2 class="label">Competing</h2><p><b>${esc(c.name)}</b> ${n<=0?"is today. Good luck!":`in ${n} day${n===1?"":"s"}`}</p><p class="small muted">${esc([compDates(c),c.city,c.mine.division].filter(Boolean).join(" · "))}</p><button class="btn" data-a="compopen" data-v="${c.id}">Details and team</button></section>`}).join("")}

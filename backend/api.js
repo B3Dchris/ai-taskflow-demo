@@ -673,6 +673,105 @@ function makeApi(pool, { secureCookies }) {
     });
   }));
 
+
+  // ---------- competitions ----------
+  const COMP_STATUS = ["requested", "entered", "declined", "withdrawn"];
+  const RESULTS = ["", "gold", "silver", "bronze", "competed", "didn't compete"];
+  const dateOut = (d) => (d ? String(d).slice(0, 10) : null);
+  const compOut = (c) => ({ id: String(c.id), name: c.name, startsOn: dateOut(c.starts_on), endsOn: dateOut(c.ends_on), venue: c.venue, city: c.city, organiser: c.organiser,
+    url: c.url, registerBy: dateOut(c.register_by), fee: c.fee, style: c.style, divisions: c.divisions || [], details: c.details });
+  function readComp(b) {
+    const name = clean(b.name, 140); if (!name) fail(400, "Give the competition a name.");
+    const d = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : null);
+    const startsOn = d(b.startsOn) || fail(400, "Pick the competition date.");
+    const endsOn = d(b.endsOn) && b.endsOn >= startsOn ? b.endsOn : null;
+    const url = /^https?:\/\//i.test(b.url || "") ? clean(b.url, 400) : "";
+    return { name, startsOn, endsOn, venue: clean(b.venue, 140), city: clean(b.city, 80), organiser: clean(b.organiser, 100), url, registerBy: d(b.registerBy), fee: clean(b.fee, 120),
+      style: ["gi", "nogi", "both"].includes(b.style) ? b.style : "", divisions: (Array.isArray(b.divisions) ? b.divisions : []).map((x) => clean(x, 80)).filter(Boolean).slice(0, 30), details: clean(b.details, 1500) };
+  }
+  async function ownComp(u, id) { const r = await q("select * from competitions where id=$1 and gym_id=$2", [intOr(id, 0), u.gym_id]); if (!r.rows[0]) fail(404, "That competition doesn't exist."); return r.rows[0]; }
+  const compWhen = (c) => { try { const o = { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }; const a = new Date(dateOut(c.starts_on) + "T00:00:00Z").toLocaleDateString("en-ZA", o); return c.ends_on ? `${a} to ${new Date(dateOut(c.ends_on) + "T00:00:00Z").toLocaleDateString("en-ZA", o)}` : a; } catch (e) { return dateOut(c.starts_on); } };
+
+  api.get("/competitions", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) return res.json({ competitions: [] });
+    const coach = u.role === "coach";
+    const cs = (await q("select * from competitions where gym_id=$1 and coalesce(ends_on, starts_on) >= current_date - 60 order by starts_on limit 100", [u.gym_id])).rows;
+    const ent = cs.length ? (await q(`select k.*, u.name, u.belt, u.stripes from competitors k join users u on u.id=k.user_id where k.competition_id = any($1) order by u.name`, [cs.map((c) => c.id)])).rows : [];
+    res.json({ competitions: cs.map((c) => {
+      const mine = ent.find((e) => e.competition_id === c.id && String(e.user_id) === String(u.id));
+      const people = ent.filter((e) => e.competition_id === c.id && (coach || e.status === "entered"));
+      return { ...compOut(c), entered: ent.filter((e) => e.competition_id === c.id && e.status === "entered").length, requested: ent.filter((e) => e.competition_id === c.id && e.status === "requested").length,
+        mine: mine ? { status: mine.status, division: mine.division, weight: mine.weight, note: mine.note, coachNote: mine.coach_note, result: mine.result } : null,
+        team: people.map((e) => ({ id: String(e.user_id), name: coach ? e.name : shortName(e.name), belt: e.belt, stripes: e.stripes, status: e.status, division: e.division, weight: e.weight, result: e.result, me: String(e.user_id) === String(u.id),
+          ...(coach ? { note: e.note, coachNote: e.coach_note, paid: e.paid } : {}) })) };
+    }) });
+  }));
+  api.post("/coach/competitions/import", wrap(async (req, res) => {
+    const u = needCoach(req);
+    if (limited("cimp:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
+    try { res.json(await importer.importEvent(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
+  }));
+  api.post("/coach/competitions", wrap(async (req, res) => {
+    const u = needCoach(req), c = readComp(req.body || {});
+    const r = await q(`insert into competitions(gym_id,name,starts_on,ends_on,venue,city,organiser,url,register_by,fee,style,divisions,details,created_by)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`, [u.gym_id, c.name, c.startsOn, c.endsOn, c.venue, c.city, c.organiser, c.url, c.registerBy, c.fee, c.style, JSON.stringify(c.divisions), c.details, u.id]);
+    res.status(201).json({ competition: compOut(r.rows[0]) });
+  }));
+  api.put("/coach/competitions/:id", wrap(async (req, res) => {
+    const u = needCoach(req), cur = await ownComp(u, req.params.id), c = readComp(req.body || {});
+    const r = await q(`update competitions set name=$1,starts_on=$2,ends_on=$3,venue=$4,city=$5,organiser=$6,url=$7,register_by=$8,fee=$9,style=$10,divisions=$11,details=$12 where id=$13 returning *`,
+      [c.name, c.startsOn, c.endsOn, c.venue, c.city, c.organiser, c.url, c.registerBy, c.fee, c.style, JSON.stringify(c.divisions), c.details, cur.id]);
+    res.json({ competition: compOut(r.rows[0]) });
+  }));
+  api.delete("/coach/competitions/:id", wrap(async (req, res) => {
+    const u = needCoach(req), c = await ownComp(u, req.params.id);
+    await q("delete from competitions where id=$1", [c.id]); res.json({ ok: true });
+  }));
+  // Coach adds, approves, declines or updates a competitor.
+  api.put("/coach/competitions/:id/competitors/:userId", wrap(async (req, res) => {
+    const u = needCoach(req), c = await ownComp(u, req.params.id), st = await ownStudent(u, req.params.userId), b = req.body || {};
+    const cur = (await q("select * from competitors where competition_id=$1 and user_id=$2", [c.id, st.id])).rows[0];
+    const status = b.status !== undefined ? (COMP_STATUS.includes(b.status) ? b.status : fail(400, "Bad status.")) : cur ? cur.status : "entered";
+    const v = (k, col, max) => (b[k] !== undefined ? clean(b[k], max) : cur ? cur[col] : "");
+    const result = b.result !== undefined ? (RESULTS.includes(b.result) ? b.result : fail(400, "Bad result.")) : cur ? cur.result : "";
+    await q(`insert into competitors(competition_id,user_id,status,division,weight,coach_note,paid,result) values($1,$2,$3,$4,$5,$6,$7,$8)
+      on conflict(competition_id,user_id) do update set status=excluded.status, division=excluded.division, weight=excluded.weight, coach_note=excluded.coach_note, paid=excluded.paid, result=excluded.result, updated_at=now()`,
+      [c.id, st.id, status, v("division", "division", 80), v("weight", "weight", 30), v("coachNote", "coach_note", 500), b.paid !== undefined ? !!b.paid : cur ? cur.paid : false, result]);
+    const decided = (!cur || cur.status !== status) && (status === "entered" || (status === "declined" && cur && cur.status === "requested"));
+    if (decided && b.notify !== false) mail.sendLater({ to: st.email, ...mail.templates.compDecision(st.name, c.name, compWhen(c), status === "entered", v("coachNote", "coach_note", 500)) });
+    res.json({ ok: true, status });
+  }));
+  api.delete("/coach/competitions/:id/competitors/:userId", wrap(async (req, res) => {
+    const u = needCoach(req), c = await ownComp(u, req.params.id);
+    await q("delete from competitors where competition_id=$1 and user_id=$2", [c.id, intOr(req.params.userId, 0)]); res.json({ ok: true });
+  }));
+  // Students ask to compete (or withdraw).
+  api.post("/competitions/:id/request", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) fail(403, "Join a gym first.");
+    const c = (await q("select * from competitions where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+    if (!c) fail(404, "That competition doesn't exist.");
+    if (dateOut(c.ends_on || c.starts_on) < new Date().toISOString().slice(0, 10)) fail(400, "That competition is over.");
+    const cur = (await q("select status from competitors where competition_id=$1 and user_id=$2", [c.id, u.id])).rows[0];
+    if (cur && cur.status === "entered") fail(409, "You're already on the team for this one.");
+    if (cur && cur.status === "declined") fail(409, "Your coach has decided on this one. Talk to them if things have changed.");
+    const b = req.body || {};
+    await q(`insert into competitors(competition_id,user_id,status,division,weight,note) values($1,$2,'requested',$3,$4,$5)
+      on conflict(competition_id,user_id) do update set status='requested', division=excluded.division, weight=excluded.weight, note=excluded.note, updated_at=now()`,
+      [c.id, u.id, clean(b.division, 80), clean(b.weight, 30), clean(b.note, 500)]);
+    if (!cur || cur.status !== "requested") {
+      const coaches = (await q("select name, email from users where gym_id=$1 and role='coach' and active", [u.gym_id])).rows;
+      for (const k of coaches) mail.sendLater({ to: k.email, replyTo: u.email, ...mail.templates.compRequest(k.name, u.name, c.name, compWhen(c), clean(b.division, 80)) });
+    }
+    res.json({ ok: true, status: "requested" });
+  }));
+  api.delete("/competitions/:id/request", wrap(async (req, res) => {
+    const u = needUser(req);
+    const r = await q(`update competitors k set status='withdrawn', updated_at=now() from competitions c where c.id=k.competition_id and c.gym_id=$3 and k.competition_id=$1 and k.user_id=$2 returning k.status`, [intOr(req.params.id, 0), u.id, u.gym_id]);
+    if (!r.rows[0]) fail(404, "You haven't asked to enter that one.");
+    res.json({ ok: true, status: "withdrawn" });
+  }));
+
   // ---------- coach: email students ----------
   api.post("/coach/message", wrap(async (req, res) => {
     const u = needCoach(req), b = req.body || {};

@@ -114,6 +114,39 @@ alter table users add column if not exists plan_started date;
 alter table users add column if not exists rank_changed_at timestamptz;
 create index if not exists attendance_user on attendance(user_id);
 create index if not exists attendance_waiting on attendance(class_id, booked_at) where waitlisted;
+create table if not exists competitions(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  name text not null,
+  starts_on date not null,
+  ends_on date,
+  venue text not null default '',
+  city text not null default '',
+  organiser text not null default '',
+  url text not null default '',
+  register_by date,
+  fee text not null default '',
+  style text not null default '',
+  divisions jsonb not null default '[]',
+  details text not null default '',
+  created_by bigint references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists competitions_gym on competitions(gym_id, starts_on);
+create table if not exists competitors(
+  competition_id bigint not null references competitions(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  status text not null default 'requested',
+  division text not null default '',
+  weight text not null default '',
+  note text not null default '',
+  coach_note text not null default '',
+  paid boolean not null default false,
+  result text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key(competition_id, user_id)
+);
 create table if not exists password_resets(
   token_hash text primary key,
   user_id bigint not null references users(id) on delete cascade,

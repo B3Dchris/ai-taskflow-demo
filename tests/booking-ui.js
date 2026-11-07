@@ -1,16 +1,16 @@
 // Booking through the real screens: students racing for the last spot, the waitlist, check-in and plan limits,
 // and what the coach sees. Usage: DATABASE_URL=postgres://.../<something>test node tests/booking-ui.js  (wipes that database)
 const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg");
-const { startMailSink } = require("./fixture-gym");
+const { startMailSink, startGymSite } = require("./fixture-gym");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
-  const sink = await startMailSink();
+  await pool.query("drop table if exists competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  const sink = await startMailSink(), site = await startGymSite();
   const port = 9400 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
-  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url }, stdio: ["ignore", "ignore", "inherit"] });
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await wait(150); } }
   const b = await chromium.launch(); const errs = [];
   const phone = async (name) => { const c = await b.newContext({ ...devices["iPhone 13"] }); await c.addInitScript(() => { if (!localStorage.getItem("rtb.progress")) localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(name + ": " + e.message)); return p; };
@@ -83,10 +83,33 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const soonId = await ev(co, () => COACH.classes.find((c) => c.title === "Starting soon").id);
     await ev(co, (id) => classSheet(id), soonId); await co.waitForTimeout(800);
     ok(await ev(co, () => /Checked in/.test(document.getElementById("sheet").innerText)), "coach sees the student checked themselves in");
+    // ---- competitions: coach imports an event, a student asks in, the coach enters them
+    await ev(co, () => hideSheet()); await co.tap('[data-a="coachview"][data-v="comps"]'); await co.waitForTimeout(500);
+    await co.fill("#ci-url", site.url + "/events/gauteng-open"); await co.tap("#compimpform [type=submit]"); await co.waitForSelector("#compform", { timeout: 15000 });
+    ok(await ev(co, () => document.getElementById("cp-name").value === "Gauteng Open No-Gi 2026" && document.getElementById("cp-start").value === "2026-12-12" && document.getElementById("cp-reg").value === "2026-12-05" && /date was found/.test(document.getElementById("sheet").innerText)), "coach pastes an event link and the form fills in");
+    await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+    ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "comp" && /Gauteng Open/.test(document.getElementById("sheet").innerText) && /Nobody entered yet/.test(document.getElementById("sheet").innerText)), "saved competition opens with an empty team");
+    await ev(s3, async () => { hideSheet(); API.comps = null; S.ui.bookView = "comps"; go("book"); }); await s3.waitForTimeout(900);
+    ok(await ev(s3, () => /Gauteng Open/.test(document.querySelector(".compcard").innerText) && /Registration/.test(document.querySelector(".compcard").innerText)), "student sees it under Classes › Comps");
+    await s3.locator(".compcard").first().tap(); await s3.waitForTimeout(500); await s3.tap('[data-a="compreq"]'); await s3.waitForTimeout(300);
+    await s3.fill('#compreqform [name="division"]', "Adult blue belt -76kg"); await s3.fill('#compreqform [name="weight"]', "74"); await s3.tap("#sheetbar [type=submit]"); await s3.waitForTimeout(1200);
+    ok(await ev(s3, () => /Asked to enter/.test(document.getElementById("sheet").innerText)), "student asks to compete");
+    await ev(co, async () => { await loadComps(true); }); await co.waitForTimeout(400);
+    await ev(co, () => { hideSheet(); COACH.rosterAt = 0; render(); }); await co.locator(".compcard").first().tap(); await co.waitForTimeout(1200);
+    ok(await ev(co, () => /Asking to enter \(1\)/i.test(document.getElementById("sheet").innerText) && /Cat Diaz/.test(document.getElementById("sheet").innerText)), "coach sees the request");
+    await co.tap('[data-a="compyes"]'); await co.waitForTimeout(1200);
+    ok(await ev(co, () => /The team \(1\)/i.test(document.getElementById("sheet").innerText)), "coach enters the student; the team shows 1");
+    await co.selectOption("#comp-add", { label: "Ana Lima" }); await co.tap('[data-a="compadd"]'); await co.waitForTimeout(1200);
+    ok(await ev(co, () => /The team \(2\)/i.test(document.getElementById("sheet").innerText)), "coach adds another student straight onto the team");
+    await ev(s3, async () => { await loadComps(true); hideSheet(); go("book"); }); await s3.waitForTimeout(700);
+    ok(await ev(s3, () => /On the team/.test(document.querySelector(".compcard").innerText) && document.querySelectorAll(".compcard .whochip").length === 2), "student sees they're on the team with their teammate");
+    await ev(s3, () => go("today")); await s3.waitForTimeout(500);
+    ok(await ev(s3, () => /Competing/i.test(document.getElementById("app").innerText) && /Gauteng Open/.test(document.getElementById("app").innerText)), "Today shows the upcoming competition");
+    await wait(300); ok(sink.mails.some((m) => /Cat Diaz wants to compete/.test(m.subject)) && sink.mails.some((m) => m.to[0] === "cat@race.test" && /on the team/.test(m.subject)), "request and decision emails go out");
     for (const p of [co, s1, s2, s3]) ok(await ev(p, () => document.documentElement.scrollWidth <= 390), "no sideways scroll");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
-  await b.close(); srv.kill(); sink.close(); await pool.end();
+  await b.close(); srv.kill(); sink.close(); site.close(); await pool.end();
   console.log(`booking-ui: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);
 })();
