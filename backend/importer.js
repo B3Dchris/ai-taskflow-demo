@@ -338,19 +338,21 @@ const SCHEMA = {
     logo_choice: { type: "integer", description: "Index of the best logo in the LOGO CANDIDATES list, or -1 if none look like the gym's logo." },
     socials: { type: "object", additionalProperties: false, required: SOCIALS, properties: Object.fromEntries(SOCIALS.map((k) => [k, { ...str, description: "Full URL, or empty." }])) },
     timetable: { type: "array", description: "Every recurring weekly class. One entry per day a class runs.", items: { type: "object", additionalProperties: false,
-      required: ["day", "start", "end", "title", "coach", "level"],
+      required: ["day", "start", "end", "title", "coach", "level", "quote"],
       properties: { day: { type: "string", enum: DAYS }, start: { ...str, description: "24-hour HH:MM" }, end: { ...str, description: "24-hour HH:MM, or empty if not given" },
-        title: { ...str, description: "Class name, e.g. 'No-Gi Fundamentals'" }, coach: { ...str, description: "Coach for this class, or empty" }, level: { ...str, description: "Kids / Beginners / All levels / Advanced etc, or empty" } } } },
-    coaches: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "rank", "bio"],
-      properties: { name: str, rank: { ...str, description: "Belt rank and/or role, e.g. 'Black belt, head coach'" }, bio: { ...str, description: "Up to three sentences from the site." } } } },
-    rates: { type: "array", description: "Membership prices and fees.", items: { type: "object", additionalProperties: false, required: ["name", "price", "currency", "period", "note"],
-      properties: { name: str, price: { type: "number" }, currency: { ...str, description: "ISO code such as ZAR, USD, GBP" }, period: { type: "string", enum: PERIODS }, note: { ...str, description: "Conditions, e.g. '3 classes a week' or 'family discount'. Empty if none." } } } },
+        title: { ...str, description: "Class name, e.g. 'No-Gi Fundamentals'" }, coach: { ...str, description: "Coach for this class, or empty" }, level: { ...str, description: "Kids / Beginners / All levels / Advanced etc, or empty" }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
+    coaches: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "rank", "bio", "quote"],
+      properties: { name: str, rank: { ...str, description: "Belt rank and/or role, e.g. 'Black belt, head coach'" }, bio: { ...str, description: "Up to three sentences from the site." }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
+    rates: { type: "array", description: "Membership prices and fees.", items: { type: "object", additionalProperties: false, required: ["name", "price", "currency", "period", "note", "quote"],
+      properties: { name: str, price: { type: "number" }, currency: { ...str, description: "ISO code such as ZAR, USD, GBP" }, period: { type: "string", enum: PERIODS }, note: { ...str, description: "Conditions, e.g. '3 classes a week' or 'family discount'. Empty if none." }, quote: { ...str, description: "The exact words on the page this came from, copied verbatim (or \"image\" if read from an attached image)." } } } },
     notes: { ...str, description: "Other things a member should know (free trial, kit rules, kids' ages, booking). Empty if none." },
   },
 };
 const SYSTEM = `You read a martial arts gym's public website and pull out the facts a gym-management app needs: name, contact details, weekly class timetable, coaches and membership prices.
 The gym's own coach will review your output before anything is saved, so accuracy matters more than completeness.
 - Use only what the pages say. Leave a field empty (or a list empty) rather than guessing.
+- Many gym sites have no timetable or prices on the page (only a "join" form, or "DM us"). Then return empty timetable and rates lists. Never fill in typical class times, class names or prices.
+- For every timetable row, rate and coach, put the exact words you took it from in "quote". Each one is checked against the page, and anything that can't be found there is thrown away.
 - Timetables are often grids with days as columns, or lists grouped under day headings. Produce one entry per class per day. Convert times to 24-hour HH:MM. If a time has no am/pm, use context (evening classes after work are pm).
 - Prices: copy the amount as a number and the period it covers. Use the currency the site shows; if the site shows "R" it is ZAR.
 - Ignore shop products, apparel and merchandise prices.
@@ -388,6 +390,40 @@ async function claudeRead(client, pages, logos, timetableImages) {
   const block = (msg.content || []).find((b) => b.type === "text");
   if (!block) throw new Error("No answer from Claude.");
   return JSON.parse(block.text);
+}
+
+/* ---------------- checking Claude's answer against the pages ---------------- */
+// Claude can produce a plausible timetable for a site that has none. Every timetable row, price and coach must be
+// traceable to the page text (its quote, or its time/price/name actually appearing there), or it is dropped.
+const normText = (s) => String(s || "").toLowerCase().replace(/[\u2013\u2014\u2212]/g, "-").replace(/[\u2018\u2019]/g, "'").replace(/[|•·]/g, " ").replace(/\s+/g, " ").trim();
+function timeForms(t) {
+  const m = String(t || "").match(/^(\d{1,2}):(\d{2})$/); if (!m) return [];
+  const h = Number(m[1]), mm = m[2], h12 = h % 12 || 12, ap = h < 12 ? "am" : "pm";
+  const out = [`${h}:${mm}`, `${String(h).padStart(2, "0")}:${mm}`, `${h}h${mm}`, `${String(h).padStart(2, "0")}h${mm}`, `${h}.${mm}`, `${h12}:${mm}${ap}`, `${h12}:${mm} ${ap}`, `${h12}.${mm}${ap}`, `${h12}.${mm} ${ap}`];
+  if (mm === "00") out.push(`${h12}${ap}`, `${h12} ${ap}`, `${h12}${ap[0]}`);
+  return out;
+}
+function priceForms(p) {
+  const n = Number(p); if (!(n > 0)) return [];
+  const whole = Math.round(n) === n, i = Math.floor(n), cents = Math.round((n - i) * 100);
+  const g = (sep) => String(i).replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+  const ints = [...new Set([String(i), g(","), g(" "), g(".")])];
+  return whole ? ints.flatMap((x) => [x, x + ".00", x + ",00", x + ",-"]) : ints.flatMap((x) => [x + "." + String(cents).padStart(2, "0"), x + "," + String(cents).padStart(2, "0")]);
+}
+function verifyAi(ai, pages, usedImages) {
+  const corpus = " " + normText(pages.map((p) => p.text + "\n" + p.title).join("\n")) + " ";
+  const has = (s) => { const n = normText(s); return n.length >= 3 && corpus.includes(n); };
+  const hasToken = (s) => new RegExp("(^|[^0-9a-z])" + normText(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(corpus);
+  const quoted = (it) => (it.quote && has(it.quote)) || (usedImages && /^image\b/i.test(String(it.quote || "").trim()));
+  const words = (s) => normText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !["class", "classes", "session", "training", "level", "levels"].includes(w));
+  const dropped = { timetable: 0, rates: 0, coaches: 0 };
+  const keep = (k, test) => { const before = (ai[k] || []).length; ai[k] = (ai[k] || []).filter(test); dropped[k] = before - ai[k].length; };
+  const inQuote = (it, forms) => { const q = " " + normText(it.quote) + " "; return forms.some((f) => new RegExp("(^|[^0-9a-z])" + normText(f).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(q)); };
+  const img = (it) => usedImages && /^image\b/i.test(String(it.quote || "").trim());
+  keep("timetable", (r) => img(r) || (quoted(r) && inQuote(r, timeForms(r.start))) || (timeForms(r.start).some(hasToken) && words(r.title).some((w) => hasToken(w))));
+  keep("rates", (r) => img(r) || (quoted(r) && inQuote(r, priceForms(r.price))) || priceForms(r.price).some(hasToken));
+  keep("coaches", (c) => has(c.name) || img(c) || (quoted(c) && inQuote(c, [c.name])));
+  return dropped;
 }
 
 /* ---------------- cleaning and merging ---------------- */
@@ -456,11 +492,13 @@ async function importSite(rawUrl, { client, maxPages = 8, log = () => {} } = {})
   const plain = cleanProfile(plainRead(pages));
   const logos = logoCandidates(pages);
   const ttImages = [...new Set(pages.flatMap((p) => p.imgs).filter((im) => /time-?table|schedule|class-?times|rooster|price|pricing/i.test(im.src + " " + im.alt)).map((im) => im.src))].slice(0, 2);
-  let profile = plain, method = "basic", aiError = null, logoChoice = -2;
+  let profile = plain, method = "basic", aiError = null, logoChoice = -2, dropped = null;
   const c = client === undefined ? getClient() : client;
   if (c) {
     try {
       const ai = await claudeRead(c, pages, logos, ttImages);
+      dropped = verifyAi(ai, pages, ttImages.length > 0);
+      if (dropped.timetable || dropped.rates || dropped.coaches) log(`import: dropped unverifiable items ${JSON.stringify(dropped)}`);
       logoChoice = Number.isInteger(ai.logo_choice) ? ai.logo_choice : -2;
       profile = cleanProfile(merge(cleanProfile({ ...ai, website: plain.website }), plain));
       method = "claude";
@@ -473,7 +511,7 @@ async function importSite(rawUrl, { client, maxPages = 8, log = () => {} } = {})
     if (previews.length >= 3) break;
     try { const img = await fetchImage(l.url, 300000); const d = img && img.body.toString("base64"); if (img && !previews.some((x) => x.dataUrl.endsWith(d))) previews.push({ url: l.url, why: l.why, dataUrl: `data:${img.type};base64,${img.body.toString("base64")}` }); } catch (e) { /* skip */ }
   }
-  return { profile, logos: previews, method, aiError, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
+  return { profile, logos: previews, method, aiError, dropped, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
 }
 
-module.exports = { importSite, fetchImage, cleanProfile, safeGet, checkUrl, privateIp, parsePage, plainRead, ImportError, DAYS, PERIODS, SCHEMA };
+module.exports = { verifyAi, timeForms, priceForms, importSite, fetchImage, cleanProfile, safeGet, checkUrl, privateIp, parsePage, plainRead, ImportError, DAYS, PERIODS, SCHEMA };

@@ -55,15 +55,23 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const fake = (out, extra = {}) => ({ beta: { messages: { create: async (params) => { sent = params; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } } });
     const ai = { name: "Fourways Grappling Club", tagline: "BJJ for everyone.", address: "", phone: "", email: "", logo_choice: 1,
       socials: { instagram: "", facebook: "", youtube: "https://www.youtube.com/@fgc", tiktok: "", whatsapp: "", x: "" },
-      timetable: [{ day: "Fri", start: "18:00", end: "19:00", title: "Competition class", coach: "Thabo", level: "Advanced" }, { day: "Funday", start: "1", end: "", title: "bad", coach: "", level: "" }],
-      coaches: [{ name: "Thabo Nkosi", rank: "Black belt", bio: "" }], rates: [{ name: "Adult unlimited", price: 850, currency: "ZAR", period: "month", note: "" }], notes: "First class free." };
+      timetable: [{ day: "Thu", start: "18:00", end: "19:30", title: "Gi Fundamentals", coach: "", level: "", quote: "Thursday | 6pm - 7:30pm | Gi Fundamentals" }, { day: "Funday", start: "1", end: "", title: "bad", coach: "", level: "", quote: "" },
+        { day: "Sun", start: "07:15", end: "08:00", title: "Sunrise flow", coach: "", level: "", quote: "Sunday 7:15 Sunrise flow" }, { day: "Fri", start: "05:30", end: "", title: "BJJ", coach: "", level: "", quote: "Pricing" }],
+      coaches: [{ name: "Thabo Nkosi", rank: "Black belt", bio: "", quote: "Thabo Nkosi" }, { name: "Rickson Example", rank: "Black belt", bio: "", quote: "Our coaches" }],
+      rates: [{ name: "Adult unlimited", price: 850, currency: "ZAR", period: "month", note: "", quote: "R 850 per month" }, { name: "Family", price: 1999, currency: "ZAR", period: "month", note: "", quote: "Membership" }], notes: "First class free." };
     const c = await im.importSite(site.url, { client: fake(ai) });
     ok(c.method === "claude", "with a client it uses the Claude read");
     ok(sent.model === "claude-opus-5-5" && sent.fallbacks === "default" && sent.betas.includes("server-side-fallback-2026-07-01"), "request uses the model with refusal fallbacks");
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.find((b) => b.type === "text").text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
-    ok(c.profile.timetable.length === 1 && c.profile.timetable[0].day === "Fri", "Claude's timetable replaces the plain one; invalid rows dropped");
+    ok(c.profile.timetable.length === 1 && c.profile.timetable[0].day === "Thu", "Claude's timetable replaces the plain one; invalid rows dropped");
+    ok(c.dropped.timetable === 3 && !c.profile.timetable.some((r) => /Sunrise|BJJ$/.test(r.title)), "class times that aren't on the site are thrown away (made-up quote, or a real quote without the time)");
+    ok(c.dropped.rates === 1 && c.profile.rates.length === 1 && c.dropped.coaches === 1 && c.profile.coaches.length === 1, "made-up prices and coaches are thrown away too");
+    ok(/Never fill in typical class times/.test(sent.system) && sent.output_config.format.schema.properties.timetable.items.required.includes("quote"), "Claude is asked to quote its source for each item");
+    // a site with no timetable at all (like a Squarespace page with only a join form)
+    const none = await im.importSite(site.url + "/contact", { client: fake({ ...ai, timetable: [{ day: "Mon", start: "16:15", end: "", title: "Kids Gi BJJ", coach: "", level: "Kids", quote: "Monday 16:15 Kids Gi BJJ" }], rates: [], coaches: [] }) });
+    ok(none.method === "claude" && none.dropped.timetable === 1, "an invented timetable for a site without one is dropped");
     ok(c.profile.phone && c.profile.socials.instagram && c.profile.socials.youtube && c.profile.notes === "First class free.", "blank Claude fields are filled from the plain read");
     ok(c.logos[0] && c.logos[0].url !== r.logos[0].url, "Claude's logo choice goes first");
     const refused = await im.importSite(site.url, { client: { beta: { messages: { create: async () => ({ stop_reason: "refusal", content: [] }) } } } });
