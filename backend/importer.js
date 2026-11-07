@@ -149,7 +149,8 @@ function pageScore(path, text, depth) {
   if (/\/(blog|news|posts?|events?|gallery|press|20\d\d)\//.test(path)) s -= 8;
   return s;
 }
-function normPage(u) { try { const x = new URL(u); x.hash = ""; if (/^(utm_|fbclid|gclid)/.test([...x.searchParams.keys()].join(" "))) x.search = ""; return x.origin + x.pathname.replace(/\/+$/, "") + x.search; } catch (e) { return null; } }
+// One page per path: "?itemId=…", "?page=2", tracking tags and the like are treated as the same page.
+function normPage(u) { try { const x = new URL(u); return x.origin + x.pathname.replace(/\/+$/, ""); } catch (e) { return null; } }
 // Budgets keep the whole import under Cloudflare's 100-second limit: crawl 20 s + Claude 55 s + logos 8 s.
 async function crawl(home, { maxPages = 30, maxDepth = 4, budgetMs = 20000, concurrency = 5 } = {}) {
   const t0 = Date.now(), origin = new URL(home.url).origin, pages = [home];

@@ -19,7 +19,7 @@ const PAGES = {
   "/contact": page("Contact | Fourways Grappling Club", `<h1>Contact</h1><p>Call or WhatsApp: 082 123 4567</p>`),
   "/shop": page("Shop", `<p>Rashguard R 450</p><a href="/shop/rashguard">Rashguard</a>`),
   "/shop/rashguard": page("Rashguard", `<p>Rashguard R 450</p>`),
-  "/the-academy": page("The Academy | Fourways Grappling Club", `<h1>The academy</h1><p>Founded in 2019.</p><img src="/img/fgc-schedule-2026.png" alt=""><a href="/the-academy/friday">Friday sessions</a>`),
+  "/the-academy": page("The Academy | Fourways Grappling Club", `<h1>The academy</h1><p>Founded in 2019.</p><img src="/img/fgc-schedule-2026.png" alt=""><a href="/the-academy/friday">Friday sessions</a><a href="/the-academy?itemId=a1">Photo 1</a><a href="/the-academy?itemId=a2">Photo 2</a>`),
   "/the-academy/friday": page("Friday | Fourways Grappling Club", `<h3>Friday</h3><p>12:00 - 13:00 Wrestling for BJJ</p>`),
   "/hidden": page("Weekend | Fourways Grappling Club", `<h3>Sunday</h3><p>10:00 - 11:30 Competition Training</p>`),
 };
