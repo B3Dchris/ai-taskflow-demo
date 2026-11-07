@@ -7,7 +7,7 @@ There are two versions, built from the same source:
 | Version | Where | What it has |
 |---|---|---|
 | **claude.ai** | `dist/jitsflow-claude.html`, published as a claude.ai Artifact | Everything below, plus saving to your Claude account, your own video clips and photos, and "Explain in more detail" answers from Claude |
-| **Website** | `web/`, deployed on Render from `render.yaml` (e.g. jitsflow.com) | Installs to your home screen, works offline at the gym, YouTube videos can play inside the app. Progress is saved on the device. |
+| **Website** | `web/` served by `server.js`, deployed on Render from `render.yaml` (e.g. jitsflow.com) | Installs to your home screen, works offline at the gym, YouTube videos can play inside the app. Progress is saved on the device. |
 
 ## What's inside
 
@@ -34,7 +34,8 @@ Needs Node and Playwright with Chromium.
 ```bash
 node tests/run.js local "iPhone 13"   # claude.ai version, saving on the device
 node tests/run.js db "iPhone SE"      # claude.ai version, simulated account saving, uploads and Claude answers
-node tests/web.js                     # website: install manifest, icons, service worker, offline
+node tests/web.js                     # website via server.js: headers, install, service worker, offline
+npm test                              # all of the above
 ```
 
 ## Deploy on Render (Blueprint)

@@ -1,0 +1,15 @@
+{
+  "name": "jitsflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JitsFlow: your no-gi game, mapped.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "python3 build.py",
+    "test": "node tests/web.js && node tests/run.js local \"iPhone 13\" && node tests/run.js db \"iPhone SE\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
