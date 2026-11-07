@@ -14,17 +14,18 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
   const ev = (p, f, a) => p.evaluate(f, a); const toast = (p) => ev(p, () => document.getElementById("toast").textContent);
   const wide = async (p, label) => ok(await ev(p, () => document.documentElement.scrollWidth <= 390), label + ": no sideways scroll");
   try {
-    // ---- coach starts a gym
+    // ---- coach finds sign-in from the landing page, then starts a gym
     const { p: co } = await phone();
-    await co.goto(URL + "/app/"); await co.waitForTimeout(700);
-    await co.tap('#sheetbar [data-a="back"]'); // skip setup
-    await co.tap('nav.tabs [data-v="settings"]');
-    ok(await ev(co, () => /Your account/i.test(document.body.innerText)), "settings offers an account");
-    await co.locator('[data-a="auth"][data-v="gym"]').first().tap();
+    await co.goto(URL + "/"); await co.waitForTimeout(400);
+    await co.locator('.toplinks .signin').tap(); await co.waitForTimeout(900);
+    ok(await ev(co, () => location.pathname === "/app/" && S.ui.sheet && S.ui.sheet.k === "auth" && S.ui.authMode === "login"), "landing 'Coach sign in' opens the sign-in sheet");
+    await co.tap('[data-a="authmode"][data-v="gym"]');
     await co.fill("#a-gym", "JPB Martial Arts Academy"); await co.fill("#a-name", "Coach JP"); await co.fill("#a-email", "coach@example.com"); await co.fill("#a-pass", "coachpass1");
     await co.tap('#sheetbar [type=submit]'); await co.waitForTimeout(900);
     ok(await ev(co, () => isCoach() && location.hash === "#coach" && !document.querySelector('nav.tabs [data-v="coach"]').hidden), "coach is signed in and sees the Coach tab");
     ok(await ev(co, () => /Coach/.test(document.querySelector(".sync.who").textContent)), "header shows who's signed in");
+    ok(await ev(co, () => { hideSheet(); go("today"); return !!document.querySelector(".sync.who") && !document.querySelector('[data-a="auth"][data-v="login"].who'); }), "signed-in header shows the name, not Sign in");
+    await co.tap('nav.tabs [data-v="coach"]');
     await co.tap('[data-a="coachview"][data-v="gym"]');
     const invite = await ev(co, () => document.querySelector(".codebox").textContent);
     ok(/\/app\/\?join=[A-Z0-9]{8}$/.test(invite), "gym tab shows the student invite link");

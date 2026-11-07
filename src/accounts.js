@@ -22,7 +22,10 @@ async function acctInit(){
   if(inClaude()||!/^https?:$/.test(location.protocol))return;
   try{const j=await api("GET","/me");API.on=true;API.me=j.me;if(API.me)await startSync()}
   catch(e){API.on=false}
-  const q=new URLSearchParams(location.search).get("join");
+  const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
+  if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
+    if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
+  const q=qs.get("join");
   if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
     else if(API.me&&!API.me.gym){S.ui.joinCode=q.toUpperCase()}}

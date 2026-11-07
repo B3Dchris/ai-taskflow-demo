@@ -3412,7 +3412,7 @@ function beltSVG(pct){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
-function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
+function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -3840,7 +3840,10 @@ async function acctInit(){
   if(inClaude()||!/^https?:$/.test(location.protocol))return;
   try{const j=await api("GET","/me");API.on=true;API.me=j.me;if(API.me)await startSync()}
   catch(e){API.on=false}
-  const q=new URLSearchParams(location.search).get("join");
+  const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
+  if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
+    if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
+  const q=qs.get("join");
   if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
     else if(API.me&&!API.me.gym){S.ui.joinCode=q.toUpperCase()}}

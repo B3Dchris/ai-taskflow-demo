@@ -92,6 +92,9 @@ p{margin:0}
 .partner b{color:#F4F6FB;font-size:16px}.partner small{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0D0}
 .partner img{height:46px;width:auto;border-radius:8px;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
 .partner:hover{border-color:rgba(255,255,255,.3)}
+.toplinks{display:flex;align-items:center;gap:16px}
+.toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
 /* stats strip */
 .strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
 .stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -161,7 +164,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
 <header class="wrap top">
   <a class="brand" href="/" aria-label="JitsFlow home"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
-  <a class="btn sm primary" href="/app/">Open the app</a>
+  <nav class="toplinks"><a class="signin" href="/app/?signin=1">Coach sign in</a><a class="btn sm primary" href="/app/">Open the app</a></nav>
 </header>
 
   <section class="wrap hero">
@@ -259,6 +262,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
     <div class="faq">
       <details><summary>Does it replace my coach?</summary><p>No. JitsFlow is for study between classes. Coaches teach details differently, so moves where that matters are flagged with "Check with your coach", and each belt has a coach review list to go through together.</p></details>
+      <details><summary>Where do coaches sign in?</summary><p>Tap <a href="/app/?signin=1">Coach sign in</a> at the top of this page. New coaches choose <a href="/app/?start=1">Start a gym</a>, then send students the invite link from the Coach tab's Gym page.</p></details>
       <details><summary>What does it cost?</summary><p>It's free to use, with no account needed.</p></details>
       <details><summary>Where's my data?</summary><p>On your phone. Nothing is uploaded. Settings › Backup copies everything so you can move it to another device.</p></details>
       <details><summary>Does it work at the gym with no signal?</summary><p>Yes. Once opened, JitsFlow works offline. Videos need a connection.</p></details>
