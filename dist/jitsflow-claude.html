@@ -352,8 +352,17 @@ textarea{min-height:76px;resize:vertical}
 .flowsvg .node.dest rect{fill:var(--blue-soft)}
 .flowsvg .node{cursor:pointer}
 .flowsvg .tier{font-family:var(--f-display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;fill:var(--ink-2);font-weight:700}
-.flowsvg .edge{fill:none;stroke:var(--blue);stroke-width:1.8;opacity:.8;stroke-dasharray:5 5}
-@media (prefers-reduced-motion: no-preference){.flowsvg .edge{animation:flowdash 1.1s linear infinite}@keyframes flowdash{to{stroke-dashoffset:-20}}}
+.flowsvg .kbar-bg{fill:var(--surface-2)!important;stroke:none!important}.flowsvg .kbar{fill:var(--good)!important;stroke:none!important}
+.flowsvg .node.sel .kbar-bg{fill:rgba(255,255,255,.3)!important}.flowsvg .node.sel .kbar{fill:var(--on-blue)!important}
+.flowsvg .dbadge{fill:var(--blue)!important;stroke:var(--surface)!important;stroke-width:2!important}.flowsvg .dbadgetx{fill:var(--on-blue)!important;font-size:10px!important;font-weight:700!important}
+.flowsvg .node.dest rect:first-child{stroke:var(--blue);stroke-width:2.2}
+.flowkey{display:flex;flex-wrap:wrap;gap:6px 14px}.flowkey span{display:inline-flex;align-items:center;gap:6px}
+.flowkey i{font-style:normal;display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;font-size:10px;font-weight:700}
+.k-dest{background:var(--blue);color:var(--on-blue)}.k-sub{background:var(--bad);color:#fff}.k-bar{width:22px;min-width:22px!important;height:4px!important;border-radius:2px!important;background:var(--good)}
+.routesteps{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:grid;gap:6px}
+.routesteps .rpos{font-weight:700;position:relative}.routesteps .rpos::before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--blue)}
+.routesteps .rmove{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding-left:10px}.routesteps .rmove::before{content:"↓";color:var(--ink-2);margin-left:-10px}
+
 .flowsvg .node.sel rect{filter:drop-shadow(0 0 6px rgba(91,140,255,.6))}
 .flowsvg .arrow{fill:var(--blue)}
 .flowsvg .badge{fill:var(--bad)} .flowsvg .badgetx{fill:var(--surface);font-family:var(--f-mono);font-size:9px;font-weight:500}
@@ -3555,37 +3564,51 @@ function learnGroups(){
     return `<details class="grp" data-g="${g.p}"${open?" open":""}><summary><span><b>${esc(POS[g.p].L)}</b><br><span class="small muted">${g.ts.length} technique${g.ts.length>1?"s":""} · ${solid} solid</span></span><span class="small muted mono">${solid}/${g.ts.length}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><p class="small muted" style="padding-bottom:6px">${gl((PD[g.p]||{}).d||"")}</p><div class="list">${g.ts.map(t=>tRow(t,`<span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)).join("")}</div><button class="linkbtn small" data-a="pos" data-v="${g.p}">Open in flow map ›</button></div></details>`}).join("")}</div>`:`<div class="empty">No techniques match${q?` “${esc(u.q.trim())}”`:""}. <button class="linkbtn" data-a="clearq">Clear search and filters</button></div>`}`;
 }
 
+function posKnown(p,max){const ts=fromPos(p,max);if(!ts.length)return null;return ts.reduce((x,t)=>x+Math.min(4,lv(t.id)),0)/(ts.length*4)}
 function flowSVG(sel){
-  const W=400,NW=92,NH=34,G=8,top=24,RH=64;const pos={};
+  const W=400,NW=92,NH=38,G=8,top=24,RH=66,mx=flowMax();const pos={};
   ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+ri*RH}})});
-  const outs=fromPos(sel,flowMax());const dests=[...new Set(outs.map(t=>t.t).filter(t=>t!=="sub"&&t!==sel))];
+  // Where the selected position leads: count the moves to each destination (no lines: they crossed the labels and said nothing).
+  const outs=fromPos(sel,mx),cnt={};outs.forEach(t=>{if(t.t!=="sub"&&t.t!==sel)cnt[t.t]=(cnt[t.t]||0)+1});
   const subs=outs.filter(t=>t.t==="sub").length;
-  let edges="";const s=pos[sel];
-  dests.forEach(d=>{const a={x:s.x+NW/2,y:s.y+NH/2},b={x:pos[d].x+NW/2,y:pos[d].y+NH/2};
-    const up=b.y<a.y,dy=Math.abs(b.y-a.y);
-    const sy=dy?(up?s.y:s.y+NH):a.y,ey=dy?(up?pos[d].y+NH:pos[d].y):b.y;
-    const sx=dy?a.x:(b.x>a.x?s.x+NW:s.x),ex=dy?b.x:(b.x>a.x?pos[d].x:pos[d].x+NW);
-    const cx=(sx+ex)/2+(dy?0:0),cy=dy?(sy+ey)/2:sy-26;
-    edges+=`<path class="edge" d="M${sx},${sy} Q${dy?(sx+ex)/2+((ex-sx)>0?-18:18):cx},${cy} ${ex},${ey}" marker-end="url(#ah)"/>`});
-  let labels=TIERS.map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
-  let nodes="";Object.entries(pos).forEach(([p,c])=>{const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(dests.includes(p))cls.push("dest");
-    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="6"/><text x="${c.x+NW/2}" y="${c.y+NH/2+4}" text-anchor="middle">${esc(POS[p].l)}</text>${p===sel&&subs?`<circle class="badge" cx="${c.x+NW-2}" cy="${c.y+2}" r="8"/><text class="badgetx" x="${c.x+NW-2}" y="${c.y+5}" text-anchor="middle">${subs}</text>`:""}</g>`});
-  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+5*RH+NH+8}" role="group" aria-label="Position map"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs>${labels}${edges}${nodes}</svg>`;
+  const labels=TIERS.map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
+  let nodes="";Object.entries(pos).forEach(([p,c])=>{const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(cnt[p])cls.push("dest");
+    const k=posKnown(p,mx),n=cnt[p];
+    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${n?`, ${n} move${n>1?"s":""} from ${esc(POS[sel].l)}`:""}${k!==null?`, you know ${Math.round(k*100)}% of its moves`:""}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="7"/>
+      <text x="${c.x+NW/2}" y="${c.y+NH/2+2}" text-anchor="middle">${esc(POS[p].l)}</text>
+      ${k!==null?`<rect class="kbar-bg" x="${c.x+8}" y="${c.y+NH-8}" width="${NW-16}" height="3" rx="1.5"/><rect class="kbar" x="${c.x+8}" y="${c.y+NH-8}" width="${Math.max(0,(NW-16)*k)}" height="3" rx="1.5"/>`:""}
+      ${n?`<circle class="dbadge" cx="${c.x+NW-3}" cy="${c.y+3}" r="9"/><text class="dbadgetx" x="${c.x+NW-3}" y="${c.y+6.5}" text-anchor="middle">${n}</text>`:""}
+      ${p===sel&&subs?`<circle class="badge" cx="${c.x+NW-3}" cy="${c.y+3}" r="9"/><text class="badgetx" x="${c.x+NW-3}" y="${c.y+6.5}" text-anchor="middle">${subs}</text>`:""}</g>`});
+  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+5*RH+NH+8}" role="group" aria-label="Position map">${labels}${nodes}</svg>`;
 }
+/* Shortest chain of techniques from one position to another (breadth-first over "from → to" moves). */
+function routeFind(from,to,max){if(from===to)return [];const prev={[from]:null},q=[from];
+  while(q.length){const p=q.shift();for(const t of fromPos(p,max)){if(t.t==="sub"||t.t===p||t.t in prev)continue;prev[t.t]=t;if(t.t===to){const path=[];let x=to;while(prev[x]){path.unshift(prev[x]);x=prev[x].f}return path}q.push(t.t)}}
+  return null}
+function routeBlock(sel){const mx=flowMax(),to=S.ui.routeTo&&POS[S.ui.routeTo]&&S.ui.routeTo!==sel?S.ui.routeTo:(sel==="back_top"?"mount_top":"back_top");
+  const r=routeFind(sel,to,mx),opts=k=>ROWS.flat().map(p=>`<option value="${p}"${p===k?" selected":""}>${esc(POS[p].l)}</option>`).join("");
+  return `<section class="panel stack route"><h2 class="label">Find a route</h2>
+    <div class="grid2"><label class="f">From<select id="rt-from" data-route="from">${opts(sel)}</select></label><label class="f">To<select id="rt-to" data-route="to">${opts(to)}</select></label></div>
+    ${r===null?`<p class="small muted">No route using moves up to ${esc((BELT[Object.keys(RANK).find(k=>RANK[k]===mx)]||{to:"your"}).to)} belt. Pick a higher belt in "Every move from here".</p>`
+     :`<ol class="routesteps"><li class="rpos">${esc(POS[sel].l)}</li>${r.map(t=>`<li class="rmove"><button class="linkbtn" data-a="open" data-v="${t.id}">${esc(t.n)}</button><span class="small muted">${esc(CATS[t.c])}</span></li><li class="rpos">${esc(POS[t.t].l)}</li>`).join("")}</ol>
+       <p class="small muted">${r.length} move${r.length===1?"":"s"}: the shortest chain in the curriculum${mx<4?` up to your filter`:""}. Tap a move to study it.</p>`}</section>`}
 function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),outs=fromPos(sel,mx),ins=intoPos(sel,mx);
   const groups={};outs.forEach(t=>{(groups[t.c]=groups[t.c]||[]).push(t)});
   const order=["escape","defense","sweep","guard","pass","takedown","entry","back","control","sub"];
   return `${header()}<div class="stack-lg">
-  <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions ranked from best (top) to worst (bottom). Tap a position to see where you can go from it. A red number counts its submissions.</p>
-  <div style="overflow-x:auto">${flowSVG(sel)}</div></section>
-  <section class="panel"><div class="twocol"><div class="stack">${(P().photos||{})[sel]?"":posImg(sel)?posImgFig(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):""):vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</div><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></div></section>
-  ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
-  ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
+  <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions from best (top) to worst (bottom). Tap one to see where it leads.</p>
+  <div style="overflow-x:auto">${flowSVG(sel)}</div>
+  <div class="flowkey small muted"><span><i class="k-dest">2</i>moves from ${esc(p.l.toLowerCase())} to there</span><span><i class="k-sub">3</i>submissions</span><span><i class="k-bar"></i>how much of a position's moves you know</span></div></section>
+  <section class="panel stack"><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${OPP[sel]?`<button class="btn" data-a="pos" data-v="${OPP[sel]}">See it from the other side: ${esc(POS[OPP[sel]].l)}</button>`:""}${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></section>
   <section class="stack"><div class="row between"><h2 class="label">Every move from here</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
   <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
   ${outs.length?order.filter(c=>groups[c]).map(c=>`<div class="stack"><div class="small muted"><b>${CATS[c]}</b></div><div class="list">${groups[c].map(t=>`<div class="row between" style="flex-wrap:nowrap;border-top:1px solid var(--line);padding-block:6px"><div style="flex:1;min-width:0">${tRow(t).replace('class="trow"','class="trow" style="border:0;padding-block:4px"')}</div>${t.t!=="sub"&&t.t!==sel?`<button class="posbtn" data-a="pos" data-v="${t.t}" aria-label="Go to ${esc(POS[t.t].L)}">→ ${esc(POS[t.t].l)}</button>`:""}</div>`).join("")}</div></div>`).join(""):`<div class="empty">No techniques start here yet.</div>`}
   </section>
+  ${routeBlock(sel)}
+  ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
+  ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
+  <section class="panel stack">${(P().photos||{})[sel]?"":posImg(sel)?posImgFig(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):""):vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</section>
   ${ins.length?`<section class="stack"><h2 class="label">Ways in</h2><div class="list">${ins.map(t=>tRow(t)).join("")}</div></section>`:""}
   <section class="stack"><h2 class="label">Starter game plans</h2><p class="small muted">Pick one A-game chain and run it every roll for a month. Being reliable at a few things gets people promoted.</p>
   ${PLANS.map(pl=>`<div class="panel"><div><h3>${esc(pl.n)}</h3><p class="small muted">${esc(pl.d)}</p></div><div class="chain">${pl.ids.map((id,i)=>`${i?'<span class="arr">→</span>':""}<button data-a="open" data-v="${id}">${esc(TM[id].n)}</button>`).join("")}</div></div>`).join("")}
@@ -3906,6 +3929,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.pick&&t.value){const f=S.ui.form,k=t.dataset.pick;if(!f[k].includes(t.value))f[k].push(t.value);logSheet(true);return}
   if(t.dataset.blk){const i=Number(t.value);P().settings.cycleStart=addDays(today(),-14*i);saveProgress();toast("Focus set to “"+curBlocks()[i].n+"”.");return}
   if(t.dataset.goal){setGoal(t.value);return}
+  if(t.dataset.route){if(t.dataset.route==="from"){S.ui.flowSel=t.value}else S.ui.routeTo=t.value;const y=window.scrollY;render();window.scrollTo(0,y);return}
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
   if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
   if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}

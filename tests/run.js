@@ -46,6 +46,16 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   const pos=await ev(()=>Object.keys(POS));
   for(const k of pos){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();const r=await ev(k=>({h3:document.querySelector('.panel h3')?.innerText,want:POS[k].L,d:document.querySelector('.panel')?.innerText.includes(PD[k].d),sel:!!document.querySelector(`.flowsvg g.node.sel[data-v="${k}"]`),yt:!!document.querySelector('.panel a.yt[href*="youtube.com/results"]')}),k);ok(r.yt,`position ${k} has a YouTube link`);ok(r.h3===r.want&&r.d&&r.sel,`flow node ${k}`)}
   await overflow('flow');
+  // --- flow map: destination badges, progress bars, route finder, other side
+  await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();
+  ok(await ev(()=>!document.querySelector('.flowsvg .edge')&&document.querySelectorAll('.flowsvg g.dest').length>0&&[...document.querySelectorAll('.flowsvg g.dest')].every(g=>Number(g.querySelector('.dbadgetx').textContent)===fromPos('hg_bot',flowMax()).filter(t=>t.t===g.dataset.v).length)),'flow map: no arrows; each place you can go shows how many moves lead there');
+  ok(await ev(()=>document.querySelectorAll('.flowsvg .kbar-bg').length>=18&&/how much of a position/.test(document.querySelector('.flowkey').innerText)),'flow map: a progress bar on every position, with a key');
+  ok(await ev(()=>Object.keys(POS).every(a=>Object.keys(POS).every(b=>{const r=routeFind(a,b,4);return r===null||(a===b?r.length===0:r.length>0&&r[0].f===a&&r[r.length-1].t===b&&r.every((t,i)=>i===0||r[i-1].t===t.f))}))),'every route found is a real chain of moves from start to finish');
+  await p.selectOption('#rt-to','back_top');
+  ok(await ev(()=>{const r=routeFind('hg_bot','back_top',flowMax());return r&&document.querySelectorAll('.routesteps .rmove').length===r.length&&document.querySelectorAll('.routesteps .rpos').length===r.length+1}),'route finder shows half guard to back control step by step');
+  await p.locator('.routesteps .rmove [data-a="open"]').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'tapping a route move opens it');await ev(()=>closeSheet());
+  await p.locator('.panel [data-a="pos"][data-v="hg_top"]').tap();ok(await ev(()=>S.ui.flowSel==='hg_top'),'"See it from the other side" flips to half guard top');
+  await overflow('flow route');
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
   await p.tap('nav.tabs [data-v="today"]');await p.tap('.panel.accent button[data-a="qr"]');
   const total=await ev(()=>S.ui.qr.q.length);const want=await ev(()=>rateable().length);ok(total===want&&total>54,`rate queue is ${total}, expected ${want}`);
