@@ -5,7 +5,7 @@ const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.erro
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
@@ -55,7 +55,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await st.tap('nav.tabs [data-v="today"]'); await st.waitForTimeout(600);
     ok(await ev(st, () => /Next class/i.test(document.body.innerText) && /No-gi: half guard/.test(document.querySelector(".nextclass").innerText) && document.querySelectorAll(".nextclass .trow").length === 2), "student sees the next class and the coach's plan");
     await st.locator('.nextclass [data-a="rsvp"]').tap(); await st.waitForTimeout(700);
-    ok(await ev(st, () => /You're going/.test(document.querySelector(".nextclass").innerText)), "student taps I'm going");
+    ok(await ev(st, () => /You're booked/.test(document.querySelector(".nextclass").innerText) && /You/.test(document.querySelector(".nextclass .who-line").innerText)), "student books from Today and shows up in the booked list");
     await wide(st, "student today");
     // student logs a session (goes to the server)
     await st.tap(".fab"); await st.selectOption("#f-tapped", "rnc"); await st.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();
@@ -136,6 +136,34 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.tap('[data-a="coachview"][data-v="gym"]'); await co.waitForTimeout(300);
     await co.fill("#inv-emails", "newkid@example.com, chris@example.com"); await co.tap("#inviteform [type=submit]"); await co.waitForTimeout(900);
     ok(/Sent 1 invite\. 1 already in your gym/.test(await toast(co)) && sink.mails.some((m) => m.to[0] === "newkid@example.com"), "coach invites students by email: " + (await toast(co)));
+    // ---- bookings, private lessons, memberships, insights
+    await co.tap('[data-a="coachview"][data-v="classes"]'); await co.tap('[data-a="privnew"]');
+    await co.fill("#pv-times", "18:30"); await co.fill("#pv-price", "450"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(900);
+    ok(await ev(co, () => [...document.querySelectorAll(".classcard.priv")].some((c) => /Open slot/.test(c.innerText) && /R\s?450/.test(c.innerText))), "coach adds a private lesson slot");
+    await st.evaluate(() => { API.classes = null; }); await st.tap('nav.tabs [data-v="book"]'); await st.waitForTimeout(900);
+    ok(await ev(st, () => !document.querySelector('nav.tabs [data-v="book"]').hidden && /No-gi: half guard/.test(document.getElementById("app").innerText) && !!document.querySelector(".bookcard.mine")), "student's Classes tab lists classes and marks their booking");
+    await wide(st, "student classes");
+    await st.tap('[data-a="bookview"][data-v="private"]'); await st.waitForTimeout(300);
+    await st.locator('.bookcard.priv [data-a="rsvp"]').first().tap(); await st.waitForTimeout(900);
+    ok(await ev(st, () => /Your private lessons/i.test(document.getElementById("app").innerText) && /You're booked/.test(document.querySelector(".bookcard.priv").innerText)), "student books the private lesson");
+    await co.evaluate(() => coachLoad("classes")); await co.waitForTimeout(700);
+    ok(await ev(co, () => [...document.querySelectorAll(".classcard.priv")].some((c) => /Booked by Chris/.test(c.innerText))), "coach sees who booked the private");
+    await co.tap('[data-a="coachview"][data-v="gym"]'); await co.tap('[data-a="planedit"][data-v="new"]');
+    await co.fill('#planform [name="name"]', "2x a week"); await co.fill('#planform [name="price"]', "650"); await co.fill('#planform [name="cpw"]', "2");
+    await co.tap('#planform [type=submit]'); await co.waitForTimeout(800);
+    ok(await ev(co, () => /2x a week/.test(document.getElementById("app").innerText) && /2\/week/.test(document.getElementById("app").innerText)), "coach adds a membership plan");
+    await co.tap('[data-a="coachview"][data-v="roster"]'); await co.locator('#roster-list [data-a="student"]').first().tap(); await co.waitForTimeout(700);
+    await co.selectOption("#s-plan", { label: "2x a week · R 650" }).catch(async () => { const v = await ev(co, () => [...document.querySelectorAll("#s-plan option")].find((o) => /2x a week/.test(o.textContent)).value); await co.selectOption("#s-plan", v); });
+    await co.fill("#s-fee", ""); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(800);
+    ok(await ev(co, () => /2x a week/.test(document.getElementById("roster-list").innerText)), "coach puts the student on the plan");
+    await st.evaluate(() => { API.mem = undefined; }); await st.tap('[data-a="bookview"][data-v="classes"]'); await st.waitForTimeout(900);
+    ok(await ev(st, () => /2x a week/.test(document.querySelector(".memcard").innerText) && /1\/2/.test(document.querySelector(".memcard").innerText)), "student sees their plan and bookings used this week");
+    await co.tap('[data-a="coachview"][data-v="insights"]'); await co.waitForTimeout(1200);
+    ok(await ev(co, () => !!document.querySelector(".chart svg .bar") && /Active members/i.test(document.getElementById("app").innerText) && document.querySelectorAll(".segpills button").length === 6 && /Chris/.test(document.getElementById("app").innerText)), "coach opens Insights: numbers, weekly chart, student groups");
+    await co.locator(".chart .bar").last().tap(); ok(/visits by/.test(await toast(co)), "tapping a bar reads out the week");
+    await wide(co, "insights");
+    await co.tap('[data-a="coachview"][data-v="classes"]'); await co.locator(".classcard").first().tap(); await co.waitForTimeout(700);
+    await co.tap('#sheetbar [data-a="back"]');
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
   await b.close(); srv.kill(); site.close(); sink.close();

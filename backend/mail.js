@@ -48,13 +48,13 @@ function layout(title, paras, button, preheader) {
   return { html, text };
 }
 
-async function send({ to, subject, title, paras, button, preheader }) {
+async function send({ to, subject, title, paras, button, preheader, replyTo }) {
   if (!mailOn()) return { sent: false, reason: "off" };
   const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ from: FROM(), to: [to], reply_to: REPLY_TO(), subject, html, text }),
+    body: JSON.stringify({ from: FROM(), to: [to], reply_to: replyTo || REPLY_TO(), subject, html, text }),
     signal: AbortSignal.timeout(10000),
   });
   if (!r.ok) { const body = await r.text().catch(() => ""); throw new Error(`Resend ${r.status}: ${body.slice(0, 200)}`); }
@@ -64,6 +64,15 @@ async function send({ to, subject, title, paras, button, preheader }) {
 const sendLater = (msg) => { send(msg).catch((e) => console.warn("mail:", e.message)); };
 
 const templates = {
+  offWaitlist: (name, gym, cls, when) => ({ subject: `You're in: ${cls}`, title: "A spot opened up",
+    paras: [`Hi ${name},`, `Someone cancelled, so you've moved off the waitlist and you're booked for ${cls} at ${gym}: ${when}.`, "Can't make it any more? Cancel in the app so the next person gets the spot."],
+    button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
+  cancelled: (name, gym, cls, when) => ({ subject: `Cancelled: ${cls}`, title: "Class cancelled",
+    paras: [`Hi ${name},`, `${gym} has cancelled ${cls} on ${when}. Your booking has been removed.`, "Have a look for another class to book."],
+    button: { label: "Book another class", url: appUrl() + "/app/#book" } }),
+  message: (name, coach, gym, subject, text) => ({ subject, title: subject,
+    paras: [`Hi ${name},`, ...String(text).split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean), `${coach}, ${gym}`],
+    preheader: String(text).slice(0, 120), button: { label: "Open JitsFlow", url: appUrl() + "/app/#book" } }),
   reset: (name, url) => ({ subject: "Reset your JitsFlow password", title: "Reset your password",
     paras: [`Hi ${name},`, "Someone asked to reset the password for your JitsFlow account. If it was you, tap the button. The link works once and expires in 1 hour.", "If it wasn't you, ignore this email. Your password stays the same."],
     button: { label: "Choose a new password", url } }),

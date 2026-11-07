@@ -56,7 +56,7 @@ function makeApi(pool, { secureCookies }) {
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
     if (tok && tok.length === 64) {
-      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v
+      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees
         from sessions s join users u on u.id=s.user_id left join gyms g on g.id=u.gym_id
         where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
       if (r.rows[0]) {
@@ -69,6 +69,7 @@ function makeApi(pool, { secureCookies }) {
   const needUser = (req) => { if (!req.user) fail(401, "Sign in to continue."); return req.user; };
   const needCoach = (req) => { const u = needUser(req); if (u.role !== "coach" || !u.gym_id) fail(403, "Only coaches can do that."); return u; };
 
+  async function validTz(tz) { tz = clean(tz, 64); if (!tz) return null; try { await q("select now() at time zone $1", [tz]); return tz; } catch (e) { return null; } }
   async function startSession(res, userId) {
     const tok = crypto.randomBytes(32).toString("hex");
     await q("insert into sessions(token_hash,user_id,expires_at) values($1,$2,now()+($3||' days')::interval)", [sha(tok), userId, String(SESSION_DAYS)]);
@@ -77,6 +78,7 @@ function makeApi(pool, { secureCookies }) {
   function me(u) {
     const out = { id: String(u.id), name: u.name, email: u.email, role: u.role, belt: u.belt, stripes: u.stripes };
     if (u.gym_id) out.gym = { id: String(u.gym_id), name: u.gym_name, currency: u.currency, logo: u.logo_v ? `/api/gyms/${u.gym_id}/logo?v=${u.logo_v}` : null };
+    if (u.gym_id) Object.assign(out.gym, { timezone: u.timezone || "Africa/Johannesburg", showAttendees: u.show_attendees !== false });
     if (u.role === "coach" && u.gym_id) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, monthlyFeeCents: u.gym_fee });
     return out;
   }
@@ -99,7 +101,7 @@ function makeApi(pool, { secureCookies }) {
       throw e;
     }
   }
-  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v
+  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees
       from users u left join gyms g on g.id=u.gym_id where u.id=$1`, [id])).rows[0];
 
   // ---------- accounts ----------
@@ -108,7 +110,7 @@ function makeApi(pool, { secureCookies }) {
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     const gymName = clean(b.gym, 100);
     if (!gymName) fail(400, "Enter your gym's name.");
-    const g = await q("insert into gyms(name,student_code,coach_code) values($1,$2,$3) returning id", [gymName, code(), code()]);
+    const g = await q("insert into gyms(name,student_code,coach_code,timezone) values($1,$2,$3,$4) returning id", [gymName, code(), code(), (await validTz(b.timezone)) || "Africa/Johannesburg"]);
     let id;
     try { id = await newUser({ ...b, role: "coach", gymId: g.rows[0].id }); }
     catch (e) { await q("delete from gyms where id=$1", [g.rows[0].id]); throw e; }
@@ -249,9 +251,14 @@ function makeApi(pool, { secureCookies }) {
     res.json({ ok: true });
   }));
 
-  // ---------- classes ----------
+  // ---------- classes and bookings ----------
+  // attendance rows: going = booked, waitlisted = on the waitlist, attended = checked in (by the student or a coach).
+  const tzOf = (u) => u.timezone || "Africa/Johannesburg";
+  const shortName = (n) => { const p = String(n || "").trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0].toUpperCase()}.` : p[0] || "Member"; };
   const classOut = (c, coach) => ({ id: String(c.id), title: c.title, startsAt: c.starts_at, durationMin: c.duration_min, shared: c.shared,
-    plan: coach || c.shared ? c.plan : null, going: Number(c.going || 0), myGoing: !!c.my_going, myAttended: !!c.my_attended });
+    kind: c.kind || "class", capacity: c.capacity ?? null, priceCents: c.price_cents ?? null, coach: c.coach || "", level: c.level || "",
+    plan: coach || c.shared ? c.plan : null, going: Number(c.going || 0), waiting: Number(c.waiting || 0),
+    myGoing: !!c.my_going, myWaitlisted: !!c.my_waitlisted, myAttended: !!c.my_attended, myPosition: c.my_position ? Number(c.my_position) : null });
 
   api.get("/classes", wrap(async (req, res) => {
     const u = needUser(req);
@@ -259,26 +266,46 @@ function makeApi(pool, { secureCookies }) {
     const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 864e5);
     const to = req.query.to ? new Date(req.query.to) : new Date(Date.now() + 60 * 864e5);
     if (isNaN(from) || isNaN(to)) fail(400, "Bad date range.");
+    const coach = u.role === "coach";
     const r = await q(`select c.*, (select count(*) from attendance a where a.class_id=c.id and a.going) as going,
-        (select going from attendance a where a.class_id=c.id and a.user_id=$2) as my_going,
-        (select attended from attendance a where a.class_id=c.id and a.user_id=$2) as my_attended
-      from classes c where c.gym_id=$1 and c.starts_at between $3 and $4 order by c.starts_at limit 200`, [u.gym_id, u.id, from, to]);
-    res.json({ classes: r.rows.map((c) => classOut(c, u.role === "coach")) });
+        (select count(*) from attendance a where a.class_id=c.id and a.waitlisted) as waiting,
+        m.going as my_going, m.waitlisted as my_waitlisted, m.attended as my_attended,
+        case when m.waitlisted then (select count(*) from attendance w where w.class_id=c.id and w.waitlisted and w.booked_at <= m.booked_at) end as my_position
+      from classes c left join attendance m on m.class_id=c.id and m.user_id=$2
+      where c.gym_id=$1 and c.starts_at between $3 and $4
+        and ($5 or c.kind <> 'private' or coalesce(m.going,false) or not exists (select 1 from attendance o where o.class_id=c.id and o.going))
+      order by c.starts_at limit 300`, [u.gym_id, u.id, from, to, coach]);
+    const out = r.rows.map((c) => classOut(c, coach));
+    // Who's booked: coaches see everyone; students see group classes only, first name + initial, if the gym allows it.
+    const ids = r.rows.filter((c) => coach || (c.kind !== "private" && u.show_attendees !== false)).map((c) => c.id);
+    if (ids.length) {
+      const a = await q(`select a.class_id, u.id, u.name, u.belt, u.stripes from attendance a join users u on u.id=a.user_id
+        where a.class_id = any($1) and a.going order by a.booked_at`, [ids]);
+      const by = {};
+      for (const x of a.rows) (by[x.class_id] = by[x.class_id] || []).push({ id: String(x.id), name: coach ? x.name : shortName(x.name), belt: x.belt, stripes: x.stripes, me: String(x.id) === String(u.id) });
+      out.forEach((c) => { if (ids.includes(Number(c.id)) || ids.includes(c.id)) c.attendees = by[c.id] || []; });
+    }
+    res.json({ classes: out, showAttendees: u.show_attendees !== false });
   }));
 
   function readClass(b) {
-    const title = clean(b.title, 120) || "Class";
+    const kind = b.kind === "private" ? "private" : "class";
+    const title = clean(b.title, 120) || (kind === "private" ? "Private lesson" : "Class");
     const startsAt = new Date(b.startsAt);
     if (isNaN(startsAt)) fail(400, "Pick a date and time for the class.");
     const durationMin = Math.min(600, Math.max(15, intOr(b.durationMin, 60)));
     const plan = b.plan && typeof b.plan === "object" ? b.plan : {};
     const p = { focus: clean(plan.focus, 120), notes: clean(plan.notes, 4000), ids: Array.isArray(plan.ids) ? plan.ids.map((x) => clean(x, 64)).filter(Boolean).slice(0, 30) : [] };
-    return { title, startsAt, durationMin, plan: p, shared: b.shared !== false };
+    let capacity = b.capacity === null || b.capacity === undefined || b.capacity === "" ? null : Math.min(500, Math.max(1, intOr(b.capacity, 0)));
+    if (kind === "private") capacity = Math.min(capacity || 1, 6);
+    const priceCents = b.priceCents === null || b.priceCents === undefined || b.priceCents === "" ? null : Math.max(0, intOr(b.priceCents, 0));
+    return { title, startsAt, durationMin, plan: p, shared: b.shared !== false, kind, capacity, priceCents, coach: clean(b.coach, 60), level: clean(b.level, 40) };
   }
+  const CLASS_COLS = "gym_id,title,starts_at,duration_min,plan,shared,created_by,kind,capacity,price_cents,coach,level";
+  const classVals = (u, c) => [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id, c.kind, c.capacity, c.priceCents, c.coach, c.level];
   api.post("/classes", wrap(async (req, res) => {
     const u = needCoach(req), c = readClass(req.body || {});
-    const r = await q("insert into classes(gym_id,title,starts_at,duration_min,plan,shared,created_by) values($1,$2,$3,$4,$5,$6,$7) returning *",
-      [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id]);
+    const r = await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`, classVals(u, c));
     res.status(201).json({ class: classOut(r.rows[0], true) });
   }));
   async function ownClass(u, id) {
@@ -289,23 +316,86 @@ function makeApi(pool, { secureCookies }) {
   api.put("/classes/:id", wrap(async (req, res) => {
     const u = needCoach(req); await ownClass(u, req.params.id);
     const c = readClass(req.body || {});
-    const r = await q("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5 where id=$6 returning *",
-      [c.title, c.startsAt, c.durationMin, c.plan, c.shared, intOr(req.params.id, 0)]);
+    const r = await q("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10 where id=$11 returning *",
+      [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, intOr(req.params.id, 0)]);
     res.json({ class: classOut(r.rows[0], true) });
   }));
+  const whenText = (d, tz) => { try { return new Date(d).toLocaleString("en-ZA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); } catch (e) { return new Date(d).toISOString(); } };
   api.delete("/classes/:id", wrap(async (req, res) => {
-    const u = needCoach(req); await ownClass(u, req.params.id);
-    await q("delete from classes where id=$1", [intOr(req.params.id, 0)]);
-    res.json({ ok: true });
+    const u = needCoach(req), c = await ownClass(u, req.params.id);
+    const booked = await q("select u.email, u.name from attendance a join users u on u.id=a.user_id where a.class_id=$1 and (a.going or a.waitlisted)", [c.id]);
+    await q("delete from classes where id=$1", [c.id]);
+    if (new Date(c.starts_at) > new Date() && req.body?.notify !== false)
+      for (const b of booked.rows) mail.sendLater({ to: b.email, ...mail.templates.cancelled(b.name, u.gym_name, c.title, whenText(c.starts_at, tzOf(u))) });
+    res.json({ ok: true, notified: new Date(c.starts_at) > new Date() ? booked.rows.length : 0 });
   }));
+
+  // Book or cancel. Runs in a transaction with the class row locked, so two people can't take the last spot.
   api.put("/classes/:id/rsvp", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id) fail(403, "Join a gym first.");
-    const c = await q("select id from classes where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
-    if (!c.rows[0]) fail(404, "That class doesn't exist.");
-    const going = req.body?.going !== false;
-    await q(`insert into attendance(class_id,user_id,going) values($1,$2,$3)
-             on conflict(class_id,user_id) do update set going=excluded.going, updated_at=now()`, [c.rows[0].id, u.id, going]);
-    res.json({ ok: true, going });
+    const want = req.body?.going !== false;
+    const db = await pool.connect(); let promoted = null, out;
+    try {
+      await db.query("begin");
+      const c = (await db.query("select * from classes where id=$1 and gym_id=$2 for update", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+      if (!c) fail(404, "That class doesn't exist.");
+      if (new Date(c.starts_at).getTime() + c.duration_min * 6e4 < Date.now()) fail(400, "That class has already finished.");
+      const mine = (await db.query("select * from attendance where class_id=$1 and user_id=$2", [c.id, u.id])).rows[0];
+      const booked = Number((await db.query("select count(*) from attendance where class_id=$1 and going and user_id<>$2", [c.id, u.id])).rows[0].count);
+      if (want) {
+        if (mine && (mine.going || mine.waitlisted)) out = { going: !!mine.going, waitlisted: !!mine.waitlisted };
+        else {
+          if (u.role === "student" && u.plan_id) {
+            const p = (await db.query("select * from plans where id=$1", [u.plan_id])).rows[0];
+            if (u.plan_status === "paused" || u.plan_status === "cancelled") fail(403, `Your membership is ${u.plan_status}. Talk to your coach to book classes.`);
+            if (p && p.classes_per_week && c.kind !== "private") {
+              const n = Number((await db.query(`select count(*) from attendance a join classes k on k.id=a.class_id where a.user_id=$1 and a.going and k.kind<>'private' and k.id<>$2
+                and date_trunc('week', k.starts_at at time zone $4) = date_trunc('week', $3::timestamptz at time zone $4)`, [u.id, c.id, c.starts_at, tzOf(u)])).rows[0].count);
+              if (n >= p.classes_per_week) fail(403, `Your ${p.name} plan includes ${p.classes_per_week} class${p.classes_per_week > 1 ? "es" : ""} a week, and you've booked ${n} that week. Cancel one or ask your coach about upgrading.`);
+            }
+          }
+          const full = c.capacity && booked >= c.capacity;
+          if (full && c.kind === "private") fail(409, "Someone just booked that slot. Pick another time.");
+          await db.query(`insert into attendance(class_id,user_id,going,waitlisted,booked_at) values($1,$2,$3,$4,now())
+            on conflict(class_id,user_id) do update set going=excluded.going, waitlisted=excluded.waitlisted, booked_at=now(), updated_at=now()`, [c.id, u.id, !full, !!full]);
+          out = { going: !full, waitlisted: !!full };
+        }
+      } else {
+        await db.query("update attendance set going=false, waitlisted=false, updated_at=now() where class_id=$1 and user_id=$2", [c.id, u.id]);
+        out = { going: false, waitlisted: false };
+        // A spot opened: give it to the first person waiting.
+        if (mine && mine.going && c.capacity && booked < c.capacity && new Date(c.starts_at) > new Date()) {
+          const w = (await db.query(`update attendance set going=true, waitlisted=false, booked_at=now(), updated_at=now()
+            where class_id=$1 and user_id=(select user_id from attendance where class_id=$1 and waitlisted order by booked_at limit 1) returning user_id`, [c.id])).rows[0];
+          if (w) promoted = { userId: w.user_id, c };
+        }
+      }
+      if (out.waitlisted) out.position = Number((await db.query("select count(*) from attendance where class_id=$1 and waitlisted and booked_at <= (select booked_at from attendance where class_id=$1 and user_id=$2)", [c.id, u.id])).rows[0].count);
+      await db.query("commit");
+    } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
+    if (promoted) {
+      const p = (await q("select email, name from users where id=$1", [promoted.userId])).rows[0];
+      if (p) mail.sendLater({ to: p.email, ...mail.templates.offWaitlist(p.name, u.gym_name, promoted.c.title, whenText(promoted.c.starts_at, tzOf(u))) });
+    }
+    res.json({ ok: true, ...out });
+  }));
+  // Students check themselves in from 45 minutes before a class until it ends.
+  api.post("/classes/:id/checkin", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) fail(403, "Join a gym first.");
+    const c = (await q("select * from classes where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+    if (!c) fail(404, "That class doesn't exist.");
+    const start = new Date(c.starts_at).getTime(), now = Date.now();
+    if (now < start - 45 * 6e4) fail(400, "Check-in opens 45 minutes before the class.");
+    if (now > start + c.duration_min * 6e4) fail(400, "That class has finished.");
+    const mine = (await q("select going from attendance where class_id=$1 and user_id=$2", [c.id, u.id])).rows[0];
+    if (!mine || !mine.going) {
+      const booked = Number((await q("select count(*) from attendance where class_id=$1 and going", [c.id])).rows[0].count);
+      if (c.capacity && booked >= c.capacity) fail(409, "This class is full. Ask your coach at the mat.");
+      if (c.kind === "private") fail(403, "That private lesson is booked for someone else.");
+    }
+    await q(`insert into attendance(class_id,user_id,going,attended,checked_in_at) values($1,$2,true,true,now())
+             on conflict(class_id,user_id) do update set going=true, waitlisted=false, attended=true, checked_in_at=now(), updated_at=now()`, [c.id, u.id]);
+    res.json({ ok: true });
   }));
 
   // ---------- coach: class detail, roster, students ----------
@@ -328,34 +418,91 @@ function makeApi(pool, { secureCookies }) {
   }
   const person = (u, s) => ({ id: String(u.id), name: u.name, belt: u.belt, stripes: u.stripes, ...s });
 
+  // Attendance analysis. A visit = a check-in, or a booking for a class where nobody was checked in
+  // (so gyms that never take attendance still get numbers).
+  const DAY = 864e5;
+  async function visitStats(gymId, tz) {
+    const cls = (await q(`select c.id, c.title, c.kind, c.capacity, c.starts_at,
+        extract(isodow from c.starts_at at time zone $2)::int as dow, to_char(c.starts_at at time zone $2,'HH24:MI') as hm,
+        to_char(date_trunc('week', c.starts_at at time zone $2),'YYYY-MM-DD') as wk,
+        (select count(*) from attendance a where a.class_id=c.id and a.attended)::int as checked,
+        (select count(*) from attendance a where a.class_id=c.id and a.going)::int as booked,
+        (select count(*) from attendance a where a.class_id=c.id and a.waitlisted)::int as waiting
+      from classes c where c.gym_id=$1 and c.starts_at > now() - interval '180 days' and c.starts_at + (c.duration_min || ' minutes')::interval < now()`, [gymId, tz])).rows;
+    const byId = Object.fromEntries(cls.map((c) => [c.id, c]));
+    const att = (await q(`select a.user_id, a.class_id, a.attended, a.going from attendance a join classes c on c.id=a.class_id
+      where c.gym_id=$1 and c.starts_at > now() - interval '180 days' and c.starts_at + (c.duration_min || ' minutes')::interval < now() and (a.attended or a.going)`, [gymId])).rows;
+    const visits = {};
+    for (const a of att) { const c = byId[a.class_id]; if (!c) continue; if (a.attended || (a.going && c.checked === 0)) (visits[a.user_id] = visits[a.user_id] || []).push({ at: new Date(c.starts_at).getTime(), wk: c.wk, kind: c.kind, classId: c.id }); }
+    for (const c of cls) c.count = c.checked || c.booked;
+    return { cls, visits };
+  }
+  function studentStats(u, vs, now = Date.now()) {
+    const v = (vs || []).slice().sort((a, b) => a.at - b.at);
+    const d28 = v.filter((x) => x.at > now - 28 * DAY).length, p28 = v.filter((x) => x.at <= now - 28 * DAY && x.at > now - 56 * DAY).length;
+    const last = v.length ? v[v.length - 1].at : null;
+    const since = new Date(u.rank_changed_at || u.created_at).getTime();
+    // weeks in a row with at least one visit, counting back from this week (or last week if none yet this week)
+    const weeks = new Set(v.map((x) => x.wk)); let streak = 0;
+    const wkKey = (t) => { const d = new Date(t); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
+    let t = now; if (!weeks.has(wkKey(t))) t -= 7 * DAY;
+    while (weeks.has(wkKey(t)) && streak < 104) { streak++; t -= 7 * DAY; }
+    const joinedDays = (now - new Date(u.created_at).getTime()) / DAY, daysSince = last ? (now - last) / DAY : null;
+    let segment;
+    if (joinedDays < 30) segment = "new";
+    else if (d28 >= 6) segment = "regular";
+    else if ((d28 === 0 && p28 >= 2) || (p28 >= 4 && d28 <= p28 / 2)) segment = "at_risk";
+    else if (!last || daysSince > 60) segment = "inactive";
+    else if (d28 === 0) segment = "at_risk";
+    else segment = "occasional";
+    return { d28, p28, perWeek: Math.round((d28 / 4) * 10) / 10, last: last ? new Date(last).toISOString() : null, daysSince: daysSince === null ? null : Math.floor(daysSince),
+      streak, total180: v.length, privates180: v.filter((x) => x.kind === "private").length, sinceRank: v.filter((x) => x.at > since).length, segment };
+  }
+  const monthly = (p) => !p ? null : p.period === "month" ? p.price_cents : p.period === "week" ? Math.round(p.price_cents * 52 / 12) : p.period === "year" ? Math.round(p.price_cents / 12) : p.period === "term" ? Math.round(p.price_cents / 3) : 0;
+  async function plansOf(gymId) { return (await q("select * from plans where gym_id=$1 order by active desc, price_cents", [gymId])).rows; }
+  const planOut = (p) => ({ id: String(p.id), name: p.name, priceCents: p.price_cents, period: p.period, classesPerWeek: p.classes_per_week, active: p.active, monthlyCents: monthly(p) });
+
   api.get("/coach/classes/:id", wrap(async (req, res) => {
     const u = needCoach(req), c = await ownClass(u, req.params.id);
-    const r = await q(`select u.id,u.name,u.belt,u.stripes,a.going,a.attended from attendance a join users u on u.id=a.user_id
-      where a.class_id=$1 and (a.going or a.attended) order by u.name`, [c.id]);
+    const r = await q(`select u.id,u.name,u.belt,u.stripes,a.going,a.attended,a.waitlisted,a.booked_at,a.checked_in_at from attendance a join users u on u.id=a.user_id
+      where a.class_id=$1 and (a.going or a.attended or a.waitlisted) order by a.waitlisted, a.booked_at, u.name`, [c.id]);
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
-    res.json({ class: classOut({ ...c, going: r.rows.filter((x) => x.going).length }, true),
-      attendees: r.rows.map((x) => ({ ...person(x, s[x.id]), going: x.going, attended: x.attended })) });
+    const att = r.rows.filter((x) => !x.waitlisted);
+    res.json({ class: classOut({ ...c, going: att.filter((x) => x.going).length, waiting: r.rows.length - att.length }, true),
+      attendees: att.map((x) => ({ ...person(x, s[x.id]), going: x.going, attended: x.attended, bookedAt: x.booked_at, checkedInAt: x.checked_in_at, self: !!x.checked_in_at })),
+      waitlist: r.rows.filter((x) => x.waitlisted).map((x) => ({ ...person(x, {}), bookedAt: x.booked_at })) });
   }));
   api.put("/coach/classes/:id/attendance", wrap(async (req, res) => {
     const u = needCoach(req), c = await ownClass(u, req.params.id);
-    const sid = intOr(req.body?.userId, 0);
-    const st = await q("select id from users where id=$1 and gym_id=$2", [sid, u.gym_id]);
-    if (!st.rows[0]) fail(404, "That student isn't in your gym.");
-    await q(`insert into attendance(class_id,user_id,going,attended) values($1,$2,true,$3)
-             on conflict(class_id,user_id) do update set attended=excluded.attended, updated_at=now()`, [c.id, sid, req.body?.attended !== false]);
-    res.json({ ok: true });
+    const ids = (Array.isArray(req.body?.userIds) ? req.body.userIds : [req.body?.userId]).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 300);
+    const st = await q("select id from users where id = any($1) and gym_id=$2", [ids, u.gym_id]);
+    if (st.rows.length !== ids.length || !ids.length) fail(404, "That student isn't in your gym.");
+    for (const sid of ids) await q(`insert into attendance(class_id,user_id,going,attended) values($1,$2,true,$3)
+             on conflict(class_id,user_id) do update set attended=excluded.attended, going=attendance.going or excluded.attended, waitlisted=false, updated_at=now()`, [c.id, sid, req.body?.attended !== false]);
+    res.json({ ok: true, count: ids.length });
   }));
 
-  api.get("/coach/roster", wrap(async (req, res) => {
-    const u = needCoach(req);
-    const r = await q("select id,name,email,role,belt,stripes,active,monthly_fee_cents,notes,created_at from users where gym_id=$1 order by role, name", [u.gym_id]);
+  async function rosterRows(u) {
+    const r = await q(`select u.id,u.name,u.email,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
+      from users u where u.gym_id=$1 order by u.role, u.name`, [u.gym_id]);
+    const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
-    const pay = await q(`select user_id, sum(amount_cents) as month_cents, max(paid_on) as last_paid from payments
-      where gym_id=$1 and user_id is not null and paid_on >= date_trunc('month', current_date) group by user_id`, [u.gym_id]);
-    const pm = Object.fromEntries(pay.rows.map((x) => [x.user_id, x]));
-    res.json({ gymFeeCents: u.gym_fee, currency: u.currency, people: r.rows.map((x) => ({ ...person(x, s[x.id]), email: x.email, role: x.role, active: x.active,
-      feeCents: x.monthly_fee_cents ?? u.gym_fee, notes: x.notes, joined: x.created_at,
-      paidThisMonthCents: Number(pm[x.id]?.month_cents || 0), lastPaid: pm[x.id]?.last_paid || null })) });
+    const { visits } = await visitStats(u.gym_id, tzOf(u));
+    const pay = await q(`select user_id, sum(amount_cents) filter (where paid_on >= date_trunc('month', current_date)) as month_cents, max(paid_on) as last_paid from payments
+      where gym_id=$1 and user_id is not null group by user_id`, [u.gym_id]);
+    const paid = Object.fromEntries(pay.rows.map((x) => [x.user_id, x]));
+    return { plans, rows: r.rows.map((x) => {
+      const plan = pm[String(x.plan_id)] || null;
+      const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
+      return { ...person(x, s[x.id]), email: x.email, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
+        feeCents: fee || 0, planId: plan ? String(plan.id) : null, planName: plan ? plan.name : null, planStatus: x.plan_status, planStarted: x.plan_started,
+        paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
+        visits: x.role === "student" ? studentStats(x, visits[x.id]) : null };
+    }) };
+  }
+  api.get("/coach/roster", wrap(async (req, res) => {
+    const u = needCoach(req), { plans, rows } = await rosterRows(u);
+    res.json({ gymFeeCents: u.gym_fee, currency: u.currency, plans: plans.map(planOut), people: rows });
   }));
 
   async function ownStudent(u, id) {
@@ -368,9 +515,17 @@ function makeApi(pool, { secureCookies }) {
     const s = (await summaries(u.gym_id, [st.id]))[st.id];
     const logs = await q("select id,data from training_logs where user_id=$1 order by date desc nulls last limit 30", [st.id]);
     const pays = await q("select * from payments where user_id=$1 and gym_id=$2 order by paid_on desc limit 24", [st.id, u.gym_id]);
-    res.json({ student: { ...person(st, s), email: st.email, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? u.gym_fee, notes: st.notes },
+    const { visits } = await visitStats(u.gym_id, tzOf(u));
+    const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
+      where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
+    const plan = st.plan_id ? (await q("select * from plans where id=$1", [st.plan_id])).rows[0] : null;
+    res.json({ student: { ...person(st, s), email: st.email, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
+        notes: st.notes, joined: st.created_at, planId: st.plan_id ? String(st.plan_id) : null, planStatus: st.plan_status, planStarted: st.plan_started, rankChangedAt: st.rank_changed_at,
+        visits: studentStats(st, visits[st.id]) },
+      classes: recent.rows.map((x) => ({ title: x.title, startsAt: x.starts_at, kind: x.kind, attended: x.attended })),
       logs: logs.rows.map((x) => ({ ...x.data, id: x.id })), payments: pays.rows.map(payOut) });
   }));
+  const PLAN_STATUS = ["active", "trial", "paused", "cancelled"];
   api.patch("/coach/students/:id", wrap(async (req, res) => {
     const u = needCoach(req), st = await ownStudent(u, req.params.id), b = req.body || {};
     const belt = b.belt !== undefined ? (BELTS.includes(b.belt) ? b.belt : fail(400, "Pick a belt.")) : st.belt;
@@ -378,8 +533,123 @@ function makeApi(pool, { secureCookies }) {
     const notes = b.notes !== undefined ? clean(b.notes, 4000) : st.notes;
     const fee = b.feeCents !== undefined ? (b.feeCents === null ? null : Math.max(0, intOr(b.feeCents, 0))) : st.monthly_fee_cents;
     const active = b.active !== undefined ? !!b.active : st.active;
-    await q("update users set belt=$1,stripes=$2,notes=$3,monthly_fee_cents=$4,active=$5 where id=$6", [belt, stripes, notes, fee, active, st.id]);
+    let planId = st.plan_id;
+    if (b.planId !== undefined) { planId = b.planId ? intOr(b.planId, 0) : null; if (planId && !(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
+    const planStatus = b.planStatus !== undefined ? (PLAN_STATUS.includes(b.planStatus) ? b.planStatus : fail(400, "Pick a membership status.")) : st.plan_status;
+    const planStarted = b.planStarted !== undefined ? (/^\d{4}-\d{2}-\d{2}$/.test(b.planStarted || "") ? b.planStarted : null) : st.plan_started;
+    const rankChanged = belt !== st.belt || stripes !== st.stripes;
+    await q(`update users set belt=$1,stripes=$2,notes=$3,monthly_fee_cents=$4,active=$5,plan_id=$6,plan_status=$7,plan_started=$8,
+      rank_changed_at=case when $9 then now() else rank_changed_at end where id=$10`, [belt, stripes, notes, fee, active, planId, planStatus, planStarted, rankChanged, st.id]);
     res.json({ ok: true });
+  }));
+
+  // ---------- memberships ----------
+  const PERIODS = ["month", "week", "year", "term", "class", "once"];
+  function readPlan(b) {
+    const name = clean(b.name, 80); if (!name) fail(400, "Give the plan a name.");
+    const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 0 || price > 1e8) fail(400, "Enter the price.");
+    const period = PERIODS.includes(b.period) ? b.period : "month";
+    const cpw = b.classesPerWeek === null || b.classesPerWeek === undefined || b.classesPerWeek === "" ? null : Math.min(30, Math.max(1, intOr(b.classesPerWeek, 0)));
+    return { name, price, period, cpw, active: b.active !== false };
+  }
+  api.get("/coach/plans", wrap(async (req, res) => { const u = needCoach(req); res.json({ plans: (await plansOf(u.gym_id)).map(planOut) }); }));
+  api.post("/coach/plans", wrap(async (req, res) => {
+    const u = needCoach(req), p = readPlan(req.body || {});
+    const r = await q("insert into plans(gym_id,name,price_cents,period,classes_per_week,active) values($1,$2,$3,$4,$5,$6) returning *", [u.gym_id, p.name, p.price, p.period, p.cpw, p.active]);
+    res.status(201).json({ plan: planOut(r.rows[0]) });
+  }));
+  api.patch("/coach/plans/:id", wrap(async (req, res) => {
+    const u = needCoach(req), p = readPlan(req.body || {});
+    const r = await q("update plans set name=$1,price_cents=$2,period=$3,classes_per_week=$4,active=$5 where id=$6 and gym_id=$7 returning *", [p.name, p.price, p.period, p.cpw, p.active, intOr(req.params.id, 0), u.gym_id]);
+    if (!r.rows[0]) fail(404, "That plan doesn't exist.");
+    res.json({ plan: planOut(r.rows[0]) });
+  }));
+  // Turn the prices imported from the gym's website into plans (skips names that already exist).
+  api.post("/coach/plans/from-rates", wrap(async (req, res) => {
+    const u = needCoach(req);
+    const g = (await q("select profile from gyms where id=$1", [u.gym_id])).rows[0];
+    const have = new Set((await plansOf(u.gym_id)).map((p) => p.name.toLowerCase()));
+    let added = 0;
+    for (const r of (g.profile && g.profile.rates) || []) {
+      if (!r.name || have.has(r.name.toLowerCase()) || !PERIODS.includes(r.period)) continue;
+      const cpw = /(\d)\s*(x|times|classes)\s*(a|per)\s*week/i.exec(r.name + " " + (r.note || ""));
+      await q("insert into plans(gym_id,name,price_cents,period,classes_per_week) values($1,$2,$3,$4,$5)", [u.gym_id, clean(r.name, 80), Math.round(r.price * 100), r.period, cpw ? Number(cpw[1]) : null]);
+      have.add(r.name.toLowerCase()); added++;
+    }
+    res.status(201).json({ added, plans: (await plansOf(u.gym_id)).map(planOut) });
+  }));
+
+  // ---------- your membership (students) ----------
+  api.get("/me/membership", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) return res.json({ membership: null });
+    const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null;
+    const wk = Number((await q(`select count(*) from attendance a join classes k on k.id=a.class_id where a.user_id=$1 and a.going and k.kind<>'private'
+      and date_trunc('week', k.starts_at at time zone $2) = date_trunc('week', now() at time zone $2)`, [u.id, tzOf(u)])).rows[0].count);
+    const { visits } = await visitStats(u.gym_id, tzOf(u));
+    const st = studentStats(u, visits[u.id]);
+    const month = (visits[u.id] || []).filter((v) => new Date(v.at).getMonth() === new Date().getMonth() && Date.now() - v.at < 32 * DAY).length;
+    res.json({ membership: { plan: plan ? planOut(plan) : null, status: u.plan_status, started: u.plan_started, bookedThisWeek: wk, visitsThisMonth: month, streak: st.streak, perWeek: st.perWeek, total180: st.total180 } });
+  }));
+
+  // ---------- coach: insights ----------
+  api.get("/coach/insights", wrap(async (req, res) => {
+    const u = needCoach(req), tz = tzOf(u), now = Date.now();
+    const { plans, rows } = await rosterRows(u);
+    const { cls, visits } = await visitStats(u.gym_id, tz);
+    const studs = rows.filter((p) => p.role === "student" && p.active);
+    // weekly visits for the last 12 weeks
+    const wkKey = (t) => { const d = new Date(t); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
+    const weeks = []; for (let i = 11; i >= 0; i--) weeks.push({ wk: wkKey(now - i * 7 * DAY), visits: 0, people: new Set() });
+    const wi = Object.fromEntries(weeks.map((w, i) => [w.wk, i]));
+    for (const [uid, vs] of Object.entries(visits)) for (const v of vs) if (wi[v.wk] !== undefined) { weeks[wi[v.wk]].visits++; weeks[wi[v.wk]].people.add(uid); }
+    // class slots (same weekday, time and title) over the last 8 weeks
+    const slots = {};
+    for (const c of cls) {
+      if (c.kind === "private" || new Date(c.starts_at).getTime() < now - 56 * DAY) continue;
+      const k = c.dow + "|" + c.hm + "|" + c.title.toLowerCase();
+      const s = (slots[k] = slots[k] || { dow: c.dow, hm: c.hm, title: c.title, n: 0, sum: 0, cap: 0, capN: 0, waitlisted: 0 });
+      s.n++; s.sum += c.count; if (c.capacity) { s.cap += c.count / c.capacity; s.capN++; } if (c.waiting) s.waitlisted++;
+    }
+    const slotList = Object.values(slots).filter((s) => s.n >= 2).map((s) => ({ dow: s.dow, hm: s.hm, title: s.title, n: s.n, avg: Math.round((s.sum / s.n) * 10) / 10,
+      fill: s.capN ? Math.round((100 * s.cap) / s.capN) : null, waitlisted: s.waitlisted })).sort((a, b) => b.avg - a.avg);
+    const seg = { regular: 0, occasional: 0, at_risk: 0, new: 0, inactive: 0 };
+    studs.forEach((p) => { seg[p.visits.segment]++; });
+    const visits28 = studs.reduce((s, p) => s + p.visits.d28, 0), prev28 = studs.reduce((s, p) => s + p.visits.p28, 0);
+    const old = studs.filter((p) => now - new Date(p.joined).getTime() > 90 * DAY);
+    const expected = studs.filter((p) => !["paused", "cancelled", "trial"].includes(p.planStatus)).reduce((s, p) => s + (p.feeCents || 0), 0);
+    const collected = Number((await q("select coalesce(sum(amount_cents),0) as s from payments where gym_id=$1 and paid_on >= date_trunc('month', current_date)", [u.gym_id])).rows[0].s);
+    const unpaid = studs.filter((p) => p.feeCents > 0 && p.paidThisMonthCents < p.feeCents && p.planStatus !== "paused" && p.planStatus !== "cancelled");
+    const mix = plans.filter((p) => p.active).map((p) => { const m = studs.filter((s) => s.planId === String(p.id) && s.planStatus !== "cancelled"); return { id: String(p.id), name: p.name, members: m.length, monthlyCents: m.length * (monthly(p) || 0) }; });
+    res.json({
+      tz, currency: u.currency,
+      kpis: { active: studs.length, visits28, prev28, perWeek: Math.round((visits28 / 4) * 10) / 10, perMember: studs.length ? Math.round((visits28 / 4 / studs.length) * 10) / 10 : 0,
+        newMembers30: studs.filter((p) => now - new Date(p.joined).getTime() < 30 * DAY).length,
+        retention: { base: old.length, retained: old.filter((p) => p.visits.d28 > 0).length } },
+      weeks: weeks.map((w) => ({ wk: w.wk, visits: w.visits, people: w.people.size })),
+      segments: seg, slots: slotList,
+      revenue: { collected, expected, unpaid: unpaid.map((p) => ({ id: p.id, name: p.name, dueCents: p.feeCents - p.paidThisMonthCents })) },
+      plans: mix, noPlan: studs.filter((p) => !p.planId).length,
+      students: studs.map((p) => ({ id: p.id, name: p.name, belt: p.belt, stripes: p.stripes, joined: p.joined, planName: p.planName, planStatus: p.planStatus,
+        mastery: p.mastery, goal: p.goal, ...p.visits })),
+    });
+  }));
+
+  // ---------- coach: email students ----------
+  api.post("/coach/message", wrap(async (req, res) => {
+    const u = needCoach(req), b = req.body || {};
+    if (!mail.mailOn()) fail(503, "Email isn't switched on yet.");
+    const subject = clean(b.subject, 140), text = String(b.text || "").trim().slice(0, 4000);
+    if (!subject || !text) fail(400, "Write a subject and a message.");
+    const ids = (Array.isArray(b.userIds) ? b.userIds : []).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 200);
+    const to = (await q("select id, name, email from users where id = any($1) and gym_id=$2", [ids, u.gym_id])).rows;
+    if (!to.length) fail(400, "Pick who to send it to.");
+    let sent = 0; const failed = [];
+    for (const p of to) {
+      if (limited("msg:" + u.gym_id, 300, 24 * 3600e3)) { failed.push(p.name); continue; }
+      try { await mail.send({ to: p.email, replyTo: u.email, ...mail.templates.message(p.name, u.name, u.gym_name, subject, text) }); sent++; }
+      catch (e) { console.warn("mail:", e.message); failed.push(p.name); }
+    }
+    res.json({ sent, failed });
   }));
 
   api.patch("/coach/gym", wrap(async (req, res) => {
@@ -387,9 +657,12 @@ function makeApi(pool, { secureCookies }) {
     const name = b.name !== undefined ? clean(b.name, 100) : u.gym_name;
     if (!name) fail(400, "Enter your gym's name.");
     const fee = b.monthlyFeeCents !== undefined ? Math.max(0, intOr(b.monthlyFeeCents, 0)) : u.gym_fee;
-    await q("update gyms set name=$1, monthly_fee_cents=$2 where id=$3", [name, fee, u.gym_id]);
+    const show = b.showAttendees !== undefined ? !!b.showAttendees : u.show_attendees !== false;
+    const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
+    await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4 where id=$5", [name, fee, show, tz, u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
   }));
+
   api.post("/coach/invite", wrap(async (req, res) => {
     const u = needCoach(req);
     if (!mail.mailOn()) fail(503, "Email isn't switched on yet. Copy the invite link and send it yourself.");
@@ -459,7 +732,7 @@ function makeApi(pool, { secureCookies }) {
       const c = readClass(raw || {});
       const dup = await q("select 1 from classes where gym_id=$1 and starts_at=$2 and lower(title)=lower($3)", [u.gym_id, c.startsAt, c.title]);
       if (dup.rows[0]) { skipped++; continue; }
-      await q("insert into classes(gym_id,title,starts_at,duration_min,plan,shared,created_by) values($1,$2,$3,$4,$5,$6,$7)", [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id]);
+      await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, classVals(u, c));
       added++;
     }
     res.status(201).json({ added, skipped });

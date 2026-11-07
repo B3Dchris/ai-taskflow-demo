@@ -88,6 +88,31 @@ alter table gyms add column if not exists logo bytea;
 alter table gyms add column if not exists logo_type text;
 alter table gyms add column if not exists logo_v text;
 alter table gyms add column if not exists profile_updated_at timestamptz;
+alter table classes add column if not exists kind text not null default 'class';
+alter table classes add column if not exists capacity int;
+alter table classes add column if not exists price_cents int;
+alter table classes add column if not exists coach text not null default '';
+alter table classes add column if not exists level text not null default '';
+alter table attendance add column if not exists waitlisted boolean not null default false;
+alter table attendance add column if not exists booked_at timestamptz not null default now();
+alter table attendance add column if not exists checked_in_at timestamptz;
+alter table gyms add column if not exists show_attendees boolean not null default true;
+alter table gyms add column if not exists timezone text not null default 'Africa/Johannesburg';
+create table if not exists plans(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  name text not null,
+  price_cents int not null default 0,
+  period text not null default 'month',
+  classes_per_week int,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table users add column if not exists plan_id bigint references plans(id) on delete set null;
+alter table users add column if not exists plan_status text not null default 'active';
+alter table users add column if not exists plan_started date;
+alter table users add column if not exists rank_changed_at timestamptz;
+create index if not exists attendance_user on attendance(user_id);
 create table if not exists password_resets(
   token_hash text primary key,
   user_id bigint not null references users(id) on delete cascade,
