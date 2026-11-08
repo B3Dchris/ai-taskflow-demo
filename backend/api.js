@@ -8,6 +8,7 @@ const mail = require("./mail");
 const pop = require("./pop");
 const ai = require("./ai");
 const assistant = require("./assistant");
+const people = require("./people");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -54,7 +55,7 @@ function makeApi(pool, { secureCookies }) {
 
   // Proof-of-payment uploads carry a file (base64), so they get a bigger allowance than everything else.
   const smallJson = express.json({ limit: "400kb" }), bigJson = express.json({ limit: "12mb" });
-  api.use((req, res, next) => (/\/proof$/.test(req.path) ? bigJson : smallJson)(req, res, next));
+  api.use((req, res, next) => (/\/(proof|read-people)$/.test(req.path) ? bigJson : smallJson)(req, res, next));
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
@@ -603,7 +604,7 @@ function makeApi(pool, { secureCookies }) {
   }));
 
   async function rosterRows(u) {
-    const r = await q(`select u.id,u.name,u.email,u.phone,(u.pass_hash is null) as offline,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
+    const r = await q(`select u.id,u.name,u.parent_name,u.email,u.phone,(u.pass_hash is null) as offline,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
       from users u where u.gym_id=$1 order by u.role, u.name`, [u.gym_id]);
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
@@ -616,7 +617,7 @@ function makeApi(pool, { secureCookies }) {
     return { plans, vs, rows: r.rows.map((x) => {
       const plan = pm[String(x.plan_id)] || null;
       const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
-      return { ...person(x, s[x.id]), email: x.email || "", phone: x.phone || "", offline: !!x.offline, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
+      return { ...person(x, s[x.id]), parentName: x.parent_name || "", email: x.email || "", phone: x.phone || "", offline: !!x.offline, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
         feeCents: fee || 0, planId: plan ? String(plan.id) : null, planName: plan ? plan.name : null, planStatus: x.plan_status, planStarted: x.plan_started,
         paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), pendingThisMonthCents: Number(paid[x.id]?.pending_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
         visits: x.role === "student" ? studentStats(x, visits[x.id]) : null };
@@ -638,30 +639,50 @@ function makeApi(pool, { secureCookies }) {
     const email = clean(b.email, 254).toLowerCase(), phone = cleanPhone(b.phone);
     if (email && !isEmail(email)) fail(400, "That email doesn't look right.");
     if (!email && !phone) fail(400, "Add a WhatsApp number or an email, so you can reach them.");
+    const parentName = clean(b.parentName, 80);
     if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) fail(409, "Someone with that email is already on JitsFlow. Send them your gym's invite link instead.");
     const belt = BELTS.includes(b.belt) ? b.belt : "white", stripes = Math.min(4, Math.max(0, intOr(b.stripes, 0)));
     let planId = null; if (b.planId) { planId = intOr(b.planId, 0); if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
     const fee = b.feeCents === undefined || b.feeCents === null || b.feeCents === "" ? null : Math.max(0, intOr(b.feeCents, 0));
-    const r = await q(`insert into users(gym_id,role,name,email,pass_hash,phone,belt,stripes,plan_id,plan_status,plan_started,monthly_fee_cents,notes,offline)
-      values($1,'student',$2,$3,null,$4,$5,$6,$7,$8,$9,$10,$11,true) returning id`,
-      [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000)]);
+    const r = await q(`insert into users(gym_id,role,name,email,pass_hash,phone,belt,stripes,plan_id,plan_status,plan_started,monthly_fee_cents,notes,offline,parent_name)
+      values($1,'student',$2,$3,null,$4,$5,$6,$7,$8,$9,$10,$11,true,$12) returning id`,
+      [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000), parentName]);
     res.status(201).json({ id: String(r.rows[0].id) });
   }));
   // Several at once (from the phone's contacts, a contacts file or a pasted list). Skips people already on the list.
+  async function whoIsIn(gymId) {
+    const have = (await q("select lower(name) as n, phone, parent_name, lower(coalesce(email,'')) as e from users where gym_id=$1", [gymId])).rows;
+    const digits = (v) => String(v || "").replace(/\D/g, "").slice(-9);
+    return { digits, seenPh: new Set(have.filter((h) => !h.parent_name).map((h) => digits(h.phone)).filter((d) => d.length >= 7)), seenEm: new Set(have.map((h) => h.e).filter(Boolean)), seenNm: new Set(have.map((h) => h.n)) };
+  }
+  // Screenshots of a WhatsApp group: who's in it, as students (kids with their parent's number). Nothing is saved here.
+  api.post("/coach/students/read-people", wrap(async (req, res) => {
+    const u = needCoach(req);
+    const client = ai.getClient(); if (!client) fail(503, "Reading screenshots isn't switched on yet. Paste the names instead.");
+    const list = (Array.isArray(req.body?.images) ? req.body.images : []).slice(0, 8);
+    if (!list.length) fail(400, "Choose a screenshot of your WhatsApp group.");
+    const images = list.map((d) => { const data = Buffer.from(String(d || ""), "base64"), type = pop.sniff(data);
+      if (!type || !/^image\/(jpeg|png|webp|gif)$/.test(type)) fail(400, "Those need to be screenshots (pictures)."); if (data.length > 4 * 1024 * 1024) fail(413, "One of those pictures is too big."); return { type, data }; });
+    if (limited("ppl:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of screenshots. Try again in a while.");
+    let rows;
+    try { rows = await people.readPeople({ client, images }); }
+    catch (e) { console.error("read-people:", e.message); fail(502, "Couldn't read those screenshots just now. Try again, or paste the names."); }
+    const { seenPh, seenNm, digits } = await whoIsIn(u.gym_id);
+    res.json({ people: rows.map((r) => ({ ...r, already: !!((r.name && seenNm.has(r.name.toLowerCase())) || (!r.parentName && r.phone && seenPh.has(digits(r.phone)))) })) });
+  }));
   api.post("/coach/students/bulk", wrap(async (req, res) => {
     const u = needCoach(req), list = (Array.isArray(req.body?.people) ? req.body.people : []).slice(0, 300);
     if (!list.length) fail(400, "No one to add.");
-    const have = (await q("select lower(name) as n, phone, lower(coalesce(email,'')) as e from users where gym_id=$1", [u.gym_id])).rows;
-    const digits = (v) => String(v || "").replace(/\D/g, "").slice(-9);
-    const seenPh = new Set(have.map((h) => digits(h.phone)).filter((d) => d.length >= 7)), seenEm = new Set(have.map((h) => h.e).filter(Boolean)), seenNm = new Set(have.map((h) => h.n));
+    const { seenPh, seenEm, seenNm, digits } = await whoIsIn(u.gym_id);
     let added = 0, skipped = 0;
     for (const p0 of list) {
-      const name = clean(p0.name, 80), phone = cleanPhone(p0.phone), email0 = clean(p0.email, 254).toLowerCase(), email = isEmail(email0) ? email0 : "";
-      if (!name || (!phone && !email)) { skipped++; continue; }
-      if ((phone && seenPh.has(digits(phone))) || (email && seenEm.has(email)) || seenNm.has(name.toLowerCase())) { skipped++; continue; }
+      const name = clean(p0.name, 80), parentName = clean(p0.parentName, 80), phone = cleanPhone(p0.phone), email0 = clean(p0.email, 254).toLowerCase(), email = isEmail(email0) ? email0 : "";
+      if (!name) { skipped++; continue; }
+      // Brothers and sisters share a parent's number, so for kids only the name counts as "already here".
+      if ((!parentName && phone && seenPh.has(digits(phone))) || (email && seenEm.has(email)) || seenNm.has(name.toLowerCase())) { skipped++; continue; }
       if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) { skipped++; continue; }
-      await q("insert into users(gym_id,role,name,email,pass_hash,phone,offline) values($1,'student',$2,$3,null,$4,true)", [u.gym_id, name, email || null, phone]);
-      if (phone) seenPh.add(digits(phone)); if (email) seenEm.add(email); seenNm.add(name.toLowerCase()); added++;
+      await q("insert into users(gym_id,role,name,email,pass_hash,phone,offline,parent_name) values($1,'student',$2,$3,null,$4,true,$5)", [u.gym_id, name, email || null, phone, parentName]);
+      if (phone && !parentName) seenPh.add(digits(phone)); if (email) seenEm.add(email); seenNm.add(name.toLowerCase()); added++;
     }
     res.status(201).json({ added, skipped });
   }));
@@ -689,7 +710,7 @@ function makeApi(pool, { secureCookies }) {
     const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
       where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
     const plan = st.plan_id ? (await q("select * from plans where id=$1", [st.plan_id])).rows[0] : null;
-    res.json({ student: { ...person(st, s), email: st.email || "", phone: st.phone || "", offline: !st.pass_hash, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
+    res.json({ student: { ...person(st, s), parentName: st.parent_name || "", email: st.email || "", phone: st.phone || "", offline: !st.pass_hash, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
         notes: st.notes, joined: st.created_at, planId: st.plan_id ? String(st.plan_id) : null, planStatus: st.plan_status, planStarted: st.plan_started, rankChangedAt: st.rank_changed_at,
         visits: studentStats(st, visits[st.id]) },
       classes: recent.rows.map((x) => ({ title: x.title, startsAt: x.starts_at, kind: x.kind, attended: x.attended })),
@@ -709,6 +730,7 @@ function makeApi(pool, { secureCookies }) {
     const planStarted = b.planStarted !== undefined ? (isDay(b.planStarted) ? b.planStarted : null) : st.plan_started;
     const rankChanged = belt !== st.belt || stripes !== st.stripes;
     if (b.phone !== undefined) await q("update users set phone=$1 where id=$2", [cleanPhone(b.phone), st.id]);
+    if (b.parentName !== undefined) await q("update users set parent_name=$1 where id=$2", [clean(b.parentName, 80), st.id]);
     await q(`update users set belt=$1,stripes=$2,notes=$3,monthly_fee_cents=$4,active=$5,plan_id=$6,plan_status=$7,plan_started=$8,
       rank_changed_at=case when $9 then now() else rank_changed_at end where id=$10`, [belt, stripes, notes, fee, active, planId, planStatus, planStarted, rankChanged, st.id]);
     res.json({ ok: true });
@@ -1235,7 +1257,7 @@ function makeApi(pool, { secureCookies }) {
   // Who owes what this month, what came in, and the last six months. Expected uses each student's current fee.
   async function moneyRows(u, month) {
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
-    const ppl = (await q(`select id, name, email, phone, pass_hash is null as offline, monthly_fee_cents, plan_id, pay_ref, created_at from users
+    const ppl = (await q(`select id, name, parent_name, email, phone, pass_hash is null as offline, monthly_fee_cents, plan_id, pay_ref, created_at from users
       where gym_id=$1 and role='student' and active order by name`, [u.gym_id])).rows;
     return ppl.map((x) => { const plan = pm[String(x.plan_id)] || null; return { ...x, plan, fee: x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee ?? 0 }; });
   }
@@ -1249,7 +1271,7 @@ function makeApi(pool, { secureCookies }) {
       from payments where gym_id=$1 and user_id is not null and paid_on >= $2 and paid_on < $3 group by user_id`, [u.gym_id, start, next])).rows.map((r) => [String(r.user_id), r]));
     const lastEver = Object.fromEntries((await q("select user_id, max(paid_on) as last from payments where gym_id=$1 and status='confirmed' and user_id is not null group by user_id", [u.gym_id])).rows.map((r) => [String(r.user_id), r.last]));
     const inMonth = rows.filter((x) => new Date(x.created_at).toISOString().slice(0, 10) < next);
-    const students = inMonth.map((x) => { const s = sums[String(x.id)] || {}; return { id: String(x.id), name: x.name, email: x.email || "", phone: x.phone || "", offline: x.offline, plan: x.plan ? x.plan.name : null,
+    const students = inMonth.map((x) => { const s = sums[String(x.id)] || {}; return { id: String(x.id), name: x.name, parentName: x.parent_name || "", email: x.email || "", phone: x.phone || "", offline: x.offline, plan: x.plan ? x.plan.name : null,
       feeCents: x.fee, paidCents: Number(s.paid || 0), pendingCents: Number(s.pending || 0), lastPaid: lastEver[String(x.id)] || null, reference: x.pay_ref }; });
     const methods = (await q(`select coalesce(nullif(method,''),'other') as m, sum(amount_cents) as c, count(*) as n from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3 group by 1 order by 2 desc`, [u.gym_id, start, next])).rows.map((r) => ({ method: r.m, cents: Number(r.c), n: Number(r.n) }));
     const total = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as c, coalesce(sum(amount_cents) filter (where status='confirmed' and user_id is null),0) as unmatched,

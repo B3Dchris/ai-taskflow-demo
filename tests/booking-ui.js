@@ -245,17 +245,36 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     for (const p of [co, s1]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
     await ev(co, () => coachGo("today")); await co.waitForTimeout(300);
     ok(await ev(co, () => !document.querySelector(".fab.ask") && !document.querySelector('[data-a="ast"]')), "no assistant button while it's switched off");
-    // --- add several students from a list or a contacts file
+    // --- add several students: a WhatsApp group screenshot first, then contacts or typed names
     await ev(co, () => coachGo("students")); await co.waitForTimeout(400); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
-    await co.fill("#bulk-paste", "Pat Smith 082 111 2222\nLee Jones, lee@bulk.test\nnot a person"); await co.tap('[data-a="bulkparse"]'); await co.waitForTimeout(200);
-    ok(await ev(co, () => document.querySelectorAll("#sheet .bulkrow").length === 2), "a pasted list becomes people to add (lines without a number or email are left out)");
-    await co.locator("#sheet .bulkrow").first().tap(); await co.waitForTimeout(150);
-    ok(await ev(co, () => /Add 1 student/.test(document.querySelector('#sheetbar [data-a="bulkadd"]').innerText)), "tap someone to leave them out");
-    const vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zoe Khumalo\r\nTEL;type=CELL:+27 82 333 4444\r\nEND:VCARD\r\nBEGIN:VCARD\r\nVERSION:3.0\r\nN:Botha;Ruan;;;\r\nitem1.EMAIL;type=INTERNET:ruan@bulk.test\r\nEND:VCARD\r\n";
-    await co.setInputFiles("#vcf-in", { name: "contacts.vcf", mimeType: "text/vcard", buffer: Buffer.from(vcf) }); await co.waitForTimeout(400);
-    ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return document.querySelectorAll("#sheet .bulkrow").length === 4 && /Zoe Khumalo/.test(t) && /Ruan Botha/.test(t); }), "a contacts file (.vcf from the iPhone Contacts app) adds its people to the list");
-    await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(1200);
-    ok(/Added 3 students/.test(await toast(co)) && await ev(co, () => { const t = document.getElementById("roster-list").innerText; return /Lee Jones/.test(t) && /Zoe Khumalo/.test(t) && !/Pat Smith/.test(t); }), "the ticked people are added as students who aren't on the app yet");
+    ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return /Screenshot of your WhatsApp group/.test(document.querySelector('label[for="ppl-in"]').innerText) && !/\.vcf|\.csv|vcard/i.test(t); }), "adding several leads with a WhatsApp screenshot, and never mentions file types");
+    await co.locator("#sheet details.planbox summary").tap(); await co.waitForTimeout(100);
+    await co.fill("#bulk-paste", "Pat Smith 082 111 2222\nLee Jones, lee@bulk.test\nSipho Ndlovu\nLerato's mom 083 555 1234"); await co.tap('[data-a="bulkparse"]'); await co.waitForTimeout(200);
+    ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return r.length === 4 && /No number yet/.test(r[2].innerText) && r[3].querySelector("input").value === "Lerato" && /Kid/.test(r[3].querySelector(".kindchip").innerText); }), "typed names work with or without a number, and \"Lerato's mom\" becomes the kid Lerato");
+    await co.locator("#sheet .bulkrow .bx").first().tap(); await co.waitForTimeout(150);
+    ok(await ev(co, () => /Add 3 students/.test(document.querySelector('#sheetbar [data-a="bulkadd"]').innerText)), "tap the tick to leave someone out");
+    let shots = 0;
+    await co.route("**/api/coach/students/read-people", (rt) => { shots = (rt.request().postDataJSON().images || []).length; rt.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ people: [
+      { name: "Aya", parentName: "Nomsa Dube", phone: "+27 82 444 5555" }, { name: "Ben", parentName: "Nomsa Dube", phone: "+27 82 444 5555" },
+      { name: "", parentName: "Kev", phone: "+27 82 666 7777" }, { name: "Ana Lima", parentName: "", phone: "", already: true }, { name: "Tom Adult", parentName: "", phone: "082 777 8888" } ] }) }); });
+    const shot = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    await co.setInputFiles("#ppl-in", [{ name: "IMG_1.PNG", mimeType: "image/png", buffer: shot }, { name: "IMG_2.PNG", mimeType: "image/png", buffer: shot }]); await co.waitForTimeout(900);
+    ok(shots === 2 && await ev(co, () => document.querySelectorAll("#sheet .bulkrow").length === 9), "two screenshots of the group are read together and their people join the list");
+    ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return !r[7].classList.contains("on") && /Already on your list/.test(r[7].innerText) && /Parent: Nomsa Dube/.test(r[4].innerText) && /Parent: Nomsa Dube/.test(r[5].innerText); }), "someone already in the gym starts unticked; brother and sister share their parent");
+    await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(300);
+    ok(/kid's name for Kev/.test(await toast(co)) && await ev(co, () => document.activeElement && document.activeElement.dataset.i === "6"), "a parent without the kid's name asks for it");
+    await co.fill('[data-bk="name"][data-i="6"]', "Kai");
+    await co.tap('[data-a="bulkkind"][data-v="8"]'); await co.waitForTimeout(200);
+    ok(await ev(co, () => { const r = document.querySelectorAll("#sheet .bulkrow")[8]; return /Parent: Tom Adult/.test(r.innerText) && r.querySelector("input").value === "" && document.activeElement === r.querySelector("input"); }), "tapping Adult turns a parent into a Kid row, ready for the kid's name");
+    await co.fill('[data-bk="name"][data-i="8"]', "Tim");
+    const vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zoe Khumalo\r\nTEL;type=CELL:+27 82 333 4444\r\nEND:VCARD\r\n";
+    await co.setInputFiles("#ppl-in", { name: "contacts.vcf", mimeType: "text/vcard", buffer: Buffer.from(vcf) }); await co.waitForTimeout(400);
+    ok(await ev(co, () => { const r = document.querySelectorAll("#sheet .bulkrow"); return r.length === 10 && r[9].querySelector("input").value === "Zoe Khumalo" && r[6].querySelector("input").value === "Kai" && r[8].querySelector("input").value === "Tim"; }), "a shared contact file goes in the same button, and typed names are kept");
+    await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(1200); await co.unroute("**/api/coach/students/read-people");
+    ok(/Added 8 students/.test(await toast(co)) && await ev(co, () => { const t = document.getElementById("roster-list").innerText; return /Lee Jones/.test(t) && /Zoe Khumalo/.test(t) && /Sipho Ndlovu/.test(t) && !/Pat Smith/.test(t) && /Aya[\s\S]*Kid · Nomsa Dube/.test(t) && /Ben/.test(t) && /Tim/.test(t); }), "the ticked people are added, kids with their parent (siblings both)");
+    await ev(co, () => studentSheet(students().find((s) => s.name === "Aya").id)); await co.waitForTimeout(800);
+    ok(await ev(co, () => { const a = [...document.querySelectorAll('#sheet a[href*="wa.me"]')].map((x) => decodeURIComponent(x.href)).join(" "); return document.getElementById("s-parent").value === "Nomsa Dube" && /Hi Nomsa, join .* for Aya/.test(a); }), "a kid's page shows the parent, and WhatsApp messages greet the parent");
+    await ev(co, () => hideSheet());
     // --- with two coaches, the class forms offer a list of coaches
     const cc = await ev(co, () => API.me.gym.coachCode); const c2 = await phone("coach2");
     await signup(c2, "/app/?join=" + cc, { "#a-name": "Coach Raf", "#a-email": "raf@race.test", "#a-pass": "rafpass11" });

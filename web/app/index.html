@@ -380,7 +380,7 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .setupcard .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:8px}.setupcard .srow.ok span{color:var(--ink-2)}
 .swatch{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:var(--sw);padding:0;overflow:hidden}.swatch[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px}
 .swatch.none{background:#1D4FB5;color:#fff;font-weight:800;font-size:12px}.swatch.fromlogo{background:#fff}.swatch.fromlogo img{width:100%;height:100%;object-fit:contain}
-.bulkrow .bx{width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;color:var(--on-blue)}.bulkrow[aria-pressed="true"] .bx{background:var(--blue);border-color:var(--blue)}
+.bulkrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}.bulkrow:last-child{border-bottom:0}.bulkrow .bx{width:28px;height:28px;padding:0;border-radius:7px;border:2px solid var(--line);background:transparent;display:grid;place-items:center;font-weight:800;color:var(--on-blue);cursor:pointer}.bulkrow.on .bx{background:var(--blue);border-color:var(--blue)}.bulkrow:not(.on) .bk{opacity:.55}.bulkrow .bk{display:flex;flex-direction:column;gap:2px;min-width:0}.bulkrow .bk input{padding:6px 8px;font-weight:600}.bulkrow .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.kindchip{min-width:58px;justify-content:center}.kindchip.on{background:var(--blue-soft);border-color:var(--blue)}.bigpick{min-height:56px;font-size:17px}.busyline{display:flex;align-items:center;gap:8px}
 .qwrap{display:flex;flex-direction:column;gap:6px}.qsugg{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.qsugg:empty{display:none}
 .qsugg-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 12px;color:var(--ink);font:inherit;min-height:48px}.qsugg-row:first-child{border-top:0}
 .qs-l{display:flex;flex-direction:column;min-width:0}.qs-l small{color:var(--ink-2);font-size:13px}.qs-l mark{background:var(--blue-soft);color:inherit;border-radius:3px;padding:0 1px}
@@ -4117,7 +4117,8 @@ document.addEventListener("click",e=>{
     case "bulkopen": bulkSheet([]); break;
     case "pickcontacts": pickContacts(); break;
     case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
-    case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Put one person per line, with a phone number or email.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl));break }
+    case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
+    case "bulkkind": bulkKind(+v); break;
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
@@ -4183,6 +4184,7 @@ let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   if(e.target.id==="tag-q"){const sh=S.ui.sheet,s=sh&&S.sessions.find(x=>x.id===sh.id);if(s)document.getElementById("tag-list").innerHTML=tagChoices(s,sh.kind,e.target.value);return}
   if(e.target.id==="tag-note"){tagNote(e.target.value);return}
+  if(e.target.dataset&&e.target.dataset.bk){const b=S.ui.bulk,p=b&&b.people[+e.target.dataset.i];if(p)p[e.target.dataset.bk]=e.target.value;return}
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
@@ -4193,7 +4195,7 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
-  if(e.target.id==="vcf-in"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";f.text().then(t=>{const ppl=parseVcf(t);if(!ppl.length){toast("No contacts with a phone number or email in that file.");return}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl))}).catch(()=>toast("Couldn't read that file."));return}
+  if(e.target.id==="ppl-in"&&e.target.files&&e.target.files.length){const fs=[...e.target.files];e.target.value="";peopleFiles(fs);return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
@@ -4439,7 +4441,7 @@ const monthShift=(m,n)=>{const d=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7)-1
 function moneyStatus(s,M){const left=s.feeCents-s.paidCents;if(!s.feeCents)return ["nofee","No fee",""];if(left<=0)return ["paid","Paid","ok"];if(s.pendingCents)return ["checking","Checking","due"];
   const cur=M.today.slice(0,7),late=M.month<cur||(M.month===cur&&Number(M.today.slice(8,10))>M.dueDay+6);return late?["late","Overdue","bad"]:s.paidCents?["part","Part paid","due"]:["due","Due","due"]}
 function remindText(s,M){const b=((COACH.payInfo||{}).pay)||{},left=s.feeCents-s.paidCents;
-  return `Hi ${first(s.name)}, a friendly reminder that ${money(left,M.currency)} is due for ${monthLabel(M.month)} at ${gymName()}.${b.account?`\n\nEFT: ${b.bank?b.bank+" ":""}${b.account}${b.branch?`, branch ${b.branch}`:""}${b.holder?` (${b.holder})`:""}`:""}\nReference: ${s.reference}\n\nAlready paid? Send your proof of payment in JitsFlow: ${appLink("#book")}\nThanks!`}
+  return `Hi ${hiName(s)}, a friendly reminder that ${money(left,M.currency)} is due for ${monthLabel(M.month)}${s.parentName?` for ${first(s.name)}`:""} at ${gymName()}.${b.account?`\n\nEFT: ${b.bank?b.bank+" ":""}${b.account}${b.branch?`, branch ${b.branch}`:""}${b.holder?` (${b.holder})`:""}`:""}\nReference: ${s.reference}\n\nAlready paid? Send your proof of payment in JitsFlow: ${appLink("#book")}\nThanks!`}
 function moneyMonth(){
   const want=COACH.moneyMonth||null,M=COACH.money;
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -4479,15 +4481,16 @@ function moneyCSV(){const M=COACH.money;if(!M)return;const q=v=>`"${String(v==nu
 
 /* ----- students a coach adds who aren't on the app ----- */
 function addStudentSheet(){const plans=(COACH.roster.plans||[]).filter(p=>p.active);S.ui.sheet={k:"addstu"};S.ui.stack=[];
-  openSheet(`${sheetHead("Add a student")}<form id="addstuform" class="stack-lg" novalidate><button type="button" class="btn" data-a="bulkopen">${canPickContacts()?"Add several from my contacts":"Add several: contacts file or a list"}</button><p class="small">For someone who isn't on the app (yet). You can record their payments, attendance and plan, and send them an invite later; when they sign up, it all carries over.</p>
+  openSheet(`${sheetHead("Add a student")}<form id="addstuform" class="stack-lg" novalidate><button type="button" class="btn primary" data-a="bulkopen">Add several at once</button><p class="small muted" style="margin-top:-12px">From a screenshot of your WhatsApp group${canPickContacts()?", your contacts":""} or a list of names.</p><p class="small">For someone who isn't on the app (yet). You can record their payments, attendance and plan, and send them an invite later; when they sign up, it all carries over.</p>
     <label class="f">Name<input name="name" autocomplete="off" required></label>
+    <label class="f">Parent's name (only for a kid)<input name="parent" autocomplete="off" placeholder="Leave empty for adults"></label>
     <label class="f">WhatsApp number<input name="phone" type="tel" inputmode="tel" placeholder="082 123 4567"></label>
     <label class="f">Email (optional)<input name="email" type="email" inputmode="email" autocomplete="off"></label>
     <div class="grid2"><label class="f">Belt<select name="belt">${["white","blue","purple","brown","black"].map(b=>`<option value="${b}">${cap1(b)}</option>`).join("")}</select></label><label class="f">Stripes<select name="stripes">${[0,1,2,3,4].map(n=>`<option>${n}</option>`).join("")}</select></label></div>
     ${plans.length?`<label class="f">Membership<select name="plan"><option value="">No plan</option>${plans.map(p=>`<option value="${p.id}">${esc(p.name)} · ${money(p.priceCents,COACH.roster.currency)}</option>`).join("")}</select></label>`:""}
     <label class="f">Notes<input name="notes" placeholder="e.g. pays cash on Mondays"></label></form>`,false,{act:`<button class="btn primary grow" type="submit" form="addstuform">Add student</button>`})}
 async function submitAddStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
-  try{const j=await api("POST","/coach/students",{name:v("name"),phone:v("phone"),email:v("email"),belt:v("belt"),stripes:Number(v("stripes")||0),planId:v("plan")||null,notes:v("notes")});
+  try{const j=await api("POST","/coach/students",{name:v("name"),parentName:v("parent"),phone:v("phone"),email:v("email"),belt:v("belt"),stripes:Number(v("stripes")||0),planId:v("plan")||null,notes:v("notes")});
     hideSheet();await coachLoad("roster");COACH.money=null;toast("Student added.");studentSheet(j.id)}catch(e){toast(e.message)}}
 
 /* ----- notices for students: classes cancelled or moved ----- */
@@ -4681,7 +4684,7 @@ function coachRoster(){
   return `<section class="stack"><div class="stats"><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div><div class="stat"><b>${ppl.filter(p=>p.attended30>0||p.n30>0).length}</b><span>Trained · 30d</span></div><div class="stat"><b>${due.length}</b><span>Fees due</span></div></div>
     <div class="row" style="flex-wrap:nowrap"><input id="r-q" type="search" placeholder="Search students" value="${esc(COACH.q)}" aria-label="Search students" style="flex:1"><button class="btn" data-a="addstu">+ Add</button></div>
     <div class="list" id="roster-list">${list.map(p=>{const g=goalOf(p),r=readinessFor(p.mastery,g),paid=p.feeCents>0?(p.paidThisMonthCents>=p.feeCents?`<span class="pill ok">Paid</span>`:`<span class="pill due">Due</span>`):"";
-      const vs=p.visits||{};return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}${p.offline?` <span class="pill">Not on app</span>`:""}</span><span class="meta">${beltChip(p.belt,p.stripes)}${vs.segment?`<span class="segtag ${vs.segment}">${esc(SEG[vs.segment][0])}</span>`:""}<span>${vs.d28||0} classes / 4 wks</span><span>${r}% → ${BELT[g].to}</span>${p.planName?`<span>${esc(p.planName)}${p.planStatus&&p.planStatus!=="active"?" ("+esc(p.planStatus)+")":""}</span>`:""}</span></span>${paid}</button>`}).join("")||`<div class="empty">No students yet. Send your invite link from the Gym tab, or tap + Add for someone who isn't on the app.</div>`}</div></section>`;
+      const vs=p.visits||{};return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}${p.offline?` <span class="pill">Not on app</span>`:""}</span><span class="meta">${p.parentName?`<span>Kid · ${esc(p.parentName==="Parent"?"parent":p.parentName)}</span>`:""}${beltChip(p.belt,p.stripes)}${vs.segment?`<span class="segtag ${vs.segment}">${esc(SEG[vs.segment][0])}</span>`:""}<span>${vs.d28||0} classes / 4 wks</span><span>${r}% → ${BELT[g].to}</span>${p.planName?`<span>${esc(p.planName)}${p.planStatus&&p.planStatus!=="active"?" ("+esc(p.planStatus)+")":""}</span>`:""}</span></span>${paid}</button>`}).join("")||`<div class="empty">No students yet. Send your invite link from the Gym tab, or tap + Add for someone who isn't on the app.</div>`}</div></section>`;
 }
 async function studentSheet(id){
   S.ui.sheet={k:"student",id};S.ui.stack=[];openSheet(`${sheetHead("Student")}<div class="empty">Loading…</div>`);
@@ -4689,8 +4692,8 @@ async function studentSheet(id){
   let claim=null;if(j.student.offline){try{claim=(await api("POST",`/coach/students/${id}/claim-link`)).url}catch(e){}}
   const s=j.student,g=goalOf(s),ar=areasFor(s.mastery,g),cur=COACH.roster.currency;
   const stuck=Object.entries(s.stuck||{}).filter(([k])=>POS[k]).sort((a,b)=>b[1]-a[1]).slice(0,3),tapped=Object.entries(s.tapped||{}).filter(([k])=>TM[k]).sort((a,b)=>b[1]-a[1]).slice(0,3);
-  openSheet(`${sheetHead("Student")}<div class="stack-lg"><div><h1>${esc(s.name)}</h1><p class="muted small">${esc(s.email)}${s.offline?`${s.email?" · ":""}<span class="pill">Not on the app</span>`:""}</p></div>
-    ${s.offline?`<section class="panel stack"><p class="small">${esc(first(s.name))} isn't on the app yet. Their invite link signs them straight into this record, so their plan, payments and classes carry over.</p>${claim?`<div class="row">${s.phone?waBtn(`Hi ${first(s.name)}, join ${gymName()} on JitsFlow to book classes, see your membership and pay your fees: ${claim}`,"Invite on WhatsApp",{phone:s.phone,kind:"claim_invite"}):""}<input id="claim-url" value="${esc(claim)}" hidden><button class="btn" data-a="copytext" data-v="claim-url">Copy invite link</button></div>`:""}<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))}</button></section>`:""}
+  openSheet(`${sheetHead("Student")}<div class="stack-lg"><div><h1>${esc(s.name)}</h1><p class="muted small">${s.parentName?`Kid · parent ${esc(s.parentName)}${s.email?" · ":""}`:""}${esc(s.email)}${s.offline?`${s.email?" · ":""}<span class="pill">Not on the app</span>`:""}</p></div>
+    ${s.offline?`<section class="panel stack"><p class="small">${esc(first(s.name))} isn't on the app yet. Their invite link signs them straight into this record, so their plan, payments and classes carry over.</p>${claim?`<div class="row">${s.phone?waBtn(`Hi ${hiName(s)}, join ${gymName()} on JitsFlow to book classes${s.parentName?` for ${first(s.name)}`:""}, see your membership and pay your fees: ${claim}`,"Invite on WhatsApp",{phone:s.phone,kind:"claim_invite"}):""}<input id="claim-url" value="${esc(claim)}" hidden><button class="btn" data-a="copytext" data-v="claim-url">Copy invite link</button></div>`:""}<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))}</button></section>`:""}
     <section class="beltwrap"><div class="row between"><div><div class="bignum mono">${readinessFor(s.mastery,g)}%</div><p class="muted small">Ready for ${BELT[g].to} belt</p></div>${beltChip(s.belt,s.stripes)}</div>
       <div class="areas">${ar.map(x=>`<div class="area"><span>${esc(x.n)}</span><span class="track"><span class="fill" style="width:${x.pct}%"></span></span><span class="mono">${x.pct}%</span></div>`).join("")}</div>
       <p class="small muted">${s.visits?`${s.visits.d28} classes in the last 4 weeks (${s.visits.p28} the 4 before)${s.visits.streak>1?`, ${s.visits.streak}-week streak`:""}${s.visits.last?`, last trained ${esc(fmtDate(s.visits.last.slice(0,10)))}`:""}. ${s.visits.sinceRank} classes since their last promotion. `:""}${s.n30} sessions logged in 30 days.${stuck.length?" Stuck in: "+stuck.map(([k,n])=>esc(POS[k].l)+" ×"+n).join(", ")+".":""}${tapped.length?" Tapped by: "+tapped.map(([k,n])=>esc(TM[k].n)+" ×"+n).join(", ")+".":""}</p></section>
@@ -4702,7 +4705,8 @@ async function studentSheet(id){
       <label class="f">Status<select id="s-status" name="pstatus">${["active","trial","paused","cancelled"].map(x=>`<option value="${x}"${(s.planStatus||"active")===x?" selected":""}>${cap1(x)}</option>`).join("")}</select></label></div>
       <label class="f">Started<input id="s-started" name="pstarted" type="date" value="${esc(s.planStarted||"")}"></label>
       <label class="f">Monthly fee override (${esc(cur)})<input id="s-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${s.feeOverride!=null?s.feeOverride/100:""}" placeholder="${(s.feeCents||0)/100} from plan or gym fee"></label>
-      <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">WhatsApp number<input id="s-phone" name="phone" type="tel" inputmode="tel" value="${esc(s.phone||"")}" placeholder="e.g. 082 123 4567"></label>${s.phone?waBtn(`Hi ${first(s.name)}, `,"Message",{phone:s.phone,kind:"student"}):""}</div>
+      <label class="f">Parent's name (for a kid)<input id="s-parent" name="parent" value="${esc(s.parentName||"")}" placeholder="Leave empty for adults" autocomplete="off"></label>
+      <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">${s.parentName?"Parent's WhatsApp":"WhatsApp number"}<input id="s-phone" name="phone" type="tel" inputmode="tel" value="${esc(s.phone||"")}" placeholder="e.g. 082 123 4567"></label>${s.phone?waBtn(`Hi ${hiName(s)}, `,"Message",{phone:s.phone,kind:"student"}):""}</div>
       <label class="f"><span class="row between" style="flex-wrap:nowrap">Coach notes (only coaches see these)${micBtn("s-notes")}</span><textarea id="s-notes" name="notes">${esc(s.notes||"")}</textarea></label>
       <label class="row small"><input id="s-active" name="active" type="checkbox" style="width:auto"${s.active?" checked":""}> Active student</label></form>
     <section class="stack"><div class="row between"><h2 class="label">Payments</h2><button class="btn" data-a="paynew" data-v="${s.id}">Record payment</button></div>
@@ -4712,7 +4716,7 @@ async function studentSheet(id){
   </div>`,false,{act:`<button class="btn primary grow" type="submit" form="studentform">Save</button>`});
 }
 async function submitStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value;const id=S.ui.sheet.id;
-  try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),notes:v("notes"),phone:v("phone")||"",active:form.querySelector("[name=active]").checked,planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null});
+  try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),notes:v("notes"),phone:v("phone")||"",parentName:v("parent")||"",active:form.querySelector("[name=active]").checked,planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null});
     toast("Student saved.");hideSheet();await coachLoad("roster");coachGo("students")}catch(e){toast(e.message)}}
 /* ----- money: proof of payment, EFT details, recording ----- */
 const PMETH={eft:"EFT",cash:"Cash",card:"Card",snapscan:"SnapScan",payfast:"PayFast",other:"Other"};
@@ -5086,7 +5090,7 @@ function coachInsights(){
   const nm=a=>a.slice(0,6).map(s=>`<button class="linkbtn" data-a="student" data-v="${s.id}">${esc(s.name)}</button>`).join(", ")+(a.length>6?` and ${a.length-6} more`:"");
   const byId={};st.forEach(x=>byId[x.id]=x);
   const mailBtn=(kind,a)=>{const one=a.length===1&&byId[a[0].id]&&byId[a[0].id].phone;const m=MSG[kind]||MSG.blank;
-    return (API.status.mail?`<button class="btn" data-a="msgnew" data-k="${kind}" data-v="${ids(a)}">Email ${a.length===1?"them":"all "+a.length}</button>`:"")+waBtn((one?`Hi ${first(byId[a[0].id].name)}, `:"")+m[1].replace(/\n\n/g,"\n\n"),one?"WhatsApp them":"WhatsApp",{phone:one||"",kind:"insight_"+kind})};
+    return (API.status.mail?`<button class="btn" data-a="msgnew" data-k="${kind}" data-v="${ids(a)}">Email ${a.length===1?"them":"all "+a.length}</button>`:"")+waBtn((one?`Hi ${hiName(byId[a[0].id])}, `:"")+m[1].replace(/\n\n/g,"\n\n"),one?"WhatsApp them":"WhatsApp",{phone:one||"",kind:"insight_"+kind})};
   const cards=[
     atRisk.length&&card("warn",`${atRisk.length} student${atRisk.length>1?"s":""} at risk of dropping off`,`${nm(atRisk)}. They used to come regularly but have stopped or halved in the last 4 weeks. A short personal message often brings people back.`,mailBtn("risk",atRisk)),
     I.revenue.unpaid.length&&card("warn",`${I.revenue.unpaid.length} haven't paid this month`,`${I.revenue.unpaid.slice(0,6).map(u=>`<button class="linkbtn" data-a="student" data-v="${u.id}">${esc(u.name)}</button> (${money(u.dueCents,cur)})`).join(", ")}.`,mailBtn("pay",I.revenue.unpaid)),
@@ -5453,32 +5457,70 @@ function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roste
     <div class="progress"><i style="width:${Math.round(100*done/items.length)}%"></i></div>
     ${items.map(([l,ok,a,v,b])=>`<div class="srow${ok?" ok":""}"><span>${ok?"✓":"○"} ${esc(l)}</span>${ok?"":`<button class="btn sm" data-a="${a}" data-v="${v}">${esc(b)}</button>`}</div>`).join("")}</section>`}
 
-/* ============ ADD STUDENTS FROM CONTACTS / A PASTED LIST ============ */
+/* ============ ADD STUDENTS: A WHATSAPP GROUP SCREENSHOT, CONTACTS OR A LIST ============ */
 const canPickContacts=()=>!!(navigator.contacts&&navigator.contacts.select&&window.ContactsManager);
+// "Lerato's mom", "Thabo (Lwazi's dad)", "Mama Sipho": the student is the kid, the parent is who we message.
+const PARENT_W="mom|mum|mommy|mummy|mother|mama|dad|daddy|father|papa|parent|ouma|oupa|granny|gran";
+function kidFromName(n){const t=String(n||"").replace(/^[~\s]+/,"").replace(/\s+/g," ").trim();let m;
+  if((m=t.match(new RegExp(`^(.+?)['’]s\\s+(?:${PARENT_W})\\b\\s*(.*)$`,"i"))))return {name:m[1].trim(),parentName:m[2].trim()||"Parent"};
+  if((m=t.match(new RegExp(`^(.+?)\\s*\\(\\s*(.+?)['’]s\\s+(?:${PARENT_W})\\s*\\)$`,"i"))))return {name:m[2].trim(),parentName:m[1].trim()};
+  if((m=t.match(new RegExp(`^(?:${PARENT_W})(?:\\s+of)?\\s*[-:]?\\s+(.+)$`,"i"))))return {name:m[1].trim(),parentName:"Parent"};
+  return null}
+const intake=ppl=>ppl.map(p=>{if(p.parentName)return p;const k=kidFromName(p.name);return k?{...p,...k}:{...p,parentName:""}});
+const hiName=s=>!s?"":s.parentName?(s.parentName==="Parent"?"there":first(s.parentName)):first(s.name);
 function parseVcf(txt){const un=String(txt).replace(/\r?\n[ \t]/g,"");const out=[];
   for(const card of un.split(/BEGIN:VCARD/i).slice(1)){const L=card.split(/\r?\n/);const get=re=>{for(const l of L){const m=l.match(re);if(m)return m[1].trim()}return ""};
     let name=get(/^(?:item\d+\.)?FN[^:]*:(.+)$/i);if(!name){const n=get(/^(?:item\d+\.)?N[^:]*:(.+)$/i);if(n){const [ln,fn]=n.split(";");name=[fn,ln].filter(Boolean).join(" ")}}
     const tel=get(/^(?:item\d+\.)?TEL[^:]*:(.+)$/i),email=get(/^(?:item\d+\.)?EMAIL[^:]*:(.+)$/i);
-    if(name&&(tel||email))out.push({name:name.replace(/\\,/g,",").replace(/\\/g,""),phone:tel,email})}
+    if(name)out.push({name:name.replace(/\\,/g,",").replace(/\\/g,""),phone:tel,email})}
   return out}
+// One person per line. A number or email is nice to have, not required: a name on its own is fine.
 function parseList(txt){const out=[];
   for(const raw of String(txt).split(/\r?\n/)){const l=raw.trim();if(!l)continue;
     const email=(l.match(/[^\s,;<>]+@[^\s,;<>]+\.[a-z]{2,}/i)||[""])[0],phone=(l.replace(email,"").match(/\+?\d[\d\s().-]{6,}\d/)||[""])[0];
-    const name=l.replace(email,"").replace(phone,"").replace(/[<>(),;:|\t-]+/g," ").replace(/\s+/g," ").trim();
-    if(name&&(phone||email))out.push({name,phone:phone.trim(),email})}
+    const name=l.replace(email,"").replace(phone,"").replace(/[<>,;:|\t]+/g," ").replace(/\s-\s/g," ").replace(/\s+/g," ").trim();
+    if(name&&/[a-z]/i.test(name)&&name.length<=60)out.push({name,phone:phone.trim(),email})}
   return out}
-function bulkSheet(people){const prev=S.ui.bulk||{people:[],pick:[]};if(!people)people=prev.people;const keep=people.length>=prev.people.length&&prev.people.every((p,i)=>people[i]===p);S.ui.bulk={people,pick:people.map((_,i)=>keep&&i<prev.pick.length?prev.pick[i]:true)};const b=S.ui.bulk;S.ui.sheet={k:"bulk"};S.ui.stack=[];
+function bulkSheet(people){const prev=S.ui.bulk||{people:[],pick:[]};if(!people)people=prev.people;const keep=people.length>=prev.people.length&&prev.people.every((p,i)=>people[i]===p);
+  S.ui.bulk={people,pick:people.map((p,i)=>keep&&i<prev.pick.length?prev.pick[i]:!p.already),busy:keep?prev.busy:0};const b=S.ui.bulk;S.ui.sheet={k:"bulk"};S.ui.stack=[];
   const n=b.pick.filter(Boolean).length;
+  const row=(p,i)=>`<div class="bulkrow${b.pick[i]?" on":""}"><button class="bx" data-a="bulkpick" data-v="${i}" aria-pressed="${!!b.pick[i]}" aria-label="${b.pick[i]?"Leave out":"Include"} ${esc(p.name||p.parentName)}">${b.pick[i]?"✓":""}</button>
+    <div class="bk"><input data-bk="name" data-i="${i}" value="${esc(p.name)}" placeholder="${p.parentName?"Kid's name":"Name"}" aria-label="${p.parentName?"Kid's name":"Name"}" autocomplete="off">
+    <span class="meta">${[p.parentName?(p.parentName==="Parent"?"Parent":`Parent: ${esc(p.parentName)}`):"",p.phone?esc(p.phone):p.email?esc(p.email):"No number yet",p.already?"Already on your list":""].filter(Boolean).join(" · ")}</span></div>
+    <button class="chip kindchip${p.parentName?" on":""}" data-a="bulkkind" data-v="${i}" aria-label="${p.parentName?"This is a kid: tap for an adult":"This is an adult: tap if it's a parent with a kid"}">${p.parentName?"Kid":"Adult"}</button></div>`;
   openSheet(`${sheetHead("Add students")}<div class="stack-lg"><h1>Add students</h1>
-    ${canPickContacts()?`<button class="btn primary" data-a="pickcontacts">Choose from my contacts</button>`:`<p class="small muted">iPhone: in Contacts, select the people (or a list), tap Share and save the file, then choose it below. Or paste names and numbers.</p>`}
-    <label class="btn" for="vcf-in" style="cursor:pointer">Choose a contacts file (.vcf)</label><input type="file" id="vcf-in" accept=".vcf,text/vcard,text/x-vcard" hidden>
-    <label class="f">Or paste a list, one person per line<textarea id="bulk-paste" rows="5" placeholder="Thabo Mokoena 082 123 4567&#10;Lerato Dlamini, lerato@gmail.com"></textarea></label><button class="btn" data-a="bulkparse">Read the list</button>
-    ${b.people.length?`<section class="stack"><h2 class="label">${b.people.length} found · tap to leave someone out</h2><div class="list">${b.people.map((p,i)=>`<button class="trow bulkrow" data-a="bulkpick" data-v="${i}" aria-pressed="${!!b.pick[i]}" style="grid-template-columns:auto minmax(0,1fr)"><span class="bx">${b.pick[i]?"✓":""}</span><span><span class="nm">${esc(p.name)}</span><span class="meta">${esc([p.phone,p.email].filter(Boolean).join(" · "))}</span></span></button>`).join("")}</div></section>`:""}
+    <label class="btn primary bigpick" for="ppl-in">Screenshot of your WhatsApp group</label><input type="file" id="ppl-in" accept="image/*,.vcf,.csv,text/vcard,text/x-vcard,text/csv" multiple hidden>
+    <p class="small muted" style="margin-top:-12px">In WhatsApp, open your gym's group, tap its name and scroll to the members. Screenshot the list (a few if it's long) and choose them here.</p>
+    ${b.busy?`<p class="small busyline"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Reading ${b.busy>1?b.busy+" screenshots":"your screenshot"}…</p>`:""}
+    ${canPickContacts()?`<button class="btn" data-a="pickcontacts">Choose from my contacts</button>`:""}
+    <details class="planbox"><summary>Or type the names</summary><div class="stack" style="padding-top:12px"><textarea id="bulk-paste" rows="5" placeholder="Thabo Mokoena 082 123 4567&#10;Lerato's mom 083 555 1234&#10;Sipho Ndlovu"></textarea><span class="small muted">One person per line. A number helps but isn't needed.</span><button class="btn" data-a="bulkparse">Add to the list</button></div></details>
+    ${b.people.length?`<section class="stack"><h2 class="label">${b.people.length} found · ${n} ticked</h2><p class="small muted" style="margin-top:-6px">Untick anyone who doesn't train. If a parent is in the group for their child, tap <b>Adult</b> to make it <b>Kid</b> and type the kid's name.</p><div class="list bulklist">${b.people.map(row).join("")}</div></section>`:""}
   </div>`,true,{act:`<button class="btn primary grow" data-a="bulkadd"${n?"":" disabled"}>${n?`Add ${n} student${n>1?"s":""}`:"Add students"}</button>`})}
+function bulkKind(i){const b=S.ui.bulk,p=b&&b.people[i];if(!p)return;
+  if(p.parentName){p.name=p.name||(p.parentName==="Parent"?"":p.parentName);p.parentName=""}else{p.parentName=p.name||"Parent";p.name=""}
+  b.pick[i]=true;bulkSheet();if(p.parentName)setTimeout(()=>{const el=document.querySelector(`[data-bk="name"][data-i="${i}"]`);if(el)el.focus()},60)}
+// Screenshots are shrunk on the phone first: smaller uploads, and Claude reads them at this size anyway.
+async function shrinkShot(file){const url=URL.createObjectURL(file);try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});
+  const k=Math.min(1,1568/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c.toDataURL("image/jpeg",.85).split(",")[1]}finally{URL.revokeObjectURL(url)}}
+async function peopleFiles(fs){const isImg=f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp|gif|heic)$/i.test(f.name),imgs=fs.filter(isImg),docs=fs.filter(f=>!isImg(f));let add=[];
+  for(const f of docs){try{const t=await f.text();add=add.concat(/BEGIN:VCARD/i.test(t)?parseVcf(t):parseList(t.split(/\r?\n/).filter((l,i)=>!(i===0&&/name/i.test(l)&&!/\d/.test(l))).join("\n")))}catch(e){}}
+  if(docs.length&&!add.length&&!imgs.length){toast("Couldn't find any names in that file.");return}
+  const base=((S.ui.bulk||{}).people||[]).concat(intake(add));
+  if(!imgs.length){bulkSheet(base);return}
+  S.ui.bulk={...(S.ui.bulk||{pick:[]}),people:(S.ui.bulk||{}).people||[]};bulkSheet(base);S.ui.bulk.busy=imgs.length;bulkSheet();
+  try{const images=[];for(const f of imgs.slice(0,8))images.push(await shrinkShot(f));
+    const j=await api("POST","/coach/students/read-people",{images}),got=intake(j.people||[]);S.ui.bulk.busy=0;bulkSheet(S.ui.bulk.people.concat(got));
+    const kids=got.filter(p=>p.parentName).length,old=got.filter(p=>p.already).length;
+    toast(got.length?`Found ${got.length} ${got.length===1?"person":"people"}${kids?` (${kids} kid${kids>1?"s":""})`:""}${old?`, ${old} already on your list`:""}. Check them, then add.`:"Couldn't see any names. Screenshot the group's member list and try again.");jfTrack("people_read",{n:got.length,shots:images.length})}
+  catch(e){if(S.ui.bulk){S.ui.bulk.busy=0;if(S.ui.sheet&&S.ui.sheet.k==="bulk")bulkSheet()}toast(e.message)}}
 async function pickContacts(){try{const cs=await navigator.contacts.select(["name","tel","email"],{multiple:true});
-  const ppl=cs.map(c=>({name:(c.name||[])[0]||"",phone:(c.tel||[])[0]||"",email:(c.email||[])[0]||""})).filter(p=>p.name&&(p.phone||p.email));
-  bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl));if(!ppl.length)toast("None of those had a name with a number or email.")}catch(e){}}
-async function bulkAdd(){const b=S.ui.bulk;if(!b)return;const people=b.people.filter((_,i)=>b.pick[i]);if(!people.length)return;
+  const ppl=cs.map(c=>({name:(c.name||[])[0]||"",phone:(c.tel||[])[0]||"",email:(c.email||[])[0]||""})).filter(p=>p.name);
+  bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));if(!ppl.length)toast("None of those had a name.")}catch(e){}}
+async function bulkAdd(){const b=S.ui.bulk;if(!b)return;const idx=b.people.map((_,i)=>i).filter(i=>b.pick[i]);if(!idx.length)return;
+  const gap=idx.find(i=>!String(b.people[i].name||"").trim());
+  if(gap!==undefined){const p=b.people[gap];toast(p.parentName?`Type the kid's name for ${p.parentName==="Parent"?"that parent":p.parentName}, or untick them.`:"One ticked row has no name. Type it, or untick it.");const el=document.querySelector(`[data-bk="name"][data-i="${gap}"]`);if(el)el.focus();return}
+  const people=idx.map(i=>{const p=b.people[i];return {name:p.name.trim(),parentName:p.parentName==="Parent"?"":p.parentName||"",phone:p.phone||"",email:p.email||""}});
   try{const j=await api("POST","/coach/students/bulk",{people});hideSheet();S.ui.bulk=null;await coachLoad("roster");COACH.money=null;coachGo("students");
     toast(`Added ${j.added} student${j.added===1?"":"s"}${j.skipped?`; ${j.skipped} already on your list`:""}.`);jfTrack("bulk_students",{added:j.added})}catch(e){toast(e.message)}}
 

@@ -359,7 +359,7 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .setupcard .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:8px}.setupcard .srow.ok span{color:var(--ink-2)}
 .swatch{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:var(--sw);padding:0;overflow:hidden}.swatch[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px}
 .swatch.none{background:#1D4FB5;color:#fff;font-weight:800;font-size:12px}.swatch.fromlogo{background:#fff}.swatch.fromlogo img{width:100%;height:100%;object-fit:contain}
-.bulkrow .bx{width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;color:var(--on-blue)}.bulkrow[aria-pressed="true"] .bx{background:var(--blue);border-color:var(--blue)}
+.bulkrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}.bulkrow:last-child{border-bottom:0}.bulkrow .bx{width:28px;height:28px;padding:0;border-radius:7px;border:2px solid var(--line);background:transparent;display:grid;place-items:center;font-weight:800;color:var(--on-blue);cursor:pointer}.bulkrow.on .bx{background:var(--blue);border-color:var(--blue)}.bulkrow:not(.on) .bk{opacity:.55}.bulkrow .bk{display:flex;flex-direction:column;gap:2px;min-width:0}.bulkrow .bk input{padding:6px 8px;font-weight:600}.bulkrow .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.kindchip{min-width:58px;justify-content:center}.kindchip.on{background:var(--blue-soft);border-color:var(--blue)}.bigpick{min-height:56px;font-size:17px}.busyline{display:flex;align-items:center;gap:8px}
 .qwrap{display:flex;flex-direction:column;gap:6px}.qsugg{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.qsugg:empty{display:none}
 .qsugg-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 12px;color:var(--ink);font:inherit;min-height:48px}.qsugg-row:first-child{border-top:0}
 .qs-l{display:flex;flex-direction:column;min-width:0}.qs-l small{color:var(--ink-2);font-size:13px}.qs-l mark{background:var(--blue-soft);color:inherit;border-radius:3px;padding:0 1px}
@@ -2287,7 +2287,8 @@ document.addEventListener("click",e=>{
     case "bulkopen": bulkSheet([]); break;
     case "pickcontacts": pickContacts(); break;
     case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
-    case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Put one person per line, with a phone number or email.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl));break }
+    case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
+    case "bulkkind": bulkKind(+v); break;
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
@@ -2353,6 +2354,7 @@ let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   if(e.target.id==="tag-q"){const sh=S.ui.sheet,s=sh&&S.sessions.find(x=>x.id===sh.id);if(s)document.getElementById("tag-list").innerHTML=tagChoices(s,sh.kind,e.target.value);return}
   if(e.target.id==="tag-note"){tagNote(e.target.value);return}
+  if(e.target.dataset&&e.target.dataset.bk){const b=S.ui.bulk,p=b&&b.people[+e.target.dataset.i];if(p)p[e.target.dataset.bk]=e.target.value;return}
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
@@ -2363,7 +2365,7 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
-  if(e.target.id==="vcf-in"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";f.text().then(t=>{const ppl=parseVcf(t);if(!ppl.length){toast("No contacts with a phone number or email in that file.");return}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl))}).catch(()=>toast("Couldn't read that file."));return}
+  if(e.target.id==="ppl-in"&&e.target.files&&e.target.files.length){const fs=[...e.target.files];e.target.value="";peopleFiles(fs);return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}

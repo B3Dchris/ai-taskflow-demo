@@ -242,6 +242,14 @@ function client(base) {
     // --- students who aren't on the app
     r = await coach("POST", "/coach/students", { name: "Nomsa Dube" }); ok(r.s === 400 && /WhatsApp number or an email/.test(r.j.error), "an added student needs a WhatsApp number or email");
     r = await coach("POST", "/coach/students", { name: "Tess Copy", email: "tess@example.com" }); ok(r.s === 409, "can't add someone whose email is already on JitsFlow");
+    r = await coach("POST", "/coach/students/bulk", { people: [{ name: "Kid One", parentName: "Pat Parent", phone: "082 999 0001" }, { name: "Kid Two", parentName: "Pat Parent", phone: "082 999 0001" }, { name: "Name Only" }, { name: "Kid One", parentName: "Pat Parent" }] });
+    ok(r.s === 201 && r.j.added === 3 && r.j.skipped === 1, "bulk: siblings on one parent's number both go in, a name alone is fine, a repeat is skipped: " + JSON.stringify(r.j));
+    { const ro = (await coach("GET", "/coach/roster")).j.people; const k1 = ro.find((x) => x.name === "Kid One"), k2 = ro.find((x) => x.name === "Kid Two");
+      ok(k1 && k2 && k1.parentName === "Pat Parent" && k2.phone === k1.phone, "kids keep their parent's name and number");
+      r = await coach("PATCH", "/coach/students/" + k1.id, { parentName: "Pat P." }); const d = (await coach("GET", "/coach/students/" + k1.id)).j.student;
+      ok(r.s === 200 && d.parentName === "Pat P.", "the parent's name can be changed"); }
+    r = await coach("POST", "/coach/students", { name: "Solo Kid", parentName: "Sam Parent", phone: "082 999 0002" }); ok(r.s === 201, "a single kid can be added with their parent");
+    r = await coach("POST", "/coach/students/read-people", { images: ["aGVsbG8="] }); ok(r.s === 503, "reading screenshots says so when AI is off");
     r = await stu2("POST", "/coach/students", { name: "X", phone: "0821234567" }); ok(r.s === 403, "students can't add students");
     r = await coach("POST", "/coach/students", { name: "Nomsa Dube", phone: "082 444 1111", belt: "blue", stripes: 2 }); const nomsa = r.j.id; ok(r.s === 201 && nomsa, "coach adds a student by WhatsApp number only");
     r = await coach("POST", "/coach/students", { name: "Pieter Botha", email: "pieter@example.com" }); const pieter = r.j.id; ok(r.s === 201, "coach adds a student by email");
