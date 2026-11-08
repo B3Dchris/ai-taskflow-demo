@@ -113,7 +113,7 @@ async function run({ u, q, msgs, helpers: H }) {
         const at = (await q("select ($1::timestamp at time zone $2) as t", [`${day} ${hhmm}`, H.tzOf(u)])).rows[0].t;
         const c = H.readClass({ title: i.title, startsAt: at, durationMin: i.duration_min || 60, capacity: i.capacity || null, coach: i.coach || "", level: i.level || "", kind: i.private ? "private" : "class" });
         if ((await q("select 1 from classes where gym_id=$1 and starts_at=$2 and lower(title)=lower($3)", [u.gym_id, c.startsAt, c.title])).rows[0]) { skipped++; continue; }
-        await q(`insert into classes(${H.CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, H.classVals(u, c)); added++;
+        await q(`insert into classes(${H.CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, H.classVals(u, c)); added++;
       }
       did(`Added ${added} class${added === 1 ? "" : "es"}: ${H.clean(i.title, 60)} at ${hhmm}`, "classes");
       return { added, skipped, first_date: first, time: hhmm };

@@ -159,6 +159,7 @@ alter table users alter column email drop not null;
 alter table users alter column pass_hash drop not null;
 alter table users add column if not exists offline boolean not null default false;
 alter table users add column if not exists parent_name text not null default '';
+alter table classes add column if not exists discipline text not null default '';
 alter table users add column if not exists claim_token text;
 create unique index if not exists users_claim_token on users(claim_token) where claim_token is not null;
 alter table users add column if not exists notices_seen_at timestamptz;

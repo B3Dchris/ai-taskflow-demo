@@ -4553,7 +4553,7 @@ function calRow(c){
   const who=priv?(c.attendees&&c.attendees.length?esc(c.attendees.map(a=>a.name).join(", ")):"Open slot"):"";
   return swipeWrap(`<button class="calrow${priv?" priv":""}${past?" past":""}" data-a="classopen" data-v="${c.id}">
     <span class="cr-time mono"><span>${timeHTML(c.startsAt)}</span><small>${c.durationMin} min</small></span>
-    <span class="cr-body"><b>${esc(c.title)}</b><small>${[priv?"Private":c.level,c.coach,priv&&c.priceCents?money(c.priceCents,API.me.gym.currency):""].filter(Boolean).map(esc).join(" · ")}</small>${priv?`<small class="${c.attendees&&c.attendees.length?"ok":""}">${priv&&c.attendees&&c.attendees.length?"Booked by ":""}${who}</small>`:""}</span>
+    <span class="cr-body"><b>${esc(c.title)}</b><small>${[priv?"Private":typeTag(c),priv?"":c.level,c.coach,priv&&c.priceCents?money(c.priceCents,API.me.gym.currency):""].filter(Boolean).map(esc).join(" · ")}</small>${priv?`<small class="${c.attendees&&c.attendees.length?"ok":""}">${priv&&c.attendees&&c.attendees.length?"Booked by ":""}${who}</small>`:""}</span>
     ${priv?"":`<span class="cr-cap mono"><b>${c.going}${c.capacity?`<small>/${c.capacity}</small>`:""}</b><small>${past?"came":"booked"}</small>${fill!==null?`<span class="cap"><i style="width:${fill}%"></i></span>`:""}${c.waiting?`<small class="w">+${c.waiting} waiting</small>`:""}</span>`}</button>`,{edit:["classeditid",c.id],del:["classdelask",c.id]})}
 function coachClasses(){
   if(!API.comps)loadComps();
@@ -4577,7 +4577,7 @@ async function calMove(k,dir){const st=calState(k==="coach"?"coach":"book");
 async function ensureRange(k){const d=fromYmd(k);if(COACH.rFrom&&d>=COACH.rFrom&&d<=COACH.rTo)return;await coachLoad("classes",k)}
 async function copyWeek(){
   const st=calState("coach"),ws=weekStart(st.anchor),list=(COACH.classes||[]).filter(c=>c.kind!=="private"&&dayKey(c.startsAt)>=ws&&dayKey(c.startsAt)<=addDays2(ws,6));
-  const out=list.map(c=>{const d=new Date(c.startsAt);d.setDate(d.getDate()+7);return {title:c.title,startsAt:d.toISOString(),durationMin:c.durationMin,capacity:c.capacity,coach:c.coach,level:c.level,kind:"class",shared:c.shared,plan:{focus:"",notes:"",ids:[]}}});
+  const out=list.map(c=>{const d=new Date(c.startsAt);d.setDate(d.getDate()+7);return {title:c.title,startsAt:d.toISOString(),durationMin:c.durationMin,capacity:c.capacity,coach:c.coach,level:c.level,discipline:c.discipline||"",kind:"class",shared:c.shared,plan:{focus:"",notes:"",ids:[]}}});
   if(!out.length)return;
   try{const j=await api("POST","/coach/classes/bulk",{classes:out});st.anchor=addDays2(ws,7);st.sel=st.anchor;await coachLoad("classes",st.anchor);toast(`Copied ${j.added} class${j.added===1?"":"es"} to next week${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
 
@@ -4590,6 +4590,7 @@ function classAutofill(title){
   const tt=(gymProfile().timetable||[]).find(r=>(r.title+(r.level?` (${r.level})`:"")).toLowerCase()===tl||r.title.toLowerCase()===tl);
   const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined&&v!==null&&v!=="")el.value=v};
   const cp=v=>setCoachPick(document.getElementById("c-coach"),v);
+  set("c-type",(last&&last.discipline)||(tt&&tt.type)||guessType(title));
   if(last){set("c-dur",last.durationMin);set("c-cap",last.capacity||"");cp(last.coach);set("c-level",last.level);set("c-time",fmtHM(last.startsAt))}
   else if(tt){cp(tt.coach);set("c-level",tt.level);set("c-time",tt.start);if(tt.end){const [a,b]=tt.start.split(":").map(Number),[c2,d]=tt.end.split(":").map(Number);const m=(c2*60+d)-(a*60+b);if(m>=15)set("c-dur",m)}}}
 /* Coach picker: the gym's coach accounts plus coaches from its profile; a free name for guests. */
@@ -4602,6 +4603,12 @@ function coachField(id,cur,isEdit){const names=coachNames();cur=String(cur||"").
   return `<label class="f">Coach<select id="${id}" name="coach" data-coachpick="1">${isEdit&&!cur?`<option value="" selected>Not set</option>`:""}${cur&&!has?`<option selected>${esc(cur)}</option>`:""}${opts}<option value="__other">Someone else…</option></select><input id="${id}-other" name="coachOther" placeholder="Coach's name" aria-label="Coach's name" hidden style="margin-top:8px"></label>`}
 const coachVal=f=>{const s=f.querySelector('[name="coach"]'),o=f.querySelector('[name="coachOther"]');return s?(s.value==="__other"?(o&&o.value||"").trim():s.value.trim()):""};
 function setCoachPick(el,v){if(!el||!v)return;if(el.tagName==="SELECT"&&![...el.options].some(o=>o.value===v)){const o=document.createElement("option");o.textContent=v;el.insertBefore(o,el.querySelector('option[value="__other"]'))}el.value=v;const x=document.getElementById(el.id+"-other");if(x)x.hidden=true}
+/* Class types: a gym runs more than jiu-jitsu. */
+const CLASS_TYPES=["BJJ","BJJ No-Gi","MMA","Muay Thai","Boxing","Kickboxing","Wrestling","Judo","Karate","Taekwondo","Krav Maga","Self-defence","Strength & conditioning","CrossFit","HIIT","Yoga","Pilates","Open mat","Other"];
+const TYPE_GUESS=[[/no[- ]?gi|grappling|submission/i,"BJJ No-Gi"],[/\bgi\b|bjj|jiu|jitsu/i,"BJJ"],[/\bmma\b|mixed martial/i,"MMA"],[/muay|thai\b/i,"Muay Thai"],[/kick ?box/i,"Kickboxing"],[/box/i,"Boxing"],[/wrestl/i,"Wrestling"],[/judo/i,"Judo"],[/karate/i,"Karate"],[/taekwon|\btkd\b/i,"Taekwondo"],[/krav/i,"Krav Maga"],[/self[- ]?def/i,"Self-defence"],[/yoga/i,"Yoga"],[/pilates/i,"Pilates"],[/crossfit/i,"CrossFit"],[/hiit|boot ?camp|circuit/i,"HIIT"],[/strength|conditioning|s ?& ?c\b|weights|lifting/i,"Strength & conditioning"],[/open mat/i,"Open mat"]];
+const guessType=t=>{for(const [re,v] of TYPE_GUESS)if(re.test(t||""))return v;return ""};
+// Show the type next to a class unless its name already says it ("Muay Thai Fundamentals").
+const typeTag=c=>{const d=c.discipline||"";return d&&!String(c.title||"").toLowerCase().includes(d.toLowerCase().split(" ")[0])?d:""};
 const fmtHM=iso=>{const d=new Date(iso);return pad2(d.getHours())+":"+pad2(d.getMinutes())};
 function classForm(c,onDay){
   const st=calState("coach"),def=onDay||(st.sel&&st.sel>todayK()?st.sel:addDays2(todayK(),1));
@@ -4611,12 +4618,13 @@ function classForm(c,onDay){
   const priv=c&&c.kind==="private",hasPlan=c&&c.plan&&(c.plan.focus||c.plan.notes||(c.plan.ids||[]).length);
   S.ui.sheet={k:"classform",id:c&&c.id};S.ui.stack=[];
   openSheet(`${sheetHead(c?"Edit class":"Add a class")}<form id="classform" class="stack-lg" novalidate>
-    <label class="f">Class<input id="c-title" name="title" list="c-titles" autocomplete="off" value="${esc(c?c.title:"")}" placeholder="e.g. No-gi fundamentals"></label>
+    <label class="f">Class<input id="c-title" name="title" list="c-titles" autocomplete="off" value="${esc(c?c.title:"")}" placeholder="e.g. Fundamentals, Muay Thai, Kids"></label>
     <datalist id="c-titles">${knownTitles().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
     ${c?"":`<p class="small muted" style="margin-top:-12px">Pick a class you've run before and the rest fills itself in.</p>`}
     <div class="grid2"><label class="f">Date<input id="c-date" name="date" type="date" value="${date}"></label><label class="f">Start<input id="c-time" name="time" type="time" value="${time}"></label></div>
     <div class="grid2"><label class="f">Minutes<input id="c-dur" name="dur" type="number" inputmode="numeric" min="15" max="600" value="${c?c.durationMin:60}"></label><label class="f">Spots<input id="c-cap" name="cap" type="number" inputmode="numeric" min="1" max="500" value="${c&&c.capacity?c.capacity:""}" placeholder="No limit"></label></div>
-    <div class="grid2">${coachField("c-coach",c?c.coach:API.me.name,!!c)}<label class="f">Level<input id="c-level" name="level" value="${esc(c?c.level||"":"")}" placeholder="All levels"></label></div>
+    <div class="grid2"><label class="f">Type<input id="c-type" name="discipline" list="c-types" autocomplete="off" value="${esc(c?c.discipline||"":"")}" placeholder="e.g. Muay Thai"></label><datalist id="c-types">${CLASS_TYPES.map(t=>`<option value="${esc(t)}">`).join("")}</datalist><label class="f">Level<input id="c-level" name="level" value="${esc(c?c.level||"":"")}" placeholder="All levels"></label></div>
+    ${coachField("c-coach",c?c.coach:API.me.name,!!c)}
     ${c?"":`<label class="f">Repeat<select id="c-repeat" name="repeat"><option value="0">Just this once</option><option value="4">Every week for 4 weeks</option><option value="8">Every week for 8 weeks</option><option value="12">Every week for 12 weeks</option></select></label>`}
     <div class="grid2"><label class="f">Type<select id="c-kind" name="kind"><option value="class"${priv?"":" selected"}>Group class</option><option value="private"${priv?" selected":""}>Private lesson</option></select></label>
       <label class="f" id="c-price-wrap"${priv?"":" hidden"}>Price (${esc(API.me.gym.currency||"ZAR")})<input id="c-price" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c&&c.priceCents?c.priceCents/100:""}"></label></div>
@@ -4633,7 +4641,7 @@ async function submitClass(form){
   if(!v("title").trim()){toast("Give the class a name.");return}
   const when=new Date(`${v("date")}T${v("time")||"18:00"}`);if(isNaN(when)){toast("Pick a date and time.");return}
   const body={title:v("title").trim(),startsAt:when.toISOString(),durationMin:Number(v("dur"))||60,shared:form.querySelector("[name=shared]").checked,plan:{focus:v("focus"),notes:v("notes"),ids:(S.ui.cplan||{ids:[]}).ids},
-    kind:v("kind")||"class",capacity:v("cap")?Number(v("cap")):null,coach:coachVal(form),level:v("level"),priceCents:v("kind")==="private"&&v("price")?Math.round(Number(v("price"))*100):null};
+    kind:v("kind")||"class",capacity:v("cap")?Number(v("cap")):null,coach:coachVal(form),level:v("level"),discipline:v("discipline").trim()||guessType(v("title")),priceCents:v("kind")==="private"&&v("price")?Math.round(Number(v("price"))*100):null};
   const id=S.ui.sheet&&S.ui.sheet.id,reps=id?0:Number(v("repeat"))||0;
   try{
     if(reps>1){const list=[];for(let i=0;i<reps;i++){const d=new Date(when);d.setDate(d.getDate()+7*i);list.push({...body,startsAt:d.toISOString()})}
@@ -4928,7 +4936,7 @@ function drawGymEdit(keep){
     <section class="stack"><div class="row between"><h2 class="label">Weekly timetable (${p.timetable.length})</h2></div>
       ${p.timetable.map((r,i)=>`<div class="edrow tt"><div class="grid3">${sel(`tt-day-${i}`,TTD.map(d=>[d,d]),r.day)}<input name="tt-start-${i}" type="time" value="${esc(r.start)}" aria-label="Starts"><input name="tt-end-${i}" type="time" value="${esc(r.end||"")}" aria-label="Ends"></div>
         <div class="row" style="flex-wrap:nowrap"><input name="tt-title-${i}" value="${esc(r.title)}" placeholder="Class" aria-label="Class" style="flex:2"><input name="tt-coach-${i}" value="${esc(r.coach||"")}" placeholder="Coach" aria-label="Coach" style="flex:1">${x("timetable",i)}</div>
-        <input type="hidden" name="tt-level-${i}" value="${esc(r.level||"")}"></div>`).join("")||`<p class="small muted">No class times found.</p>`}
+        <input type="hidden" name="tt-level-${i}" value="${esc(r.level||"")}"><input type="hidden" name="tt-type-${i}" value="${esc(r.type||"")}"></div>`).join("")||`<p class="small muted">No class times found.</p>`}
       <button type="button" class="btn" data-a="geadd" data-v="timetable">+ Add a class time</button></section>
     <section class="stack"><h2 class="label">Rates (${p.rates.length})</h2>
       ${p.rates.map((r,i)=>`<div class="edrow"><div class="row" style="flex-wrap:nowrap"><input name="rt-name-${i}" value="${esc(r.name)}" placeholder="e.g. Adult unlimited" aria-label="Name" style="flex:1">${x("rates",i)}</div>
@@ -4947,7 +4955,7 @@ function gimpRead(form){
   const G=S.ui.gimp,p=G.profile,v=n=>{const el=form.querySelector(`[name="${n}"]`);return el?el.value:""};
   ["name","tagline","address","phone","email","website","notes"].forEach(k=>p[k]=v(k).trim());
   p.socials={...(p.socials||{})};["instagram","facebook","whatsapp","youtube"].forEach(k=>{const s=v("soc-"+k).trim();if(s)p.socials[k]=s;else delete p.socials[k]});
-  p.timetable=p.timetable.map((r,i)=>({day:v(`tt-day-${i}`),start:v(`tt-start-${i}`),end:v(`tt-end-${i}`),title:v(`tt-title-${i}`).trim(),coach:v(`tt-coach-${i}`).trim(),level:v(`tt-level-${i}`)}));
+  p.timetable=p.timetable.map((r,i)=>({day:v(`tt-day-${i}`),start:v(`tt-start-${i}`),end:v(`tt-end-${i}`),title:v(`tt-title-${i}`).trim(),coach:v(`tt-coach-${i}`).trim(),level:v(`tt-level-${i}`),type:v(`tt-type-${i}`)}));
   p.rates=p.rates.map((r,i)=>({name:v(`rt-name-${i}`).trim(),price:Number(v(`rt-price-${i}`)),period:v(`rt-period-${i}`),note:v(`rt-note-${i}`).trim(),currency:v(`rt-cur-${i}`)}));
   p.coaches=p.coaches.map((c,i)=>({name:v(`co-name-${i}`).trim(),rank:v(`co-rank-${i}`).trim(),bio:v(`co-bio-${i}`).trim()}));
   const lp=form.querySelector("[name=logo]:checked");G.logoPick=lp?lp.value:G.logoPick;
@@ -4972,7 +4980,7 @@ async function ttToClasses(weeks){
   for(let k=0;k<weeks*7;k++){const d=new Date(now);d.setDate(now.getDate()+k);const di=(d.getDay()+6)%7;
     tt.filter(r=>r.day===TTD[di]).forEach(r=>{const [h,m]=r.start.split(":").map(Number);const at=new Date(d);at.setHours(h,m,0,0);if(at<=now)return;
       let dur=60;if(r.end){const [eh,em]=r.end.split(":").map(Number);const x=(eh*60+em)-(h*60+m);if(x>=15)dur=x}
-      out.push({title:r.title+(r.level&&!r.title.toLowerCase().includes(r.level.toLowerCase())?" ("+r.level+")":""),startsAt:at.toISOString(),durationMin:dur,shared:true,plan:{focus:"",notes:r.coach?"Coach: "+r.coach:"",ids:[]}})})}
+      out.push({title:r.title,startsAt:at.toISOString(),durationMin:dur,shared:true,coach:r.coach||"",level:r.level||"",discipline:r.type||guessType(r.title),plan:{focus:"",notes:"",ids:[]}})})}
   if(!out.length){toast("No upcoming classes in that range.");return}
   try{const j=await api("POST","/coach/classes/bulk",{classes:out});await coachLoad("classes");coachGo("classes");toast(`Added ${j.added} class${j.added===1?"":"es"}${j.skipped?` (${j.skipped} already there)`:""}.`)}
   catch(e){toast(e.message)}
@@ -5005,7 +5013,7 @@ function bookCard(c){
   const fill=c.capacity?Math.min(100,Math.round(100*c.going/c.capacity)):null;
   return `<div class="bookcard${c.myGoing?" mine":""}${c.kind==="private"?" priv":""}">
     <button class="bc-main" data-a="bookopen" data-v="${c.id}"><span class="bc-time mono"><span>${timeHTML(c.startsAt)}</span><small>${c.durationMin} min</small></span>
-      <span class="bc-body"><b>${esc(c.title)}</b><span class="small muted">${[c.level,c.coach&&("with "+c.coach)].filter(Boolean).map(esc).join(" · ")}</span>
+      <span class="bc-body"><b>${esc(c.title)}</b><span class="small muted">${[typeTag(c),c.level,c.coach&&("with "+c.coach)].filter(Boolean).map(esc).join(" · ")}</span>
       <span class="small mono">${esc(spotsTxt(c))}</span>${fill!==null&&c.kind!=="private"?`<span class="cap" aria-hidden="true"><i style="width:${fill}%"></i></span>`:""}${whoLine(c)}</span></button>
     <div class="bc-act row">${bookActions(c)}</div></div>`}
 function membershipCard(){const m=API.mem;if(!m)return "";const p=m.plan;
@@ -5045,7 +5053,7 @@ function bookSheet(id){
   const c=(API.classes||[]).find(x=>x.id===id);if(!c)return;S.ui.sheet={k:"book",id};S.ui.stack=[];
   const pl=c.plan||{};const a=c.attendees;
   openSheet(`${sheetHead(c.kind==="private"?"Private lesson":"Class")}<div class="stack-lg"><div><h1>${esc(c.title)}</h1>
-    <p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · with "+esc(c.coach):""}${c.level?" · "+esc(c.level):""}</p>
+    <p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · with "+esc(c.coach):""}${typeTag(c)?" · "+esc(typeTag(c)):""}${c.level?" · "+esc(c.level):""}</p>
     <p class="mono small">${esc(spotsTxt(c))}</p></div>
     ${pl&&(pl.focus||(pl.ids||[]).length||pl.notes)?`<section class="stack"><h2 class="label">Coach's plan</h2>${pl.focus?`<p><b>${esc(pl.focus)}</b></p>`:""}${(pl.ids||[]).filter(i=>TM[i]).length?`<div class="list">${pl.ids.filter(i=>TM[i]).map(i=>tRow(TM[i])).join("")}</div>`:""}${pl.notes?`<p class="small">${esc(pl.notes)}</p>`:""}</section>`:""}
     ${c.kind!=="private"?`<section class="stack"><h2 class="label">Who's booked${c.capacity?` (${c.going}/${c.capacity})`:` (${c.going})`}</h2>

@@ -315,7 +315,7 @@ function makeApi(pool, { secureCookies }) {
   const tzOf = (u) => u.timezone || "Africa/Johannesburg";
   const shortName = (n) => { const p = String(n || "").trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0].toUpperCase()}.` : p[0] || "Member"; };
   const classOut = (c, coach) => ({ id: String(c.id), title: c.title, startsAt: c.starts_at, durationMin: c.duration_min, shared: c.shared,
-    kind: c.kind || "class", capacity: c.capacity ?? null, priceCents: c.price_cents ?? null, coach: c.coach || "", level: c.level || "",
+    kind: c.kind || "class", capacity: c.capacity ?? null, priceCents: c.price_cents ?? null, coach: c.coach || "", level: c.level || "", discipline: c.discipline || "",
     plan: coach || c.shared ? c.plan : null, going: Number(c.going || 0), waiting: Number(c.waiting || 0),
     myGoing: !!c.my_going, myWaitlisted: !!c.my_waitlisted, myAttended: !!c.my_attended, myPosition: c.my_position ? Number(c.my_position) : null });
 
@@ -360,13 +360,13 @@ function makeApi(pool, { secureCookies }) {
     let capacity = b.capacity === null || b.capacity === undefined || b.capacity === "" ? null : Math.min(500, Math.max(1, intOr(b.capacity, 0)));
     if (kind === "private") capacity = Math.min(capacity || 1, 6);
     const priceCents = b.priceCents === null || b.priceCents === undefined || b.priceCents === "" ? null : Math.max(0, intOr(b.priceCents, 0));
-    return { title, startsAt, durationMin, plan: p, shared: b.shared !== false, kind, capacity, priceCents, coach: clean(b.coach, 60), level: clean(b.level, 40) };
+    return { title, startsAt, durationMin, plan: p, shared: b.shared !== false, kind, capacity, priceCents, coach: clean(b.coach, 60), level: clean(b.level, 40), discipline: clean(b.discipline, 40) };
   }
-  const CLASS_COLS = "gym_id,title,starts_at,duration_min,plan,shared,created_by,kind,capacity,price_cents,coach,level";
-  const classVals = (u, c) => [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id, c.kind, c.capacity, c.priceCents, c.coach, c.level];
+  const CLASS_COLS = "gym_id,title,starts_at,duration_min,plan,shared,created_by,kind,capacity,price_cents,coach,level,discipline";
+  const classVals = (u, c) => [u.gym_id, c.title, c.startsAt, c.durationMin, c.plan, c.shared, u.id, c.kind, c.capacity, c.priceCents, c.coach, c.level, c.discipline || ""];
   api.post("/classes", wrap(async (req, res) => {
     const u = needCoach(req), c = readClass(req.body || {});
-    const r = await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`, classVals(u, c));
+    const r = await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`, classVals(u, c));
     res.status(201).json({ class: classOut(r.rows[0], true) });
   }));
   async function ownClass(u, id) {
@@ -383,8 +383,8 @@ function makeApi(pool, { secureCookies }) {
     try {
       await db.query("begin");
       await db.query("select id from classes where id=$1 for update", [cur.id]);
-      row = (await db.query("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10 where id=$11 returning *",
-        [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, cur.id])).rows[0];
+      row = (await db.query("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10,discipline=$11 where id=$12 returning *",
+        [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, c.discipline, cur.id])).rows[0];
       ids = await promoteWaitlist(db, row); // more spots (or no limit any more): people waiting move in
       await db.query("commit");
     } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
@@ -1074,7 +1074,7 @@ function makeApi(pool, { secureCookies }) {
       const c = readClass(raw || {});
       const dup = await q("select 1 from classes where gym_id=$1 and starts_at=$2 and lower(title)=lower($3)", [u.gym_id, c.startsAt, c.title]);
       if (dup.rows[0]) { skipped++; continue; }
-      await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, classVals(u, c));
+      await q(`insert into classes(${CLASS_COLS}) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, classVals(u, c));
       added++;
     }
     res.status(201).json({ added, skipped });
