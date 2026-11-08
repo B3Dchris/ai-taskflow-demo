@@ -248,7 +248,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // --- add several students: a WhatsApp group screenshot first, then contacts or typed names
     await ev(co, () => coachGo("students")); await co.waitForTimeout(400); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
     ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return /Screenshot of your WhatsApp group/.test(document.querySelector('label[for="ppl-in"]').innerText) && !/\.vcf|\.csv|vcard/i.test(t); }), "adding several leads with a WhatsApp screenshot, and never mentions file types");
-    await co.locator("#sheet details.planbox summary").tap(); await co.waitForTimeout(100);
+    ok(await ev(co, () => /Choose from your iPhone contacts/.test(document.getElementById("sheet").innerText) && /Contact Picker API/.test(document.getElementById("sheet").textContent) && !document.querySelector('[data-a="pickcontacts"]')), "on an iPhone without the contact picker, the steps to switch it on are offered");
+    await co.locator("#sheet details.planbox summary").nth(1).tap(); await co.waitForTimeout(100);
     await co.fill("#bulk-paste", "Pat Smith 082 111 2222\nLee Jones, lee@bulk.test\nSipho Ndlovu\nLerato's mom 083 555 1234"); await co.tap('[data-a="bulkparse"]'); await co.waitForTimeout(200);
     ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return r.length === 4 && /No number yet/.test(r[2].innerText) && r[3].querySelector("input").value === "Lerato" && /Kid/.test(r[3].querySelector(".kindchip").innerText); }), "typed names work with or without a number, and \"Lerato's mom\" becomes the kid Lerato");
     await co.locator("#sheet .bulkrow .bx").first().tap(); await co.waitForTimeout(150);
@@ -272,6 +273,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(await ev(co, () => { const r = document.querySelectorAll("#sheet .bulkrow"); return r.length === 10 && r[9].querySelector("input").value === "Zoe Khumalo" && r[6].querySelector("input").value === "Kai" && r[8].querySelector("input").value === "Tim"; }), "a shared contact file goes in the same button, and typed names are kept");
     await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(1200); await co.unroute("**/api/coach/students/read-people");
     ok(/Added 8 students/.test(await toast(co)) && await ev(co, () => { const t = document.getElementById("roster-list").innerText; return /Lee Jones/.test(t) && /Zoe Khumalo/.test(t) && /Sipho Ndlovu/.test(t) && !/Pat Smith/.test(t) && /Aya[\s\S]*Kid · Nomsa Dube/.test(t) && /Ben/.test(t) && /Tim/.test(t); }), "the ticked people are added, kids with their parent (siblings both)");
+    // --- with the phone's contact picker (Android, or iPhone with it switched on): the main button, several at once
+    await ev(co, () => { window.ContactsManager = function () {}; Object.defineProperty(navigator, "contacts", { configurable: true, value: { select: async (props, o) => (window._pickOpts = o, [{ name: ["Musa Khoza"], tel: ["+27 82 121 3434"], email: [] }, { name: ["Naledi's Mom"], tel: ["083 222 1111"], email: [] }]) } }); });
+    await ev(co, () => coachGo("students")); await co.waitForTimeout(300); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
+    ok(await ev(co, () => { const b = document.querySelector('#sheet [data-a="pickcontacts"]'); return b && b.classList.contains("primary") && !/Contact Picker API/.test(document.getElementById("sheet").innerText); }), "the contacts picker is the main button when the phone has it");
+    await co.tap('[data-a="pickcontacts"]'); await co.waitForTimeout(300);
+    ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return window._pickOpts && window._pickOpts.multiple === true && r.length === 2 && /\+27 82 121 3434/.test(r[0].innerText) && r[1].querySelector("input").value === "Naledi" && /Kid/.test(r[1].innerText); }), "several contacts come in at once with their numbers; \"Naledi's Mom\" becomes the kid Naledi");
+    await ev(co, () => hideSheet());
     await ev(co, () => studentSheet(students().find((s) => s.name === "Aya").id)); await co.waitForTimeout(800);
     ok(await ev(co, () => { const a = [...document.querySelectorAll('#sheet a[href*="wa.me"]')].map((x) => decodeURIComponent(x.href)).join(" "); return document.getElementById("s-parent").value === "Nomsa Dube" && /Hi Nomsa, join .* for Aya/.test(a); }), "a kid's page shows the parent, and WhatsApp messages greet the parent");
     await ev(co, () => hideSheet());

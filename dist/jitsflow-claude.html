@@ -5435,12 +5435,13 @@ function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roste
     ${items.map(([l,ok,a,v,b])=>`<div class="srow${ok?" ok":""}"><span>${ok?"✓":"○"} ${esc(l)}</span>${ok?"":`<button class="btn sm" data-a="${a}" data-v="${v}">${esc(b)}</button>`}</div>`).join("")}</section>`}
 
 /* ============ ADD STUDENTS: A WHATSAPP GROUP SCREENSHOT, CONTACTS OR A LIST ============ */
+const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 const canPickContacts=()=>!!(navigator.contacts&&navigator.contacts.select&&window.ContactsManager);
 // "Lerato's mom", "Thabo (Lwazi's dad)", "Mama Sipho": the student is the kid, the parent is who we message.
 const PARENT_W="mom|mum|mommy|mummy|mother|mama|dad|daddy|father|papa|parent|ouma|oupa|granny|gran";
 function kidFromName(n){const t=String(n||"").replace(/^[~\s]+/,"").replace(/\s+/g," ").trim();let m;
-  if((m=t.match(new RegExp(`^(.+?)['’]s\\s+(?:${PARENT_W})\\b\\s*(.*)$`,"i"))))return {name:m[1].trim(),parentName:m[2].trim()||"Parent"};
   if((m=t.match(new RegExp(`^(.+?)\\s*\\(\\s*(.+?)['’]s\\s+(?:${PARENT_W})\\s*\\)$`,"i"))))return {name:m[2].trim(),parentName:m[1].trim()};
+  if((m=t.match(new RegExp(`^(.+?)['’]s\\s+(?:${PARENT_W})\\b\\s*(.*)$`,"i"))))return {name:m[1].trim(),parentName:m[2].trim()||"Parent"};
   if((m=t.match(new RegExp(`^(?:${PARENT_W})(?:\\s+of)?\\s*[-:]?\\s+(.+)$`,"i"))))return {name:m[1].trim(),parentName:"Parent"};
   return null}
 const intake=ppl=>ppl.map(p=>{if(p.parentName)return p;const k=kidFromName(p.name);return k?{...p,...k}:{...p,parentName:""}});
@@ -5466,10 +5467,11 @@ function bulkSheet(people){const prev=S.ui.bulk||{people:[],pick:[]};if(!people)
     <span class="meta">${[p.parentName?(p.parentName==="Parent"?"Parent":`Parent: ${esc(p.parentName)}`):"",p.phone?esc(p.phone):p.email?esc(p.email):"No number yet",p.already?"Already on your list":""].filter(Boolean).join(" · ")}</span></div>
     <button class="chip kindchip${p.parentName?" on":""}" data-a="bulkkind" data-v="${i}" aria-label="${p.parentName?"This is a kid: tap for an adult":"This is an adult: tap if it's a parent with a kid"}">${p.parentName?"Kid":"Adult"}</button></div>`;
   openSheet(`${sheetHead("Add students")}<div class="stack-lg"><h1>Add students</h1>
-    <label class="btn primary bigpick" for="ppl-in">Screenshot of your WhatsApp group</label><input type="file" id="ppl-in" accept="image/*,.vcf,.csv,text/vcard,text/x-vcard,text/csv" multiple hidden>
-    <p class="small muted" style="margin-top:-12px">In WhatsApp, open your gym's group, tap its name and scroll to the members. Screenshot the list (a few if it's long) and choose them here.</p>
+    ${canPickContacts()?`<button class="btn primary bigpick" data-a="pickcontacts">Choose from my contacts</button><p class="small muted" style="margin-top:-12px">Tick everyone who trains, then tap Done. Names and numbers come straight in.</p>`
+      :isIOS()?`<details class="planbox"><summary>Choose from your iPhone contacts</summary><ol class="steps small" style="padding-top:8px"><li>Open <b>Settings</b> → <b>Apps</b> → <b>Safari</b> → <b>Advanced</b> → <b>Feature Flags</b> (older iPhones: Settings → Safari → Advanced → Experimental Features).</li><li>Turn on <b>Contact Picker API</b>.</li><li>Come back here and pull down to reload. A <b>Choose from my contacts</b> button appears.</li></ol></details>`:""}
+    <label class="btn${canPickContacts()?"":" primary bigpick"}" for="ppl-in">Screenshot of your WhatsApp group</label><input type="file" id="ppl-in" accept="image/*,.vcf,.csv,text/vcard,text/x-vcard,text/csv" multiple hidden>
+    <p class="small muted" style="margin-top:-12px">In WhatsApp, open your gym's group, tap its name and scroll to the members. Screenshot the list and choose it here. Only numbers WhatsApp shows come through.</p>
     ${b.busy?`<p class="small busyline"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Reading ${b.busy>1?b.busy+" screenshots":"your screenshot"}…</p>`:""}
-    ${canPickContacts()?`<button class="btn" data-a="pickcontacts">Choose from my contacts</button>`:""}
     <details class="planbox"><summary>Or type the names</summary><div class="stack" style="padding-top:12px"><textarea id="bulk-paste" rows="5" placeholder="Thabo Mokoena 082 123 4567&#10;Lerato's mom 083 555 1234&#10;Sipho Ndlovu"></textarea><span class="small muted">One person per line. A number helps but isn't needed.</span><button class="btn" data-a="bulkparse">Add to the list</button></div></details>
     ${b.people.length?`<section class="stack"><h2 class="label">${b.people.length} found · ${n} ticked</h2><p class="small muted" style="margin-top:-6px">Untick anyone who doesn't train. If a parent is in the group for their child, tap <b>Adult</b> to make it <b>Kid</b> and type the kid's name.</p><div class="list bulklist">${b.people.map(row).join("")}</div></section>`:""}
   </div>`,true,{act:`<button class="btn primary grow" data-a="bulkadd"${n?"":" disabled"}>${n?`Add ${n} student${n>1?"s":""}`:"Add students"}</button>`})}
