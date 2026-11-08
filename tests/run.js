@@ -110,10 +110,22 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
   await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
   await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
+  // --- smart search: typos, slang, initials; suggestions as you type
+  ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('rnc')==='rnc'&&/kimura/.test(top('kimra'))&&/triangle/.test(top('trangle'))&&top('dbl leg')==='double_leg'&&/^Armbar/.test((searchAll('arm bar',1)[0]||{}).label)&&searchAll('xyzzy').length===0}),'search forgives typos, knows slang and initials (rnc, kimra, trangle, dbl leg)');
+  ok(await ev(()=>{const r=searchAll('half gaurd',3);return r[0].k==='p'&&/half guard/i.test(r[0].label)}),'a misspelt position finds the position first');
+  await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('kimra');await p.waitForTimeout(400);
+  ok(await ev(()=>{const rows=[...document.querySelectorAll('#qsugg .qsugg-row')];return rows.length>0&&/Kimura/.test(rows[0].innerText)&&document.activeElement.id==='q'&&[...document.querySelectorAll('#learn-groups .trow .nm')].some(n=>/Kimura/.test(n.innerText))}),'suggestions appear as you type and the list filters, keyboard stays up');
+  await p.locator('#qsugg .qsugg-row').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'&&/kimura/.test(S.ui.sheet.id)),'tapping a suggestion opens it');await ev(()=>closeSheet());
+  await p.fill('#q','');await p.waitForTimeout(250);ok(await ev(()=>!document.querySelector('#qsugg .qsugg-row')),'clearing the search clears the suggestions');
+  // --- technique page: how you get here / where to from here
+  ok(await ev(()=>{techSheet('knee_cut');const f=[...document.querySelectorAll('#sheet .flowsec')];return f.length===2&&/Moves that get you to passing/.test(f[0].innerText)&&/Side control/.test(f[1].innerText)&&!!f[1].querySelector('[data-a="open"]')}),'technique page: how you get here and where to from here, both tappable');
+  ok(await ev(()=>{techSheet('upa');return /when your partner gets to/.test(document.querySelector('#sheet .flowsec').innerText)}),'a bad position explains how you end up there');
+  ok(await ev(()=>{techSheet('rnc');return /If they defend, switch to/.test([...document.querySelectorAll('#sheet .flowsec')][1].innerText)}),'a submission says what to switch to if they defend');
+  await ev(()=>closeSheet());
   // --- curriculum search keeps keyboard focus; filters; collapsible
   await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
   ok(await ev(()=>document.activeElement&&document.activeElement.id==='q'),'search keeps focus while typing');
-  ok(await ev(()=>{const n=document.querySelectorAll('#learn-groups details.grp[open] .trow').length;const w=TECH.filter(t=>beltOf(t)==='blue'&&(t.n+' '+POS[t.f].L+' '+CATS[t.c]+' '+(OV[t.id]||'')).toLowerCase().includes('armbar')).length;return n===w&&n>=3}),'search "armbar" finds attacks and defenses');
+  ok(await ev(()=>{const rows=[...document.querySelectorAll('#learn-groups details.grp[open] .trow')];const ids=searchTechIds('armbar');return rows.length===ids.size&&rows.length>=3&&rows.some(r=>/defense/i.test(r.innerText))&&rows.some(r=>/^Armbar/m.test(r.innerText))}),'search "armbar" finds attacks and defenses, across belts');
   await p.locator('#q').fill('zzzz');await p.waitForTimeout(250);await p.locator('[data-a="clearq"]').tap();
   ok(await ev(()=>S.ui.q===''&&document.querySelectorAll('#learn-groups details.grp').length===20),'clear search restores 20 groups');
   await p.locator('[data-a="filter"][data-v="plus"]').tap();ok(await ev(()=>document.querySelectorAll('#learn-groups .trow').length===TECH.filter(t=>t.p==='plus'&&beltOf(t)==='blue').length),'bonus filter');

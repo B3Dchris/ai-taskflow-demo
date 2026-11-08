@@ -344,6 +344,13 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
 .tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
 .flabel{font-size:14px;color:var(--ink-2)}
+.qwrap{display:flex;flex-direction:column;gap:6px}.qsugg{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.qsugg:empty{display:none}
+.qsugg-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 12px;color:var(--ink);font:inherit;min-height:48px}.qsugg-row:first-child{border-top:0}
+.qs-l{display:flex;flex-direction:column;min-width:0}.qs-l small{color:var(--ink-2);font-size:13px}.qs-l mark{background:var(--blue-soft);color:inherit;border-radius:3px;padding:0 1px}
+.qs-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);flex:none;width:70px;text-align:center}.qs-k.p{background:var(--blue-soft);color:var(--blue)}.qs-k.g{background:var(--good-soft);color:var(--good)}
+.qsugg-empty{padding:10px 12px}
+.path{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.path li{display:flex;align-items:center;gap:6px}.path li.mv::before,.path li.ps:not(:first-child)::before{content:"→";color:var(--ink-2)}
+.path .posbtn{font-size:13px}
 .lcard{display:flex;flex-direction:column;gap:8px}.ltags{display:flex;flex-wrap:wrap;gap:6px}.qtags{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.qtags .chip{min-height:40px;justify-content:center;padding:6px 4px;white-space:nowrap}.lcard .pill{white-space:nowrap;background:var(--surface-2)}
 .ltag{font-size:13px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink)}
 .ltag.ok{background:var(--good-soft);color:var(--good)}.ltag.bad{background:var(--bad-soft);color:var(--bad)}.ltag.warn{background:var(--warn-soft);color:var(--warn)}
@@ -3604,7 +3611,8 @@ function viewLearn(){
    <details class="grp"><summary><span><b>How to get there faster</b></span><span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><ul class="plain" style="padding-bottom:10px">${B.how.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div></details>
   </section>
   <section class="stack">
-   <input id="q" type="search" placeholder="Search techniques or positions" value="${esc(u.q)}" aria-label="Search">
+   <div class="qwrap"><input id="q" type="search" placeholder="Search moves, positions or terms (rnc, kimra, half guard…)" value="${esc(u.q)}" aria-label="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+   <div id="qsugg" class="qsugg" role="listbox" aria-label="Suggestions">${u.q?suggestHTML(u.q):""}</div></div>
    <div class="chips">${chip("filterP","all","All")}${chip("filterP","core","Core")}${chip("filterP","key","Key")}${chip("filterP","plus","Bonus")}</div>
    <div class="chips">${chip("kind","all","All moves")}${chip("kind","def","Defense & escapes")}${chip("kind","att","Attacks")}</div>
    <div class="chips">${chip("filterM","all","Any level")}${chip("filterM","gaps","Needs work")}${chip("filterM","solid","Solid")}</div>
@@ -3613,11 +3621,73 @@ function viewLearn(){
   <div id="learn-groups">${learnGroups()}</div>
   </div>`;
 }
+/* ============ SMART SEARCH ============
+   Forgiving search over moves, positions and terms: typos ("kimra"), word order ("guard half"), squashed words ("armbar"),
+   initials ("rnc") and gym slang ("slx", "kob", "americana"). */
+const ALIAS={dbl:"double",sgl:"single",rnc:"rear naked choke",mataleao:"rear naked choke",armbar:"arm bar armbar",juji:"arm bar",keylock:"americana",heelhook:"heel hook",kneebar:"knee bar",toehold:"toe hold",slx:"single leg x",ashi:"ashi garami leg entanglement",legs:"leg entanglement",fifty:"50 50",darce:"d arce darce",brabo:"d arce darce",kob:"knee on belly",sc:"side control",hg:"half guard",cg:"closed guard",bfly:"butterfly",td:"takedown",guillo:"guillotine",omo:"omoplata",tri:"triangle",ns:"north south",scarf:"kesa scarf",bodylock:"body lock",shrimp:"hip escape shrimp",upa:"trap roll upa bridge",sprawl:"sprawl",snap:"snap down snapdown",dl:"double leg",sl:"single leg",ezekiel:"ezekiel",anaconda:"anaconda",choke:"choke",lock:"lock",tap:"submission",sub:"submission",subs:"submission",escape:"escape",pass:"pass",sweep:"sweep",back:"back",mount:"mount",turtle:"turtle",guard:"guard",wrestling:"takedown wrestle"};
+const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+// edit distance with adjacent swaps, giving up early once it's over the limit
+function lev(a,b,max){if(Math.abs(a.length-b.length)>max)return max+1;const d=[];for(let i=0;i<=a.length;i++){d[i]=[i];for(let j=1;j<=b.length;j++)d[i][j]=i?0:j}
+  for(let i=1;i<=a.length;i++){let lo=max+1;for(let j=1;j<=b.length;j++){const c=a[i-1]===b[j-1]?0:1;d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c);
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);lo=Math.min(lo,d[i][j])}if(lo>max)return max+1}return d[a.length][b.length]}
+let SIDX=null;
+function searchIndex(){if(SIDX)return SIDX;const e=[];
+  TECH.forEach(t=>e.push({k:"t",id:t.id,label:t.n,sub:`${CATS[t.c]} · from ${POS[t.f].l.toLowerCase()}`,name:norm(t.n),text:norm(`${t.n} ${CATS[t.c]} ${POS[t.f].L} ${POS[t.f].l} ${t.t==="sub"?"submission":POS[t.t]?POS[t.t].L:""}`)}));
+  Object.entries(POS).forEach(([k,p])=>e.push({k:"p",id:k,label:p.L,sub:"Position",name:norm(p.L),text:norm(p.L+" "+p.l)}));
+  GLOSS.forEach(g=>e.push({k:"g",id:g.k,label:g.k,sub:"Term",name:norm(g.k),text:norm(g.k)}));
+  e.forEach(x=>{x.words=x.text.split(" ");x.compact=x.text.replace(/ /g,"");x.ncompact=x.name.replace(/ /g,"");x.initials=x.name.split(" ").map(w=>w[0]).join("")});
+  return SIDX=e}
+function scoreEntry(x,toks,qn){const qc=qn.replace(/ /g,"");let s=0,all=true;
+  if(x.name===qn)s+=100;else if(x.name.startsWith(qn))s+=60;else if(qc.length>=3&&x.ncompact.includes(qc))s+=x.ncompact.startsWith(qc)?60:40;
+  if(qc.length>=2&&qc.length<=5&&x.initials.startsWith(qc)&&x.initials.length<=qc.length+1)s+=45;
+  const nameW=x.nwords||(x.nwords=x.name.split(" "));
+  const hitIn=(words,c)=>{let b=0;for(const w of words){if(w===c)b=Math.max(b,10);else if(c.length>=2&&w.startsWith(c))b=Math.max(b,7);
+    else if(c.length>=4){const tol=c.length>=7?2:1;if(lev(w,c,tol)<=tol||(w.length>c.length&&lev(w.slice(0,c.length),c,tol)<=tol))b=Math.max(b,4)}
+    else if(c.length===3&&w[0]===c[0]&&w.length<=4&&lev(w,c,1)<=1)b=Math.max(b,3)}return b};
+  for(const w0 of toks){const alt=ALIAS[w0]?norm(ALIAS[w0]).split(" "):[];let best=0,inName=false;
+    for(const c of [w0,...alt]){if(!c)continue;const n=hitIn(nameW,c);if(n){inName=true;best=Math.max(best,n)}else best=Math.max(best,hitIn(x.words,c))}
+    if(!best&&w0.length>=4&&x.compact.includes(w0))best=6;
+    if(!best){all=false;continue}
+    s+=best+(inName?4:0)}
+  if(!all&&s<40)return 0;
+  if(x.k==="p"&&all&&toks.every(w=>nameW.some(n=>n===w||n.startsWith(w)||(w.length>=4&&lev(n,w,1)<=1))))s+=12; // the position itself beats moves that mention it
+  return s+(x.k==="t"?1:0)}
+function searchAll(q,lim){const qn=norm(q);if(!qn)return [];const toks=qn.split(" ").filter(Boolean);
+  return searchIndex().map(x=>({x,s:scoreEntry(x,toks,qn)})).filter(r=>r.s>0).sort((a,b)=>b.s-a.s||a.x.label.length-b.x.label.length).slice(0,lim||8).map(r=>r.x)}
+/* moves a query finds: direct matches, plus everything from a position it names */
+function searchTechIds(q){const r=searchAll(q,400);const ids=new Set(r.filter(x=>x.k==="t").map(x=>x.id));r.filter(x=>x.k==="p").forEach(p=>fromPos(p.id).forEach(t=>ids.add(t.id)));return ids}
+function suggestHTML(q){const r=searchAll(q,6);if(!norm(q))return "";
+  if(!r.length)return `<div class="qsugg-empty small muted">No match for “${esc(q.trim())}”. Try a shorter word or a position, like “mount”.</div>`;
+  const qn=norm(q);
+  return r.map(x=>{const lab=esc(x.label),i=x.name.indexOf(qn),hi=i>=0&&qn.length>1?lab.replace(new RegExp(`(${qn.split(" ").map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")})`,"i"),"<mark>$1</mark>"):lab;
+    return `<button class="qsugg-row" data-a="${x.k==="t"?"open":x.k==="p"?"pos":"termopen"}" data-v="${esc(x.id)}" role="option"><span class="qs-k ${x.k}">${x.k==="t"?"Move":x.k==="p"?"Position":"Term"}</span><span class="qs-l">${hi}<small>${esc(x.sub)}</small></span></button>`}).join("")}
+
+/* ============ HOW YOU GET HERE / WHERE TO FROM HERE ============ */
+function pathHTML(steps){return `<ol class="path">${steps.map(x=>x.t?`<li class="mv"><button class="linkbtn" data-a="open" data-v="${x.t.id}">${esc(x.t.n)}</button></li>`:`<li class="ps"><button class="posbtn" data-a="pos" data-v="${x.p}">${esc(POS[x.p].l)}</button></li>`).join("")}</ol>`}
+function getHereHTML(t){const mx=flowMax(),p=POS[t.f];
+  if(t.f==="standing")return `<p class="small">Every match starts standing.</p>`;
+  if(p.r>=4){const o=OPP[t.f],ms=o?intoPos(o,mx).slice(0,4):[];
+    return `<p class="small">You end up here when your partner gets ${o?`to <b>${esc(POS[o].l.toLowerCase())}</b>`:"the better position"}${ms.length?`, for example with ${ms.map(m=>`<button class="linkbtn" data-a="open" data-v="${m.id}">${esc(m.n)}</button>`).join(", ")}`:""}.</p>`}
+  const pri=m=>"core key plus".indexOf(m.p)+(isDef(m)?6:0);
+  const ins=intoPos(t.f,mx).sort((a,b)=>pri(a)-pri(b)).slice(0,5);
+  const route=routeFind("standing",t.f,mx),short=route&&route.length>=1&&route.length<=2?route:null;
+  return `${ins.length?`<p class="small muted">Moves that get you to ${esc(p.l.toLowerCase())}:</p><div class="chips">${ins.map(m=>`<button class="chip" data-a="open" data-v="${m.id}">${esc(m.n)}<small class="muted"> from ${esc(POS[m.f].l.toLowerCase())}</small></button>`).join("")}</div>`:""}
+    ${short?`<p class="small muted">From standing:</p>${pathHTML([{p:"standing"},...short.flatMap(m=>[{t:m},{p:m.t}])])}`:""}
+    ${!ins.length&&!short?`<p class="small">Start from <button class="linkbtn" data-a="pos" data-v="${t.f}">${esc(p.l.toLowerCase())}</button> in the flow map to see every way in.</p>`:""}`}
+function fromHereHTML(t){const mx=flowMax(),nx=(t.nx||[]).filter(n=>TM[n]);
+  if(t.t==="sub")return nx.length?`<p class="small muted">If they defend, switch to:</p><div class="list">${nx.map(n=>tRow(TM[n])).join("")}</div>`:`<p class="small">It ends with the tap. If they defend, go back to <button class="linkbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].l.toLowerCase())}</button> and pick another attack.</p>`;
+  const end=t.t,stay=end===t.f,rank=m=>(isDef(m)?3:POS[m.t]&&POS[m.t].r<POS[end].r?0:m.t==="sub"?1:2)*10+"core key plus".indexOf(m.p);
+  const next=fromPos(end,mx).filter(m=>m.id!==t.id&&!nx.includes(m.id)).sort((a,b)=>rank(a)-rank(b)).slice(0,4);
+  return `<p class="small">${stay?`You stay in <b>${esc(POS[end].l.toLowerCase())}</b>, in a better spot.`:`You end up in <button class="posbtn" data-a="pos" data-v="${end}">${esc(POS[end].L)}</button>`}</p>
+    ${nx.length?`<p class="small muted">Chains into:</p><div class="list">${nx.map(n=>tRow(TM[n])).join("")}</div>`:""}
+    ${next.length?`<p class="small muted">${next.every(isDef)?`Be ready to defend in ${esc(POS[end].l.toLowerCase())}:`:`Good next moves from ${esc(POS[end].l.toLowerCase())}:`}</p><div class="chips">${next.map(m=>`<button class="chip" data-a="open" data-v="${m.id}">${esc(m.n)}</button>`).join("")}</div>`:""}`}
+
 function learnGroups(){
   const u=S.ui,q=u.q.trim().toLowerCase();
   const bk=u.belt||goal();
   const ATT=["sub","sweep","pass","takedown","back"];
-  const match=t=>beltOf(t)===bk&&((u.kind||"all")==="all"||(u.kind==="def"?isDef(t):ATT.includes(t.c)))&&(u.filterP==="all"||t.p===u.filterP)&&(u.filterM==="all"||(u.filterM==="gaps"?lv(t.id)<3:lv(t.id)>=3))&&(!q||(t.n+" "+POS[t.f].L+" "+CATS[t.c]+" "+(OV[t.id]||"")).toLowerCase().includes(q));
+  const hit=q?searchTechIds(q):null;
+  const match=t=>(hit?hit.has(t.id):beltOf(t)===bk)&&((u.kind||"all")==="all"||(u.kind==="def"?isDef(t):ATT.includes(t.c)))&&(u.filterP==="all"||t.p===u.filterP)&&(u.filterM==="all"||(u.filterM==="gaps"?lv(t.id)<3:lv(t.id)>=3));
   const groups=ORDER.map(p=>({p,ts:fromPos(p).filter(match)})).filter(g=>g.ts.length);
   return `${groups.length?`<div class="stack">${groups.map(g=>{const open=q||u.filterP!=="all"||u.filterM!=="all"||(u.kind||"all")!=="all"||(S.ui.openG||{})[g.p];const solid=g.ts.filter(t=>lv(t.id)>=3).length;
     return `<details class="grp" data-g="${g.p}"${open?" open":""}><summary><span><b>${esc(POS[g.p].L)}</b><br><span class="small muted">${g.ts.length} technique${g.ts.length>1?"s":""} · ${solid} solid</span></span><span class="small muted mono">${solid}/${g.ts.length}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><p class="small muted" style="padding-bottom:6px">${gl((PD[g.p]||{}).d||"")}</p><div class="list">${g.ts.map(t=>tRow(t,`<span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)).join("")}</div><button class="linkbtn small" data-a="pos" data-v="${g.p}">Open in flow map ›</button></div></details>`}).join("")}</div>`:`<div class="empty">No techniques match${q?` “${esc(u.q.trim())}”`:""}. <button class="linkbtn" data-a="clearq">Clear search and filters</button></div>`}`;
@@ -3773,11 +3843,13 @@ function techSheet(id,fromBack){
     ${c?`<p class="small muted">Next review ${esc(fmtDate(c.due))}</p>`:""}</section>
    <section class="stack"><h2 class="label">Starting position: ${esc(POS[t.f].L)}</h2><p>${gl((PD[t.f]||{}).d||POS[t.f].g)}</p><button class="linkbtn small" data-a="pos" data-v="${t.f}">See all moves from here ›</button></section>
    <section class="stack"><h2 class="label">Steps</h2><ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></section>
+   <section class="stack flowsec"><h2 class="label">How you get here</h2>${getHereHTML(t)}</section>
+   <section class="stack flowsec"><h2 class="label">Where to from here</h2>${fromHereHTML(t)}</section>
    <section class="stack"><h2 class="label">Key details</h2><ul class="plain">${t.d.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></section>
    <section class="stack"><h2 class="label">Common mistakes</h2><ul class="plain">${t.m.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></section>
    <section class="stack"><h2 class="label">Drill</h2><p>${gl(t.dr)}</p></section>
    ${SAMPLE?`<section class="stack"><h2 class="label">Go deeper</h2><div id="explain-box">${explainBox(t)}</div></section>`:""}
-   ${t.nx.length?`<section class="stack"><h2 class="label">Chains into</h2><div class="list">${t.nx.filter(n=>TM[n]).map(n=>tRow(TM[n])).join("")}</div></section>`:""}
+
    <section class="stack"><h2 class="label">My notes</h2><textarea id="note-${id}" data-note="${id}" placeholder="Your coach's details, what works on bigger partners, setups that work for you…">${esc(P().notes[id]||"")}</textarea></section>
    ${(P().videos||{})[t.id]||S.ui.vidUp===t.id||!ASSETS?"":`<section class="stack"><h2 class="label">Video</h2>${videoBlock(t)}</section>`}
   </div>`,false,{act:!ASSETS?"":(P().videos||{})[t.id]?`<button class="btn grow" data-a="playvid">▶ Play video</button>`:`<label class="btn grow" for="vid-${t.id}" style="cursor:pointer">Add a video</label>`});
@@ -3965,6 +4037,7 @@ document.addEventListener("click",e=>{
     case "day": { const st=P().settings,i=Number(v);let d=(st.days||defaultDays(st.perWeek)).slice();d=d.includes(i)?d.filter(x=>x!==i):[...d,i].sort();st.days=d;if(d.length)st.perWeek=d.length;saveProgress();render();break }
     case "termclose": hideTerm(); break;
     case "termmore": termMore(v); break;
+    case "termopen": showTerm(v); break;
     case "explain": askAI(v,null); break;
     case "ask": { const q=(document.getElementById("ai-q")||{}).value||"";if(!q.trim()){toast("Type a question first.");break}askAI(v,q.trim().slice(0,500));break }
     case "aistop": if(AICTL)AICTL.abort(); break;
@@ -4057,7 +4130,7 @@ document.addEventListener("input",e=>{
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
-  if(t.id==="q"){S.ui.q=t.value;clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
+  if(t.id==="q"){S.ui.q=t.value;const sg=document.getElementById("qsugg");if(sg)sg.innerHTML=suggestHTML(t.value);clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
   if(t.dataset.note){P().notes[t.dataset.note]=t.value;saveProgress();return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value;return}
   if(t.dataset.s){const n=Number(t.value);if(t.value!==""&&isFinite(n)&&n>=0){P().settings[t.dataset.s]=n;saveProgress()}return}
@@ -5217,7 +5290,8 @@ function lastClassCard(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if
 /* One sheet per tag type; every tap saves straight away. */
 function tagChoices(s,k,q){const sel=new Set(s[k]||[]);q=(q||"").trim().toLowerCase();
   const first=k==="hits"?(s.taught||[]).filter(i=>TM[i]):[...new Set(recent(90).flatMap(x=>x.tapped||[]))].filter(i=>TM[i]);
-  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!q||(t.n+" "+POS[t.f].l+" "+(CATS[t.c]||"")).toLowerCase().includes(q)).map(t=>t.id);
+  const hit=q?searchTechIds(q):null;
+  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!hit||hit.has(t.id)).map(t=>t.id);
   const chip=i=>`<button class="tchip wide" data-a="tagset" data-k="${k}" data-v="${i}" aria-pressed="${sel.has(i)}">${esc(TM[i].n)}</button>`;
   const rest=pool.filter(i=>q||!first.includes(i));
   return `${first.length&&!q?`<h2 class="label">${k==="hits"?"Taught in this class":"Got you before"}</h2><div class="tlist">${first.map(chip).join("")}</div><h2 class="label">${k==="hits"?"Anything else":"Other submissions"}</h2>`:""}<div class="tlist">${rest.slice(0,q?80:30).map(chip).join("")}</div>${!q&&rest.length>30?`<p class="small muted">Search to find more.</p>`:""}${q&&!rest.length?`<p class="small muted">Nothing matches “${esc(q)}”.</p>`:""}`}

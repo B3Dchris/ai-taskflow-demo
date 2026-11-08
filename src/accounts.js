@@ -1093,7 +1093,8 @@ function lastClassCard(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if
 /* One sheet per tag type; every tap saves straight away. */
 function tagChoices(s,k,q){const sel=new Set(s[k]||[]);q=(q||"").trim().toLowerCase();
   const first=k==="hits"?(s.taught||[]).filter(i=>TM[i]):[...new Set(recent(90).flatMap(x=>x.tapped||[]))].filter(i=>TM[i]);
-  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!q||(t.n+" "+POS[t.f].l+" "+(CATS[t.c]||"")).toLowerCase().includes(q)).map(t=>t.id);
+  const hit=q?searchTechIds(q):null;
+  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!hit||hit.has(t.id)).map(t=>t.id);
   const chip=i=>`<button class="tchip wide" data-a="tagset" data-k="${k}" data-v="${i}" aria-pressed="${sel.has(i)}">${esc(TM[i].n)}</button>`;
   const rest=pool.filter(i=>q||!first.includes(i));
   return `${first.length&&!q?`<h2 class="label">${k==="hits"?"Taught in this class":"Got you before"}</h2><div class="tlist">${first.map(chip).join("")}</div><h2 class="label">${k==="hits"?"Anything else":"Other submissions"}</h2>`:""}<div class="tlist">${rest.slice(0,q?80:30).map(chip).join("")}</div>${!q&&rest.length>30?`<p class="small muted">Search to find more.</p>`:""}${q&&!rest.length?`<p class="small muted">Nothing matches “${esc(q)}”.</p>`:""}`}
