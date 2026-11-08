@@ -5,7 +5,7 @@ const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.erro
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
@@ -172,7 +172,13 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await wide(co, "week calendar");
     // ---- bookings, private lessons, memberships, insights
     await co.tap('nav.tabs [data-v="coach-classes"]'); await co.tap('[data-a="privnew"]');
-    await co.fill("#pv-times", "18:30"); await co.fill("#pv-price", "450"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(900);
+    ok(await ev(co, () => document.querySelectorAll("#pv-grid .tchip").length >= 16 && getComputedStyle(document.getElementById("pv-date")).width === getComputedStyle(document.getElementById("pv-rep")).width), "private slots: hour chips to tap, and the date box is as wide as the others");
+    await co.tap('[data-a="pvclear"]'); await co.tap('[data-a="pvtime"][data-v="07:00"]'); await co.tap('[data-a="pvtime"][data-v="07:00"]');
+    await co.fill("#pv-other", "18:30"); await co.tap('[data-a="pvadd"]');
+    ok(await ev(co, () => document.querySelector('#pv-grid [data-v="18:30"][aria-pressed="true"]') && /^1 time = 1 slot$/.test(document.getElementById("pv-sum").textContent)), "private slots: an odd time can be added, toggling a chip twice unpicks it");
+    await co.selectOption("#pv-rep", "4"); ok(await ev(co, () => /1 time × 4 weeks = 4 slots/.test(document.getElementById("pv-sum").textContent) && /Add 4 slots/.test(document.getElementById("pv-go").textContent)), "private slots: repeating weekly shows how many slots it will add");
+    await co.selectOption("#pv-rep", "1");
+    await co.fill("#pv-price", "450"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(900);
     ok(await ev(co, () => [...document.querySelectorAll(".calrow.priv")].some((c) => /Open slot/.test(c.innerText) && /R\s?450/.test(c.innerText))), "coach adds a private lesson slot");
     await st.evaluate(() => { API.classes = null; }); await st.tap('nav.tabs [data-v="book"]'); await st.waitForTimeout(900);
     ok(await ev(st, () => !document.querySelector('nav.tabs [data-v="book"]').hidden && /No-gi: half guard/.test(document.getElementById("app").innerText) && !!document.querySelector(".bookcard.mine")), "student's Classes tab lists classes and marks their booking");

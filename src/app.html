@@ -337,6 +337,16 @@ ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 /* forms */
 label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2);min-width:0}
 input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;min-width:0}
+/* iOS draws date/time inputs at their own width and ignores width:100%: make them behave like the other fields */
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-height:46px;text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+.tgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
+.tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
+.flabel{font-size:14px;color:var(--ink-2)}
+.kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;border-top:1px solid var(--line);padding-top:8px}.kv:first-child{border-top:0;padding-top:0}
+.kv>.small:first-child{grid-column:1/-1}.kv .mono{font-size:17px;word-break:break-all}.kv>span:last-child:empty{display:none}
+.refrow b{font-size:22px;letter-spacing:.06em;color:var(--blue)}
 textarea{min-height:76px;resize:vertical}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
@@ -2129,6 +2139,15 @@ document.addEventListener("click",e=>{
     case "hand": P().settings.hand=v;saveProgress();render();toast(v==="left"?"Set for left hand.":"Set for right hand.");break;
     case "level": { const id=el.dataset.id;setLevel(id,Number(v));const y=window.scrollY;techSheet(id,true);window.scrollTo(0,y);break }
     case "flowfin": {const f=document.getElementById("fsk-sub");if(f)f.scrollIntoView({behavior:"smooth",block:"start"});else toast("No submissions from here.");break}
+    case "pvtime": el.setAttribute("aria-pressed",el.getAttribute("aria-pressed")==="true"?"false":"true");pvSum();break;
+    case "pvadd": pvAdd();break;
+    case "pvclear": document.querySelectorAll('#pv-grid .tchip').forEach(b=>b.setAttribute("aria-pressed","false"));pvSum();break;
+    case "popcheck": popSheet(v);break;
+    case "popok": popQuick(v,"confirmed");break;
+    case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
+    case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
+    case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
+    case "mypay": myPaySheet();break;
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("flow"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
@@ -2186,6 +2205,9 @@ document.addEventListener("input",e=>{
   if(t.dataset.s){const n=Number(t.value);if(t.value!==""&&isFinite(n)&&n>=0){P().settings[t.dataset.s]=n;saveProgress()}return}
 });
 document.addEventListener("change",e=>{
+  if(e.target.id==="pv-rep"){pvSum();return}
+  if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
+  if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
   const t=e.target;
   if(t.dataset.photo&&t.files&&t.files[0]){uploadPhoto(t.dataset.photo,t.files[0]);return}
   if(t.dataset.pick&&t.value){const f=S.ui.form,k=t.dataset.pick;if(!f[k].includes(t.value))f[k].push(t.value);logSheet(true);return}
@@ -2205,7 +2227,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2215,6 +2237,8 @@ document.addEventListener("submit",async e=>{
     if(fid==="msgform")return sendMsg(f);
     if(fid==="planform")return savePlan(f);
     if(fid==="privform")return savePriv(f);
+    if(fid==="bankform")return saveBank(f);
+    if(fid==="popform")return savePop(f);
     if(fid==="compform")return saveComp(f);
     if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
     if(fid==="compimpform")return compImport(f);

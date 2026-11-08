@@ -18,11 +18,11 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
+  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", INBOUND_SECRET: "test-inbound-secret" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   try {
@@ -178,6 +178,61 @@ function client(base) {
     ok(r.j.me.gym.inviteCode === coachGym.studentCode && !r.j.me.gym.coachCode && !r.j.me.gym.studentCode, "students get the student invite code to share (never the coach code)");
     await coach("PATCH", "/coach/gym", { studentsInvite: false }); r = await stu2("GET", "/me"); ok(!r.j.me.gym.inviteCode, "a coach can stop students sharing invites");
     await coach("PATCH", "/coach/gym", { studentsInvite: true });
+    // --- paying by EFT: bank details, personal references, proof of payment, review
+    r = await coach("GET", "/coach/gym/pay"); const popAddr = r.j.popAddress;
+    ok(r.s === 200 && /^pop-[a-z0-9]{10}@jitsflow\.com$/.test(popAddr) && r.j.popReady === true, "each gym gets a private proof-of-payment address");
+    r = await stu2("GET", "/coach/gym/pay"); ok(r.s === 403, "students can't see the gym's forwarding address");
+    r = await coach("PATCH", "/coach/gym/pay", { holder: "Test Gym", bank: "FNB", account: "62-123 456 789", branch: "250655", type: "Cheque", link: "http://pay.example" }); ok(r.s === 400, "a payment link must be https");
+    r = await coach("PATCH", "/coach/gym/pay", { holder: "Test Gym", bank: "FNB", account: "62-123 456 789", branch: "250655", type: "Cheque", note: "Due by the 3rd" }); ok(r.s === 200 && r.j.pay.account === "62123 456 789", "coach saves bank details (account number keeps digits only)");
+    r = await stu2("GET", "/me/pay"); const myRef = r.j.pay.reference;
+    ok(/^JF[A-HJ-NP-Z2-9]{5}$/.test(myRef) && r.j.pay.bank.bank === "FNB" && r.j.pay.dueCents === 90000 && r.j.pay.paidCents === 0, "student sees what's due, the bank details and their own reference");
+    ok((await stu2("GET", "/me/pay")).j.pay.reference === myRef, "the reference stays the same");
+    r = await coach("GET", "/me/pay"); ok(r.j.pay === null, "coaches don't get a fees card");
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64").toString("base64");
+    r = await stu2("POST", "/me/pay/proof", { name: "notes.txt", data: Buffer.from("just some text, not a proof").toString("base64") }); ok(r.s === 400 && /PDF or an image/.test(r.j.error), "a file that isn't a PDF or image is refused");
+    r = await stu2("POST", "/me/pay/proof", { name: "IMG.HEIC", data: Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypheic"), Buffer.alloc(20)]).toString("base64") }); ok(r.s === 400 && /HEIC/.test(r.j.error), "an iPhone HEIC photo gets a clear message");
+    r = await stu2("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 90000 }); const stuPop = r.j.payment;
+    ok(r.s === 201 && stuPop.status === "pending" && stuPop.hasProof && stuPop.amountCents === 90000, "student sends a proof: it waits for the coach");
+    await new Promise((res) => setTimeout(res, 300));
+    r = await stu2("GET", "/me/pay"); ok(r.j.pay.pendingCents === 90000 && r.j.pay.paidCents === 0 && r.j.pay.payments.some((p) => p.id === stuPop.id && p.status === "pending") && !r.j.pay.payments[0].read, "it shows as being checked, and doesn't count as paid yet");
+    r = await coach("GET", "/coach/payments"); const seenPop = r.j.payments.find((p) => p.id === stuPop.id);
+    ok(seenPop && seenPop.status === "pending" && seenPop.source === "student" && seenPop.userId === sam.id && r.j.payments[0].id === stuPop.id, "coach sees it first, from that student");
+    r = await coach("GET", "/coach/roster"); ok(r.j.people.find((p) => p.id === sam.id).pendingThisMonthCents === 90000 && r.j.people.find((p) => p.id === sam.id).paidThisMonthCents === 0, "roster keeps pending apart from paid");
+    const tess = client(base); r = await tess("POST", "/auth/register", { code: (await coach("GET", "/me")).j.me.gym.studentCode, name: "Tess", email: "tess@example.com", password: "password7" }); const tessId = r.j.me.id;
+    let pf = await fetch(`${base}/payments/${stuPop.id}/proof`, { headers: { cookie: "" } }); ok(pf.status === 401, "proof files need sign-in");
+    r = await tess("GET", `/payments/${stuPop.id}/proof`); ok(r.s === 404, "another student can't open someone's proof");
+    r = await other("GET", `/payments/${stuPop.id}/proof`); ok(r.s === 404, "another gym's coach can't open it");
+    r = await coach("GET", `/payments/${stuPop.id}/proof`); ok(r.s === 200 && r.h.get("content-type") === "image/png" && /sandbox/.test(r.h.get("content-security-policy")), "the gym's coach opens the proof (sandboxed)");
+    r = await stu2("GET", `/payments/${stuPop.id}/proof`); ok(r.s === 200, "the student can open their own proof");
+    r = await coach("POST", "/coach/payments/proof", { name: "whatsapp.png", data: png }); const upl = r.j.payment;
+    ok(r.s === 201 && upl.status === "pending" && upl.source === "upload" && upl.userId === null, "coach uploads a proof: unread without Claude, so no student or amount yet");
+    r = await coach("PATCH", `/coach/payments/${upl.id}`, { status: "confirmed" }); ok(r.s === 400, "can't confirm without an amount and a student");
+    r = await coach("PATCH", `/coach/payments/${upl.id}`, { userId: tessId, amountCents: 90000, method: "eft", status: "confirmed" }); ok(r.s === 200 && r.j.payment.status === "confirmed" && r.j.payment.method === "eft", "coach fills it in and confirms");
+    r = await coach("GET", "/coach/roster"); ok(r.j.people.find((p) => p.id === tessId).paidThisMonthCents === 90000, "confirmed proof counts as paid");
+    r = await coach("PATCH", `/coach/payments/${stuPop.id}`, { status: "rejected" }); ok(r.s === 200, "coach marks one as not a payment");
+    r = await stu2("GET", "/me/pay"); ok(r.j.pay.pendingCents === 0 && r.j.pay.payments.find((p) => p.id === stuPop.id).status === "rejected", "the student sees it wasn't accepted");
+    r = await coach("POST", "/coach/payments", { userId: sam.id, amountCents: 10000, paidOn: today, method: "cash" }); ok(r.s === 201 && r.j.payment.method === "cash" && r.j.payment.status === "confirmed", "recording by hand keeps the method and counts straight away");
+    // --- forwarded emails (Cloudflare email worker -> /inbound/pop)
+    const mime = (to, from, subject, body, pdf) => {
+      const b = "XYZBOUNDARY";
+      return `From: ${from}\r\nTo: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="${b}"\r\n\r\n--${b}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}\r\n` +
+        (pdf ? `--${b}\r\nContent-Type: application/pdf; name="pop.pdf"\r\nContent-Disposition: attachment; filename="pop.pdf"\r\nContent-Transfer-Encoding: base64\r\n\r\n${pdf.toString("base64").replace(/.{76}/g, "$&\r\n")}\r\n` : "") + `--${b}--\r\n`;
+    };
+    const inbound = (raw, to, secret = "test-inbound-secret") => fetch(`${base}/inbound/pop`, { method: "POST", headers: { "content-type": "message/rfc822", "x-jf": "1", "x-jf-inbound": secret, "x-jf-to": to }, body: raw });
+    const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(4000, 32), Buffer.from("\n%%EOF")]);
+    const notif = mime(popAddr, "FNB <inContact@fnb.co.za>", "FNB: proof of payment", `FNB: You have received a payment of R900.00 on ${today}.\nReference: ${myRef}\nFrom: C SMITH`, pdf);
+    pf = await inbound(notif, popAddr, "wrong-secret"); ok(pf.status === 403, "the inbound address needs the worker's secret");
+    pf = await inbound(notif, "pop-zzzzzzzzzz@jitsflow.com"); ok(pf.status === 404, "unknown forwarding address is refused");
+    pf = await inbound(notif, popAddr); ok(pf.status === 201, "a forwarded bank email is accepted");
+    r = await coach("GET", "/coach/payments"); const em = r.j.payments.find((p) => p.source === "email");
+    ok(em && em.status === "pending" && em.amountCents === 90000 && em.userId === sam.id && em.read.match === "reference" && em.hasProof && /proof of payment/.test(em.emailSubject), "the email is read and matched to the student by their reference");
+    pf = await inbound(notif, popAddr); r = await coach("GET", "/coach/payments");
+    ok(r.j.payments.filter((p) => p.source === "email").some((p) => p.read && p.read.duplicateOf === em.id), "the same email twice is flagged as a duplicate");
+    pf = await inbound(mime(popAddr, "Newsletter <news@example.com>", "Our sale", "Big discounts this weekend"), popAddr); ok(pf.status === 200 && (await pf.json()).skipped, "an email that isn't a payment is ignored");
+    pf = await inbound(mime(popAddr, "Gmail Team <forwarding-noreply@google.com>", "(#123456789) Gmail Forwarding Confirmation - Receive Mail from owner@gmail.com", "Confirmation code: 123456789\n\nhttps://mail-settings.google.com/mail/vf-abc123"), popAddr);
+    r = await coach("GET", "/coach/gym/pay"); ok(r.j.popNotice && r.j.popNotice.code === "123456789" && r.j.popNotice.from === "owner@gmail.com", "Gmail's forwarding confirmation code shows up for the coach");
+    r = await coach("POST", "/coach/gym/pay/new-address"); ok(r.s === 200 && r.j.popAddress !== popAddr, "coach can get a new address");
+    pf = await inbound(notif, popAddr); ok(pf.status === 404, "the old address stops working");
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");

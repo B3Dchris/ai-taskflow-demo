@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const importer = require("./importer");
 const mail = require("./mail");
+const pop = require("./pop");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -48,7 +49,9 @@ function makeApi(pool, { secureCookies }) {
   const q = (text, params) => pool.query(text, params);
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-  api.use(express.json({ limit: "400kb" }));
+  // Proof-of-payment uploads carry a file (base64), so they get a bigger allowance than everything else.
+  const smallJson = express.json({ limit: "400kb" }), bigJson = express.json({ limit: "12mb" });
+  api.use((req, res, next) => (/\/proof$/.test(req.path) ? bigJson : smallJson)(req, res, next));
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
@@ -538,15 +541,17 @@ function makeApi(pool, { secureCookies }) {
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
     const vs = await visitStats(u.gym_id, tzOf(u)), { visits } = vs;
-    const pay = await q(`select user_id, sum(amount_cents) filter (where paid_on >= date_trunc('month', current_date)) as month_cents, max(paid_on) as last_paid from payments
-      where gym_id=$1 and user_id is not null group by user_id`, [u.gym_id]);
+    const pay = await q(`select user_id, sum(amount_cents) filter (where status='confirmed' and paid_on >= date_trunc('month', current_date)) as month_cents,
+        sum(amount_cents) filter (where status='pending' and paid_on >= date_trunc('month', current_date) - interval '7 days') as pending_cents,
+        max(paid_on) filter (where status='confirmed') as last_paid from payments
+      where gym_id=$1 and user_id is not null and status<>'rejected' group by user_id`, [u.gym_id]);
     const paid = Object.fromEntries(pay.rows.map((x) => [x.user_id, x]));
     return { plans, vs, rows: r.rows.map((x) => {
       const plan = pm[String(x.plan_id)] || null;
       const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
       return { ...person(x, s[x.id]), email: x.email, phone: x.phone || "", role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
         feeCents: fee || 0, planId: plan ? String(plan.id) : null, planName: plan ? plan.name : null, planStatus: x.plan_status, planStarted: x.plan_started,
-        paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
+        paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), pendingThisMonthCents: Number(paid[x.id]?.pending_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
         visits: x.role === "student" ? studentStats(x, visits[x.id]) : null };
     }) };
   }
@@ -564,7 +569,7 @@ function makeApi(pool, { secureCookies }) {
     const u = needCoach(req), st = await ownStudent(u, req.params.id);
     const s = (await summaries(u.gym_id, [st.id]))[st.id];
     const logs = await q("select id,data from training_logs where user_id=$1 order by date desc nulls last limit 30", [st.id]);
-    const pays = await q("select * from payments where user_id=$1 and gym_id=$2 order by paid_on desc limit 24", [st.id, u.gym_id]);
+    const pays = await q("select * from payments where user_id=$1 and gym_id=$2 and status<>'rejected' order by paid_on desc limit 24", [st.id, u.gym_id]);
     const { visits } = await visitStats(u.gym_id, tzOf(u));
     const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
       where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
@@ -672,7 +677,7 @@ function makeApi(pool, { secureCookies }) {
     const visits28 = studs.reduce((s, p) => s + p.visits.d28, 0), prev28 = studs.reduce((s, p) => s + p.visits.p28, 0);
     const old = studs.filter((p) => now - new Date(p.joined).getTime() > 90 * DAY);
     const expected = studs.filter((p) => !["paused", "cancelled", "trial"].includes(p.planStatus)).reduce((s, p) => s + (p.feeCents || 0), 0);
-    const collected = Number((await q("select coalesce(sum(amount_cents),0) as s from payments where gym_id=$1 and paid_on >= date_trunc('month', current_date)", [u.gym_id])).rows[0].s);
+    const collected = Number((await q("select coalesce(sum(amount_cents),0) as s from payments where gym_id=$1 and status='confirmed' and paid_on >= date_trunc('month', current_date)", [u.gym_id])).rows[0].s);
     const unpaid = studs.filter((p) => p.feeCents > 0 && p.paidThisMonthCents < p.feeCents && p.planStatus !== "paused" && p.planStatus !== "cancelled");
     const mix = plans.filter((p) => p.active).map((p) => { const m = studs.filter((s) => s.planId === String(p.id) && s.planStatus !== "cancelled"); return { id: String(p.id), name: p.name, members: m.length, monthlyCents: m.length * (monthly(p) || 0) }; });
     res.json({
@@ -894,13 +899,128 @@ function makeApi(pool, { secureCookies }) {
   }));
 
   // ---------- coach: payments ----------
+  const METHODS = ["eft", "cash", "card", "snapscan", "payfast", "other"];
+  const PAY_STATUS = ["pending", "confirmed", "rejected"];
   function payOut(p) {
+    const a = p.ai || {};
     return { id: String(p.id), userId: p.user_id ? String(p.user_id) : null, amountCents: p.amount_cents, currency: p.currency, paidOn: p.paid_on,
-      reference: p.reference, note: p.note, source: p.source, emailFrom: p.email_from, emailSubject: p.email_subject, createdAt: p.created_at };
+      reference: p.reference, note: p.note, source: p.source, emailFrom: p.email_from, emailSubject: p.email_subject, createdAt: p.created_at,
+      method: p.method || "", status: p.status || "confirmed", hasProof: !!p.has_proof,
+      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, reading: !!a.reading, error: a.error ? "Couldn't read it automatically." : "" } : null };
   }
+  const PAY_COLS = "p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof";
+  const todayIn = async (u) => (await q("select to_char(now() at time zone $1,'YYYY-MM-DD') as d", [tzOf(u)])).rows[0].d;
+  async function payRef(userId) {
+    const cur = (await q("select pay_ref from users where id=$1", [userId])).rows[0];
+    if (cur && cur.pay_ref) return cur.pay_ref;
+    for (let i = 0; i < 8; i++) {
+      const ref = "JF" + Array.from(crypto.randomBytes(5), (b) => pop.REF_ALPHABET[b % 32]).join("");
+      try { const r = await q("update users set pay_ref=$1 where id=$2 and pay_ref is null returning pay_ref", [ref, userId]); if (r.rows[0]) return ref; return (await q("select pay_ref from users where id=$1", [userId])).rows[0].pay_ref; }
+      catch (e) { if (e.code !== "23505") throw e; }
+    }
+    fail(500, "Couldn't make a payment reference. Try again.");
+  }
+  // A proof file from the browser: base64, at most 8 MB, and really a PDF or an image Claude can read.
+  function proofFile(b) {
+    const data = Buffer.from(String(b.data || ""), "base64");
+    if (!data.length) fail(400, "Choose the proof of payment (a PDF or a screenshot).");
+    if (data.length > 8 * 1024 * 1024) fail(413, "That file is over 8 MB. Send a screenshot of the payment instead.");
+    const type = pop.sniff(data);
+    if (type === "image/heic") fail(400, "That photo is in HEIC format. Take a screenshot of the payment and send that instead.");
+    if (!type) fail(400, "Send a PDF or an image (a screenshot is fine).");
+    return { name: clean(b.name, 120) || (type === "application/pdf" ? "proof.pdf" : "proof"), type, data };
+  }
+  const gymStudents = async (gymId) => (await q("select id, name, pay_ref from users where gym_id=$1 and role='student'", [gymId])).rows;
+  // Store a proof as a payment waiting for the coach. Flags a likely duplicate (same amount, date and student or reference).
+  async function addProof({ u, gymId, userId, read, source, files, text, from, subject, note, method }) {
+    let match = { userId: userId || null, how: userId ? "student" : "" };
+    if (!userId && read) match = pop.matchStudent(read, text || "", await gymStudents(gymId));
+    const amount = (read && read.amountCents) || 0, paidOn = (read && read.date) || (await todayIn(u || { timezone: null }));
+    const reference = clean((read && read.reference) || "", 140);
+    const dup = amount ? (await q(`select id from payments where gym_id=$1 and amount_cents=$2 and paid_on=$3 and status<>'rejected' and (($4::bigint is not null and user_id=$4) or ($5<>'' and reference=$5)) limit 1`,
+      [gymId, amount, paidOn, match.userId, reference])).rows[0] : null;
+    const ai = read ? { ...read, match: match.how, duplicateOf: dup ? String(dup.id) : null } : null;
+    const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,email_from,email_subject,status,method,ai,submitted_by)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13) returning id`,
+      [gymId, match.userId, amount, (u && u.currency) || "ZAR", paidOn, reference, clean(note, 500), source, from ? clean(from, 200) : null, subject ? clean(subject, 200) : null, method || "eft", ai, u ? u.id : null]);
+    for (const f of files || []) await q("insert into pop_files(payment_id,name,type,data) values($1,$2,$3,$4)", [r.rows[0].id, f.name, f.type, f.data]);
+    return (await q(`select ${PAY_COLS} from payments p where p.id=$1`, [r.rows[0].id])).rows[0];
+  }
+  const aiClient = () => importer.getClient ? importer.getClient() : null;
+
+  // ---------- how students pay ----------
+  const PAY_FIELDS = { holder: 80, bank: 60, account: 30, branch: 20, type: 30, link: 400, note: 300 };
+  function readPaySettings(b) {
+    const out = {}; for (const [k, n] of Object.entries(PAY_FIELDS)) out[k] = clean(b[k], n);
+    if (out.link && !/^https:\/\//i.test(out.link)) fail(400, "The payment link must start with https://");
+    out.account = out.account.replace(/[^\d ]/g, ""); out.branch = out.branch.replace(/[^\d ]/g, "");
+    return out;
+  }
+  const popAddress = (tok) => `pop-${tok}@${process.env.POP_DOMAIN || "jitsflow.com"}`;
+  api.get("/coach/gym/pay", wrap(async (req, res) => {
+    const u = needCoach(req), g = (await q("select pay, pop_token, pop_notice from gyms where id=$1", [u.gym_id])).rows[0];
+    let tok = g.pop_token;
+    if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
+    res.json({ pay: g.pay || {}, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null });
+  }));
+  api.patch("/coach/gym/pay", wrap(async (req, res) => {
+    const u = needCoach(req), pay = readPaySettings(req.body || {});
+    await q("update gyms set pay=$1 where id=$2", [pay, u.gym_id]);
+    res.json({ pay });
+  }));
+  // A new forwarding address (the old one stops working), e.g. if it leaked.
+  api.post("/coach/gym/pay/new-address", wrap(async (req, res) => {
+    const u = needCoach(req), tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+    await q("update gyms set pop_token=$1, pop_notice=null where id=$2", [tok, u.gym_id]);
+    res.json({ popAddress: popAddress(tok) });
+  }));
+
+  // ---------- students: what's due, where to pay, send proof ----------
+  async function feeFor(u) {
+    const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null;
+    return u.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee ?? 0;
+  }
+  api.get("/me/pay", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id || u.role !== "student") return res.json({ pay: null });
+    const g = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0];
+    const sums = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as paid, coalesce(sum(amount_cents) filter (where status='pending'),0) as pending
+      from payments where user_id=$1 and gym_id=$2 and paid_on >= date_trunc('month', now() at time zone $3)`, [u.id, u.gym_id, tzOf(u)])).rows[0];
+    const recent = (await q(`select ${PAY_COLS} from payments p where p.user_id=$1 and p.gym_id=$2 and p.paid_on > current_date - 200 order by p.paid_on desc, p.id desc limit 12`, [u.id, u.gym_id])).rows;
+    res.json({ pay: { dueCents: (await feeFor(u)) || 0, paidCents: Number(sums.paid), pendingCents: Number(sums.pending), currency: u.currency || "ZAR",
+      reference: await payRef(u.id), bank: g.pay || {}, payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
+  }));
+  api.post("/me/pay/proof", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
+    if (limited("pop-u:" + u.id, 20, 24 * 3600e3)) fail(429, "That's a lot of uploads today. Ask your coach if something's wrong.");
+    const b = req.body || {}, file = proofFile(b);
+    const typed = intOr(b.amountCents, 0), on = isDay(b.paidOn) ? b.paidOn : "";
+    const row = await addProof({ u, gymId: u.gym_id, userId: u.id, read: { amountCents: typed > 0 && typed < 1e8 ? typed : 0, date: on, reference: await payRef(u.id), reading: true }, source: "student", files: [file], note: b.note, method: "eft" });
+    res.status(201).json({ payment: payOut(row) });
+    // Read it in the background: the student doesn't need to wait, the coach sees what it says.
+    const c = aiClient();
+    setImmediate(async () => {
+      try {
+        const read = await pop.readPop({ client: c, files: [file] });
+        const amount = row.amount_cents || read.amountCents || 0, mismatch = row.amount_cents && read.amountCents && read.amountCents !== row.amount_cents;
+        const otherRef = pop.refsIn(read.reference).find((r) => r !== (u.pay_ref || "")) || null;
+        await q("update payments set ai=$1, amount_cents=$2, paid_on=coalesce($3::date, paid_on) where id=$4 and status='pending'",
+          [{ ...read, match: "student", typedCents: row.amount_cents || 0, amountMismatch: !!mismatch, otherRef }, amount, on ? null : (read.date || null), row.id]);
+      } catch (e) { console.error("pop read:", e.message); await q("update payments set ai = coalesce(ai,'{}'::jsonb) - 'reading' || '{\"error\":\"read failed\"}' where id=$1", [row.id]).catch(() => {}); }
+    });
+  }));
+  // The proof file itself: for the gym's coaches and the student who sent it.
+  api.get("/payments/:id/proof", wrap(async (req, res) => {
+    const u = needUser(req), p = (await q("select * from payments where id=$1", [intOr(req.params.id, 0)])).rows[0];
+    if (!p || !(u.gym_id === p.gym_id && (u.role === "coach" || u.id === p.user_id))) fail(404, "Not found.");
+    const f = (await q("select * from pop_files where payment_id=$1 order by id limit 1", [p.id])).rows[0]; if (!f) fail(404, "No proof attached.");
+    res.set({ "Content-Type": f.type, "Content-Disposition": `inline; filename="${f.name.replace(/[^\w.\- ]/g, "_")}"`, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'", "Cache-Control": "private, no-store" });
+    res.send(f.data);
+  }));
+
+  // ---------- coach: payments ----------
   api.get("/coach/payments", wrap(async (req, res) => {
     const u = needCoach(req);
-    const r = await q("select * from payments where gym_id=$1 order by paid_on desc, id desc limit 300", [u.gym_id]);
+    const r = await q(`select ${PAY_COLS} from payments p where p.gym_id=$1 and (p.status<>'rejected' or p.created_at > now() - interval '30 days') order by (p.status='pending') desc, p.paid_on desc, p.id desc limit 400`, [u.gym_id]);
     res.json({ payments: r.rows.map(payOut) });
   }));
   api.post("/coach/payments", wrap(async (req, res) => {
@@ -910,23 +1030,63 @@ function makeApi(pool, { secureCookies }) {
     const paidOn = isDay(b.paidOn) ? b.paidOn : fail(400, "Pick the date it was paid.");
     let userId = null;
     if (b.userId) userId = (await ownStudent(u, b.userId)).id;
-    const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source) values($1,$2,$3,$4,$5,$6,$7,'manual') returning *`,
-      [u.gym_id, userId, amount, u.currency || "ZAR", paidOn, clean(b.reference, 140), clean(b.note, 500)]);
-    res.status(201).json({ payment: payOut(r.rows[0]) });
+    const method = METHODS.includes(b.method) ? b.method : "";
+    const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,submitted_by) values($1,$2,$3,$4,$5,$6,$7,'manual',$8,$9) returning id`,
+      [u.gym_id, userId, amount, u.currency || "ZAR", paidOn, clean(b.reference, 140), clean(b.note, 500), method, u.id]);
+    res.status(201).json({ payment: payOut((await q(`select ${PAY_COLS} from payments p where p.id=$1`, [r.rows[0].id])).rows[0]) });
   }));
+  // Coach uploads a proof (e.g. a screenshot a student WhatsApped them): read it now so they can confirm straight away.
+  api.post("/coach/payments/proof", wrap(async (req, res) => {
+    const u = needCoach(req), file = proofFile(req.body || {});
+    const read = await pop.readPop({ client: aiClient(), files: [file] });
+    const row = await addProof({ u, gymId: u.gym_id, read, source: "upload", files: [file], method: "eft" });
+    res.status(201).json({ payment: payOut(row) });
+  }));
+  // Edit, match, confirm or reject. Only the fields sent change.
   api.patch("/coach/payments/:id", wrap(async (req, res) => {
-    const u = needCoach(req);
-    const p = await q("select * from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
-    if (!p.rows[0]) fail(404, "That payment doesn't exist.");
-    const userId = req.body?.userId ? (await ownStudent(u, req.body.userId)).id : null;
-    await q("update payments set user_id=$1 where id=$2", [userId, p.rows[0].id]);
-    res.json({ ok: true });
+    const u = needCoach(req), b = req.body || {};
+    const p = (await q("select * from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+    if (!p) fail(404, "That payment doesn't exist.");
+    const userId = b.userId === undefined ? p.user_id : b.userId ? (await ownStudent(u, b.userId)).id : null;
+    const amount = b.amountCents === undefined ? p.amount_cents : intOr(b.amountCents, NaN);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 100000000) fail(400, "Enter the amount paid.");
+    const paidOn = b.paidOn === undefined ? p.paid_on : isDay(b.paidOn) ? b.paidOn : fail(400, "Pick the date it was paid.");
+    const status = b.status === undefined ? p.status : PAY_STATUS.includes(b.status) ? b.status : fail(400, "Bad status.");
+    const method = b.method === undefined ? p.method : METHODS.includes(b.method) ? b.method : "";
+    if (status === "confirmed" && !(amount > 0)) fail(400, "Enter the amount before confirming.");
+    if (status === "confirmed" && !userId) fail(400, "Pick the student this payment is from.");
+    await q("update payments set user_id=$1, amount_cents=$2, paid_on=$3, status=$4, method=$5, reference=$6, note=$7 where id=$8",
+      [userId, amount, paidOn, status, method, b.reference === undefined ? p.reference : clean(b.reference, 140), b.note === undefined ? p.note : clean(b.note, 500), p.id]);
+    res.json({ payment: payOut((await q(`select ${PAY_COLS} from payments p where p.id=$1`, [p.id])).rows[0]) });
   }));
   api.delete("/coach/payments/:id", wrap(async (req, res) => {
     const u = needCoach(req);
     const r = await q("delete from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
     if (!r.rowCount) fail(404, "That payment doesn't exist.");
     res.json({ ok: true });
+  }));
+
+  // ---------- inbound proof-of-payment email (from the Cloudflare email worker) ----------
+  // The worker posts the raw message with a shared secret. Each gym has its own address: pop-<token>@jitsflow.com.
+  api.post("/inbound/pop", express.raw({ type: () => true, limit: "26mb" }), wrap(async (req, res) => {
+    const secret = process.env.INBOUND_SECRET || "", got = String(req.headers["x-jf-inbound"] || "");
+    if (!secret || got.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(secret))) fail(403, "Not allowed.");
+    const to = String(req.headers["x-jf-to"] || "").toLowerCase(), tok = (to.match(/^pop-([a-z0-9]{6,32})@/) || [])[1];
+    const g = tok && (await q("select g.id, g.currency, g.timezone from gyms g where g.pop_token=$1", [tok])).rows[0];
+    if (!g) fail(404, "Unknown address.");
+    if (limited("pop-g:" + g.id, 300, 24 * 3600e3)) fail(429, "Too many emails today.");
+    const { simpleParser } = require("mailparser");
+    const parsed = await simpleParser(Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body || "")));
+    const notice = pop.gmailConfirm(parsed);
+    if (notice) { await q("update gyms set pop_notice=$1 where id=$2", [notice, g.id]); return res.json({ ok: true, gmailConfirm: true }); }
+    const files = (parsed.attachments || []).map((a) => ({ name: clean(a.filename, 120) || "attachment", data: a.content, type: pop.sniff(a.content) }))
+      .filter((f) => f.type && f.type !== "image/heic" && f.data.length <= 8 * 1024 * 1024 && f.data.length > 2048).slice(0, 3);
+    const text = `From: ${(parsed.from && parsed.from.text) || ""}\nSubject: ${parsed.subject || ""}\n\n${(parsed.text || "").slice(0, 20000)}`;
+    const read = await pop.readPop({ client: aiClient(), text, files });
+    if (!read.isPayment && !files.length) return res.json({ ok: true, skipped: "not a payment" });
+    const row = await addProof({ u: { id: null, currency: g.currency, timezone: g.timezone }, gymId: g.id, read, source: "email", files, text,
+      from: (parsed.from && parsed.from.text) || String(req.headers["x-jf-from"] || ""), subject: parsed.subject || "", method: "eft" });
+    res.status(201).json({ ok: true, id: String(row.id) });
   }));
 
   api.use((req, res) => res.status(404).json({ error: "Not found." }));

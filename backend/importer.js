@@ -637,5 +637,6 @@ async function importEvent(rawUrl, { client, log = () => {} } = {}) {
   return { event, method, aiError, dateChecked, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
 }
 module.exports.importEvent = importEvent;
+module.exports.getClient = getClient;
 module.exports.datesInText = datesInText;
 module.exports.cleanEvent = cleanEvent;

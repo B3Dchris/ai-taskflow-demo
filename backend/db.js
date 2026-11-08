@@ -149,6 +149,27 @@ create table if not exists competitors(
   updated_at timestamptz not null default now(),
   primary key(competition_id, user_id)
 );
+-- payments: how students pay (bank details), personal references, proof-of-payment files waiting for a coach
+alter table gyms add column if not exists pay jsonb not null default '{}';
+alter table gyms add column if not exists pop_token text;
+alter table gyms add column if not exists pop_notice jsonb;
+create unique index if not exists gyms_pop_token on gyms(pop_token) where pop_token is not null;
+alter table users add column if not exists pay_ref text;
+create unique index if not exists users_pay_ref on users(pay_ref) where pay_ref is not null;
+alter table payments add column if not exists method text not null default '';
+alter table payments add column if not exists status text not null default 'confirmed';
+alter table payments add column if not exists ai jsonb;
+alter table payments add column if not exists submitted_by bigint;
+create index if not exists payments_gym_status on payments(gym_id, status);
+create table if not exists pop_files(
+  id bigserial primary key,
+  payment_id bigint not null references payments(id) on delete cascade,
+  name text not null default '',
+  type text not null,
+  data bytea not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists pop_files_payment on pop_files(payment_id);
 create table if not exists password_resets(
   token_hash text primary key,
   user_id bigint not null references users(id) on delete cascade,
