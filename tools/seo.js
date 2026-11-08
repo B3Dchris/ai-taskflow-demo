@@ -279,7 +279,7 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   const all = [{ url: "/", pri: 1 }, { url: "/coaches/", pri: 0.9 }, { url: "/app/", pri: 0.6 }, ...pages];
   write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${all.map((p) => `<url><loc>${SITE}${p.url}</loc><lastmod>${today}</lastmod><priority>${p.pri.toFixed(1)}</priority></url>`).join("\n")}\n</urlset>\n`);
   write("robots.txt", `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
-  cards.push({ file: "og/coaches.jpg", eyebrow: "For coaches and gym owners", title: "Run your gym from your phone", sub: "Timetable, bookings, waitlists, memberships, attendance insights, competitions and WhatsApp invites.", belt: "black" });
+  cards.push({ file: "og/coaches.jpg", eyebrow: "For gyms", title: "Run your gym from your phone", sub: "Timetable, bookings, waitlists, memberships, attendance insights, competitions and WhatsApp invites.", belt: "black" });
   cards.push({ file: "og/home.jpg", eyebrow: "No-gi BJJ study app", title: "Know what to do from every position", sub: `${D.tech.length} techniques, every position, attack chain and escape, white to black belt.`, belt: "black" });
   return { pages: all.length, cards };
 }

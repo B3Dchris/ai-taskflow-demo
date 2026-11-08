@@ -29,7 +29,8 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
      ok(r.status===200&&/Run your gym from your phone/.test(h)&&/href="\/app\/\?start=1"/.test(h)&&/"FAQPage"/.test(h)&&!/@@/.test(h),'coaches page: headline, Start your gym link, FAQ data');
      ok(imgs.length>=5&&st.every(x=>x===200),'coaches page screenshots load ('+imgs.length+')');
      ok((await fetch(URL+'og/coaches.jpg')).status===200,'coaches share card exists');
-     ok(/href="\/coaches\/"/.test(await (await fetch(URL)).text()),'home page links to the coaches page');}
+     {const home=await (await fetch(URL)).text();ok(/class="gymlink" href="\/coaches\/">For gyms</.test(home)&&/id="gyms"/.test(home),'home page: For gyms in the header and its own section');}
+     for(const pth of ['gyms','gym','gyms/','for-gyms']){const rr=await fetch(URL+pth,{redirect:'manual'});ok(rr.status===301&&rr.headers.get('location')==='/coaches/',`/${pth} goes to the gyms page`)}}
     const rb=await (await fetch(URL+'robots.txt')).text();ok(/Sitemap: https:\/\/www\.jitsflow\.com\/sitemap\.xml/.test(rb)&&/Disallow: \/api\//.test(rb),'robots.txt points to the sitemap');
     const tp=locs.find(u=>/\/techniques\/[^/]+\/$/.test(u)).replace('https://www.jitsflow.com/','');
     const rr=await fetch(URL+tp.replace(/\/$/,''),{redirect:'manual'});ok(rr.status===301&&rr.headers.get('location')==='/'+tp,'pages without the trailing slash redirect to one address');
@@ -44,7 +45,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>[...document.images].every(i=>i.complete&&i.naturalWidth>0)||true),'landing images present');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'landing has no sideways scroll on a phone');
     const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing screenshots load');
-    await p.locator('.cta a.btn.primary').tap();await p.waitForTimeout(800);
+    await p.locator('.hero .cta a.btn.primary').tap();await p.waitForTimeout(800);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&document.title==='JitsFlow'&&!window.claude),'"Open JitsFlow" opens the app');
     ok(await p.evaluate(()=>S.ui.sheet&&S.ui.sheet.k==='onboard'),'website shows first-run setup');
     await p.tap('#sheetbar [data-a="obdone"]');

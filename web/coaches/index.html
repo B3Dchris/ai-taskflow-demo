@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>JitsFlow for coaches: run your BJJ gym from your phone</title>
+<title>JitsFlow for gyms: run your BJJ gym from your phone</title>
 <meta name="description" content="Timetable, bookings and waitlists, memberships and fees, attendance insights, competitions and WhatsApp invites for Jiu-Jitsu gyms. Import your timetable from your website in a minute.">
 <link rel="canonical" href="https://www.jitsflow.com/coaches/">
 <meta name="theme-color" content="#1D4FB5">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="JitsFlow">
 <meta property="og:url" content="https://www.jitsflow.com/coaches/">
-<meta property="og:title" content="JitsFlow for coaches: run your gym from your phone">
+<meta property="og:title" content="JitsFlow for gyms: run your gym from your phone">
 <meta property="og:description" content="Timetable, bookings, waitlists, memberships, who's training and who's gone quiet, competitions and WhatsApp invites.">
 <meta property="og:image" content="https://www.jitsflow.com/og/coaches.jpg">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
@@ -111,7 +111,18 @@ p{margin:0}
 .toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
 .toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
 /* narrow phones: two text links fit, the button doesn't (the hero repeats it right below) */
-@media (max-width:520px){.toplinks .btn{display:none}.toplinks{gap:14px}}
+.toplinks .gymlink{color:#F4F6FB;font-weight:700;font-size:17px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center;padding:0 16px;border:1.5px solid rgba(255,255,255,.45);border-radius:999px}
+.toplinks .gymlink:hover{border-color:#FFFFFF;background:rgba(255,255,255,.08)}
+@media (max-width:520px){.toplinks .btn{display:none}.toplinks{gap:12px}.toplinks .gymlink{padding:0 12px;font-size:16px}}
+@media (max-width:360px){.brand{font-size:24px}.brand .mark{width:28px}}
+/* for gyms band */
+.gyms{background:#0D1730;color:#EEF2FA}
+.gyms .wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:center;padding-block:64px}
+.gyms h2{color:#F4F6FB}.gyms .eyebrow{color:#9FB0D0}.gyms p{color:#C9D3E6;font-size:19px}
+.gyms ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.gyms li{padding-left:26px;position:relative;color:#DDE4F2}.gyms li::before{content:"";position:absolute;left:3px;top:.6em;width:11px;height:6px;border-left:2.5px solid #6FD3A0;border-bottom:2.5px solid #6FD3A0;transform:translateY(-50%) rotate(-45deg)}
+.gyms .btn.primary{background:#5B8CFF;border-color:#5B8CFF;color:#07101F}.gyms .btn{background:rgba(255,255,255,.06);color:#F4F6FB;border-color:rgba(255,255,255,.22)}
+@media (min-width:760px){.gyms .wrap{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}.gyms ul{grid-template-columns:1fr 1fr}}
 /* stats strip */
 .strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
 .stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -197,7 +208,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
   <section class="wrap hero">
     <div>
-      <p class="eyebrow">For coaches and gym owners</p>
+      <p class="eyebrow">For gyms, coaches and owners</p>
       <h1 style="margin-top:12px">Run your gym from your phone.</h1>
       <p class="lede">Your timetable, bookings, memberships and competition team in one place, with your students booking from their own phones. Paste your gym's website and JitsFlow reads in your classes, coaches and rates.</p>
       <div class="cta"><a class="btn primary" href="/app/?start=1">Start your gym</a><a class="btn ghost" href="#features">See what it does</a></div>

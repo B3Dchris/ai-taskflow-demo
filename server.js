@@ -89,6 +89,8 @@ function serveStatic(req, res) {
 
   if (pathname === "/") pathname = "/index.html";
   if (pathname === "/app") { res.writeHead(301, { Location: "/app/", ...SECURITY }); return res.end(); }
+  // Short addresses for the gyms page (easy to say out loud or put on a flyer).
+  if (/^\/(gyms?|for-gyms|coaches)$/.test(pathname) || pathname === "/gyms/") { res.writeHead(301, { Location: "/coaches/", ...SECURITY }); return res.end(); }
   // Content pages live at /techniques/kimura/ ; send /techniques/kimura there so each page has one address.
   if (!pathname.endsWith("/") && !path.extname(pathname) && files.has(pathname + "/index.html")) {
     const q = req.url.indexOf("?");
