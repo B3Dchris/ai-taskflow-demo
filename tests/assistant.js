@@ -25,7 +25,7 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
   await pool.query("drop table if exists pop_files, notices, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const ai = await fakeClaude(), site = await startGymSite();
   const port = 9600 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
-  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, ANTHROPIC_API_KEY: "test-key", ANTHROPIC_BASE_URL: ai.url, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, ANTHROPIC_API_KEY: "test-key", ANTHROPIC_BASE_URL: ai.url, JF_IMPORT_ALLOW_LOOPBACK: "1", JF_ASSISTANT: "1", RESEND_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await wait(150); } }
   try {
     const co = client(base), other = client(base), stu = client(base);

@@ -1749,7 +1749,7 @@ function beltSVG(pct){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 function toast(msg,act){const t=document.getElementById("toast");t.textContent=msg;toast._act=act?act.fn:null;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`);t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;toast._act=null},act?5000:2800)}
-function header(){const g=API.me&&API.me.gym;return `<header class="top">${g&&g.logo?`<div class="brand gymbrand"><img src="${esc(g.logo)}" alt="" class="gbl"><span><b>${esc(g.name)}</b><small>on JitsFlow</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`}<div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
+function header(){const g=API.me&&API.me.gym;return `<header class="top">${g&&g.logo?`<div class="brand gymbrand"><img src="${esc(g.logo)}" alt="" class="gbl"><span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`}<div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -2143,7 +2143,7 @@ function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
-  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:v==="coach"&&isCoach()?`<button class="fab ask" data-a="ast" aria-label="Ask JitsFlow" title="Ask JitsFlow">✦</button>`:"";
+  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
   const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}

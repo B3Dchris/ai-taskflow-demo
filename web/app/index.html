@@ -3579,7 +3579,7 @@ function beltSVG(pct){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 function toast(msg,act){const t=document.getElementById("toast");t.textContent=msg;toast._act=act?act.fn:null;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`);t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;toast._act=null},act?5000:2800)}
-function header(){const g=API.me&&API.me.gym;return `<header class="top">${g&&g.logo?`<div class="brand gymbrand"><img src="${esc(g.logo)}" alt="" class="gbl"><span><b>${esc(g.name)}</b><small>on JitsFlow</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`}<div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
+function header(){const g=API.me&&API.me.gym;return `<header class="top">${g&&g.logo?`<div class="brand gymbrand"><img src="${esc(g.logo)}" alt="" class="gbl"><span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`}<div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -3973,7 +3973,7 @@ function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
-  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:v==="coach"&&isCoach()?`<button class="fab ask" data-a="ast" aria-label="Ask JitsFlow" title="Ask JitsFlow">✦</button>`:"";
+  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
   const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}
@@ -4425,7 +4425,7 @@ function viewCoach(){
   const v=COACH_VIEWS.includes(COACH.view)?COACH.view:"today";
   const title={today:"Today",classes:"Classes",students:"Students",comps:"Competitions",money:"Money",gym:"Your gym"}[v];
   const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="classes"?coachClasses():v==="students"?coachStudents():v==="comps"?coachComps():v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
-  return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead">${API.me.gym.logo?`<img src="${esc(API.me.gym.logo)}" alt="" class="gymlogo sm">`:""}<div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}</h1></div></div></section>${body}</div>`;
+  return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}</h1></div></div></section>${body}</div>`;
 }
 function coachStudents(){const sv=COACH.stuView==="insights"?"insights":"list";
   return `<div class="seg2"><button data-a="stuview" data-v="list" aria-pressed="${sv==="list"}">Roster</button><button data-a="stuview" data-v="insights" aria-pressed="${sv==="insights"}">Insights</button></div>${sv==="insights"?coachInsights():coachRoster()}`}
@@ -4519,7 +4519,7 @@ function coachToday(){
     <section class="stack"><h2 class="label">Needs you</h2>${needs.length?needs.join(""):`<p class="small muted">Nothing waiting. Everyone's paid, nobody's stuck on a waitlist, no requests.</p>`}</section>
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div></div></section>
     <section class="stack"><h2 class="label">Quick actions</h2><div class="quick">
-      <button class="btn primary" data-a="ast">✦ Ask JitsFlow</button><button class="btn" data-a="classnew">+ Add a class</button><button class="btn" data-a="paynew">Record a payment</button>
+      <button class="btn primary" data-a="classnew">+ Add a class</button><button class="btn" data-a="paynew">Record a payment</button>
       ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}<button class="btn" data-a="coachgo" data-v="comps">+ Competition</button></div></section>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
@@ -5437,7 +5437,7 @@ function impReview(){const j=COACH.imp;if(!j||j.status!=="done")return;const r=j
 function welcomeSheet(){S.ui.sheet={k:"welcome"};S.ui.stack=[];
   openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><h1>Welcome to JitsFlow</h1><p class="lead">${esc(API.me.gym.name)} is set up. Three things to know:</p>
     <ol class="steps qrsteps"><li><span><b>Today</b> is your gym's day: classes, who's booked, and what needs you (payments to check, people who haven't paid, requests).</span></li>
-    <li><span><b>Ask JitsFlow</b> (the ✦ button) does the admin for you. Say "update my bank details" or "add Thabo, blue belt, 082 123 4567" and it's done. Tap the mic to talk instead of typing.</span></li>
+    <li><span><b>Students</b>: add them one by one, from your phone's contacts, or paste a list. They don't need the app for you to track their plan and payments.</span></li>
     <li><span><b>Getting started</b> on Today walks you through the rest, one tap at a time.</span></li></ol>
     ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Today when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
   api("PATCH","/coach/gym",{setup:{welcomed:true}}).then(j=>{API.me=j.me}).catch(()=>{})}
@@ -5447,8 +5447,7 @@ function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roste
   const items=[["Your gym's details",!!((p.timetable||[]).length||(p.rates||[]).length||API.me.gym.logo),"setupgo","gym","Import your website"],
     ["Classes on the calendar",(COACH.classes||[]).some(c=>c.kind!=="private"),"setupgo","classes","Add classes"],
     ["Plans and bank details",plans>0&&!!(pay.account||pay.link),"setupgo","money","Set up"],
-    ["Your students",students().length>0,"setupgo","students","Add or invite"],
-    ["Try the assistant",!!st.assistantUsed,"ast","","Ask JitsFlow"]];
+    ["Your students",students().length>0,"setupgo","students","Add or invite"]];
   const done=items.filter(i=>i[1]).length;if(done===items.length)return "";
   return `<section class="panel stack setupcard"><div class="row between"><h2 class="label">Getting started · ${done} of ${items.length}</h2><button class="linkbtn small" data-a="setuphide">Hide</button></div>
     <div class="progress"><i style="width:${Math.round(100*done/items.length)}%"></i></div>

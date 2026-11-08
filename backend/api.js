@@ -1011,7 +1011,8 @@ function makeApi(pool, { secureCookies }) {
   // The coach assistant: plain-language requests ("update my bank details", "add Thabo, blue belt") turned into changes.
   api.post("/coach/assistant", wrap(async (req, res) => {
     const u = needCoach(req);
-    if (!ai.getClient()) fail(503, "The assistant isn't switched on yet.");
+    // Switched off in the app for now; JF_ASSISTANT=1 turns the endpoint back on.
+    if (process.env.JF_ASSISTANT !== "1" || !ai.getClient()) fail(503, "The assistant isn't switched on yet.");
     if (limited("ast:" + u.id, 60, 60 * 60e3)) fail(429, "That's a lot of requests. Give it a few minutes.");
     const msgs = (Array.isArray(req.body?.messages) ? req.body.messages : []).slice(-12)
       .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: clean(m.text, 2000) })).filter((m) => m.content);

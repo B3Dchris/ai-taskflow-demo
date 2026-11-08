@@ -241,15 +241,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await s1.tap('#sheetbar [data-a="qrset"][data-v="2"]'); await s1.tap('#sheetbar [data-a="qrprev"]');
     ok(await ev(s1, () => S.ui.qr.i === 0 && document.querySelector('#sheetbar [data-a="qrset"][data-v="2"]').getAttribute("aria-pressed") === "true"), "Rate what you know: Previous goes back and shows what you picked");
     await ev(s1, () => { S.ui.qr = null; hideSheet(); go("book"); });
-    // --- assistant: chat sheet (the AI answer is stubbed here; the tools are tested in tests/assistant.js)
+    // --- the assistant is switched off: no ✦ button for coaches
     for (const p of [co, s1]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
-    await co.route("**/api/coach/assistant", (rt) => rt.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply: "Done: FNB 62123456789 saved.", actions: [{ summary: "Bank details updated" }], refresh: ["pay"] }) }));
-    await ev(co, () => coachGo("today")); await co.waitForTimeout(400);
-    await co.tap(".fab.ask"); await co.waitForTimeout(300);
-    ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "ast" && document.querySelectorAll("#sheet .chips .chip").length >= 4 && !!document.querySelector('#sheetbar [data-a="dictate"][data-v="ast-in"]')), "Ask JitsFlow opens with examples and a mic button");
-    await co.fill("#ast-in", "change my bank to FNB 62123456789"); await co.tap('#astform [type=submit]'); await co.waitForTimeout(700);
-    ok(await ev(co, () => { const t = document.getElementById("astlog").innerText; return /change my bank to FNB/.test(t) && /Done: FNB/.test(t) && /✓ Bank details updated/.test(t) && document.getElementById("ast-in").value === ""; }), "the coach's message, the reply and what changed show in the chat");
-    await co.unroute("**/api/coach/assistant"); await ev(co, () => hideSheet());
+    await ev(co, () => coachGo("today")); await co.waitForTimeout(300);
+    ok(await ev(co, () => !document.querySelector(".fab.ask") && !document.querySelector('[data-a="ast"]')), "no assistant button while it's switched off");
     // --- add several students from a list or a contacts file
     await ev(co, () => coachGo("students")); await co.waitForTimeout(400); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
     await co.fill("#bulk-paste", "Pat Smith 082 111 2222\nLee Jones, lee@bulk.test\nnot a person"); await co.tap('[data-a="bulkparse"]'); await co.waitForTimeout(200);
