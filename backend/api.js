@@ -63,7 +63,7 @@ function makeApi(pool, { secureCookies }) {
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
     if (tok && tok.length === 64) {
-      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite
+      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
         from sessions s join users u on u.id=s.user_id left join gyms g on g.id=u.gym_id
         where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
       if (r.rows[0]) {
@@ -88,6 +88,10 @@ function makeApi(pool, { secureCookies }) {
     if (u.gym_id) Object.assign(out.gym, { timezone: u.timezone || "Africa/Johannesburg", showAttendees: u.show_attendees !== false, studentsInvite: u.students_invite !== false });
     // Students may share the student invite code (to bring friends) when the gym allows it. They never see the coach code.
     if (u.gym_id && u.role === "student" && u.students_invite !== false) out.gym.inviteCode = u.student_code;
+    // Where lesson requests go on WhatsApp: the number the coach set, else the gym's WhatsApp link or a mobile number from its website.
+    if (u.gym_id) { const link = (String(u.gym_wa_link || "").match(/(?:wa\.me\/|phone=)\+?(\d{8,15})/) || [])[1] || "";
+      const site = /^(\+?27|0)[6-8]\d/.test(String(u.gym_phone || "").replace(/[\s()-]/g, "")) ? u.gym_phone : "";
+      out.gym.waPhone = u.wa_phone || (link ? "+" + link : "") || site || ""; if (u.role === "coach") out.gym.waPhoneSet = u.wa_phone || ""; }
     if (u.role === "coach" && u.gym_id) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, monthlyFeeCents: u.gym_fee });
     return out;
   }
@@ -112,7 +116,7 @@ function makeApi(pool, { secureCookies }) {
       throw e;
     }
   }
-  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite
+  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
       from users u left join gyms g on g.id=u.gym_id where u.id=$1`, [id])).rows[0];
 
   // ---------- accounts ----------
@@ -819,7 +823,9 @@ function makeApi(pool, { secureCookies }) {
     const show = b.showAttendees !== undefined ? !!b.showAttendees : u.show_attendees !== false;
     const invite = b.studentsInvite !== undefined ? !!b.studentsInvite : u.students_invite !== false;
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
-    await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4, students_invite=$5 where id=$6", [name, fee, show, tz, invite, u.gym_id]);
+    const wa = b.waPhone !== undefined ? cleanPhone(b.waPhone) : u.wa_phone || "";
+    if (b.waPhone !== undefined && String(b.waPhone).trim() && !wa) fail(400, "That doesn't look like a phone number.");
+    await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4, students_invite=$5, wa_phone=$6 where id=$7", [name, fee, show, tz, invite, wa, u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
   }));
 

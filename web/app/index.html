@@ -4055,7 +4055,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -4066,6 +4066,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="planform")return savePlan(f);
     if(fid==="privform")return savePriv(f);
     if(fid==="bankform")return saveBank(f);
+    if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);
     if(fid==="compform")return saveComp(f);
     if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
@@ -4579,7 +4580,9 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
 function coachGym(){const g=API.me.gym;
   return `<section class="stack">${waPanel()}${gymCard(true)}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
-      <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label></div>
+      <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
+      <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
+        <span class="small muted">${g.waPhoneSet?"Students' \"Ask for a time\" button opens a chat with this number.":"Not saved yet: students' \"Ask for a time\" button opens WhatsApp without a contact until you save one."}</span></form></div>
     ${gymImportPanel()}${gymClassesPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
       <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
     ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2><p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
@@ -4781,7 +4784,9 @@ function viewBook(){
           ${shown.length?groups(shown):`<div class="empty">${cls.length?(st.sel?"No classes that day.":"No classes this week. Try next week."):"No classes on the calendar yet. Your coach adds them in the Coach tab."}</div>`}`})()}`
     :`${mineP.length?`<section class="stack"><h2 class="label">Your private lessons</h2>${mineP.map(bookCard).join("")}</section>`:""}
       ${openP.length?groups(openP):`<div class="empty">No open private lesson slots right now.</div>`}
-      <section class="panel stack"><h2 class="label">Want a different time?</h2><p class="small">Ask your coach for a private lesson that suits you.</p>${gymContact({phone:p.phone,email:p.email,socials:{whatsapp:(p.socials||{}).whatsapp}})}</section>`}
+      <section class="panel stack"><h2 class="label">Want a different time?</h2><p class="small">Message your coach on WhatsApp. The message is written for you: add the day and time that suit you.</p>
+        ${waBtn(privAskText(openP.concat(mineP)),"Ask for a time on WhatsApp",{phone:API.me.gym.waPhone,kind:"private_ask"})}
+        ${API.me.gym.waPhone?"":`<p class="small muted">WhatsApp opens your chats: pick your coach.</p>`}${gymContact({phone:p.phone,email:p.email})}</section>`}
   </div>`}
 function bookSheet(id){
   const c=(API.classes||[]).find(x=>x.id===id);if(!c)return;S.ui.sheet={k:"book",id};S.ui.stack=[];
@@ -5025,6 +5030,9 @@ const waURL=(text,phone)=>`https://wa.me/${phone?waNum(phone):""}?text=${encodeU
 const WA_ICON=`<svg class="waico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 19.5l1.2-3.6A8 8 0 1 1 8.4 18.6z"/><path d="M9 9.2c.3 2.6 2.2 4.6 4.9 5.4l1.2-1.2 1.9.8-.5 1.8c-3.9.4-8-3.4-8.1-7.6l1.8-.4.7 1.9z"/></svg>`;
 function waBtn(text,label,o){o=o||{};return `<a class="btn wa${o.cls?" "+o.cls:""}" href="${esc(waURL(text,o.phone))}" target="_blank" rel="noopener noreferrer" data-wa="${esc(o.kind||"share")}">${WA_ICON}<span>${esc(label||"WhatsApp")}</span></a>`}
 const first=n=>String(n||"").trim().split(/\s+/)[0]||"";
+// A private-lesson request for the student to finish: the coach's name if every slot is with the same coach, then blanks for day and time.
+function privAskText(slots){const cs=[...new Set((slots||[]).map(c=>(c.coach||"").trim()).filter(Boolean))];const hi=cs.length===1?first(cs[0]):"coach";
+  return `Hi ${hi}, it's ${first(API.me.name)} from ${gymName()}. Could I book a private lesson?\n\nDay: \nTime: \n\nThanks!`}
 const appLink=h=>location.origin+"/app/"+(h||"");
 const gymName=()=>(API.me&&API.me.gym&&API.me.gym.name)||"the gym";
 function classLine(c){const left=c.capacity?Math.max(0,c.capacity-c.going):null;return `${fmtTime(c.startsAt)} ${c.title}${c.level&&!c.title.includes(c.level)?` (${c.level})`:""}${left===null?"":left===0?" (full, waitlist open)":` (${left} spot${left===1?"":"s"} left)`}`}

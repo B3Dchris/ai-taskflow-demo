@@ -150,6 +150,7 @@ create table if not exists competitors(
   primary key(competition_id, user_id)
 );
 -- payments: how students pay (bank details), personal references, proof-of-payment files waiting for a coach
+alter table gyms add column if not exists wa_phone text not null default '';
 alter table gyms add column if not exists pay jsonb not null default '{}';
 alter table gyms add column if not exists pop_token text;
 alter table gyms add column if not exists pop_notice jsonb;

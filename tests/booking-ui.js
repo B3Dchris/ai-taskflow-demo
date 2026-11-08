@@ -165,6 +165,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await co.tap('[data-a="paynew"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => [...document.querySelectorAll("#p-method option")].map((o) => o.value).join(",") === "eft,cash,card,snapscan,other"), "recording a payment asks how it was paid");
     await ev(co, () => hideSheet());
+    // --- "Want a different time?" goes to the coach on WhatsApp with the request written out
+    await ev(s1, () => { S.ui.bookView = "private"; go("book"); }); await s1.waitForTimeout(600);
+    w = waText(await ev(s1, () => document.querySelector('a[data-wa="private_ask"]').href));
+    ok(w.num === "" && /Could I book a private lesson\?/.test(w.text) && /Day: \nTime: /.test(w.text) && /it's Ana from Race Gym/.test(w.text), "no number set yet: the request opens WhatsApp to pick the coach, with the message written");
+    await ev(co, () => coachGo("gym")); await co.waitForTimeout(600);
+    await co.fill("#g-wa", "082 555 1234"); await co.tap("#gwaform [type=submit]"); await co.waitForTimeout(700);
+    ok(/Lesson requests come to this number/.test(await toast(co)), "coach saves the WhatsApp number for lesson requests");
+    await ev(s1, async () => { API.me = (await api("GET", "/me")).me; render(); }); await s1.waitForTimeout(600);
+    w = waText(await ev(s1, () => document.querySelector('a[data-wa="private_ask"]').href));
+    ok(w.num === "27825551234" && /Day: /.test(w.text), "then the request goes straight to the coach's WhatsApp");
+    await co.fill("#g-wa", "hello"); await co.tap("#gwaform [type=submit]"); await co.waitForTimeout(600);
+    ok(/doesn't look like a phone number/.test(await toast(co)), "a non-number is refused");
     for (const p of [co, s1, s2, s3]) ok(await ev(p, () => document.documentElement.scrollWidth <= 390), "no sideways scroll");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
