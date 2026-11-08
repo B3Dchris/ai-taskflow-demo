@@ -65,22 +65,24 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   const total=await ev(()=>S.ui.qr.q.length);const want=await ev(()=>rateable().length);ok(total===want&&total>54,`rate queue is ${total}, expected ${want}`);
   await p.tap('#sheetbar [data-a="qrskip"]');
   for(let i=1;i<total;i++){await p.tap(`#sheetbar [data-a="qrset"][data-v="${i%5}"]`)}
-  ok((await sheetH1())==='Rated','quick rate reaches the finished screen');
-  await p.tap('#sheetbar .back');
+  await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/Rated/.test(document.getElementById('toast').textContent)),'quick rate finishes by itself, no screen to close');
   const rq=await ev(()=>rateQueue().length);ok(rq===1,`one skipped technique left to rate (got ${rq})`);
   ok(await ev(t=>document.body.innerText.includes(`${t-1}/${t} rated`),total),'rate card shows one left to rate');
   ok(await ev(()=>readiness()>0),'readiness score above 0 after rating');
   if(MODE==='db'){await p.waitForTimeout(800);ok(await ev(()=>window.__writes>0),'db: ratings written to account')}
   // rating still works after a sync round-trip with read-only data (the original bug)
   await p.tap('.panel.accent button[data-a="qr"]');await p.tap('#sheetbar [data-a="qrset"][data-v="3"]');
-  ok((await sheetH1())==='Rated','rating works after data reloads from the account');await p.tap('#sheetbar .back');
+  await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/Rated/.test(document.getElementById('toast').textContent)),'rating works after data reloads from the account');
   ok(await ev(()=>!document.querySelector('.panel.accent [data-a="qr"]')||rateQueue().length===0),'rate card hides once everything is rated');
   // --- review
   const due=await ev(()=>dueList().length);ok(due>0,'review queue has cards after rating');
   await p.locator('button[data-a="review"]').tap();
-  await p.tap('#sheetbar [data-a="reveal"]');ok(await ev(()=>{const b=[...document.querySelectorAll('#sheetbar [data-a="rate"]')].map(x=>x.innerText.replace(/\s+/g,' '));return b.length===4&&/^Forgot tomorrow$/.test(b[0])&&/^Easy in \d+ (days|weeks|months)$/.test(b[3])&&!/later|soon/.test(b.join(' '))}),'review buttons say when each move comes back');await ev(()=>{S.ui.review.shown=false;reviewSheet()});
-  for(let i=0;i<due;i++){await p.tap('#sheetbar [data-a="reveal"]');ok(await ev(()=>document.querySelectorAll('#sheet ol.steps li').length>0),'review shows steps');await p.tap(`#sheetbar [data-a="rate"][data-v="${i%4}"]`)}
-  ok((await sheetH1())==='Done','review finishes');await p.tap('#sheetbar .back');
+  ok(await ev(()=>!document.querySelector('#sheetbar [data-a="reveal"]')&&document.querySelectorAll('#sheet ol.steps li').length>0),'review shows the steps straight away (no Show steps tap)');ok(await ev(()=>{const b=[...document.querySelectorAll('#sheetbar [data-a="rate"]')].map(x=>x.innerText.replace(/\s+/g,' '));return b.length===4&&/^Forgot tomorrow$/.test(b[0])&&/^Easy in \d+ (days|weeks|months)$/.test(b[3])&&!/later|soon/.test(b.join(' '))}),'review buttons say when each move comes back');
+  for(let i=0;i<due;i++){ok(await ev(()=>document.querySelectorAll('#sheet ol.steps li').length>0),'review shows steps');await p.tap(`#sheetbar [data-a="rate"][data-v="${i%4}"]`)}
+  await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/reviewed/.test(document.getElementById('toast').textContent)),'review finishes by itself, no Done screen to close');
+  await ev(()=>{P().settings.quiz=true;P().srs.knee_cut={due:today(),ivl:3,ease:2.3};S.ui.review={q:["knee_cut"],i:0,shown:false};reviewSheet()});
+  ok(await ev(()=>!!document.querySelector('#sheetbar [data-a="reveal"]')&&!document.querySelector('#sheet ol.steps')),'quiz mode (a setting) hides the steps until Show steps');
+  await ev(()=>{P().settings.quiz=false;S.ui.review=null;hideSheet()});
   ok(await ev(()=>dueList().length===0||dueList().every(id=>P().srs[id].due<=today())),'review rescheduled cards');
   // --- technique sheet: level, notes, chain + back stack, swipe back
   await ev(()=>techSheet('knee_cut'));await p.tap('#sheet [data-a="level"][data-v="3"]');ok(await ev(()=>lv('knee_cut')===3),'level set from technique sheet');
@@ -104,8 +106,10 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>S.sessions.length===1&&Number(S.sessions[0].mins)===75),'edit updates the same session');
   await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
   ok(await ev(()=>document.querySelector('.stat b')&&weekStreak()===1),'week streak counts this week');
-  await p.tap('nav.tabs [data-v="log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.locator('[data-a="delyes"]').tap();await p.waitForTimeout(150);
-  ok(await ev(()=>S.sessions.length===0),'session deleted after confirm');
+  await p.tap('nav.tabs [data-v="log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
+  ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
+  await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
+  await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
   // --- curriculum search keeps keyboard focus; filters; collapsible
   await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
   ok(await ev(()=>document.activeElement&&document.activeElement.id==='q'),'search keeps focus while typing');

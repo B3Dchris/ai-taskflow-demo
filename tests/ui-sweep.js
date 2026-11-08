@@ -131,8 +131,8 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       ok(await p.evaluate(() => S.ui.sheet && S.ui.sheet.k === "log"), "student swipes a session right to edit it");
       await p.evaluate(() => { hideSheet(); render(); });
       await touchSwipe(p, ".swipe .sw-front", -140); await p.waitForTimeout(250); await p.locator(".swipe.open .sw-del").tap(); await p.waitForTimeout(300);
-      await p.locator('[data-a="delyes"]').first().tap(); await p.waitForTimeout(900);
-      ok(await p.evaluate((n) => S.sessions.length === n - 1, n0), "and left to delete it (after confirming)");
+      await p.waitForTimeout(900);
+      ok(await p.evaluate((n) => S.sessions.length === n - 1 && !!document.querySelector('#toast [data-a="toastact"]'), n0), "and left to delete it (one tap, with Undo)");
       await ctx.close(); }
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 4).join(" ")); }
   await b.close(); srv.kill(); await pool.end();

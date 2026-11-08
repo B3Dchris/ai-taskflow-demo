@@ -433,6 +433,7 @@ textarea{min-height:76px;resize:vertical}
 .area .fill{display:block;height:100%;background:var(--blue);border-radius:4px}
 .area.low span:first-child{font-weight:700}.area.low .fill{background:var(--warn)}
 .area .mono{text-align:right;font-size:13px;color:var(--ink-2)}
+.toastbtn{margin-left:10px;background:none;border:0;color:var(--blue-soft);font:inherit;font-weight:800;text-decoration:underline;min-height:32px;padding:0 4px;cursor:pointer}
 .sheet-open .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;max-width:calc(100% - 32px)}
 .empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--ink-2);font-size:15px}
@@ -3525,7 +3526,7 @@ function beltSVG(pct){
   let st="";for(let i=0;i<4;i++)st+=`<rect class="${i<n?"on":"off"}" x="${250+i*13}" y="10" width="7" height="26"/>`;
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
-function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
+function toast(msg,act){const t=document.getElementById("toast");t.textContent=msg;toast._act=act?act.fn:null;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`);t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;toast._act=null},act?5000:2800)}
 function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
@@ -3777,15 +3778,15 @@ function techSheet(id,fromBack){
   </div>`,false,{act:!ASSETS?"":(P().videos||{})[t.id]?`<button class="btn grow" data-a="playvid">▶ Play video</button>`:`<label class="btn grow" for="vid-${t.id}" style="cursor:pointer">Add a video</label>`});
 }
 function reviewSheet(){
-  const r=S.ui.review;if(!r||r.i>=r.q.length){S.ui.review=null;S.ui.stack=[];openSheet(`${sheetHead("Review")}<div class="stack"><h1>Done</h1><p class="muted">${r?r.q.length:0} techniques reviewed. Each comes back on a schedule based on how well you knew it.</p></div>`);S.ui.sheet={k:"done"};return}
-  const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];
+  const r=S.ui.review;if(!r||r.i>=r.q.length){const n=r?r.q.length:0;S.ui.review=null;S.ui.stack=[];closeSheet();render();if(n)toast(`${n} reviewed. Each comes back when it's due.`);return}
+  const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];if(!P().settings.quiz)r.shown=true;
   openSheet(`${sheetHead(`Review ${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
   <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
-  ${r.shown?`<ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol><div class="small"><b>Key:</b> ${gl(t.d[0])}</div>`:`<p>${gl(OV[t.id]||"")}</p><p class="muted small">Say the steps out loud, then tap Show steps.</p>`}</div>
+  ${r.shown?`<ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol><div class="small"><b>Key:</b> ${gl(t.d[0])}</div>`:`<p>${gl(OV[t.id]||"")}</p><p class="muted small">Quiz mode: say the steps out loud, then tap Show steps.</p>`}</div>
   </div>`,false,r.shown?{top:(()=>{const c=P().srs[t.id];return `<div class="small muted">Did you remember the steps? It comes back:</div><div class="ratebar">${[["Forgot",0],["Partly",1],["Got it",2],["Easy",3]].map(([l,n])=>`<button class="btn" data-a="rate" data-v="${n}">${l}<small>${whenBack(nextIvl(c,n))}</small></button>`).join("")}</div>`})()}:{act:`<button class="btn primary grow" data-a="reveal">Show steps</button>`});
 }
 function qrSheet(){
-  const r=S.ui.qr;if(!r||r.i>=r.q.length){S.ui.qr=null;S.ui.sheet={k:"done"};S.ui.stack=[];openSheet(`${sheetHead("Quick rate")}<div class="stack"><h1>Rated</h1><p class="muted">Your readiness score and review queue are set. Review cards start today.</p></div>`);return}
+  const r=S.ui.qr;if(!r||r.i>=r.q.length){const n=r?r.q.length:0;S.ui.qr=null;S.ui.stack=[];closeSheet();render();if(n)toast("Rated. Your plan and reviews are set.");return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"qr"};S.ui.stack=[];
   openSheet(`${sheetHead(`${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
   <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
@@ -3827,6 +3828,7 @@ function viewSettings(){
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on the Today screen follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Today, ratings and focus blocks aim at.</p>
+  <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox" style="width:auto"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps, so I test myself first (one extra tap per move, better for remembering)</label></section>
   <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2><div class="seg"><button data-a="hand" data-v="left" aria-pressed="${hand==="left"}">Left hand</button><button data-a="hand" data-v="right" aria-pressed="${hand==="right"}">Right hand</button></div><p class="small muted">Back, Close and the Log button sit on this side so your thumb reaches them. Swipe right on any open page to go back.</p></section>
   <details class="more" data-g="set-hours"${(S.ui.openG||{})["set-hours"]?" open":""}><summary>Hours, targets and focus block</summary><div class="stack" style="padding-top:12px">
   <div class="grid2"><label class="f">Sessions per week<input id="s-pw" type="number" min="1" max="14" data-s="perWeek" value="${st.perWeek}"></label>
@@ -4009,7 +4011,8 @@ document.addEventListener("click",e=>{
     case "viddelyes": { const o=P().videos[v];delete P().videos[v];S.ui.vidConfirm=null;saveProgress();if(o&&ASSETS){ASSETS.delete(o.v).catch(()=>{});if(o.th)ASSETS.delete(o.th).catch(()=>{})}techSheet(v,true);toast("Video removed.");break }
     case "phno": S.ui.phConfirm=null; render(); break;
     case "phdelyes": { const id=P().photos[v];delete P().photos[v];S.ui.phConfirm=null;saveProgress();if(id&&ASSETS)ASSETS.delete(id).catch(()=>{});render();toast("Photo removed.");break }
-    case "del": S.ui.confirmDel=v; render(); break;
+    case "del": { const old=S.sessions.find(x=>x.id===v);if(!old)break;deleteSession(v).then(()=>toast("Session deleted.",{label:"Undo",fn:async()=>{const ok=await addSession(old);if(ok){render();toast("Session restored.")}}}));break }
+    case "toastact": { const f=toast._act;toast._act=null;document.getElementById("toast").hidden=true;if(f)f();break }
     case "delno": S.ui.confirmDel=null; render(); break;
     case "delyes": S.ui.confirmDel=null; deleteSession(v); break;
     case "settings": S.ui.importOpen=false;S.ui.confirmReset=false; go("settings"); break;
@@ -4042,6 +4045,7 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
+  if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
   const t=e.target;
