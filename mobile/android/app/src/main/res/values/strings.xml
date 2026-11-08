@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JitsFlow</string>
+    <string name="title_activity_main">JitsFlow</string>
+    <string name="package_name">com.jitsflow.app</string>
+    <string name="custom_url_scheme">com.jitsflow.app</string>
+</resources>

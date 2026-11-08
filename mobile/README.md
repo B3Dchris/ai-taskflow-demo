@@ -9,3 +9,11 @@ deploy updates the app too. Native extras: the phone's contacts (coaches add stu
 
 Repository secrets the build needs: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`.
 Before the first upload, create the app in App Store Connect (My Apps → + → New App) with bundle ID `com.jitsflow.app`.
+
+## Android
+
+- `android/`: the Gradle project (app id `com.jitsflow.app`, contacts permission, brand icons and splash).
+- `.github/workflows/android.yml` builds a test APK on every change (download it from the run's artifacts),
+  a signed Play Store bundle when `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASSWORD` are set, and uploads it
+  to Play's internal testing track when `PLAY_SERVICE_ACCOUNT_JSON` is set too.
+- Build locally: `npx cap sync android && cd android && ./gradlew assembleDebug` (needs JDK 21 and the Android SDK).

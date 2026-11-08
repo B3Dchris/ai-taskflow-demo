@@ -1,0 +1,49 @@
+# Builds the JitsFlow Android app (mobile/). Always: a test APK you can install on a phone (in the run's artifacts).
+# With ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_PASSWORD: a signed Play Store bundle (.aab).
+# With PLAY_SERVICE_ACCOUNT_JSON too: uploaded to the Play Console's internal testing track.
+name: Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [Jitsflow]
+    paths: ["mobile/**", ".github/workflows/android.yml"]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      KEY_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install and sync
+        working-directory: mobile
+        run: npm ci && npx cap sync android
+      - name: Test APK
+        working-directory: mobile/android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with: { name: JitsFlow-test-apk, path: mobile/android/app/build/outputs/apk/debug/app-debug.apk }
+      - name: Signed Play Store bundle
+        if: env.KEY_B64 != '' && env.KEY_PW != ''
+        working-directory: mobile/android
+        run: |
+          printf '%s' "$KEY_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          JF_KEYSTORE="$RUNNER_TEMP/upload.jks" JF_KEYSTORE_PASSWORD="$KEY_PW" JF_BUILD_NUMBER="${{ github.run_number }}" ./gradlew bundleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: env.KEY_B64 != '' && env.KEY_PW != ''
+        with: { name: JitsFlow-play-bundle, path: mobile/android/app/build/outputs/bundle/release/app-release.aab }
+      - name: Upload to Play (internal testing)
+        if: env.KEY_B64 != '' && env.PLAY_JSON != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.jitsflow.app
+          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
