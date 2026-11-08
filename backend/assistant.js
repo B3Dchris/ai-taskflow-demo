@@ -60,6 +60,7 @@ async function run({ u, q, msgs, helpers: H }) {
       if (next.link && !/^https?:\/\//i.test(next.link)) next.link = "https://" + next.link;
       const pay = H.readPaySettings(next);
       await q("update gyms set pay=$1 where id=$2", [pay, u.gym_id]);
+      if (H.bankChanged(cur0, pay)) H.tellCoaches(u.gym_id, "bank", u.name);
       did("Bank details updated", "pay");
       return { saved: { account_holder: pay.holder, bank: pay.bank, account_number: pay.account, branch_code: pay.branch, account_type: pay.type, pay_link: pay.link, due_day: pay.dueDay } };
     },

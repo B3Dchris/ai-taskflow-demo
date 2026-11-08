@@ -1,7 +1,7 @@
 // JitsFlow web server: the website in web/ plus the accounts API under /api (when DATABASE_URL is set).
 "use strict";
 const express = require("express");
-const { makePool, migrate } = require("./backend/db");
+const { makePool, migrate, purgeRejected } = require("./backend/db");
 const { makeApi } = require("./backend/api");
 const fs = require("fs");
 const path = require("path");
@@ -125,6 +125,7 @@ async function main() {
   const pool = makePool();
   if (pool) {
     await migrate(pool);
+    setInterval(() => purgeRejected(pool).catch((e) => console.warn("purge:", e.message)), 864e5).unref(); // daily, between restarts
     app.use("/api", makeApi(pool, { secureCookies: process.env.NODE_ENV === "production" }));
     console.log("Accounts API on (database connected)");
   } else {

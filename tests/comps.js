@@ -67,6 +67,12 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
     ok(r.j.status === "entered" && sink.mails.slice(m1).some((m) => m.to[0] === "ana@comp.test" && /on the team/.test(m.subject) && /Weigh-in 7am/.test(m.text)), "coach enters her; she's emailed with the coach's note");
     r = await ben("GET", "/competitions"); c = r.j.competitions.find((x) => x.id === cid);
     ok(c.entered === 1 && c.team[0].name === "Ana L." && c.team[0].belt && c.team[0].note === undefined, "teammates see who's entered (first name, initial, belt) but not private notes");
+    ok(c.team[0].weight === "", "teammates don't see each other's weight");
+    r = await ana("GET", "/competitions"); ok(r.j.competitions.find((x) => x.id === cid).team.find((x) => x.me).weight === "73.5", "but you see your own");
+    await coach("PATCH", "/coach/gym", { showAttendees: false });
+    r = await ben("GET", "/competitions"); c = r.j.competitions.find((x) => x.id === cid); ok(c.entered === 1 && !c.team.length, "when the gym hides who's coming, students don't see the team list either");
+    r = await ana("GET", "/competitions"); ok(r.j.competitions.find((x) => x.id === cid).team.length === 1, "except themselves");
+    await coach("PATCH", "/coach/gym", { showAttendees: true });
     r = await ana("POST", `/competitions/${cid}/request`, {}); ok(r.s === 409, "can't re-request once entered");
     r = await coach("PUT", `/coach/competitions/${cid}/competitors/${benId}`, { status: "entered", division: "Masters 1 blue belt", paid: true });
     r = await coach("GET", "/competitions"); c = r.j.competitions.find((x) => x.id === cid);

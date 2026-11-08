@@ -28,10 +28,24 @@ function privateIp(ip) {
     return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
   }
-  const x = ip.toLowerCase();
-  const mapped = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return privateIp(mapped[1]);
-  return x === "::" || x === "::1" || /^f[cd]/.test(x) || /^fe[89ab]/.test(x) || x.startsWith("64:ff9b:") || x.startsWith("2001:db8");
+  if (!net.isIPv6(ip)) return true;
+  // Compare the numbers, not the text: new URL() writes [::ffff:127.0.0.1] as [::ffff:7f00:1].
+  const w = v6words(ip), v4 = () => [w[6] >> 8, w[6] & 255, w[7] >> 8, w[7] & 255].join(".");
+  const zeros = (n) => w.slice(0, n).every((z) => z === 0);
+  if (zeros(5) && w[5] === 0xffff) return privateIp(v4()); // IPv4-mapped ::ffff:a.b.c.d
+  if (zeros(4) && w[4] === 0xffff && w[5] === 0) return privateIp(v4()); // IPv4-translated ::ffff:0:a.b.c.d
+  if (zeros(6)) return true; // ::, ::1 and IPv4-compatible ::a.b.c.d
+  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || w[0] >= 0xff00 || // unique local, link local, multicast
+    (w[0] === 0x64 && w[1] === 0xff9b) || w[0] === 0x2002 || (w[0] === 0x2001 && (w[1] === 0 || w[1] === 0xdb8)); // NAT64, 6to4, Teredo, documentation
+}
+// An IPv6 address as its 8 16-bit numbers (a dotted IPv4 tail becomes the last two).
+function v6words(ip) {
+  let s = ip.toLowerCase().replace(/%.*$/, "");
+  const t4 = s.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (t4) { const [a, b, c, d] = t4.slice(2).map(Number); s = t4[1] + ((a << 8) | b).toString(16) + ":" + ((c << 8) | d).toString(16); }
+  const [head, tail] = s.split("::"), hp = head ? head.split(":") : [], tp = tail ? tail.split(":") : [];
+  const parts = tail === undefined ? hp : [...hp, ...Array(8 - hp.length - tp.length).fill("0"), ...tp];
+  return parts.map((x) => parseInt(x, 16));
 }
 // DNS lookup that refuses private addresses. It runs at connect time, so a host can't pass a
 // check and then resolve somewhere else for the real request.
@@ -308,7 +322,8 @@ function plainTimetable(pages) {
         if (!rng[3] && !rng[6] && start && end && end < start) { start = to24(rng[1], rng[2], "pm"); end = to24(rng[4], rng[5], "pm") || ""; }
       } else start = one[1] ? to24(one[1], one[2], one[3]) : to24(one[4], 0, one[5]);
       if (!start || Number(start.slice(0, 2)) < 5) continue;
-      let title = line.replace(TIME_RANGE, " ").replace(TIME_ONE, " ").replace(DAY_RE, " ").replace(/\b(and|to|till|until)\b/gi, " ").replace(/[|·•,;:()&]+/g, " ").replace(/(^|\s)[–—-]+(?=\s|$)/g, " ");
+      // Table rows come through as "Day: Tuesday · Time: 17:00 · Class: Kids BJJ": the header words aren't part of the name.
+      let title = line.replace(/(^|[·|]\s*)(?:days?|times?|start(?:\s*time)?|end(?:\s*time)?|when|class(?:es)?|class\s*name|sessions?|programm?e?s?|activity|discipline|levels?)\s*:\s*/gi, "$1").replace(TIME_RANGE, " ").replace(TIME_ONE, " ").replace(DAY_RE, " ").replace(/\b(and|to|till|until)\b/gi, " ").replace(/[|·•,;:()&]+/g, " ").replace(/(^|\s)[–—-]+(?=\s|$)/g, " ");
       let coach = "";
       const cm = title.match(/\b(?:with|coach|instructor|sensei|prof(?:essor)?)\.?\s+([A-Z][\w'’.-]+(?:\s+[A-Z][\w'’.-]+)?)/);
       if (cm) { coach = cm[1].replace(/^(coach|prof(essor)?|sensei|instructor)\.?\s+/i, ""); title = title.replace(cm[0], " "); }

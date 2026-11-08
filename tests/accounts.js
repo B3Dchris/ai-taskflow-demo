@@ -37,6 +37,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await wide(co, "coach gym tab");
     // ---- coach plans a class
     await co.tap('nav.tabs [data-v="coach-classes"]'); await co.tap('[data-a="classnew"]');
+    ok(await ev(co, () => { const ls = [...document.querySelectorAll("#sheet label.f")].map((l) => l.firstChild.textContent.trim()); return ls.length > 4 && new Set(ls).size === ls.length && ls.includes("Group or private"); }), "every field in the add-a-class form has its own label (no two called Type)");
     await co.fill("#c-title", "No-gi: half guard"); await co.locator(".planbox summary").tap(); await co.fill("#c-focus", "Half guard bottom");
     await co.selectOption("#c-add", "hg_frames"); await co.selectOption("#c-add", "hg_dogfight");
     ok(await ev(co, () => document.querySelectorAll("#cplan-chips .chip").length === 2), "techniques added to the plan");
@@ -89,18 +90,26 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(await ev(co, () => /Blue · 1 stripe/.test(document.getElementById("roster-list").innerText) && /Due/.test(document.getElementById("roster-list").innerText)), "coach sets belt and fee; roster shows fee due");
     await co.tap('nav.tabs [data-v="coach-money"]'); await co.tap('[data-a="paynew"]');
     await co.selectOption("#p-user", { label: "Chris" }); await co.fill("#p-amt", "850"); await co.fill("#p-ref", "CHRIS NOV");
+    ok(await ev(co, () => document.getElementById("p-months").value === "1" && document.querySelectorAll("#p-months option").length === 12), "a payment covers 1 month unless the coach picks more (up to 12)");
     await co.tap('#sheetbar [type=submit]'); await co.waitForTimeout(2000);
+    ok(await ev(co, () => (COACH.payments || []).some((p) => p.amountCents === 85000 && p.months === 1)), "the payment is saved with the months it covers");
     await co.tap('[data-a="moneyfilter"][data-v="paid"]'); await co.waitForTimeout(200);
     ok(await ev(co, () => /R\s?850/.test(document.querySelector(".stats").innerText) && /Chris/.test(document.getElementById("app").innerText)), "payment recorded and totals updated");
     await co.tap('nav.tabs [data-v="coach-students"]'); await co.tap('[data-a="stuview"][data-v="list"]');
     ok(await ev(co, () => /Paid/.test(document.getElementById("roster-list").innerText)), "roster shows the student as paid");
+    { // On a yearly plan, a payment suggests 12 months and the year's price.
+      const id = await ev(co, async () => { const pl = (await api("POST", "/coach/plans", { name: "Year up front", priceCents: 960000, period: "year" })).plan, c = students().find((x) => x.name === "Chris");
+        await api("PATCH", "/coach/students/" + c.id, { planId: pl.id, feeCents: null }); await coachLoad("roster"); paySheet(c.id); return c.id; });
+      await co.waitForTimeout(300);
+      ok(await ev(co, () => document.getElementById("p-months").value === "12" && Number(document.getElementById("p-amt").value) === 9600), "for a yearly plan the payment covers 12 months and the year's price");
+      await ev(co, async (cid) => { hideSheet(); await api("PATCH", "/coach/students/" + cid, { planId: null, feeCents: 85000 }); await coachLoad("roster"); }, id); }
     await wide(co, "coach payments/roster");
     // ---- coach imports the gym's website, checks it and saves
     await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(400);
     await co.fill("#gi-url", site.url.replace("http://", "")); await co.tap("#gymimpform [type=submit]"); await co.waitForTimeout(400);
     ok(await ev(co, () => /Reading/.test(document.querySelector(".impban").innerText) && !S.ui.sheet), "the website is read in the background (address typed without http://) while the coach keeps going");
     await co.waitForSelector('.impban [data-a="impreview"]', { timeout: 30000 });
-    ok(await ev(co, () => /We read/.test(document.querySelector(".impban").innerText) && /\d+ classes/.test(document.querySelector(".impban").innerText)), "when it's done, the banner says what was found");
+    ok(await ev(co, () => /We read/.test(document.querySelector(".impban").innerText) && /\d+ classes/.test(document.querySelector(".impban").innerText) && /\d+ coaches/.test(document.querySelector(".impban").innerText) && !/coachs/.test(document.querySelector(".impban").innerText)), "when it's done, the banner says what was found: " + (await ev(co, () => document.querySelector(".impban").innerText)));
     await co.tap('.impban [data-a="impreview"]');
     await co.waitForSelector("#gymeditform", { timeout: 20000 });
     ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 10 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
@@ -120,6 +129,13 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(nAfter >= nBefore + 5 && /Added \d+ class/.test(await toast(co)), `timetable is added to Classes (${nBefore} → ${nAfter})`);
     await co.tap('nav.tabs [data-v="coach-gym"]'); await co.selectOption("#tt-weeks", "1"); await co.tap('[data-a="ttclasses"]'); await co.waitForTimeout(1500);
     ok(/already there/.test(await toast(co)) && (await ev(co, () => (COACH.classes || []).length)) === nAfter, "adding again skips classes already there");
+    // ---- reopening the app (no #) lands on Today, and the website's coaches are there without visiting the Gym tab
+    await co.goto(URL + "/app/"); await co.waitForTimeout(1500);
+    ok(await ev(co, () => location.hash === "#coach-today" && COACH.view === "today"), "a coach reopening the app lands on Today: " + (await ev(co, () => location.hash)));
+    ok(await ev(co, () => !!GYM.data && (gymProfile().coaches || []).length >= 2), "the gym's profile (coaches, timetable, prices) loads without opening the Gym tab");
+    await co.tap('nav.tabs [data-v="coach-classes"]'); await co.tap('[data-a="classnew"]'); await co.waitForTimeout(200);
+    ok(await ev(co, () => document.getElementById("c-coach").tagName === "SELECT" && /Anna/.test(document.getElementById("c-coach").innerText)), "so Plan a class offers the website's coaches");
+    await ev(co, () => hideSheet());
     // ---- the student sees their gym's details
     await st.tap('nav.tabs [data-v="settings"]'); await st.waitForTimeout(1000);
     ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 8 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
@@ -212,6 +228,91 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await wide(co, "insights");
     await co.tap('nav.tabs [data-v="coach-classes"]'); await co.locator(".calrow").first().tap(); await co.waitForTimeout(700);
     await co.tap('#sheetbar [data-a="back"]');
+    // ---- Today's money links open the right Money screen, and the checklist's import goes to the import box
+    await co.tap('nav.tabs [data-v="coach-today"]'); await co.waitForTimeout(300);
+    await ev(co, () => { COACH.moneyView = "setup"; COACH.payments = (COACH.payments || []).concat([{ id: "x1", status: "pending", amountCents: 100, paidOn: todayK(), userId: null }]); render(); });
+    await co.tap('[data-a="moneygo"][data-v="payments"]'); await co.waitForTimeout(400);
+    ok(await ev(co, () => COACH.view === "money" && COACH.moneyView === "payments" && document.querySelector('[data-a="moneyview"][data-v="payments"]').getAttribute("aria-pressed") === "true"), "Today's 'payments to check' opens Money > Payments, even after Setup was last used");
+    await ev(co, () => { COACH.payments = COACH.payments.filter((p) => p.id !== "x1"); coachGo("today"); const b = document.createElement("button"); b.dataset.a = "setupgo"; b.dataset.v = "gym"; b.id = "t-setup"; document.getElementById("app").appendChild(b); });
+    await co.tap("#t-setup"); await co.waitForTimeout(900);
+    ok(await ev(co, () => { const r = document.getElementById("gymimpform").getBoundingClientRect(); return COACH.view === "gym" && r.top < innerHeight && r.bottom > 0 && document.activeElement && document.activeElement.id === "gi-url"; }), "checklist 'Import your website' scrolls to the import box and puts the cursor in it");
+    // ---- bulk add: "Lerato's mom" with no name for the mom stays a kid, and her brother on the same number goes in too
+    await ev(co, () => { hideSheet(); bulkSheet(intake(parseList("Lerato's mom 083 555 1234\nThabo's mom 083 555 1234"))); }); await co.waitForTimeout(200);
+    await ev(co, () => bulkAdd()); await co.waitForTimeout(1200);
+    ok(await ev(co, () => { const ro = COACH.roster.people, l = ro.find((p) => p.name === "Lerato"), t = ro.find((p) => p.name === "Thabo"); return l && t && l.parentName && t.parentName && l.phone === "083 555 1234"; }), "kids added as \"X's mom\" stay kids, and a sibling on the same number isn't skipped");
+    ok(await ev(co, () => /Hi there/.test(remindText({ ...COACH.roster.people.find((p) => p.name === "Lerato"), feeCents: 85000, paidCents: 0, reference: "JFX" }, { currency: "ZAR", month: todayK().slice(0, 7) })) ), "and a reminder to that number greets the parent, not the kid");
+    // ---- fee reminders for someone who isn't on the app carry their own invite link
+    const thandi = await ev(co, async () => { const j = await api("POST", "/coach/students", { name: "Thandi Mokoena", phone: "082 555 0009" }); await api("PATCH", "/coach/students/" + j.id, { feeCents: 85000 }); await coachLoad("roster"); COACH.money = null; COACH.moneyView = "month"; COACH.moneyFilter = "owing"; coachGo("money"); return j.id; });
+    await co.waitForTimeout(1500);
+    ok(await ev(co, () => { const row = [...document.querySelectorAll(".mrow")].find((r) => /Thandi Mokoena/.test(r.innerText)), a = row && row.querySelector("a.wa"); return !!a && /claim=/.test(decodeURIComponent(a.href)) && !/#book/.test(decodeURIComponent(a.href)); }), "the WhatsApp reminder for a student who isn't on the app links to their invite (claim) link");
+    // ---- someone the coach added signs up through the gym's link: "Are you ...?" links them to their record
+    const sipho = await ev(co, async () => (await api("POST", "/coach/students", { name: "Sipho Ndlovu", phone: "082 555 0001" })).id);
+    { const { c: c3, p: s3 } = await phone();
+      await s3.goto(invite); await s3.waitForTimeout(900);
+      await s3.fill("#a-name", "Sipho Ndlovu"); await s3.fill("#a-email", "sipho@example.com"); await s3.fill("#a-pass", "siphopass1"); await s3.tap("#sheetbar [type=submit]"); await s3.waitForTimeout(900);
+      ok(await ev(s3, () => S.ui.sheet && S.ui.sheet.k === "authask" && /Are you Sipho Ndlovu\?/.test(document.getElementById("sheet").innerText) && !API.me), "signing up with the name the coach added asks 'Are you Sipho Ndlovu?'");
+      await s3.tap('#sheetbar [data-a="authlink"]:not([data-v="no"])'); await s3.waitForTimeout(1200);
+      ok(await ev(s3, (id) => API.me && API.me.id === id && API.me.gym, sipho), "saying yes signs them into that record");
+      await c3.close(); }
+    const lindi = await ev(co, async () => (await api("POST", "/coach/students", { name: "Lindiwe Zulu", phone: "082 555 0002" })).id);
+    { const { c: c4, p: s4 } = await phone();
+      await s4.goto(invite); await s4.waitForTimeout(900);
+      await s4.fill("#a-name", "Lindi Z"); await s4.fill("#a-email", "lindi@example.com"); await s4.fill("#a-pass", "lindipass1"); await s4.fill("#a-wa", "+27 82 555 0002"); await s4.tap("#sheetbar [type=submit]"); await s4.waitForTimeout(900);
+      ok(await ev(s4, () => S.ui.sheet && S.ui.sheet.k === "authask" && /Lindiwe Zulu/.test(document.getElementById("sheet").innerText)), "the same WhatsApp number asks too");
+      await s4.tap('#sheetbar [data-a="authlink"][data-v="no"]'); await s4.waitForTimeout(1200);
+      ok(await ev(s4, (id) => API.me && API.me.id !== id && API.me.gym, lindi), "saying no makes a new account");
+      await c4.close(); }
+    await ev(co, async () => { await coachLoad("roster"); COACH.stuView = "list"; coachGo("students"); }); await co.waitForTimeout(400);
+    ok(await ev(co, () => /Possible duplicate/.test(document.getElementById("roster-list").innerText)), "the coach sees a possible duplicate in the roster");
+    const lindiApp = await ev(co, () => COACH.roster.people.find((p) => p.name === "Lindi Z").id);
+    await ev(co, (id) => studentSheet(id), lindiApp); await co.waitForTimeout(900);
+    ok(await ev(co, () => /Possible duplicate/.test(document.getElementById("sheet").innerText) && !!document.querySelector('#sheet [data-a="mergeask"]')), "their student page offers a merge");
+    await co.tap('#sheet [data-a="mergeask"]'); await co.waitForTimeout(300); await co.tap('#sheetbar [data-a="mergeyes"]'); await co.waitForTimeout(1500);
+    ok(/Merged/.test(await toast(co)) && await ev(co, (id) => !COACH.roster.people.some((p) => p.id === id) && COACH.roster.people.some((p) => p.name === "Lindi Z" && !p.sameAs), lindi), "merging leaves one record");
+    await ev(co, () => hideSheet());
+    // ---- a signed-in student with no gym taps the invite link: they're asked to join
+    { const { c: c5, p: s5 } = await phone();
+      await s5.goto(URL + "/app/?signin=1"); await s5.waitForTimeout(900); await s5.tap('[data-a="authmode"][data-v="register"]');
+      await s5.fill("#a-name", "Gymless Gail"); await s5.fill("#a-email", "gail@example.com"); await s5.fill("#a-pass", "gailpass11"); await s5.tap("#sheetbar [type=submit]"); await s5.waitForTimeout(1200);
+      await s5.goto(invite); await s5.waitForTimeout(1200);
+      ok(await ev(s5, () => S.ui.sheet && S.ui.sheet.k === "join" && /Join your gym/.test(document.getElementById("sheet").innerText)), "a signed-in student without a gym who opens the invite link is asked to join");
+      await s5.tap('#sheetbar [data-a="joingym"]'); await s5.waitForTimeout(900);
+      ok(await ev(s5, () => API.me.gym && API.me.gym.name === "JPB Martial Arts Academy"), "and joins with one tap");
+      await ev(s5, () => { hideSheet(); go("settings"); }); await s5.waitForTimeout(300);
+      await s5.tap('[data-a="leavegym"]'); await s5.waitForTimeout(300);
+      ok(await ev(s5, () => /Leave your gym\?/.test(document.getElementById("sheet").innerText) && /keep your account/.test(document.getElementById("sheet").innerText)), "a student can leave their gym (it asks first)");
+      await s5.tap('#sheetbar [data-a="leavegymyes"]'); await s5.waitForTimeout(900);
+      ok(/left your gym/.test(await toast(s5)) && await ev(s5, () => API.me && !API.me.gym && !!document.getElementById("joinform")), "they keep their account, with no gym");
+      await c5.close(); }
+    // ---- a coach removes another coach from the Gym tab
+    { const cc0 = await ev(co, () => API.me.gym.coachCode);
+      const r2 = await fetch(URL + "/api/auth/register", { method: "POST", headers: { "content-type": "application/json", "x-jf": "1" }, body: JSON.stringify({ code: cc0, name: "Leaving Coach", email: "leaving@example.com", password: "leavingpass1" }) });
+      const leaveCookie = (r2.headers.get("set-cookie") || "").split(";")[0];
+      await ev(co, () => { hideSheet(); return coachLoad("roster"); }); await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(400);
+      ok(r2.status === 201 && await ev(co, () => /Leaving Coach/.test(document.getElementById("coach-list").innerText) && !/Coach JP/.test(document.getElementById("coach-list").innerText)), "the Gym tab lists the other coaches (not yourself)");
+      await co.locator('#coach-list [data-a="coachdelask"]').tap(); await co.waitForTimeout(300);
+      ok(await ev(co, () => /Remove Leaving\?/.test(document.getElementById("sheet").innerText)), "removing a coach asks first");
+      await co.tap('#sheetbar [data-a="coachdelyes"], #sheet [data-a="coachdelyes"]'); await co.waitForTimeout(900);
+      ok(/Coach removed/.test(await toast(co)) && await ev(co, (c) => API.me.gym.coachCode !== c && !document.getElementById("coach-list") && document.body.innerText.includes(API.me.gym.coachCode), cc0), "they're removed and the coach code shown is the new one");
+      const me2 = await (await fetch(URL + "/api/me", { headers: { cookie: leaveCookie } })).json();
+      ok(me2.me === null, "the removed coach is signed out"); }
+    // ---- a coach removes a student who has their own account
+    { const lz = await ev(co, () => COACH.roster.people.find((p) => p.name === "Lindi Z").id);
+      await ev(co, (id) => studentSheet(id), lz); await co.waitForTimeout(900);
+      await co.tap('#sheet [data-a="studelask"]'); await co.waitForTimeout(300);
+      ok(await ev(co, () => /keeps their JitsFlow account/.test(document.getElementById("sheet").innerText)), "removing a student with an account says they keep it");
+      await co.tap('#sheetbar [data-a="studelyes"]'); await co.waitForTimeout(1200);
+      ok(await ev(co, (id) => !COACH.roster.people.some((p) => p.id === id), lz), "and takes them off the list"); }
+    // ---- the only coach closes the gym
+    await ev(co, () => { hideSheet(); coachGo("gym"); }); await co.waitForTimeout(400);
+    await co.tap('[data-a="delacct"]'); await co.fill("#d-pass", "coachpass1"); await co.tap('#delform [type=submit]'); await co.waitForTimeout(900);
+    ok(/only coach/.test(await toast(co)) && /Gym tab/.test(await toast(co)) && await ev(co, () => !!API.me), "the only coach can't just delete their account: they're pointed to Delete gym");
+    await co.tap('[data-a="gymdel"]'); await co.waitForTimeout(300);
+    ok(await ev(co, () => /permanently deletes JPB Martial Arts Academy/.test(document.getElementById("gymdel").innerText)), "Delete gym says what goes and asks for the password");
+    await co.fill('#gymdelform [name=password]', "wrongpass1"); await co.tap('#gymdelform [type=submit]'); await co.waitForTimeout(700);
+    ok(/password isn't right/.test(await toast(co)) && await ev(co, () => !!API.me.gym), "a wrong password keeps the gym");
+    await co.fill('#gymdelform [name=password]', "coachpass1"); await co.tap('#gymdelform [type=submit]'); await co.waitForTimeout(1200);
+    ok(/gym is deleted/.test(await toast(co)) && await ev(co, () => API.me && !API.me.gym && !isCoach() && location.hash === "#today"), "deleting the gym keeps the coach's own account, with no gym");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
   await b.close(); srv.kill(); site.close(); sink.close();

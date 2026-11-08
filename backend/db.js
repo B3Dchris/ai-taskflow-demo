@@ -187,6 +187,8 @@ alter table payments add column if not exists status text not null default 'conf
 alter table payments add column if not exists ai jsonb;
 alter table payments add column if not exists submitted_by bigint;
 create index if not exists payments_gym_status on payments(gym_id, status);
+-- how many months a payment covers (an annual fee covers 12), counted toward each of them
+alter table payments add column if not exists months int not null default 1;
 create table if not exists pop_files(
   id bigserial primary key,
   payment_id bigint not null references payments(id) on delete cascade,
@@ -196,6 +198,8 @@ create table if not exists pop_files(
   created_at timestamptz not null default now()
 );
 create index if not exists pop_files_payment on pop_files(payment_id);
+-- when someone joined the gym they're in now, if they moved there with a code (null: they signed up into it). Coaches only see training logged since then.
+alter table users add column if not exists gym_joined_at timestamptz;
 create table if not exists password_resets(
   token_hash text primary key,
   user_id bigint not null references users(id) on delete cascade,
@@ -203,6 +207,9 @@ create table if not exists password_resets(
   created_at timestamptz not null default now()
 );
 `;
+
+// Proofs a coach marked "not a payment" leave the coach's list after 30 days. Delete them then (their files go with them).
+const purgeRejected = (pool) => pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
 
 function makePool() {
   if (!process.env.DATABASE_URL) return null;
@@ -212,10 +219,13 @@ function makePool() {
 
 async function migrate(pool) {
   await pool.query(SCHEMA);
+  // One row per PayFast payment, even if the same notification arrives twice at once. Older duplicates would block it: warn, don't stop.
+  await pool.query("create unique index if not exists payments_payfast_ref on payments(gym_id, reference) where source='payfast'").catch((e) => console.warn("payments_payfast_ref:", e.message));
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
+  await purgeRejected(pool);
   // One-off tidy-up: empty test gyms left by deploy checks (named "… (delete me)", nobody in them).
   await pool.query("delete from gyms g where g.name like '%(delete me)' and not exists (select 1 from users u where u.gym_id=g.id)");
 }
 
-module.exports = { makePool, migrate };
+module.exports = { makePool, migrate, purgeRejected };

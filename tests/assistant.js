@@ -70,8 +70,8 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
     ok(job.status === "done" && job.result.profile.timetable.length > 0, "the import finishes in the background with the timetable");
     r = await co("DELETE", "/coach/import/job"); r = await co("GET", "/coach/import/job"); ok(r.j.job === null, "the coach can clear it");
     // --- bulk add from contacts / a list
-    r = await co("POST", "/coach/students/bulk", { people: [{ name: "Lerato Dlamini", phone: "+27 82 777 1234" }, { name: "Same Phone", phone: "0827771234" }, { name: "Kyle Naidoo", email: "kyle@x.test" }, { name: "Nomsa Dube", phone: "0821230000" }, { name: "No Way" }] });
-    ok(r.s === 201 && r.j.added === 3 && r.j.skipped === 2, "bulk add skips duplicates (same number, same name); a name alone is fine");
+    r = await co("POST", "/coach/students/bulk", { people: [{ name: "Lerato Dlamini", phone: "+27 82 777 1234" }, { name: "Same Phone", phone: "0827771234" }, { name: "Kyle Naidoo", email: "kyle@x.test" }, { name: "Nomsa Dube" }, { name: "No Way" }] });
+    ok(r.s === 201 && r.j.added === 3 && r.j.skipped === 2, "bulk add skips duplicates (same number, same name with nothing to tell them apart); a name alone is fine");
     // --- look
     r = await co("PATCH", "/coach/gym", { brandAccent: "#C62828" }); ok(r.j.me.gym.brand.accent === "#c62828", "the gym's colour is saved");
     r = await stu("GET", "/me"); ok(r.j.me.gym.brand.accent === "#c62828" && !r.j.me.gym.setup, "students get the gym's colour (not the coach's setup)");

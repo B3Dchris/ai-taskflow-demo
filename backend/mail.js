@@ -77,9 +77,10 @@ const templates = {
   moved: (name, gym, cls, was, now) => ({ subject: `Changed: ${cls}`, title: "Class time changed",
     paras: [`Hi ${name},`, `${gym} has moved ${cls}. It was ${was}; it's now ${now}. You're still booked.`, "Can't make the new time? Cancel in the app so someone else gets the spot."],
     button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
-  feeReminder: (name, gym, amount, month, ref, bankLines) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
-    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for ${month}.`, ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? Send your proof of payment in the app.`],
-    button: { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
+  // join: their own invite link, for someone the coach added who isn't on the app yet
+  feeReminder: (name, gym, amount, month, ref, bankLines, join) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for ${month}.`, ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`],
+    button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
   cancelled: (name, gym, cls, when) => ({ subject: `Cancelled: ${cls}`, title: "Class cancelled",
     paras: [`Hi ${name},`, `${gym} has cancelled ${cls} on ${when}. Your booking has been removed.`, "Have a look for another class to book."],
     button: { label: "Book another class", url: appUrl() + "/app/#book" } }),
@@ -93,13 +94,22 @@ const templates = {
     paras: [gym ? `You're in ${gym} on JitsFlow. Your progress, training log and class sign-ups are saved to your account, so they're on any phone you sign in on.` : "Your progress and training log are now saved to your account, so they're on any phone you sign in on.",
       "Start by rating what you know: it takes 5–10 minutes and shows you what to drill next.", "Tip: on iPhone, open the app in Safari, tap Share, then Add to Home Screen."],
     button: { label: "Open JitsFlow", url: appUrl() + "/app/" } }),
-  welcomeCoach: (name, gym, invite) => ({ subject: `${gym} is set up on JitsFlow`, title: `${gym} is ready`,
+  // Subjects never carry text a sign-up or a coach typed (gym or coach names): these go to addresses nobody has checked yet.
+  welcomeCoach: (name, gym, invite) => ({ subject: "Your gym is set up on JitsFlow", title: `${gym} is ready`,
     paras: [`Hi ${name},`, "Send your students this invite link. It opens JitsFlow with your gym code filled in:", invite,
       "In the Coach tab you can import your timetable from your website, plan classes, see who's coming and what they need to work on, and keep your roster and payments."],
     button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }),
-  invite: (coach, gym, url) => ({ subject: `${coach} invited you to ${gym} on JitsFlow`, title: `Join ${gym} on JitsFlow`,
+  invite: (coach, gym, url) => ({ subject: "You're invited to join your gym on JitsFlow", title: `Join ${gym} on JitsFlow`,
     paras: [`${coach} invited you to ${gym}'s JitsFlow.`, "JitsFlow is a no-gi study app: every technique from white to black belt with videos, a flow map of attacks and escapes, and a training log. Your coach uses it to plan classes around what the group needs.", "Tap the button to create your free account. Your gym code is already filled in."],
     button: { label: `Join ${gym}`, url } }),
+  // To every active coach when payment details or the coaches change. Fixed subjects.
+  gymChange: (kind, name, who, detail) => { const t = {
+      bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],
+      payfast: ["Your gym's PayFast account changed", `${who} connected a PayFast account (Merchant ID ${detail}). Students' card payments now go to that account.`],
+      removed: ["A coach was removed from your gym", `${who} removed ${detail} as a coach. They can't see your roster or payments any more, and your coach code has changed.`],
+      inactive: ["A coach was marked inactive", `${who} marked ${detail} as inactive. They can't use the coach tools until a coach switches them back on.`] }[kind];
+    return { subject: t[0], title: t[0], paras: [`Hi ${name},`, t[1], "Didn't expect this? Open the Coach tab now and check your payment details and who your coaches are."],
+      button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }; },
 };
 
 module.exports = { send, sendLater, templates, mailOn, appUrl, layout };

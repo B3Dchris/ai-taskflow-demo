@@ -19,7 +19,7 @@
     gtag("consent", "update", { analytics_storage: "granted" });
     gtag("js", new Date());
     gtag("set", { allow_google_signals: false, allow_ad_personalization_signals: false }); // no ads: don't send to Google's ad endpoints
-    gtag("config", ID, { allow_google_signals: false, allow_ad_personalization_signals: false, page_location: location.origin + appPath() + location.search.replace(/([?&])(join|reset|signin|start|t)=[^&]*/g, "$1").replace(/[?&]+$/, "") });
+    gtag("config", ID, { allow_google_signals: false, allow_ad_personalization_signals: false, page_location: location.origin + appPath() + location.search.replace(/([?&])(join|reset|signin|start|t|claim|paid|billing)=[^&]*/g, "$1").replace(/[?&]+$/, "") });
     var s = document.createElement("script"); s.async = true; s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(ID);
     document.head.appendChild(s);
   }

@@ -19,6 +19,8 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(await rejects(im.importSite("https://example.com:8443/"), /isn't a public website/), "odd ports are refused");
     ok(await rejects(im.importSite("https://user:pw@example.com/"), /plain address/), "URLs with passwords are refused");
     ok(im.privateIp("::ffff:127.0.0.1") && im.privateIp("172.20.0.1") && im.privateIp("fd00::1") && !im.privateIp("8.8.8.8") && !im.privateIp("2606:4700::1111"), "private address check");
+    ok(await rejects(im.importSite("http://[::ffff:127.0.0.1]/"), /isn't a public website/) && await rejects(im.importSite("http://[::ffff:169.254.169.254]/latest/"), /isn't a public website/) && await rejects(im.importSite("http://[::ffff:10.0.0.1]/"), /isn't a public website/), "IPv4 addresses written as IPv6 are refused too");
+    ok(im.privateIp("::ffff:7f00:1") && im.privateIp("::ffff:a9fe:a9fe") && im.privateIp("::7f00:1") && im.privateIp("2002:7f00:1::") && im.privateIp("::ffff:0:a00:1") && !im.privateIp("::ffff:808:808"), "hex-written IPv4-in-IPv6, IPv4-compatible and 6to4 addresses are private; a public one isn't");
 
     process.env.JF_IMPORT_ALLOW_LOOPBACK = "1";
     ok(await rejects(im.safeGet(site.url + "/to-metadata"), /isn't a public website/), "a redirect to a private address is refused");
@@ -40,6 +42,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const tt = p.timetable, find = (d, s) => tt.find((x) => x.day === d && x.start === s);
     ok(find("Mon", "06:00") && find("Wed", "06:00") && find("Mon", "06:00").coach === "Thabo" && find("Mon", "06:00").title === "No-Gi Fundamentals", "list timetable under day headings, with coach");
     ok(find("Tue", "17:00") && find("Tue", "17:00").end === "17:45" && find("Thu", "18:00") && find("Thu", "18:00").end === "19:30" && find("Sat", "09:00"), "table timetable rows and am/pm times");
+    ok(find("Tue", "17:00").title === "Kids BJJ" && find("Thu", "18:00").title === "Gi Fundamentals" && find("Sat", "09:00").title === "Open Mat" && !tt.some((x) => /\bDay\b|\bTime\b/.test(x.title)), "table header words (Day, Time, Class) aren't put in class names: " + tt.map((x) => x.title).join(", "));
     ok(tt.length === 9 && find("Fri", "12:00") && find("Sun", "10:00"), "9 class times found, including a page two links deep and one only in the sitemap: " + tt.length);
     const rate = (n) => p.rates.find((x) => x.name.includes(n));
     ok(rate("Kids") && rate("Kids").price === 600 && rate("Kids").period === "month" && rate("Drop-in").period === "class" && rate("Joining").period === "once", "rates with periods: " + JSON.stringify(p.rates.map((x) => [x.name, x.price, x.period])));

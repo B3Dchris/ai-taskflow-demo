@@ -22,6 +22,8 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
       const ld=[...t.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];let parsed=true;try{ld.forEach(m=>JSON.parse(m[1]))}catch(e){parsed=false}
       if(r.status!==200||!t.includes('<link rel="canonical" href="'+u+'">')||!/<title>[^<]{10,}<\/title>/.test(t)||!/name="description" content="[^"]{40,}"/.test(t)||!/og:image" content="https:\/\/www\.jitsflow\.com\/og\//.test(t)||!ld.length||!parsed)bad.push(u)}
     ok(!bad.length,'content pages have a title, description, canonical, share image and valid structured data '+bad.join(' '));
+    {const t=await (await fetch(URL+'privacy/')).text();
+     ok(/proofs of payment/.test(t)&&/forwarded to a gym's payments address/.test(t)&&/WhatsApp group screenshots/.test(t)&&/PayFast/.test(t)&&/contacts the coach picks/.test(t)&&/parent's permission/.test(t)&&/competition/.test(t)&&/Leave gym/.test(t),'privacy page names Anthropic for proofs, emails and screenshots, PayFast, contacts, children, competitions and leaving a gym')}
     const og=await fetch(URL+'og/home.jpg');ok(og.status===200&&og.headers.get('content-type')==='image/jpeg','share images are served');
     ok(locs.includes('https://www.jitsflow.com/coaches/'),'sitemap lists the coaches page');
     {const r=await fetch(URL+'coaches/'),h=await r.text();const imgs=[...h.matchAll(/src="(\/img\/coach\/[^"]+)"/g)].map(m=>m[1]);
@@ -96,6 +98,8 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await gp.evaluate(()=>{go('learn')});await gp.waitForTimeout(200);
     ok(await gp.evaluate(()=>dataLayer.some(a=>a[0]==='event'&&a[1]==='page_view'&&/\/app\/learn$/.test(a[2].page_location))),'app tab changes are counted as page views');
     await gp.reload();await gp.waitForTimeout(1500);ok(await gp.evaluate(()=>!document.querySelector('.jf-consent')),'the choice is remembered');
+    await gp.goto(G+'app/?join=ABCD2345&claim=SECRETTOK1&paid=card');await gp.waitForTimeout(800);
+    ok(await gp.evaluate(()=>{const c=dataLayer.find(a=>a[0]==='config');return !!c&&/\/app\//.test(c[2].page_location)&&!/SECRETTOK1|ABCD2345|paid=/.test(c[2].page_location)}),'invite codes, claim tokens and payment results are left out of the address sent to Google');
     const nh=await (await fetch(G)).text();ok(/window\.JF_GA="G-TEST12345"/.test(nh)&&/analytics\.js\?v=[0-9a-f]{8}/.test(nh),'GA tag is added to every page, with a versioned script address');
     await gc.close();gs.kill();
     const bs=spawn('node',[path.resolve(__dirname,'../server.js')],{env:{...process.env,PORT:String(gport+1),GA_ID:'"><script>alert(1)</script>'},stdio:'ignore'});

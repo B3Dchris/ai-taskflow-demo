@@ -78,6 +78,20 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await coach("POST", "/coach/classes/bulk", { classes: [{ kind: "private", title: "Semi-private", startsAt: at(5, 7), capacity: 2, priceCents: 30000, coach: "JP" }] });
     r = await coach("GET", "/classes"); const bulkP = r.j.classes.find((c) => c.title === "Semi-private");
     ok(bulkP && bulkP.kind === "private" && bulkP.capacity === 2 && bulkP.priceCents === 30000 && bulkP.coach === "JP", "slots added in bulk keep their type, spots, price and coach");
+    r = await sam("PUT", `/classes/${bulkP.id}/rsvp`, { going: true }); ok(r.j.going, "a student books the first spot of a semi-private");
+    r = await lee("GET", "/classes"); { const sp = r.j.classes.find((c) => c.id === bulkP.id); ok(sp && sp.going === 1 && !sp.attendees, "the second spot is still there for others (with no names)"); }
+    r = await lee("PUT", `/classes/${bulkP.id}/rsvp`, { going: true }); ok(r.j.going, "and someone else can book it");
+    r = await ana("GET", "/classes"); ok(!r.j.classes.some((c) => c.id === bulkP.id), "once it's full it disappears for everyone else");
+    await sam("PUT", `/classes/${bulkP.id}/rsvp`, { going: false }); await lee("PUT", `/classes/${bulkP.id}/rsvp`, { going: false });
+
+    // ---- a student marked inactive (left the gym) can't book, and their places go to the people waiting
+    r = await coach("POST", "/classes", { title: "Small group", startsAt: at(6, 10), capacity: 1 }); const sg = r.j.class.id;
+    await sam("PUT", `/classes/${sg}/rsvp`, { going: true }); r = await lee("PUT", `/classes/${sg}/rsvp`, { going: true }); ok(r.j.waitlisted, "the class is full, so the next student waits");
+    r = await coach("PATCH", `/coach/students/${sam.id}`, { active: false }); ok(r.s === 200, "coach marks a student inactive");
+    r = await lee("GET", "/classes"); ok(r.j.classes.find((c) => c.id === sg).myGoing, "their place goes to the person waiting");
+    r = await coach("POST", "/classes", { title: "Open mat 2", startsAt: at(6, 12), capacity: 5 });
+    r = await sam("PUT", `/classes/${r.j.class.id}/rsvp`, { going: true }); ok(r.s === 403 && /inactive/.test(r.j.error), "and they can't book: " + (r.j && r.j.error));
+    await coach("PATCH", `/coach/students/${sam.id}`, { active: true }); await lee("PUT", `/classes/${sg}/rsvp`, { going: false });
 
     // ---- memberships: weekly limits and status
     r = await coach("POST", "/coach/plans", { name: "2x a week", priceCents: 65000, period: "month", classesPerWeek: 2 }); const plan2 = r.j.plan.id;
@@ -95,6 +109,12 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await coach("PATCH", `/coach/students/${ana.id}`, { planStatus: "paused" });
     r = await ana("PUT", `/classes/${ids[0]}/rsvp`, { going: true }); ok(r.s === 403 && /paused/.test(r.j.error), "a paused membership can't book");
     await coach("PATCH", `/coach/students/${ana.id}`, { planStatus: "active" });
+    // A waitlist place counts toward the weekly limit too (it can turn into a booking by itself).
+    r = await coach("POST", "/classes", { title: "Fundamentals full", startsAt: new Date(wk.getTime() + 3 * DAY).toISOString(), capacity: 1 }); const wfull = r.j.class.id;
+    await chris("PUT", `/classes/${wfull}/rsvp`, { going: true }); await ana("PUT", `/classes/${ids[1]}/rsvp`, { going: false });
+    r = await ana("PUT", `/classes/${wfull}/rsvp`, { going: true }); ok(r.j.waitlisted, "a student on 2 a week, with 1 booked, joins a waitlist");
+    r = await ana("PUT", `/classes/${ids[1]}/rsvp`, { going: true }); ok(r.s === 403 && /2 classes a week/.test(r.j.error), "then can't book another class that week");
+    await ana("PUT", `/classes/${wfull}/rsvp`, { going: false }); await chris("PUT", `/classes/${wfull}/rsvp`, { going: false });
     await coach("PATCH", `/coach/students/${chris.id}`, { planId: planU });
     r = await coach("GET", "/coach/roster"); const rc = r.j.people.find((p) => p.name === "Chris Buys");
     ok(rc.planName === "Unlimited" && rc.feeCents === 85000 && r.j.plans.length === 2, "roster shows each student's plan and the fee it implies");
@@ -103,6 +123,9 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await coach("POST", "/classes", { title: "Lunch no-gi", startsAt: new Date(Date.now() + 20 * 60e3).toISOString(), durationMin: 60 }); const soon = r.j.class.id;
     r = await chris("POST", `/classes/${soon}/checkin`); ok(r.s === 200, "students check themselves in shortly before class");
     r = await coach("GET", `/coach/classes/${soon}`); ok(r.j.attendees[0].attended && r.j.attendees[0].self, "coach sees the self check-in");
+    await coach("PATCH", `/coach/students/${ana.id}`, { planStatus: "paused" });
+    r = await ana("POST", `/classes/${soon}/checkin`); ok(r.s === 403 && /paused/.test(r.j.error), "a paused member can't check in without a booking either");
+    await coach("PATCH", `/coach/students/${ana.id}`, { planStatus: "active" });
     r = await chris("POST", `/classes/${ids[1]}/checkin`); ok(r.s === 400 && /45 minutes/.test(r.j.error), "check-in isn't open days ahead");
     r = await coach("PUT", `/coach/classes/${soon}/attendance`, { userIds: [sam.id, lee.id], attended: true }); ok(r.j.count === 2, "coach checks in several at once");
 
