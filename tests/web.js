@@ -64,8 +64,8 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'no sideways scroll');
     const vids=await p.evaluate(()=>({n:Object.keys(VIDS).length,tech:TECH.filter(t=>vidOf(t.id)).length,pos:Object.keys(POS).filter(k=>vidOf('pos:'+k)).length}));
     ok(vids.n>=140&&vids.tech>=125,`picked videos loaded (${vids.tech} techniques, ${vids.pos} positions)`);
-    await p.evaluate(()=>techSheet('triangle'));ok(await p.evaluate(()=>!!document.querySelector('#sheet .ytface img[src*="i.ytimg.com"]')),'technique page shows its video thumbnail');
-    await p.locator('#sheet .ytface').tap();ok(await p.evaluate(()=>/youtube-nocookie\.com\/embed\//.test((document.querySelector('#sheet .ytembed iframe')||{}).src||'')),'video plays inside the website');
+    await p.evaluate(()=>techSheet('triangle'));ok(await p.evaluate(()=>!!document.querySelector('#sheet .ytembed iframe[src*="youtube-nocookie.com/embed/"]')),'technique page shows its video player');
+    ok(await p.evaluate(()=>{const f=document.querySelector('#sheet .ytembed iframe');return !!f&&f.getAttribute('loading')==='lazy'&&!document.querySelector('#sheet .ytface')}),'the player is YouTube\'s own (one tap to play), loaded lazily');
     await p.waitForTimeout(500);
     // technique page in a browser: video plays in place, "Open in JitsFlow" opens that technique in the app
     const tUrl=(await (await fetch(URL+'sitemap.xml')).text()).match(/https:\/\/www\.jitsflow\.com\/(techniques\/kimura-from-side-control\/)/)[1];

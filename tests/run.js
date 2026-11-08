@@ -37,7 +37,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   for(const t of ['today','learn','flow','log','settings']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
   // --- every technique sheet
   const ids=await ev(()=>TECH.map(t=>t.id));
-  for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img, #sheet .ytface img, #sheet a.ytpick'),yt:(document.querySelector('#sheet a.yt:not(.ytpick)')||{}).href||''}),id);
+  for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img, #sheet .posimg img, #sheet .ytembed iframe, #sheet a.ytpick'),yt:(document.querySelector('#sheet a.yt:not(.ytpick)')||{}).href||''}),id);
     ok(/^https:\/\/www\.youtube\.com\/results\?search_query=.+no%20gi%20bjj$/.test(r.yt),`technique ${id} has a YouTube link`);
     ok(r.h===r.name&&r.lead.length>40&&r.steps===r.n&&r.fig,`technique sheet ${id} incomplete`);}
   await overflow('technique sheet');await ev(()=>closeSheet());
@@ -215,8 +215,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltchips [data-v="blue"]').tap();
   await ev(()=>{window.__savedVid=VIDS.knee_cut;VIDS.knee_cut={v:'dQw4w9WgXcQ',title:'Knee cut pass',channel:'Test Channel',nogi:true};techSheet('knee_cut')});
   if(MODE==='local'){
-    ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault\.jpg/.test((document.querySelector('#sheet .ytface img')||{}).src||'')&&/Test Channel/.test(document.querySelector('#sheet .ytcap').innerText)&&!document.querySelector('#sheet .ytembed')),'website shows the video thumbnail first, no player loaded');
-    await p.locator('#sheet .ytface').tap();ok(await ev(()=>/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?autoplay=1/.test((document.querySelector('#sheet .ytembed iframe')||{}).src||'')),'tapping the thumbnail plays the video in the app');
+    ok(await ev(()=>{const f=document.querySelector('#sheet .ytembed iframe');return f&&/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/.test(f.src)&&f.getAttribute('loading')==='lazy'&&/autoplay/.test(f.getAttribute('allow'))&&/Test Channel/.test(document.querySelector('#sheet .ytcap').innerText)&&!document.querySelector('#sheet .ytface')}),'technique page shows YouTube\'s own player (lazy-loaded), so one tap plays it');
     ok(await ev(()=>/More Knee cut pass videos on YouTube/.test(document.querySelector('#sheet a.yt:not(.ytpick)').innerText)),'search button stays as "More videos"');
     await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
     ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/mqdefault/.test((document.querySelector('.trow[data-v="knee_cut"] .thumb img')||{}).src||'')),'technique list uses the video thumbnail');

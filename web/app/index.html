@@ -2874,7 +2874,9 @@ const ytThumb=(id,q)=>`https://i.ytimg.com/vi/${encodeURIComponent(id)}/${q||"hq
 function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
   const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(v.title||label)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
   if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
-  return `<div class="ytbox"><button class="ytface" data-a="ytplay" data-v="${esc(v.v)}" aria-label="Play video: ${esc(v.title||label)}"><img src="${ytThumb(v.v)}" alt="" loading="lazy"><span class="ytbig" aria-hidden="true">▶</span></button>${cap}</div>`}
+  // YouTube's own player straight away (loaded when it scrolls into view): one tap plays it. A thumbnail that swaps in the
+  // player on tap needs a second tap on iPhone, because Safari won't start sound in a frame that was only just created.
+  return `<div class="ytbox"><div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.v)}?rel=0&playsinline=1" title="${esc(v.title||label)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>${cap}</div>`}
 const inClaude=()=>!!(window.claude&&window.claude.use);
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
