@@ -149,6 +149,16 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // --- PayFast: the coach connects (test account), the gym's plan shows its free months
     await co.locator('details[data-g="m-pf"] summary').tap(); await co.waitForTimeout(200);
     ok(await ev(co, () => { const t = document.querySelector('details[data-g="m-pf"]').innerText; return /Split Payments/.test(t) && /10000100/.test(t) && /2%/.test(t); }), "Money explains card payments, the 2% fee and the PayFast steps");
+    // the owner can show a PayFast button that says "coming soon" while card payments aren't live
+    await co.locator("#pf-soon").check(); await co.waitForTimeout(600);
+    ok(/coming soon/.test(await toast(co)), "the gym owner switches on the PayFast button");
+    await ev(s1, async () => { await loadPay(); go("book"); }); await s1.waitForTimeout(500); await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400);
+    ok(await ev(s1, () => !!document.querySelector('#sheet [data-a="paysoon"]') && !document.querySelector('#sheet [data-a="paycard"]')), "students see the PayFast button");
+    await s1.tap('#sheet [data-a="paysoon"]'); await s1.waitForTimeout(200);
+    ok(/coming soon/i.test(await toast(s1)), "tapping it says coming soon"); await ev(s1, () => hideSheet());
+    await co.locator("#pf-soon").uncheck(); await co.waitForTimeout(600);
+    await ev(s1, async () => { await loadPay(); go("book"); }); await s1.waitForTimeout(400); await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400);
+    ok(await ev(s1, () => !document.querySelector('#sheet [data-a="paysoon"]')), "switched off, the button is gone"); await ev(s1, () => hideSheet());
     await co.tap('[data-a="pftest"]'); await co.waitForTimeout(900);
     ok(/Test account connected/.test(await toast(co)) && await ev(co, () => /Connected/.test(document.querySelector('details[data-g="m-pf"] summary').innerText)), "the coach connects PayFast (test account)");
     await ev(co, () => coachGo("gym")); await co.waitForTimeout(700);
@@ -295,6 +305,21 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await co.tap('[data-a="pickcontacts"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return window._pickOpts && window._pickOpts.multiple === true && r.length === 2 && /\+27 82 121 3434/.test(r[0].innerText) && r[1].querySelector("input").value === "Naledi" && /Kid/.test(r[1].innerText); }), "several contacts come in at once with their numbers; \"Naledi's Mom\" becomes the kid Naledi");
     await ev(co, () => hideSheet());
+    // --- in the App Store app: the whole address book, searched and ticked
+    await ev(co, () => { window.Capacitor = { isNativePlatform: () => true, Plugins: { Contacts: { checkPermissions: async () => ({ contacts: "prompt" }), requestPermissions: async () => ({ contacts: "granted" }),
+      getContacts: async () => ({ contacts: [{ name: { display: "Zanele Dube" }, phones: [{ number: "+27 82 555 1111", isPrimary: true }] }, { name: { given: "Tom", family: "Botha" }, phones: [{ number: "083 555 2222" }] }, { name: { display: "Plumber Pete" }, phones: [{ number: "011 555 3333" }] }, { name: { display: "Kea's Mom" }, phones: [{ number: "084 555 4444" }] }] }) } } }; });
+    await ev(co, () => coachGo("students")); await co.waitForTimeout(300); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
+    await co.tap('[data-a="pickcontacts"]'); await co.waitForTimeout(400);
+    ok(await ev(co, () => S.ui.sheet.k === "cpick" && document.querySelectorAll("#cp-list .bulkrow").length === 4 && /Kea's Mom[\s\S]*Plumber Pete[\s\S]*Tom Botha[\s\S]*Zanele Dube/.test(document.getElementById("cp-list").innerText)), "the app shows the phone's contacts, A to Z, after asking permission");
+    await co.fill("#cp-q", "zan"); await co.waitForTimeout(150);
+    ok(await ev(co, () => document.querySelectorAll("#cp-list .bulkrow").length === 1), "searching narrows the contacts");
+    await co.tap('#cp-list [data-a="cpick"]'); await co.fill("#cp-q", "kea"); await co.waitForTimeout(150); await co.tap('#cp-list .bx'); await co.waitForTimeout(100);
+    ok(await ev(co, () => /Add 2 to the list/.test(document.querySelector('#sheetbar [data-a="cpdone"]').innerText)), "ticks are kept while searching");
+    await co.tap('#sheetbar [data-a="cpdone"]'); await co.waitForTimeout(300);
+    ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return S.ui.sheet.k === "bulk" && r.length === 2 && r.some((x) => /\+27 82 555 1111/.test(x.innerText)) && r.some((x) => x.querySelector("input").value === "Kea" && /Kid/.test(x.innerText)); }), "the picked people go to the list with their numbers (Kea's Mom → the kid Kea)");
+    await ev(co, () => { hideSheet(); COACH.bill = undefined; coachGo("gym"); }); await co.waitForTimeout(800);
+    ok(await ev(co, () => { const p = document.querySelector(".planpanel"); return p && !p.querySelector('[data-a="billcard"]') && /managed on the JitsFlow website/.test(p.innerText); }), "in the App Store app there's no card button for the plan (Apple's rules)");
+    await ev(co, () => { delete window.Capacitor; COACH.bill = undefined; });
     await ev(co, () => studentSheet(students().find((s) => s.name === "Aya").id)); await co.waitForTimeout(800);
     ok(await ev(co, () => { const a = [...document.querySelectorAll('#sheet a[href*="wa.me"]')].map((x) => decodeURIComponent(x.href)).join(" "); return document.getElementById("s-parent").value === "Nomsa Dube" && /Hi Nomsa, join .* for Aya/.test(a); }), "a kid's page shows the parent, and WhatsApp messages greet the parent");
     await ev(co, () => hideSheet());

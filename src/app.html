@@ -2296,6 +2296,7 @@ document.addEventListener("click",e=>{
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
     case "paycard": payByCard(); break;
+    case "paysoon": toast("Card and Instant EFT payments with PayFast are coming soon. For now, please pay by EFT."); break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;
@@ -2379,6 +2380,7 @@ document.addEventListener("input",e=>{
 document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
   if(e.target.id==="ppl-in"&&e.target.files&&e.target.files.length){const fs=[...e.target.files];e.target.value="";peopleFiles(fs);return}
+  if(e.target.id==="pf-soon"){const on=e.target.checked;api("PATCH","/coach/gym/pay-soon",{on}).then(()=>{if(COACH.payInfo&&COACH.payInfo.pay)COACH.payInfo.pay.cardSoon=on;toast(on?"Students now see a PayFast button marked “coming soon”.":"PayFast button hidden from students.")}).catch(x=>{e.target.checked=!on;toast(x.message)});return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}

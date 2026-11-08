@@ -1150,8 +1150,14 @@ function makeApi(pool, { secureCookies }) {
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
     const u = needCoach(req), pay = readPaySettings(req.body || {});
-    await q("update gyms set pay=$1 where id=$2", [pay, u.gym_id]);
+    await q("update gyms set pay = coalesce(pay,'{}'::jsonb) || $1 where id=$2", [pay, u.gym_id]); // keeps switches like cardSoon
     res.json({ pay });
+  }));
+  // The PayFast button students see before card payments are live: it says "coming soon".
+  api.patch("/coach/gym/pay-soon", wrap(async (req, res) => {
+    const u = needCoach(req), on = !!(req.body && req.body.on);
+    await q("update gyms set pay = coalesce(pay,'{}'::jsonb) || $1 where id=$2", [{ cardSoon: on }, u.gym_id]);
+    res.json({ cardSoon: on });
   }));
   // A new forwarding address (the old one stops working), e.g. if it leaked.
   api.post("/coach/gym/pay/new-address", wrap(async (req, res) => {

@@ -567,6 +567,7 @@ function feesCard(){const p=API.pay;if(!p)return "";const left=Math.max(0,p.dueC
     <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${ready?"How to pay":"Send proof of payment"}</button></section>`}
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,left=Math.max(0,p.dueCents-p.paidCents-p.pendingCents);S.ui.sheet={k:"mypay"};S.ui.stack=[];
   openSheet(`${sheetHead("Pay your fees")}<div class="stack-lg">
+    ${!p.card&&b.cardSoon?`<section class="stack"><button class="btn primary" data-a="paysoon">Pay by card or Instant EFT <span class="pill">Coming soon</span></button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast, coming soon. For now, pay by EFT below.</p></section>`:""}
     ${p.card?`<section class="stack"><h2 class="label">Pay now</h2><label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${left?left/100:p.dueCents?p.dueCents/100:""}"></label>
       <button class="btn primary" data-a="paycard">Pay by card or Instant EFT</button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast. Your coach sees it straight away.</p></section>`:""}
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
@@ -1323,10 +1324,11 @@ function payfastGo(c){const f=document.createElement("form");f.method="POST";f.a
 async function payByCard(){const amt=Math.round(Number((document.getElementById("card-amt")||{}).value||0)*100);
   if(!(amt>=500)){toast("Enter the amount, from R5.");return}
   toast("Opening PayFast…");try{const c=await api("POST","/me/pay/payfast",{amountCents:amt});jfTrack("pay_card",{cents:amt});payfastGo(c)}catch(e){toast(e.message)}}
-function pfPanel(){const og=S.ui.openG||{};
+function pfPanel(){const og=S.ui.openG||{},pi=COACH.payInfo;
   if(COACH.pf===undefined){COACH.pf=null;api("GET","/coach/payfast").then(j=>{COACH.pf=j.payfast;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   const p=COACH.pf;if(!p)return "";
   return `<details class="more" data-g="m-pf"${og["m-pf"]?" open":""}><summary><span><b>Card and Instant EFT (PayFast)</b><br><span class="small muted">${p.connected?`Connected · ${esc(p.merchantId)}${p.test?" (test account)":""}`:"Students pay in the app; it's marked paid by itself"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+    <label class="row small" style="flex-wrap:nowrap"><input id="pf-soon" type="checkbox" style="width:auto"${pi&&pi.pay&&pi.pay.cardSoon?" checked":""}> Show students a PayFast button. Until card payments are switched on, it says “coming soon”.</label>
     <p class="small">Students tap <b>Pay by card or Instant EFT</b>. The money goes into your own PayFast account and the payment shows here as paid, with no proof to check. JitsFlow's fee is ${p.feePct}% of each payment, taken by PayFast at the time; PayFast's own fee applies too.</p>
     ${p.connected?`<div class="row"><span class="pill ok">Connected</span><span class="small mono">${esc(p.merchantId)}</span><button class="linkbtn small" data-a="pfremove">Disconnect</button></div>`:""}
     <ol class="small steps qrsteps"><li><span>Open a PayFast business account at payfast.io (free) and finish their verification.</span></li>
