@@ -15,7 +15,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const b = await chromium.launch(); const errs = [];
   const phone = async (name) => { const c = await b.newContext({ ...devices["iPhone 13"] }); await c.addInitScript(() => { if (!localStorage.getItem("rtb.progress")) localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(name + ": " + e.message)); return p; };
   const ev = (p, f, a) => p.evaluate(f, a), toast = (p) => ev(p, () => document.getElementById("toast").textContent);
-  const signup = async (p, path, fields) => { await p.goto(URL + path); await p.waitForTimeout(900); for (const [k, v] of Object.entries(fields)) await p.fill(k, v); await p.tap("#sheetbar [type=submit]"); await p.waitForTimeout(1300); if (await ev(p, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await p.tap('#sheetbar [data-a="obdone"]'); };
+  const signup = async (p, path, fields) => { await p.goto(URL + path); await p.waitForTimeout(900); for (const [k, v] of Object.entries(fields)) await p.fill(k, v); await p.tap("#sheetbar [type=submit]"); await p.waitForTimeout(1300); if (await ev(p, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await p.tap('#sheetbar [data-a="obdone"]'); if (await ev(p, () => S.ui.sheet && S.ui.sheet.k === "welcome")) { await p.tap('#sheetbar [data-a="back"]'); await p.waitForTimeout(200); } };
   try {
     const co = await phone("coach");
     await signup(co, "/app/?start=1", { "#a-gym": "Race Gym", "#a-name": "Coach Kim", "#a-email": "kim@race.test", "#a-pass": "coachpass1" });
@@ -241,6 +241,33 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await s1.tap('#sheetbar [data-a="qrset"][data-v="2"]'); await s1.tap('#sheetbar [data-a="qrprev"]');
     ok(await ev(s1, () => S.ui.qr.i === 0 && document.querySelector('#sheetbar [data-a="qrset"][data-v="2"]').getAttribute("aria-pressed") === "true"), "Rate what you know: Previous goes back and shows what you picked");
     await ev(s1, () => { S.ui.qr = null; hideSheet(); go("book"); });
+    // --- assistant: chat sheet (the AI answer is stubbed here; the tools are tested in tests/assistant.js)
+    for (const p of [co, s1]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
+    await co.route("**/api/coach/assistant", (rt) => rt.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply: "Done: FNB 62123456789 saved.", actions: [{ summary: "Bank details updated" }], refresh: ["pay"] }) }));
+    await ev(co, () => coachGo("today")); await co.waitForTimeout(400);
+    await co.tap(".fab.ask"); await co.waitForTimeout(300);
+    ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "ast" && document.querySelectorAll("#sheet .chips .chip").length >= 4 && !!document.querySelector('#sheetbar [data-a="dictate"][data-v="ast-in"]')), "Ask JitsFlow opens with examples and a mic button");
+    await co.fill("#ast-in", "change my bank to FNB 62123456789"); await co.tap('#astform [type=submit]'); await co.waitForTimeout(700);
+    ok(await ev(co, () => { const t = document.getElementById("astlog").innerText; return /change my bank to FNB/.test(t) && /Done: FNB/.test(t) && /✓ Bank details updated/.test(t) && document.getElementById("ast-in").value === ""; }), "the coach's message, the reply and what changed show in the chat");
+    await co.unroute("**/api/coach/assistant"); await ev(co, () => hideSheet());
+    // --- add several students from a list or a contacts file
+    await ev(co, () => coachGo("students")); await co.waitForTimeout(400); await co.tap('[data-a="addstu"]'); await co.tap('[data-a="bulkopen"]'); await co.waitForTimeout(200);
+    await co.fill("#bulk-paste", "Pat Smith 082 111 2222\nLee Jones, lee@bulk.test\nnot a person"); await co.tap('[data-a="bulkparse"]'); await co.waitForTimeout(200);
+    ok(await ev(co, () => document.querySelectorAll("#sheet .bulkrow").length === 2), "a pasted list becomes people to add (lines without a number or email are left out)");
+    await co.locator("#sheet .bulkrow").first().tap(); await co.waitForTimeout(150);
+    ok(await ev(co, () => /Add 1 student/.test(document.querySelector('#sheetbar [data-a="bulkadd"]').innerText)), "tap someone to leave them out");
+    const vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zoe Khumalo\r\nTEL;type=CELL:+27 82 333 4444\r\nEND:VCARD\r\nBEGIN:VCARD\r\nVERSION:3.0\r\nN:Botha;Ruan;;;\r\nitem1.EMAIL;type=INTERNET:ruan@bulk.test\r\nEND:VCARD\r\n";
+    await co.setInputFiles("#vcf-in", { name: "contacts.vcf", mimeType: "text/vcard", buffer: Buffer.from(vcf) }); await co.waitForTimeout(400);
+    ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return document.querySelectorAll("#sheet .bulkrow").length === 4 && /Zoe Khumalo/.test(t) && /Ruan Botha/.test(t); }), "a contacts file (.vcf from the iPhone Contacts app) adds its people to the list");
+    await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(1200);
+    ok(/Added 3 students/.test(await toast(co)) && await ev(co, () => { const t = document.getElementById("roster-list").innerText; return /Lee Jones/.test(t) && /Zoe Khumalo/.test(t) && !/Pat Smith/.test(t); }), "the ticked people are added as students who aren't on the app yet");
+    // --- the gym's colour
+    const before = await ev(co, () => getComputedStyle(document.documentElement).getPropertyValue("--blue").trim());
+    await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);
+    ok(await ev(co, (b) => { const now = getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(); return now !== b && /^#[0-9a-f]{6}$/.test(now) && API.me.gym.brand.accent === "#c62828"; }, before), "picking a colour restyles the app");
+    await ev(s1, async () => { API.me = (await api("GET", "/me")).me; render(); }); await s1.waitForTimeout(300);
+    ok(await ev(s1, () => !!document.getElementById("brandcss") && API.me.gym.brand.accent === "#c62828"), "students see the gym's colour too");
+    await ev(co, () => api("PATCH", "/coach/gym", { brandAccent: "" }).then((j) => { API.me = j.me; applyBrand(); }));
     for (const p of [co, s1, s2, s3]) ok(await ev(p, () => document.documentElement.scrollWidth <= 390), "no sideways scroll");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));

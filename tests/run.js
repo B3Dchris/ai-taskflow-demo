@@ -110,6 +110,10 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
   await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
   await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
+  // --- flow map: tapping a position keeps your place on the page
+  await p.tap('nav.tabs [data-v="flow"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
+  {const y0=await ev(()=>window.scrollY);await p.locator('.flowsvg g.node[data-v="mount_top"]').tap();await p.waitForTimeout(250);
+   ok(await ev(y0=>S.ui.flowSel==='mount_top'&&Math.abs(window.scrollY-y0)<3,y0),'tapping a position on the map doesn\'t jump the page');}
   // --- smart search: typos, slang, initials; suggestions as you type
   ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('rnc')==='rnc'&&/kimura/.test(top('kimra'))&&/triangle/.test(top('trangle'))&&top('dbl leg')==='double_leg'&&/^Armbar/.test((searchAll('arm bar',1)[0]||{}).label)&&searchAll('xyzzy').length===0}),'search forgives typos, knows slang and initials (rnc, kimra, trangle, dbl leg)');
   ok(await ev(()=>{const r=searchAll('half gaurd',3);return r[0].k==='p'&&/half guard/i.test(r[0].label)}),'a misspelt position finds the position first');

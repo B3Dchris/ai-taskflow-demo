@@ -6,6 +6,8 @@ const bcrypt = require("bcryptjs");
 const importer = require("./importer");
 const mail = require("./mail");
 const pop = require("./pop");
+const ai = require("./ai");
+const assistant = require("./assistant");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -64,7 +66,7 @@ function makeApi(pool, { secureCookies }) {
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
     if (tok && tok.length === 64) {
-      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
+      const r = await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
         from sessions s join users u on u.id=s.user_id left join gyms g on g.id=u.gym_id
         where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
       if (r.rows[0]) {
@@ -93,6 +95,7 @@ function makeApi(pool, { secureCookies }) {
     if (u.gym_id) { const link = (String(u.gym_wa_link || "").match(/(?:wa\.me\/|phone=)\+?(\d{8,15})/) || [])[1] || "";
       const site = /^(\+?27|0)[6-8]\d/.test(String(u.gym_phone || "").replace(/[\s()-]/g, "")) ? u.gym_phone : "";
       out.gym.waPhone = u.wa_phone || (link ? "+" + link : "") || site || ""; if (u.role === "coach") out.gym.waPhoneSet = u.wa_phone || ""; }
+    if (u.gym_id) { const b = u.brand || {}; out.gym.brand = /^#[0-9a-f]{6}$/i.test(b.accent || "") ? { accent: b.accent } : {}; if (u.role === "coach") out.gym.setup = u.setup || {}; }
     if (u.role === "coach" && u.gym_id) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, monthlyFeeCents: u.gym_fee });
     return out;
   }
@@ -123,7 +126,7 @@ function makeApi(pool, { secureCookies }) {
       throw e;
     }
   }
-  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
+  const loadMe = async (id) => (await q(`select u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup, g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone
       from users u left join gyms g on g.id=u.gym_id where u.id=$1`, [id])).rows[0];
 
   // ---------- accounts ----------
@@ -640,6 +643,24 @@ function makeApi(pool, { secureCookies }) {
       [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000)]);
     res.status(201).json({ id: String(r.rows[0].id) });
   }));
+  // Several at once (from the phone's contacts, a contacts file or a pasted list). Skips people already on the list.
+  api.post("/coach/students/bulk", wrap(async (req, res) => {
+    const u = needCoach(req), list = (Array.isArray(req.body?.people) ? req.body.people : []).slice(0, 300);
+    if (!list.length) fail(400, "No one to add.");
+    const have = (await q("select lower(name) as n, phone, lower(coalesce(email,'')) as e from users where gym_id=$1", [u.gym_id])).rows;
+    const digits = (v) => String(v || "").replace(/\D/g, "").slice(-9);
+    const seenPh = new Set(have.map((h) => digits(h.phone)).filter((d) => d.length >= 7)), seenEm = new Set(have.map((h) => h.e).filter(Boolean)), seenNm = new Set(have.map((h) => h.n));
+    let added = 0, skipped = 0;
+    for (const p0 of list) {
+      const name = clean(p0.name, 80), phone = cleanPhone(p0.phone), email0 = clean(p0.email, 254).toLowerCase(), email = isEmail(email0) ? email0 : "";
+      if (!name || (!phone && !email)) { skipped++; continue; }
+      if ((phone && seenPh.has(digits(phone))) || (email && seenEm.has(email)) || seenNm.has(name.toLowerCase())) { skipped++; continue; }
+      if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) { skipped++; continue; }
+      await q("insert into users(gym_id,role,name,email,pass_hash,phone,offline) values($1,'student',$2,$3,null,$4,true)", [u.gym_id, name, email || null, phone]);
+      if (phone) seenPh.add(digits(phone)); if (email) seenEm.add(email); seenNm.add(name.toLowerCase()); added++;
+    }
+    res.status(201).json({ added, skipped });
+  }));
   // Link that signs this person up straight into their existing record (plan, payments, attendance kept).
   api.post("/coach/students/:id/claim-link", wrap(async (req, res) => {
     const u = needCoach(req), st = await ownStudent(u, req.params.id);
@@ -911,6 +932,8 @@ function makeApi(pool, { secureCookies }) {
     const invite = b.studentsInvite !== undefined ? !!b.studentsInvite : u.students_invite !== false;
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
     const wa = b.waPhone !== undefined ? cleanPhone(b.waPhone) : u.wa_phone || "";
+    if (b.brandAccent !== undefined) { const a = String(b.brandAccent || ""); await q("update gyms set brand = brand || $1 where id=$2", [{ accent: /^#[0-9a-f]{6}$/i.test(a) ? a.toLowerCase() : null }, u.gym_id]); }
+    if (b.setup && typeof b.setup === "object") { const st = {}; for (const k of ["welcomed", "assistantUsed", "dismissed"]) if (b.setup[k] !== undefined) st[k] = !!b.setup[k]; await q("update gyms set setup = setup || $1 where id=$2", [st, u.gym_id]); }
     if (b.waPhone !== undefined && String(b.waPhone).trim() && !wa) fail(400, "That doesn't look like a phone number.");
     await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4, students_invite=$5, wa_phone=$6 where id=$7", [name, fee, show, tz, invite, wa, u.gym_id]);
     res.json({ me: me(await loadMe(u.id)) });
@@ -955,6 +978,45 @@ function makeApi(pool, { secureCookies }) {
     res.send(r.rows[0].logo);
   }));
   // Read a gym website and return what was found. Nothing is saved until the coach confirms.
+  // Website import in the background: start it, keep using the app, review the result when it's ready.
+  const jobs = new Map(); // gym id -> running promise (one at a time per gym)
+  api.post("/coach/import/start", wrap(async (req, res) => {
+    const u = needCoach(req), url = clean(req.body?.url, 500);
+    if (!url) fail(400, "Enter your gym's website address.");
+    if (!importer.siteCandidates(url).length) fail(400, "That doesn't look like a web address. Try something like yourgym.co.za");
+    if (jobs.has(u.gym_id)) return res.status(202).json({ job: (await q("select import_job from gyms where id=$1", [u.gym_id])).rows[0].import_job });
+    if (limited("imp:" + u.gym_id, 12, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
+    const job = { status: "running", url, startedAt: new Date().toISOString() };
+    await q("update gyms set import_job=$1 where id=$2", [job, u.gym_id]);
+    const run = (async () => {
+      let done;
+      try { const r = await importer.importSite(url, { log: (m) => console.warn(m) }); done = { ...job, status: "done", finishedAt: new Date().toISOString(), result: r }; }
+      catch (e) { done = { ...job, status: "error", finishedAt: new Date().toISOString(), error: e instanceof importer.ImportError ? e.message : "Couldn't read that site just now. Try again in a minute." }; if (!(e instanceof importer.ImportError)) console.error("import job:", e.message); }
+      await q("update gyms set import_job=$1 where id=$2", [done, u.gym_id]).catch(() => {});
+    })().finally(() => jobs.delete(u.gym_id));
+    jobs.set(u.gym_id, run);
+    res.status(202).json({ job });
+  }));
+  api.get("/coach/import/job", wrap(async (req, res) => {
+    const u = needCoach(req); let job = (await q("select import_job from gyms where id=$1", [u.gym_id])).rows[0].import_job;
+    // a job left "running" by a restart is over
+    if (job && job.status === "running" && !jobs.has(u.gym_id) && Date.now() - new Date(job.startedAt).getTime() > 5 * 60e3) { job = { ...job, status: "error", error: "That import was interrupted. Try again." }; await q("update gyms set import_job=$1 where id=$2", [job, u.gym_id]); }
+    res.json({ job: job || null });
+  }));
+  api.delete("/coach/import/job", wrap(async (req, res) => { const u = needCoach(req); await q("update gyms set import_job=null where id=$1", [u.gym_id]); res.json({ ok: true }); }));
+  // The coach assistant: plain-language requests ("update my bank details", "add Thabo, blue belt") turned into changes.
+  api.post("/coach/assistant", wrap(async (req, res) => {
+    const u = needCoach(req);
+    if (!ai.getClient()) fail(503, "The assistant isn't switched on yet.");
+    if (limited("ast:" + u.id, 60, 60 * 60e3)) fail(429, "That's a lot of requests. Give it a few minutes.");
+    const msgs = (Array.isArray(req.body?.messages) ? req.body.messages : []).slice(-12)
+      .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: clean(m.text, 2000) })).filter((m) => m.content);
+    if (!msgs.length || msgs[msgs.length - 1].role !== "user") fail(400, "Say what you'd like to do.");
+    while (msgs.length && msgs[0].role !== "user") msgs.shift();
+    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf } });
+    await q("update gyms set setup = setup || $1 where id=$2", [{ assistantUsed: true }, u.gym_id]);
+    res.json(out);
+  }));
   api.post("/coach/import", wrap(async (req, res) => {
     const u = needCoach(req);
     if (limited("imp:" + u.gym_id, 12, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");

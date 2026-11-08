@@ -151,6 +151,9 @@ create table if not exists competitors(
 );
 -- payments: how students pay (bank details), personal references, proof-of-payment files waiting for a coach
 alter table gyms add column if not exists wa_phone text not null default '';
+alter table gyms add column if not exists import_job jsonb;
+alter table gyms add column if not exists brand jsonb not null default '{}';
+alter table gyms add column if not exists setup jsonb not null default '{}';
 -- students a coach adds who aren't on the app yet: no email or password needed; they can claim the record later
 alter table users alter column email drop not null;
 alter table users alter column pass_hash drop not null;

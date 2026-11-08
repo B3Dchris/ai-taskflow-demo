@@ -72,7 +72,7 @@ function authSheet(){
    <div class="seg3">${tabs.map(([k,l])=>`<button type="button" data-a="authmode" data-v="${k}" aria-pressed="${m===k}">${l}</button>`).join("")}</div>
    <p class="muted">${m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
    <form id="authform" class="stack" novalidate>
-    ${m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label>`:""}
+    ${m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label><label class="f">Your gym's website (optional)<input id="a-site" name="site" type="text" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="url" placeholder="yourgym.co.za"><span class="small muted">We'll read your timetable, prices, coaches and logo while you look around.</span></label>`:""}
     ${m!=="login"?`<label class="f">Your name<input id="a-name" name="name" autocomplete="name" required></label>`:""}
     <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required></label>
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
@@ -108,6 +108,7 @@ async function submitAuth(form){
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
     jfTrack(m==="login"?"login":"sign_up",{method:"email",role:m==="gym"?"coach":j.me.role,with_gym:!!j.me.gym});
     await signedIn(j.me,{adopt:m!=="login"});
+    if(m==="gym"){const site=v("site");if(site)await impStart(site);setTimeout(welcomeSheet,250)}
   }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}}
 }
 function accountSection(){
@@ -222,7 +223,7 @@ function moneyCSV(){const M=COACH.money;if(!M)return;const q=v=>`"${String(v==nu
 
 /* ----- students a coach adds who aren't on the app ----- */
 function addStudentSheet(){const plans=(COACH.roster.plans||[]).filter(p=>p.active);S.ui.sheet={k:"addstu"};S.ui.stack=[];
-  openSheet(`${sheetHead("Add a student")}<form id="addstuform" class="stack-lg" novalidate><p class="small">For someone who isn't on the app (yet). You can record their payments, attendance and plan, and send them an invite later; when they sign up, it all carries over.</p>
+  openSheet(`${sheetHead("Add a student")}<form id="addstuform" class="stack-lg" novalidate><button type="button" class="btn" data-a="bulkopen">${canPickContacts()?"Add several from my contacts":"Add several: contacts file or a list"}</button><p class="small">For someone who isn't on the app (yet). You can record their payments, attendance and plan, and send them an invite later; when they sign up, it all carries over.</p>
     <label class="f">Name<input name="name" autocomplete="off" required></label>
     <label class="f">WhatsApp number<input name="phone" type="tel" inputmode="tel" placeholder="082 123 4567"></label>
     <label class="f">Email (optional)<input name="email" type="email" inputmode="email" autocomplete="off"></label>
@@ -256,12 +257,13 @@ function coachToday(){
     fresh.length&&item("good",`<b>${fresh.length}</b> new student${fresh.length>1?"s":""} this week`,"coachgo","roster","Roster"),
   ].filter(Boolean);
   const booked=week.filter(c=>c.kind!=="private").reduce((s,c)=>s+c.going,0);
-  return `<section class="stack"><div class="row between"><h2 class="label">${esc(fromYmd(t).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</h2><button class="btn sm" data-a="classnewday" data-v="${t}">+ Add</button></div>
+  impLoad();
+  return `${impBanner()}${setupCard()}<section class="stack"><div class="row between"><h2 class="label">${esc(fromYmd(t).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</h2><button class="btn sm" data-a="classnewday" data-v="${t}">+ Add</button></div>
       ${todays.length?`<div class="calrows">${todays.map(calRow).join("")}</div>`:`<p class="small muted">No classes today.</p>`}</section>
     <section class="stack"><h2 class="label">Needs you</h2>${needs.length?needs.join(""):`<p class="small muted">Nothing waiting. Everyone's paid, nobody's stuck on a waitlist, no requests.</p>`}</section>
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div></div></section>
     <section class="stack"><h2 class="label">Quick actions</h2><div class="quick">
-      <button class="btn" data-a="classnew">+ Add a class</button><button class="btn" data-a="paynew">Record a payment</button>
+      <button class="btn primary" data-a="ast">✦ Ask JitsFlow</button><button class="btn" data-a="classnew">+ Add a class</button><button class="btn" data-a="paynew">Record a payment</button>
       ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}<button class="btn" data-a="coachgo" data-v="comps">+ Competition</button></div></section>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
@@ -351,7 +353,7 @@ function classForm(c,onDay){
     <details class="planbox"${hasPlan?" open":""}><summary>Lesson plan (optional)</summary><div class="stack-lg" style="padding-top:12px">
       <label class="f">Focus<input id="c-focus" name="focus" value="${esc(c&&c.plan?c.plan.focus||"":"")}" placeholder="e.g. Half guard bottom: underhook and dogfight"></label>
       <div class="stack"><label class="f" for="c-add">Techniques to teach</label><select id="c-add" data-cplan="1"><option value="">Add a technique…</option>${techOptions()}</select><div class="chips" id="cplan-chips">${picked}</div></div>
-      <label class="f">Notes<textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></label>
+      <label class="f"><span class="row between" style="flex-wrap:nowrap">Notes${micBtn("c-notes")}</span><textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></label>
       <label class="row small"><input id="c-shared" name="shared" type="checkbox" style="width:auto"${!c||c.shared?" checked":""}> Show the plan to students so they can study before class</label></div></details>
     ${c?`<button class="btn danger" type="button" data-a="classdel" data-v="${c.id}">Delete class</button>`:""}
   </form>`,false,{act:`<button class="btn primary grow" type="submit" form="classform">${c?"Save class":"Add class"}</button>`});
@@ -434,7 +436,7 @@ async function studentSheet(id){
       <label class="f">Started<input id="s-started" name="pstarted" type="date" value="${esc(s.planStarted||"")}"></label>
       <label class="f">Monthly fee override (${esc(cur)})<input id="s-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${s.feeOverride!=null?s.feeOverride/100:""}" placeholder="${(s.feeCents||0)/100} from plan or gym fee"></label>
       <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">WhatsApp number<input id="s-phone" name="phone" type="tel" inputmode="tel" value="${esc(s.phone||"")}" placeholder="e.g. 082 123 4567"></label>${s.phone?waBtn(`Hi ${first(s.name)}, `,"Message",{phone:s.phone,kind:"student"}):""}</div>
-      <label class="f">Coach notes (only coaches see these)<textarea id="s-notes" name="notes">${esc(s.notes||"")}</textarea></label>
+      <label class="f"><span class="row between" style="flex-wrap:nowrap">Coach notes (only coaches see these)${micBtn("s-notes")}</span><textarea id="s-notes" name="notes">${esc(s.notes||"")}</textarea></label>
       <label class="row small"><input id="s-active" name="active" type="checkbox" style="width:auto"${s.active?" checked":""}> Active student</label></form>
     <section class="stack"><div class="row between"><h2 class="label">Payments</h2><button class="btn" data-a="paynew" data-v="${s.id}">Record payment</button></div>
       ${j.payments.length?`<div class="list">${j.payments.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div>${p.reference?`<span class="small muted">${esc(p.reference)}</span>`:""}</div>`).join("")}</div>`:`<div class="empty">No payments recorded.</div>`}</section>
@@ -562,7 +564,7 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
   try{await api("POST","/coach/payments",{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100),paidOn:v("date"),method:v("method"),reference:v("ref"),note:v("note")});
     toast("Payment recorded.");hideSheet();await coachLoad();coachGo("money")}catch(e){toast(e.message)}}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack">${waPanel()}${gymCard(true)}
+  return `<section class="stack">${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
@@ -625,17 +627,11 @@ function gymCard(forCoach){
 function gymImportPanel(){const p=gymProfile();
   return `<form id="gymimpform" class="panel stack"><h2 class="label">Import from your website</h2>
     <p class="small">Paste your gym's website. JitsFlow reads the public pages (home, timetable, prices, coaches, contact) and shows you what it found. Nothing is saved until you check it.</p>
-    <div class="row" style="flex-wrap:nowrap"><input id="gi-url" name="url" type="url" inputmode="url" autocapitalize="none" autocomplete="url" placeholder="yourgym.co.za" value="${esc(p.website||"")}" style="flex:1" aria-label="Your gym's website"><button class="btn primary" type="submit">Import</button></div></form>`}
+    <div class="row" style="flex-wrap:nowrap"><input id="gi-url" name="url" type="text" inputmode="url" autocorrect="off" spellcheck="false" autocapitalize="none" autocomplete="url" placeholder="yourgym.co.za" value="${esc(p.website||"")}" style="flex:1" aria-label="Your gym's website"><button class="btn primary" type="submit">Import</button></div></form>`}
 function gymClassesPanel(){const tt=gymProfile().timetable||[];if(!tt.length)return "";
   return `<div class="panel stack"><h2 class="label">Put the timetable in the calendar</h2><p class="small">Adds each class from your weekly timetable to Classes, so students can tap "I'm going" and you can plan them. Classes that are already there are skipped.</p>
     <div class="row" style="flex-wrap:nowrap"><select id="tt-weeks" aria-label="How many weeks" style="flex:1">${[1,2,4,8].map(n=>`<option value="${n}"${n===2?" selected":""}>Next ${n} week${n>1?"s":""}</option>`).join("")}</select><button class="btn primary" data-a="ttclasses">Add classes</button></div></div>`}
-async function gymImport(form){
-  const url=form.querySelector("[name=url]").value.trim();if(!url){toast("Paste your gym's website address first.");return}
-  const btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Reading…";
-  S.ui.sheet={k:"gymedit"};S.ui.stack=[];openSheet(`${sheetHead("Import your gym")}<div class="stack-lg"><h1>Reading your site…</h1><p class="muted">Looking through the home page and pages like timetable, prices, coaches and contact. This can take up to a minute.</p><div class="loadbar"><i></i></div></div>`);
-  try{const j=await api("POST","/coach/import",{url});jfTrack("gym_import",{method:j.method,classes:(j.profile.timetable||[]).length});S.ui.gimp={profile:j.profile,logos:j.logos||[],logoPick:j.logos&&j.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:j.method,pages:j.pages||[],dropped:j.dropped||null,imported:true};drawGymEdit()}
-  catch(e){hideSheet();render();toast(e.message)}
-}
+async function gymImport(form){const url=form.querySelector("[name=url]").value.trim();await impStart(url)}
 function gymEditOpen(){const p=clone(gymProfile());p.name=p.name||API.me.gym.name;
   ["timetable","coaches","rates"].forEach(k=>p[k]=p[k]||[]);p.socials=p.socials||{};
   S.ui.gimp={profile:p,logos:[],logoPick:API.me.gym.logo?"keep":"none",imported:false};drawGymEdit()}
@@ -695,7 +691,8 @@ async function gymSave(form){
   if(p.timetable.some(r=>!r.start)){toast("Each class time needs a start time.");return}
   const logoUrl=G.logoPick==="keep"?undefined:G.logoPick==="none"?null:(G.logos[Number(G.logoPick)]||{}).url;
   const btn=document.querySelector('#sheetbar [type=submit]');if(btn){btn.disabled=true;btn.textContent="Saving…"}
-  try{const j=await api("PUT","/coach/gym/profile",{profile:p,logoUrl});API.me=j.me;S.ui.gimp=null;hideSheet();GYM.data=null;await loadGym(true);coachGo("gym");
+  const fromJob=S.ui.gimp&&S.ui.gimp.fromJob;
+  try{const j=await api("PUT","/coach/gym/profile",{profile:p,logoUrl});API.me=j.me;S.ui.gimp=null;if(fromJob){COACH.imp=null;api("DELETE","/coach/import/job").catch(()=>{})}if(API.me.gym.logo&&!(API.me.gym.brand||{}).accent)setTimeout(()=>brandFromLogo(true),600);hideSheet();GYM.data=null;await loadGym(true);coachGo("gym");
     toast(j.logoNote||(j.feeSet?`Saved. Standard fee set to ${money(j.feeSet,API.me.gym.currency)} a month.`:"Saved. Your students can see these details now."))}
   catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent="Save to my gym"}}
 }
@@ -1101,7 +1098,7 @@ function tagChoices(s,k,q){const sel=new Set(s[k]||[]);q=(q||"").trim().toLowerC
 function tagSheet(id,k){const s=S.sessions.find(x=>x.id===id);if(!s)return;S.ui.sheet={k:"tag",id,kind:k};S.ui.stack=[];
   const head={hits:"What worked?",tapped:"What got you?",stuck:"Where did you get stuck?",note:"Notes"}[k];
   const body=k==="stuck"?`<p class="small muted">Tap every position you got stuck in. JitsFlow points you to its escapes.</p><div class="tgrid2">${ORDER.map(p=>`<button class="tchip" data-a="tagset" data-k="stuck" data-v="${p}" aria-pressed="${(s.stuck||[]).includes(p)}">${esc(POS[p].l)}</button>`).join("")}</div>`
-    :k==="note"?`<textarea id="tag-note" rows="6" placeholder="What clicked, what to ask your coach, how you felt…">${esc([s.worked,s.fix].filter(Boolean).join("\n"))}</textarea><p class="small muted">Saved as you type.</p>`
+    :k==="note"?`<div class="row" style="justify-content:flex-end">${micBtn("tag-note")}</div><textarea id="tag-note" rows="6" placeholder="What clicked, what to ask your coach, how you felt…">${esc([s.worked,s.fix].filter(Boolean).join("\n"))}</textarea><p class="small muted">Saved as you type.</p>`
     :`<p class="small muted">${k==="hits"?"Tap anything you landed or that worked in rolls. It moves up your progress.":"Tap what you got caught with. JitsFlow lines up the defense."}</p><input id="tag-q" type="search" placeholder="${k==="tapped"?"Find a submission":"Find a move"}" autocomplete="off"><div id="tag-list" class="stack">${tagChoices(s,k,"")}</div>`;
   openSheet(`${sheetHead(esc(s.title||s.type||"Session"))}<div class="stack-lg"><h1>${head}</h1>${body}</div>`,false,{back:"Done"})}
 let tagNoteT=null;
@@ -1113,3 +1110,135 @@ function tagSet(el){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.se
   if(on&&k==="tapped"){const d=defFor(v);if(d){if(lv(d.id)<1)P().mastery[d.id]=1;ensureCard(d.id);P().srs[d.id].due=today();saveProgress()}}
   addSession(s)}
 function tagNote(v){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.sessions.find(x=>x.id===sh.id);if(!s)return;s.worked=String(v).slice(0,2000);s.fix="";clearTimeout(tagNoteT);tagNoteT=setTimeout(()=>addSession(s),600)}
+
+/* ============ DICTATION: talk instead of type (any text box with a mic button) ============ */
+const SRec=window.SpeechRecognition||window.webkitSpeechRecognition;let REC=null;
+function dictate(targetId,btn){const el=document.getElementById(targetId);if(!el)return;
+  if(!SRec){el.focus();toast("Tap the mic on your keyboard to dictate.");return}
+  if(REC){try{REC.stop()}catch(e){}return}
+  let r;try{r=new SRec()}catch(e){el.focus();toast("Tap the mic on your keyboard to dictate.");return}
+  REC=r;r.lang=navigator.language||"en-ZA";r.interimResults=true;r.continuous=false;
+  const base=el.value&&!/\s$/.test(el.value)?el.value+" ":el.value||"";
+  r.onresult=e=>{let t="";for(const res of e.results)t+=res[0].transcript;el.value=base+t;el.dispatchEvent(new Event("input",{bubbles:true}))};
+  const off=()=>{REC=null;if(btn)btn.classList.remove("on")};
+  r.onend=()=>{off();if(el.id==="ast-in"&&el.value.trim()&&S.ui.sheet&&S.ui.sheet.k==="ast")astSend(el.value)};
+  r.onerror=e=>{off();if(e.error==="not-allowed"||e.error==="service-not-allowed")toast("Allow the microphone to dictate, or use the mic on your keyboard.")};
+  if(btn)btn.classList.add("on");try{r.start()}catch(e){off()}}
+const micBtn=id=>`<button type="button" class="btn mic" data-a="dictate" data-v="${id}" aria-label="Dictate" title="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`;
+
+/* ============ COACH ASSISTANT: "update my bank details", "add Thabo, blue belt…" ============ */
+const AST={msgs:[],busy:false};
+const AST_EXAMPLES=["Update my bank details","Add a student","Thabo paid R650 cash","Add a class every Monday at 18:00 for 8 weeks","Note for Ana: great guard retention today","Move Sipho to blue belt"];
+function astBubble(m){return `<div class="bub ${m.role==="user"?"me":"ai"}"><div>${esc(m.text)}</div>${(m.actions||[]).map(a=>`<span class="ltag ok">✓ ${esc(a.summary)}</span>`).join("")}</div>`}
+function assistantSheet(){S.ui.sheet={k:"ast"};S.ui.stack=[];
+  const intro=AST.msgs.length?"":`<div class="stack"><p>Tell me what to change, in your own words. Type it, or tap the mic and say it. I'll ask if I need anything else.</p><div class="chips">${AST_EXAMPLES.map(x=>`<button class="chip" data-a="astsay" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`;
+  openSheet(`${sheetHead("Assistant")}<div class="stack-lg"><h1>Ask JitsFlow</h1>${intro}<div class="astlog" id="astlog">${AST.msgs.map(astBubble).join("")}${AST.busy?`<div class="bub ai"><span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span></div>`:""}</div></div>`,true,
+    {top:`<form id="astform" class="astbar" novalidate>${micBtn("ast-in")}<input id="ast-in" placeholder="e.g. Add Thabo, blue belt, 082 123 4567" autocomplete="off" enterkeyhint="send" aria-label="Message"><button class="btn primary" type="submit"${AST.busy?" disabled":""}>Send</button></form>`});
+  setTimeout(()=>{const l=document.getElementById("astlog");if(l&&l.lastElementChild)l.lastElementChild.scrollIntoView({block:"end"})},30)}
+async function astSend(text){text=String(text||"").trim();if(!text||AST.busy)return;
+  AST.msgs.push({role:"user",text});AST.busy=true;assistantSheet();
+  try{const j=await api("POST","/coach/assistant",{messages:AST.msgs.slice(-12).map(m=>({role:m.role,text:m.text}))});
+    AST.msgs.push({role:"assistant",text:j.reply,actions:j.actions||[]});if(API.me.gym.setup)API.me.gym.setup.assistantUsed=true;await astRefresh(j.refresh||[]);jfTrack("assistant",{actions:(j.actions||[]).length})}
+  catch(e){AST.msgs.push({role:"assistant",text:e.message})}
+  AST.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="ast")assistantSheet()}
+async function astRefresh(kinds){if(!kinds.length)return;
+  if(kinds.includes("pay"))COACH.payInfo=undefined;COACH.money=null;
+  if(kinds.some(k=>["roster","payments","classes"].includes(k)))await coachLoad();
+  if(kinds.includes("me")){try{API.me=(await api("GET","/me")).me;applyBrand()}catch(e){}}}
+
+/* ============ WEBSITE IMPORT IN THE BACKGROUND ============ */
+const impHost=u=>String(u||"").replace(/^[a-z]+:\/\//i,"").replace(/^www\./i,"").split(/[/?#\s]/)[0]||"your website";
+async function impStart(url){url=String(url||"").trim();if(!url){toast("Type your gym's website first, like yourgym.co.za");return}
+  try{const j=await api("POST","/coach/import/start",{url});COACH.imp=j.job;impPoll();if(S.ui.tab==="coach")render();toast("Reading your website in the background. Keep going: we'll show you what we found.");jfTrack("gym_import_start",{})}
+  catch(e){toast(e.message)}}
+function impPoll(){clearTimeout(COACH.impT);COACH.impT=setTimeout(async()=>{let j;try{j=(await api("GET","/coach/import/job")).job}catch(e){impPoll();return}
+  const was=COACH.imp&&COACH.imp.status;COACH.imp=j;
+  if(j&&j.status==="running"){impPoll();return}
+  if(was==="running"&&j){toast(j.status==="done"?"Your website is read. Tap Review to add what we found.":j.error);jfTrack("gym_import",{ok:j.status==="done"})}
+  if(S.ui.tab==="coach"&&!S.ui.sheet)render()},4000)}
+async function impLoad(){if(COACH.imp!==undefined)return;COACH.imp=null;try{COACH.imp=(await api("GET","/coach/import/job")).job;if(COACH.imp&&COACH.imp.status==="running")impPoll();if(COACH.imp&&S.ui.tab==="coach"&&!S.ui.sheet)render()}catch(e){}}
+function impBanner(){const j=COACH.imp;if(!j)return "";const host=esc(impHost(j.url));
+  if(j.status==="running")return `<div class="impban run"><span class="spin" aria-hidden="true"></span><span><b>Reading ${host}…</b><br><span class="small">Usually under a minute. Keep using the app.</span></span></div>`;
+  if(j.status==="error")return `<div class="impban err"><span><b>Couldn't read ${host}</b><br><span class="small">${esc(j.error||"")}</span></span><span class="row"><button class="btn sm" data-a="impretry">Try again</button><button class="linkbtn small" data-a="impdismiss">Hide</button></span></div>`;
+  const r=j.result||{},p=r.profile||{},n=(a,w)=>a&&a.length?`${a.length} ${w}${a.length>1?(w==="class"?"es":"s"):""}`:"";
+  const found=[n(p.timetable,"class"),n(p.coaches,"coach"),n(p.rates,"price"),(r.logos||[]).length?"your logo":""].filter(Boolean);
+  return `<div class="impban ok"><span><b>We read ${host}</b><br><span class="small">${found.length?`Found ${found.join(", ")}.`:"Found your details."} Nothing's added until you check it.</span></span><span class="row"><button class="btn sm primary" data-a="impreview">Review and add</button><button class="linkbtn small" data-a="impdismiss">Hide</button></span></div>`}
+function impReview(){const j=COACH.imp;if(!j||j.status!=="done")return;const r=j.result||{};
+  S.ui.gimp={profile:r.profile,logos:r.logos||[],logoPick:r.logos&&r.logos.length?"0":(API.me.gym.logo?"keep":"none"),method:r.method,pages:r.pages||[],dropped:r.dropped||null,imported:true,fromJob:true};drawGymEdit()}
+
+/* ============ GETTING STARTED (new coaches) ============ */
+function welcomeSheet(){S.ui.sheet={k:"welcome"};S.ui.stack=[];
+  openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><h1>Welcome to JitsFlow</h1><p class="lead">${esc(API.me.gym.name)} is set up. Three things to know:</p>
+    <ol class="steps qrsteps"><li><span><b>Today</b> is your gym's day: classes, who's booked, and what needs you (payments to check, people who haven't paid, requests).</span></li>
+    <li><span><b>Ask JitsFlow</b> (the ✦ button) does the admin for you. Say "update my bank details" or "add Thabo, blue belt, 082 123 4567" and it's done. Tap the mic to talk instead of typing.</span></li>
+    <li><span><b>Getting started</b> on Today walks you through the rest, one tap at a time.</span></li></ol>
+    ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Today when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
+  api("PATCH","/coach/gym",{setup:{welcomed:true}}).then(j=>{API.me=j.me}).catch(()=>{})}
+function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roster)return "";
+  if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{})}
+  const p=gymProfile()||{},pay=((COACH.payInfo||{}).pay)||{},plans=(COACH.roster.plans||[]).length;
+  const items=[["Your gym's details",!!((p.timetable||[]).length||(p.rates||[]).length||API.me.gym.logo),"setupgo","gym","Import your website"],
+    ["Classes on the calendar",(COACH.classes||[]).some(c=>c.kind!=="private"),"setupgo","classes","Add classes"],
+    ["Plans and bank details",plans>0&&!!(pay.account||pay.link),"setupgo","money","Set up"],
+    ["Your students",students().length>0,"setupgo","students","Add or invite"],
+    ["Try the assistant",!!st.assistantUsed,"ast","","Ask JitsFlow"]];
+  const done=items.filter(i=>i[1]).length;if(done===items.length)return "";
+  return `<section class="panel stack setupcard"><div class="row between"><h2 class="label">Getting started · ${done} of ${items.length}</h2><button class="linkbtn small" data-a="setuphide">Hide</button></div>
+    <div class="progress"><i style="width:${Math.round(100*done/items.length)}%"></i></div>
+    ${items.map(([l,ok,a,v,b])=>`<div class="srow${ok?" ok":""}"><span>${ok?"✓":"○"} ${esc(l)}</span>${ok?"":`<button class="btn sm" data-a="${a}" data-v="${v}">${esc(b)}</button>`}</div>`).join("")}</section>`}
+
+/* ============ ADD STUDENTS FROM CONTACTS / A PASTED LIST ============ */
+const canPickContacts=()=>!!(navigator.contacts&&navigator.contacts.select&&window.ContactsManager);
+function parseVcf(txt){const un=String(txt).replace(/\r?\n[ \t]/g,"");const out=[];
+  for(const card of un.split(/BEGIN:VCARD/i).slice(1)){const L=card.split(/\r?\n/);const get=re=>{for(const l of L){const m=l.match(re);if(m)return m[1].trim()}return ""};
+    let name=get(/^(?:item\d+\.)?FN[^:]*:(.+)$/i);if(!name){const n=get(/^(?:item\d+\.)?N[^:]*:(.+)$/i);if(n){const [ln,fn]=n.split(";");name=[fn,ln].filter(Boolean).join(" ")}}
+    const tel=get(/^(?:item\d+\.)?TEL[^:]*:(.+)$/i),email=get(/^(?:item\d+\.)?EMAIL[^:]*:(.+)$/i);
+    if(name&&(tel||email))out.push({name:name.replace(/\\,/g,",").replace(/\\/g,""),phone:tel,email})}
+  return out}
+function parseList(txt){const out=[];
+  for(const raw of String(txt).split(/\r?\n/)){const l=raw.trim();if(!l)continue;
+    const email=(l.match(/[^\s,;<>]+@[^\s,;<>]+\.[a-z]{2,}/i)||[""])[0],phone=(l.replace(email,"").match(/\+?\d[\d\s().-]{6,}\d/)||[""])[0];
+    const name=l.replace(email,"").replace(phone,"").replace(/[<>(),;:|\t-]+/g," ").replace(/\s+/g," ").trim();
+    if(name&&(phone||email))out.push({name,phone:phone.trim(),email})}
+  return out}
+function bulkSheet(people){const prev=S.ui.bulk||{people:[],pick:[]};if(!people)people=prev.people;const keep=people.length>=prev.people.length&&prev.people.every((p,i)=>people[i]===p);S.ui.bulk={people,pick:people.map((_,i)=>keep&&i<prev.pick.length?prev.pick[i]:true)};const b=S.ui.bulk;S.ui.sheet={k:"bulk"};S.ui.stack=[];
+  const n=b.pick.filter(Boolean).length;
+  openSheet(`${sheetHead("Add students")}<div class="stack-lg"><h1>Add students</h1>
+    ${canPickContacts()?`<button class="btn primary" data-a="pickcontacts">Choose from my contacts</button>`:`<p class="small muted">iPhone: in Contacts, select the people (or a list), tap Share and save the file, then choose it below. Or paste names and numbers.</p>`}
+    <label class="btn" for="vcf-in" style="cursor:pointer">Choose a contacts file (.vcf)</label><input type="file" id="vcf-in" accept=".vcf,text/vcard,text/x-vcard" hidden>
+    <label class="f">Or paste a list, one person per line<textarea id="bulk-paste" rows="5" placeholder="Thabo Mokoena 082 123 4567&#10;Lerato Dlamini, lerato@gmail.com"></textarea></label><button class="btn" data-a="bulkparse">Read the list</button>
+    ${b.people.length?`<section class="stack"><h2 class="label">${b.people.length} found · tap to leave someone out</h2><div class="list">${b.people.map((p,i)=>`<button class="trow bulkrow" data-a="bulkpick" data-v="${i}" aria-pressed="${!!b.pick[i]}" style="grid-template-columns:auto minmax(0,1fr)"><span class="bx">${b.pick[i]?"✓":""}</span><span><span class="nm">${esc(p.name)}</span><span class="meta">${esc([p.phone,p.email].filter(Boolean).join(" · "))}</span></span></button>`).join("")}</div></section>`:""}
+  </div>`,true,{act:`<button class="btn primary grow" data-a="bulkadd"${n?"":" disabled"}>${n?`Add ${n} student${n>1?"s":""}`:"Add students"}</button>`})}
+async function pickContacts(){try{const cs=await navigator.contacts.select(["name","tel","email"],{multiple:true});
+  const ppl=cs.map(c=>({name:(c.name||[])[0]||"",phone:(c.tel||[])[0]||"",email:(c.email||[])[0]||""})).filter(p=>p.name&&(p.phone||p.email));
+  bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl));if(!ppl.length)toast("None of those had a name with a number or email.")}catch(e){}}
+async function bulkAdd(){const b=S.ui.bulk;if(!b)return;const people=b.people.filter((_,i)=>b.pick[i]);if(!people.length)return;
+  try{const j=await api("POST","/coach/students/bulk",{people});hideSheet();S.ui.bulk=null;await coachLoad("roster");COACH.money=null;coachGo("students");
+    toast(`Added ${j.added} student${j.added===1?"":"s"}${j.skipped?`; ${j.skipped} already on your list`:""}.`);jfTrack("bulk_students",{added:j.added})}catch(e){toast(e.message)}}
+
+/* ============ THE GYM'S LOOK: their logo up top and their colour, still JitsFlow underneath ============ */
+const hex2rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),rgb2hex=c=>"#"+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");
+const lumin=c=>{const f=v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};const [r,g,b]=c.map(f);return .2126*r+.7152*g+.0722*b};
+const contrast=(a,b)=>{const x=lumin(a),y=lumin(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+function brandVars(accent){const c=hex2rgb(accent),W=[255,255,255],B=[12,18,32],LB=[238,241,245],DB=[12,15,20];
+  let light=c,i=0;while(contrast(light,W)<4.5&&i++<20)light=mix(light,[0,0,0],.08);
+  let dark=c;i=0;while(contrast(dark,DB)<5&&i++<20)dark=mix(dark,W,.1);
+  return {light:{blue:rgb2hex(light),soft:rgb2hex(mix(LB,light,.14)),on:"#ffffff"},dark:{blue:rgb2hex(dark),soft:rgb2hex(mix([21,26,34],dark,.22)),on:rgb2hex(B)}}}
+function applyBrand(){let st=document.getElementById("brandcss");const a=API.me&&API.me.gym&&API.me.gym.brand&&API.me.gym.brand.accent;
+  if(!a){if(st)st.remove();return}
+  if(!st){st=document.createElement("style");st.id="brandcss";document.head.appendChild(st)}
+  const v=brandVars(a),L=`--blue:${v.light.blue};--blue-soft:${v.light.soft};--on-blue:${v.light.on}`,D=`--blue:${v.dark.blue};--blue-soft:${v.dark.soft};--on-blue:${v.dark.on}`;
+  st.textContent=`:root{${L}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${D}}}:root[data-theme="dark"]{${D}}`;
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",v.light.blue)}
+/* the logo's main colour (skipping white, black and greys), to offer as the app colour */
+function logoAccent(src){return new Promise(ok=>{const im=new Image();im.onload=()=>{try{const c=document.createElement("canvas"),n=48;c.width=n;c.height=n;const x=c.getContext("2d");x.drawImage(im,0,0,n,n);
+  const d=x.getImageData(0,0,n,n).data,bins={};for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/510,s=mx===mn?0:(mx-mn)/(255-Math.abs(mx+mn-255));
+    if(s<.35||l<.12||l>.85)continue;const k=[r,g,b].map(v=>v>>5).join(",");(bins[k]=bins[k]||{n:0,c:[0,0,0]}).n++;bins[k].c=bins[k].c.map((v,j)=>v+[r,g,b][j])}
+  const top=Object.values(bins).sort((a,b)=>b.n-a.n)[0];ok(top&&top.n>20?rgb2hex(top.c.map(v=>v/top.n)):null)}catch(e){ok(null)}};im.onerror=()=>ok(null);im.src=src})}
+async function brandFromLogo(silent){if(!API.me.gym.logo)return;const a=await logoAccent(API.me.gym.logo);if(!a)return;
+  try{const j=await api("PATCH","/coach/gym",{brandAccent:a});API.me=j.me;applyBrand();render();if(!silent)toast("App colour matched to your logo.")}catch(e){}}
+const BRAND_SWATCHES=["#1d4fb5","#c62828","#2e7d32","#6a1b9a","#ef6c00","#00838f","#111827"];
+function lookPanel(){const cur=(API.me.gym.brand||{}).accent||"";
+  return `<div class="panel stack"><h2 class="label">Look</h2><p class="small">Your logo shows at the top of the app for you and your students, and buttons use your colour. The rest stays JitsFlow.</p>
+    <div class="row" style="gap:8px">${(API.me.gym.logo?[`<button class="swatch fromlogo" data-a="brandlogo" title="Match my logo" aria-label="Match my logo"><img src="${esc(API.me.gym.logo)}" alt=""></button>`]:[]).join("")}${BRAND_SWATCHES.map(c=>`<button class="swatch" data-a="brandset" data-v="${c}" style="--sw:${c}" aria-pressed="${cur===c}" aria-label="Use ${c}"></button>`).join("")}<button class="swatch none" data-a="brandset" data-v="" aria-pressed="${!cur}" aria-label="JitsFlow blue">JF</button></div></div>`}

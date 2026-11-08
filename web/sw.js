@@ -1,5 +1,5 @@
 /* JitsFlow service worker: keeps the app working offline at the gym. */
-const CACHE = "jitsflow-af6c05b604";
+const CACHE = "jitsflow-c1c1df3179";
 const CORE = ["/", "/app/", "/manifest.webmanifest", "/img/today.jpg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.png"];
 
 self.addEventListener("install", (e) => {

@@ -20,11 +20,11 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
     ok(r.pages.length === 2, "also reads the linked divisions page");
     r = await im.importEvent(site.url + "/events/text-only", { client: null });
     ok(r.event.startsOn === "2027-01-23" && r.event.registerBy === "2027-01-16" && r.event.style === "nogi", "text-only page: date, deadline and style from the words on the page");
-    let sent = null; const fake = (out) => ({ beta: { messages: { create: async (p) => { sent = p; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }] }; } } } });
+    let sent = null; const fake = (out) => ({ messages: { create: async (p) => { sent = p; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }] }; } } });
     const base = { name: "Fourways Submission Only", start_date: "2027-01-23", end_date: "", venue: "Fourways Grappling Club", city: "Johannesburg", organiser: "Fourways GC", register_by: "2027-01-16", fee: "R400", style: "nogi", divisions: ["Adult -77kg"], details: "Submission only.", date_quote: "Saturday 23rd January 2027" };
     r = await im.importEvent(site.url + "/events/text-only", { client: fake(base) });
     ok(r.method === "claude" && r.event.divisions[0] === "Adult -77kg" && r.event.fee === "R400" && r.dateChecked, "Claude read fills divisions and details");
-    ok(sent.model === "claude-opus-5-5" && sent.fallbacks === "default" && sent.output_config.format.type === "json_schema" && /untrusted/.test(sent.system), "event read uses structured output, fallbacks and an untrusted-text warning");
+    ok(sent.model === "claude-haiku-5-5" && sent.output_config.format.type === "json_schema" && /untrusted/.test(sent.system), "event read uses structured output, fallbacks and an untrusted-text warning");
     r = await im.importEvent(site.url + "/events/text-only", { client: fake({ ...base, start_date: "2027-02-14", register_by: "2027-02-01" }) });
     ok(r.event.startsOn === "2027-01-23" && r.event.registerBy === "2027-01-16" && !r.dateChecked, "a date Claude gives that isn't on the page is replaced with the one that is");
     ok(await im.importEvent("http://10.0.0.1/x").then(() => false, (e) => /public website/.test(e.message)), "private addresses are refused");

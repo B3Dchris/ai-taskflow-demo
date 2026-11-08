@@ -344,6 +344,22 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
 .tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
 .flabel{font-size:14px;color:var(--ink-2)}
+.gymbrand{display:flex;align-items:center;gap:10px;min-width:0}.gymbrand .gbl{height:46px;width:auto;max-width:96px;object-fit:contain;border-radius:8px;background:#fff;padding:3px}
+.gymbrand span{display:flex;flex-direction:column;min-width:0;line-height:1.05}.gymbrand b{font-family:var(--f-display);font-size:20px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}.gymbrand small{font-family:var(--f-body);font-size:11px;font-weight:600;color:var(--ink-2);text-transform:none;letter-spacing:0}
+.fab.ask{font-size:24px}
+.btn.mic{min-height:40px;width:44px;padding:0;flex:none}.btn.mic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}.btn.mic.on{background:var(--bad);border-color:var(--bad);color:#fff;animation:micpulse 1.2s infinite}
+@keyframes micpulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 25%,transparent)}}
+.astlog{display:flex;flex-direction:column;gap:10px}.bub{max-width:88%;padding:10px 12px;border-radius:14px;display:flex;flex-direction:column;gap:6px;white-space:pre-wrap}
+.bub.me{align-self:flex-end;background:var(--blue);color:var(--on-blue);border-bottom-right-radius:4px}.bub.ai{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:4px}
+.dots{display:inline-flex;gap:4px}.dots i{width:7px;height:7px;border-radius:50%;background:var(--ink-2);animation:dot 1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}@keyframes dot{50%{opacity:.3}}
+.astbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}.astbar input{flex:1;min-width:0}
+.impban{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+.impban.ok{border-color:var(--good);background:var(--good-soft)}.impban.err{border-color:var(--warn);background:var(--warn-soft)}
+.impban .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--blue);animation:spin 1s linear infinite;flex:none}@keyframes spin{to{transform:rotate(360deg)}}
+.setupcard .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:8px}.setupcard .srow.ok span{color:var(--ink-2)}
+.swatch{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:var(--sw);padding:0;overflow:hidden}.swatch[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px}
+.swatch.none{background:#1D4FB5;color:#fff;font-weight:800;font-size:12px}.swatch.fromlogo{background:#fff}.swatch.fromlogo img{width:100%;height:100%;object-fit:contain}
+.bulkrow .bx{width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;color:var(--on-blue)}.bulkrow[aria-pressed="true"] .bx{background:var(--blue);border-color:var(--blue)}
 .qwrap{display:flex;flex-direction:column;gap:6px}.qsugg{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.qsugg:empty{display:none}
 .qsugg-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 12px;color:var(--ink);font:inherit;min-height:48px}.qsugg-row:first-child{border-top:0}
 .qs-l{display:flex;flex-direction:column;min-width:0}.qs-l small{color:var(--ink-2);font-size:13px}.qs-l mark{background:var(--blue-soft);color:inherit;border-radius:3px;padding:0 1px}
@@ -1733,7 +1749,7 @@ function beltSVG(pct){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 function toast(msg,act){const t=document.getElementById("toast");t.textContent=msg;toast._act=act?act.fn:null;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`);t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;toast._act=null},act?5000:2800)}
-function header(){return `<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div><div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
+function header(){const g=API.me&&API.me.gym;return `<header class="top">${g&&g.logo?`<div class="brand gymbrand"><img src="${esc(g.logo)}" alt="" class="gbl"><span><b>${esc(g.name)}</b><small>on JitsFlow</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`}<div class="row">${API.me?`<button class="sync who" data-a="tab" data-v="settings" title="Your account">● ${esc(API.me.name.split(" ")[0])}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:""}<span class="sync" id="sync" data-s="${S.syncState}">${esc(S.sync)}</span></div></header>`}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -2127,7 +2143,8 @@ function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
-  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
+  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:v==="coach"&&isCoach()?`<button class="fab ask" data-a="ast" aria-label="Ask JitsFlow" title="Ask JitsFlow">✦</button>`:"";
+  applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
   const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}
   if(!mg&&v==="coach"&&isCoach()&&coachMode()==="study"){}
@@ -2259,6 +2276,22 @@ document.addEventListener("click",e=>{
     case "addstu": addStudentSheet();break;
     case "studelask": confirmSheet("Remove this student?","They're taken off your list. Payments you recorded stay, marked as not matched.",["studelyes",v],"Remove");break;
     case "studelyes": api("DELETE",`/coach/students/${v}`).then(async()=>{hideSheet();await coachLoad("roster");COACH.money=null;render();toast("Removed.")}).catch(e=>toast(e.message));break;
+    case "ast": assistantSheet(); break;
+    case "astsay": { if(v==="Update my bank details"||v==="Add a student")astSend(v);else{const i=document.getElementById("ast-in");if(i){i.value=v;i.focus()}}break }
+    case "dictate": dictate(v,el); break;
+    case "impretry": if(COACH.imp)impStart(COACH.imp.url); break;
+    case "impdismiss": COACH.imp=null;api("DELETE","/coach/import/job").catch(()=>{});render(); break;
+    case "impreview": impReview(); break;
+    case "setupgo": if(v==="money")COACH.moneyView="setup";coachGo(v); break;
+    case "setuphide": api("PATCH","/coach/gym",{setup:{dismissed:true}}).then(j=>{API.me=j.me;render()}).catch(e=>toast(e.message)); break;
+    case "bulkopen": bulkSheet([]); break;
+    case "pickcontacts": pickContacts(); break;
+    case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
+    case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Put one person per line, with a phone number or email.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl));break }
+    case "bulkadd": bulkAdd(); break;
+    case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
+    case "brandlogo": brandFromLogo(false); break;
+    case "pos": if(S.ui.tab==="flow"&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);break} // tapping the map: stay where you are
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("flow"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
@@ -2330,6 +2363,7 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
+  if(e.target.id==="vcf-in"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";f.text().then(t=>{const ppl=parseVcf(t);if(!ppl.length){toast("No contacts with a phone number or email in that file.");return}bulkSheet(((S.ui.bulk||{}).people||[]).concat(ppl))}).catch(()=>toast("Couldn't read that file."));return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
@@ -2352,7 +2386,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2364,6 +2398,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="privform")return savePriv(f);
     if(fid==="bankform")return saveBank(f);
     if(fid==="addstuform")return submitAddStudent(f);
+    if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
     if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);
     if(fid==="compform")return saveComp(f);

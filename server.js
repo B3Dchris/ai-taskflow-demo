@@ -33,7 +33,7 @@ const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/an
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
   "Content-Security-Policy": [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",

@@ -52,7 +52,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
 
     // ---- Claude read with a stand-in client
     let sent = null;
-    const fake = (out, extra = {}) => ({ beta: { messages: { create: async (params) => { sent = params; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } } });
+    const fake = (out, extra = {}) => ({ messages: { create: async (params) => { sent = params; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } });
     const ai = { name: "Fourways Grappling Club", tagline: "BJJ for everyone.", address: "", phone: "", email: "", logo_choice: 1,
       socials: { instagram: "", facebook: "", youtube: "https://www.youtube.com/@fgc", tiktok: "", whatsapp: "", x: "" },
       timetable: [{ day: "Thu", start: "18:00", end: "19:30", title: "Gi Fundamentals", coach: "", level: "", quote: "Thursday | 6pm - 7:30pm | Gi Fundamentals" }, { day: "Funday", start: "1", end: "", title: "bad", coach: "", level: "", quote: "" },
@@ -61,7 +61,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
       rates: [{ name: "Adult unlimited", price: 850, currency: "ZAR", period: "month", note: "", quote: "R 850 per month" }, { name: "Family", price: 1999, currency: "ZAR", period: "month", note: "", quote: "Membership" }], notes: "First class free." };
     const c = await im.importSite(site.url, { client: fake(ai) });
     ok(c.method === "claude", "with a client it uses the Claude read");
-    ok(sent.model === "claude-opus-5-5" && sent.fallbacks === "default" && sent.betas.includes("server-side-fallback-2026-07-01"), "request uses the model with refusal fallbacks");
+    ok(sent.model === "claude-haiku-5-5" && sent.thinking && sent.thinking.type === "disabled" && !sent.betas, "request uses the cheap model (Haiku 5.5), no thinking");
     ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-schedule-2026\.png/.test(b.source.url)), "a timetable picture found anywhere on the site is sent to Claude");
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.find((b) => b.type === "text").text;
@@ -77,9 +77,9 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(none.method === "claude" && none.dropped.timetable === 1, "an invented timetable for a site without one is dropped");
     ok(c.profile.phone && c.profile.socials.instagram && c.profile.socials.youtube && c.profile.notes === "First class free.", "blank Claude fields are filled from the plain read");
     ok(c.logos[0] && c.logos[0].url !== r.logos[0].url, "Claude's logo choice goes first");
-    const refused = await im.importSite(site.url, { client: { beta: { messages: { create: async () => ({ stop_reason: "refusal", content: [] }) } } } });
+    const refused = await im.importSite(site.url, { client: { messages: { create: async () => ({ stop_reason: "refusal", content: [] }) } } });
     ok(refused.method === "basic" && /declined/.test(refused.aiError) && refused.profile.timetable.length === 9, "a refusal falls back to the plain read");
-    const broken = await im.importSite(site.url, { client: { beta: { messages: { create: async () => { throw Object.assign(new Error("overloaded"), { status: 529 }); } } } } });
+    const broken = await im.importSite(site.url, { client: { messages: { create: async () => { throw Object.assign(new Error("overloaded"), { status: 529 }); } } } });
     ok(broken.method === "basic" && broken.profile.rates.length > 0, "an API error falls back to the plain read");
 
     // ---- cleaning what the browser sends back
