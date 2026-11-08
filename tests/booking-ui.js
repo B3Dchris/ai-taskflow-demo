@@ -204,6 +204,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // --- thumbnails: Rate what you know and the flow map
     await ev(s1, () => { S.ui.qr = { q: ["kimura_sc"], i: 0 }; qrSheet(); }); await s1.waitForTimeout(300);
     ok(await ev(s1, () => !!document.querySelector('#sheet .ytbox img, #sheet .ytface img, #sheet img[src*="ytimg"]')), "Rate what you know shows the move's own video thumbnail");
+    ok(await ev(s1, () => { const was = JFI.tech; JFI.tech = ["kimura_sc"]; qrSheet(); const src = (document.querySelector("#sheet .revealcard img") || {}).getAttribute?.("src"); const th = techThumb(TM.kimura_sc); JFI.tech = was; qrSheet(); return src === "/img/techniques/kimura_sc.jpg" && /img\/techniques\/kimura_sc/.test(th); }), "a move's own photo, once added, replaces its video thumbnail in Rate what you know and the lists");
     await ev(s1, () => { hideSheet(); S.ui.flowSel = "cg_bot"; go("flow"); }); await s1.waitForTimeout(500);
     ok(await ev(s1, () => document.querySelectorAll(".fsk .fmv .thumb img").length > 0), "flow map moves have their thumbnails back");
     await ev(s1, () => go("book"));

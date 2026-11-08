@@ -3160,14 +3160,16 @@ function posPic(p,size){const m=POSFIG[p];if(!m)return "";const sc=SCENES[m[0]];
   return `<figure class="posfig ${size||""}"><svg viewBox="${x0} ${y0} ${w} ${y1-y0}" role="img" aria-label="Diagram of ${esc(POS[p].L)}: you in blue, partner in grey"><line class="mat" x1="${x0}" y1="114" x2="${x1}" y2="114"/>${order.map(k=>figSVG(sc[k],k===me?"you":"them")).join("")}</svg>${size==="sm"||size==="xs"?"":`<figcaption><span class="key you"></span>You <span class="key them"></span>Partner</figcaption>`}</figure>`}
 /* picture for a position: your photo if you've added one, otherwise the diagram */
 /* illustrated position images (website): listed by the build in window.JF_IMG */
-const JFI=window.JF_IMG||{pos:[],belts:[],hero:false};
+const JFI=window.JF_IMG||{pos:[],belts:[],hero:false,tech:[]};
+/* a photo of the move itself (web/img/techniques/<id>.jpg), when one has been added */
+const techImg=id=>(JFI.tech||[]).includes(id)?"/img/techniques/"+id+".jpg":null;
 const posImg=p=>(JFI.pos||[]).includes(p)?"/img/positions/"+p+".jpg":null;
 const beltImg=b=>(JFI.belts||[]).includes(b)?"/img/belts/"+b+".jpg":null;
 const posImgFig=(p,size)=>`<figure class="posimg ${size||""}"><img src="${posImg(p)}" alt="${esc(POS[p].L)}" loading="lazy"></figure>`;
 function posVisual(p,size){const id=(P().photos||{})[p];return id?`<figure class="photo"><img src="/_blob/${esc(id)}" alt="Your photo of ${esc(POS[p].L)}"></figure>`:posImg(p)?posImgFig(p,size):posPic(p,size)}
 
 /* ============ YOUR VIDEOS ============ */
-function techMedia(t,size){const v=(P().videos||{})[t.id];if(v)return `<div class="vid"><video controls playsinline preload="metadata" ${v.th?`poster="/_blob/${esc(v.th)}"`:""} src="/_blob/${esc(v.v)}"></video></div>`;return posVisual(t.f,size)}
+function techMedia(t,size){const v=(P().videos||{})[t.id];if(v)return `<div class="vid"><video controls playsinline preload="metadata" ${v.th?`poster="/_blob/${esc(v.th)}"`:""} src="/_blob/${esc(v.v)}"></video></div>`;return techImg(t.id)?`<figure class="posimg ${size||""}"><img src="${techImg(t.id)}" alt="${esc(t.n)}" loading="lazy"></figure>`:posVisual(t.f,size)}
 function videoBlock(t){
   if(!ASSETS)return "";const v=(P().videos||{})[t.id];const inp=`<input type="file" accept="video/*" id="vid-${t.id}" data-video="${t.id}" hidden>`;
   if(S.ui.vidUp===t.id)return `<div class="photoempty"><p><b>Uploading your video…</b></p><p class="small muted">Larger clips can take a minute. Keep this page open.</p></div>`;
@@ -3508,7 +3510,7 @@ const POSQ={standing:"hand fighting stance",fhl_top:"front headlock attacks",fhl
 const ytName=n=>n.split(":")[0].replace(/\(.*?\)/g,"").replace(/\s+/g," ").trim();
 const ytURL=q=>"https://www.youtube.com/results?search_query="+encodeURIComponent(q+" no gi bjj");
 const ytBtn=(q,label)=>`<a class="btn yt" href="${ytURL(q)}" target="_blank" rel="noopener"><span class="ytplay" aria-hidden="true">▶</span>${esc(label||"Watch on YouTube")}</a>`;
-function techThumb(t){const v=(P().videos||{})[t.id];const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
+function techThumb(t){const v=(P().videos||{})[t.id];const ti=!v&&techImg(t.id);if(ti)return `<span class="thumb"><img src="${ti}" alt="" loading="lazy">${vidOf(t.id)?`<span class="play">▶</span>`:""}</span>`;const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
 function tRow(t,extra){const b=beltOf(t);return `<button class="trow" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span><span class="meta">${cat(t.c)}<span>${esc(POS[t.f].l)} → ${t.t==="sub"?"Tap":esc(POS[t.t].l)}</span>${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}${extra||""}</span></span>${stripes(lv(t.id))}</button>`}
 function beltSVG(pct){
   const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[goal()];
@@ -3771,7 +3773,7 @@ function reviewSheet(){
   const r=S.ui.review;if(!r||r.i>=r.q.length){S.ui.review=null;S.ui.stack=[];openSheet(`${sheetHead("Review")}<div class="stack"><h1>Done</h1><p class="muted">${r?r.q.length:0} techniques reviewed. Each comes back on a schedule based on how well you knew it.</p></div>`);S.ui.sheet={k:"done"};return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];
   openSheet(`${sheetHead(`Review ${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
-  <div class="revealcard">${!(P().videos||{})[t.id]&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
+  <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
   ${r.shown?`<ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol><div class="small"><b>Key:</b> ${gl(t.d[0])}</div>`:`<p>${gl(OV[t.id]||"")}</p><p class="muted small">Say the steps out loud, then tap Show steps.</p>`}</div>
   </div>`,false,r.shown?{top:`<div class="small muted">How well did you know it?</div><div class="ratebar"><button class="btn" data-a="rate" data-v="0">Again<small>1 day</small></button><button class="btn" data-a="rate" data-v="1">Hard<small>soon</small></button><button class="btn" data-a="rate" data-v="2">Good<small>later</small></button><button class="btn" data-a="rate" data-v="3">Easy<small>much later</small></button></div>`}:{act:`<button class="btn primary grow" data-a="reveal">Show steps</button>`});
 }
@@ -3779,7 +3781,7 @@ function qrSheet(){
   const r=S.ui.qr;if(!r||r.i>=r.q.length){S.ui.qr=null;S.ui.sheet={k:"done"};S.ui.stack=[];openSheet(`${sheetHead("Quick rate")}<div class="stack"><h1>Rated</h1><p class="muted">Your readiness score and review queue are set. Review cards start today.</p></div>`);return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"qr"};S.ui.stack=[];
   openSheet(`${sheetHead(`${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
-  <div class="revealcard">${!(P().videos||{})[t.id]&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
+  <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
   <ol class="steps qrsteps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol>
   <p class="small"><b>Key detail:</b> ${gl(t.d[0])}</p></div>
   </div>`,false,{top:`<div class="levels qrlevels">${LEVELS.map((L,i)=>`<button data-a="qrset" data-v="${i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>`,act:`<button class="btn grow" data-a="qrskip">Skip for now</button>`});

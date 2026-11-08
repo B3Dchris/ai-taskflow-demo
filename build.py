@@ -90,7 +90,9 @@ def images(app):
     names = dict(re.findall(r'\b([a-z_]+):\{l:"[^"]*",L:"([^"]+)"', app))
     pos = [k for k in GALLERY if have("positions", k + ".jpg")]
     belts = [b for b in ["blue", "purple", "brown", "black"] if have("belts", b + ".jpg")]
-    return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "names": names}
+    tdir = os.path.join(ROOT, "web", "img", "techniques")
+    tech = sorted(f[:-4] for f in os.listdir(tdir) if f.endswith(".jpg")) if os.path.isdir(tdir) else []
+    return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "names": names, "tech": tech}
 
 
 ROLE = {"back_top": "You're behind", "ashi": "You're attacking", "open_top": "You're passing", "standing": "Neutral", "back_bot": "They're behind", "ashi_def": "Defending your leg", "fhl_bot": "Defending"}
@@ -148,7 +150,7 @@ def build_web(app):
     head_bits, body = app[:cut], app[cut:]
     head_bits = re.sub(r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', "", head_bits)
     img = images(app)
-    jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"]})
+    jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"], "tech": img["tech"]})
     html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
