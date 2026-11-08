@@ -261,6 +261,23 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return document.querySelectorAll("#sheet .bulkrow").length === 4 && /Zoe Khumalo/.test(t) && /Ruan Botha/.test(t); }), "a contacts file (.vcf from the iPhone Contacts app) adds its people to the list");
     await co.tap('#sheetbar [data-a="bulkadd"]'); await co.waitForTimeout(1200);
     ok(/Added 3 students/.test(await toast(co)) && await ev(co, () => { const t = document.getElementById("roster-list").innerText; return /Lee Jones/.test(t) && /Zoe Khumalo/.test(t) && !/Pat Smith/.test(t); }), "the ticked people are added as students who aren't on the app yet");
+    // --- with two coaches, the class forms offer a list of coaches
+    const cc = await ev(co, () => API.me.gym.coachCode); const c2 = await phone("coach2");
+    await signup(c2, "/app/?join=" + cc, { "#a-name": "Coach Raf", "#a-email": "raf@race.test", "#a-pass": "rafpass11" });
+    await ev(co, async () => { await coachLoad("roster"); coachGo("classes"); }); await co.waitForTimeout(500);
+    await co.tap('[data-a="classnew"]'); await co.waitForTimeout(300);
+    ok(await ev(co, () => { const s = document.getElementById("c-coach"); return s && s.tagName === "SELECT" && s.value === "Coach Kim" && [...s.options].map((o) => o.text).join("|") === "Coach Kim|Coach Raf|Someone else…"; }), "a gym with two coaches picks the coach from a list (you first)");
+    await co.fill("#c-title", "Raf's no-gi"); await co.selectOption("#c-coach", "Coach Raf"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+    ok(await ev(co, () => (COACH.classes || []).some((c) => c.title === "Raf's no-gi" && c.coach === "Coach Raf")), "the picked coach is saved on the class");
+    await ev(co, () => classForm((COACH.classes || []).find((c) => c.title === "Raf's no-gi"))); await co.waitForTimeout(300);
+    ok(await ev(co, () => document.getElementById("c-coach").value === "Coach Raf"), "editing the class shows its coach");
+    await co.selectOption("#c-coach", "__other"); await co.waitForTimeout(100);
+    ok(await ev(co, () => !document.getElementById("c-coach-other").hidden), "'Someone else…' opens a box for a guest coach's name");
+    await co.fill("#c-coach-other", "Guest Prof"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+    ok(await ev(co, () => (COACH.classes || []).some((c) => c.title === "Raf's no-gi" && c.coach === "Guest Prof")), "a guest coach's name is saved");
+    await ev(co, () => classForm((COACH.classes || []).find((c) => c.title === "Raf's no-gi"))); await co.waitForTimeout(300);
+    ok(await ev(co, () => document.getElementById("c-coach").value === "Guest Prof"), "a guest coach stays selected when the class is edited again");
+    await ev(co, () => hideSheet()); await c2.close();
     // --- the gym's colour
     const before = await ev(co, () => getComputedStyle(document.documentElement).getPropertyValue("--blue").trim());
     await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);

@@ -2375,6 +2375,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.route){if(t.dataset.route==="from"){S.ui.flowSel=t.value}else S.ui.routeTo=t.value;const y=window.scrollY;render();window.scrollTo(0,y);return}
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
   if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
+  if(t.dataset&&t.dataset.coachpick){const o=document.getElementById(t.id+"-other");if(o){o.hidden=t.value!=="__other";if(!o.hidden)o.focus()}return}
   if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}
   if(t.id==="wa-comp"){S.ui.wa={kind:"comp",comp:t.value};render();return}
   if(t.id==="g-invite"){api("PATCH","/coach/gym",{studentsInvite:t.checked}).then(j=>{API.me=j.me;toast(t.checked?"Students can invite friends.":"Only coaches can send invites now.")}).catch(e=>toast(e.message));return}
