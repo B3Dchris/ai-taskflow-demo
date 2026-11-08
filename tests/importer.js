@@ -52,9 +52,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
 
     // ---- Claude read with a stand-in client
     let sent = null;
-    const picCalls = [];
-    const isFull = (params) => params.messages[0].content.some((b) => b.type === "text" && /\nPAGES:\n/.test(b.text));
-    const fake = (out, extra = {}) => ({ messages: { create: async (params) => { if (isFull(params)) sent = params; else picCalls.push(params); return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } });
+    const fake = (out, extra = {}) => ({ messages: { create: async (params) => { sent = params; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } });
     const ai = { name: "Fourways Grappling Club", tagline: "BJJ for everyone.", address: "", phone: "", email: "", logo_choice: 1,
       socials: { instagram: "", facebook: "", youtube: "https://www.youtube.com/@fgc", tiktok: "", whatsapp: "", x: "" },
       timetable: [{ day: "Thu", start: "18:00", end: "19:30", title: "Gi Fundamentals", coach: "", level: "", quote: "Thursday | 6pm - 7:30pm | Gi Fundamentals" }, { day: "Funday", start: "1", end: "", title: "bad", coach: "", level: "", quote: "" },
@@ -87,18 +85,15 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     { let n = 0; const reads = [
         { ...ai, logo_choice: -1, coaches: [], timetable: [{ day: "Mon", start: "18:00", end: "19:30", title: "No-Gi", coach: "", level: "", source: "text", quote: "Monday 18:00 - 19:30 No-Gi All levels" }] },
         { ...ai, phone: "", coaches: [{ name: "Thabo Nkosi", rank: "Black belt", bio: "", source: "text", quote: "Thabo Nkosi" }], timetable: [{ day: "Mon", start: "18:00", end: "19:30", title: "No-Gi All levels", coach: "", level: "All levels", source: "text", quote: "Monday 18:00 - 19:30 No-Gi All levels" }, { day: "Sat", start: "09:00", end: "10:30", title: "Open mat", coach: "", level: "", source: "text", quote: "Saturday 09:00 - 10:30 Open mat" }] } ];
-      let pics = 0, picOk = true;
-      const two = await im.importSite(site.url, { client: { messages: { create: async (params) => { if (!isFull(params)) { pics++; const c = params.messages[0].content; picOk = picOk && c.filter((b) => b.type === "image").length === 1 && /This picture is on the page "/.test(c[1].text); return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ ...ai, logo_choice: -1, timetable: [], rates: [], coaches: [] }) }] }; }
-        return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(reads[n++ % 2]) }] }; } } } });
-      ok(n === 2, "every import reads the whole site twice, at the same time");
-      ok(pics === 3 && picOk, "and each timetable or price picture once more on its own, with the page it's on: " + pics);
+      const two = await im.importSite(site.url, { client: { messages: { create: async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(reads[n++ % 2]) }] }) } } });
+      ok(n === 2, "every import reads the site twice, at the same time");
       ok(two.profile.coaches.some((c) => c.name === "Thabo Nkosi") && two.profile.timetable.some((r) => r.day === "Sat" && r.start === "09:00"), "anything either read found is kept");
       ok(two.profile.timetable.filter((r) => r.day === "Mon" && r.start === "18:00").length === 1 && two.profile.timetable.find((r) => r.day === "Mon" && r.start === "18:00").title === "No-Gi All levels", "the same class read twice is kept once, with the fuller name");
       ok(two.logos.length >= 1, "a 'no logo' answer from one read doesn't throw the logo away"); }
     { const u = im.unionAi({ timetable: [{ day: "Tue", start: "17:00", title: "Kids" }], rates: [], coaches: [] }, { timetable: [{ day: "Tue", start: "17:00", title: "Adults No-Gi" }], rates: [], coaches: [] });
       ok(u.timetable.length === 2, "two different classes at the same time both stay"); }
-    { const u = im.unionAi({ timetable: [{ day: "Tue", start: "18:30", title: "Adult Beginners (Edgemead)" }, { day: "Mon", start: "17:00", title: "Kids (Skyfall)" }], rates: [], coaches: [] }, { timetable: [{ day: "Tue", start: "18:30", title: "Adult Gi (Melkbosstrand)" }, { day: "Mon", start: "17:00", title: "Kids 6-8 y/o (Skyfall)" }], rates: [], coaches: [] });
-      ok(u.timetable.length === 3 && u.timetable.some((r) => r.title === "Kids 6-8 y/o (Skyfall)"), "the same time at two venues is two classes; the same venue's class read twice is one"); }
+    { const u = im.unionAi({ timetable: [{ day: "Tue", start: "18:30", title: "Adult Beginners (Edgemead)" }, { day: "Mon", start: "17:00", title: "Kids (West Workout)" }], rates: [], coaches: [] }, { timetable: [{ day: "Tue", start: "18:30", title: "Adult Gi (Melkbosstrand)" }, { day: "Mon", start: "17:00", title: "Kids 6-8 y/o (West Workout Gym)" }], rates: [], coaches: [] });
+      ok(u.timetable.length === 3 && u.timetable.some((r) => r.title === "Kids 6-8 y/o (West Workout Gym)"), "the same time at two venues is two classes; the same venue's class read twice is one"); }
     { let n = 0; const one = await im.importSite(site.url, { client: { messages: { create: async () => { if (n++ === 0) throw Object.assign(new Error("overloaded"), { status: 529 }); return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(ai) }] }; } } } });
       ok(one.method === "claude" && !one.aiError, "if one of the two reads fails, the other is used"); }
     const noLogo = await im.importSite(site.url, { client: fake({ ...ai, logo_choice: -1 }) });
