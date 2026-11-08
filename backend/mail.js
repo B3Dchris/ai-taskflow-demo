@@ -50,6 +50,7 @@ function layout(title, paras, button, preheader) {
 
 async function send({ to, subject, title, paras, button, preheader, replyTo }) {
   if (!mailOn()) return { sent: false, reason: "off" };
+  if (!to) return { sent: false, reason: "no address" };
   const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
@@ -73,6 +74,12 @@ const templates = {
   offWaitlist: (name, gym, cls, when) => ({ subject: `You're in: ${cls}`, title: "A spot opened up",
     paras: [`Hi ${name},`, `Someone cancelled, so you've moved off the waitlist and you're booked for ${cls} at ${gym}: ${when}.`, "Can't make it any more? Cancel in the app so the next person gets the spot."],
     button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
+  moved: (name, gym, cls, was, now) => ({ subject: `Changed: ${cls}`, title: "Class time changed",
+    paras: [`Hi ${name},`, `${gym} has moved ${cls}. It was ${was}; it's now ${now}. You're still booked.`, "Can't make the new time? Cancel in the app so someone else gets the spot."],
+    button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
+  feeReminder: (name, gym, amount, month, ref, bankLines) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for ${month}.`, ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? Send your proof of payment in the app.`],
+    button: { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
   cancelled: (name, gym, cls, when) => ({ subject: `Cancelled: ${cls}`, title: "Class cancelled",
     paras: [`Hi ${name},`, `${gym} has cancelled ${cls} on ${when}. Your booking has been removed.`, "Have a look for another class to book."],
     button: { label: "Book another class", url: appUrl() + "/app/#book" } }),

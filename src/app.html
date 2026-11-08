@@ -344,6 +344,16 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
 .tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
 .flabel{font-size:14px;color:var(--ink-2)}
+.mchart{margin:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:end}
+.mcol{display:grid;grid-template-rows:96px auto;gap:4px;background:none;border:0;padding:0;color:var(--ink-2);font:inherit;align-items:end;justify-items:center}
+.mcol .mbar{width:70%;max-width:40px;border:1.5px solid var(--line);border-radius:6px;display:flex;align-items:flex-end;overflow:hidden;min-height:2px}
+.mcol .mbar i{display:block;width:100%;background:var(--good)}.mcol.on .mbar{border-color:var(--blue)}.mcol.on small{color:var(--ink);font-weight:700}
+.mchart figcaption{grid-column:1/-1}.mkey{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--good);vertical-align:-1px}
+.mrow{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding:10px 2px}
+.mrow-main{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:2px}
+.mrow-main .nm{font-weight:600}.mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.mrow-side .btn{min-height:36px}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.notices .notice{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--line);padding-left:10px}.notices .notice.cancelled{border-color:var(--bad)}.notices .notice.moved{border-color:var(--warn)}.notices .notice.new b::after{content:" · new";color:var(--blue);font-size:12px}
 .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;border-top:1px solid var(--line);padding-top:8px}.kv:first-child{border-top:0;padding-top:0}
 .kv>.small:first-child{grid-column:1/-1}.kv .mono{font-size:17px;word-break:break-all}.kv>span:last-child:empty{display:none}
 .refrow b{font-size:22px;letter-spacing:.06em;color:var(--blue)}
@@ -392,7 +402,7 @@ textarea{min-height:76px;resize:vertical}
 .fsk-h{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:36px;background:none;border:0;padding:0 0 4px;text-align:left;color:var(--ink);font:inherit}
 .fsk-h b{display:block;font-family:var(--f-display);font-size:20px;text-transform:uppercase;line-height:1.05}
 .fsk-go{font-weight:700;color:var(--blue);font-size:15px;white-space:nowrap;min-height:44px;display:inline-flex;align-items:center;padding-left:12px}
-.fsk .fmv{grid-template-columns:minmax(0,1fr) auto;padding-block:9px}
+.fsk .fmv{grid-template-columns:56px minmax(0,1fr) auto;padding-block:9px}
 .routesteps{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:grid;gap:6px}
 .routesteps .rpos{font-weight:700;position:relative}.routesteps .rpos::before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--blue)}
 .routesteps .rmove{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding-left:10px}.routesteps .rmove::before{content:"↓";color:var(--ink-2);margin-left:-10px}
@@ -1727,7 +1737,7 @@ function viewToday(){
   const solo=P().solo.date===today()?P().solo.done:[];
   const inGym=!!(API.me&&API.me.gym);
   return `${header()}<div class="stack-lg">
-  ${nextClassCard()}${compTodayCard()}
+  ${typeof noticesCard==="function"?noticesCard():""}${nextClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
     ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
     <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></div></section>
@@ -1833,7 +1843,7 @@ function flowFrom(sel){const mx=flowMax(),gs=flowGroups(sel,mx),p=POS[sel];
     :g.d===sel?`<div class="fsk-h"><b>Control ${esc(p.l.toLowerCase())}</b></div>`
     :`<button class="fsk-h" data-a="pos" data-v="${g.d}" aria-label="Go to ${esc(POS[g.d].L)}"><b>${esc(POS[g.d].l)}</b><span class="fsk-go">Go ›</span></button>`;
   const dirLine=g=>`${g.d==="sub"?"Finish":g.d===sel?"Stay here":FDIR[g.dir]} · ${g.ts.length} move${g.ts.length>1?"s":""}`;
-  const row=(t,noCat)=>{const b=beltOf(t),m=`${noCat?"":cat(t.c)}${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}`;return `<button class="trow fmv" data-a="open" data-v="${t.id}"><span><span class="nm">${esc(t.n)}</span>${m?`<span class="meta">${m}</span>`:""}</span>${stripes(lv(t.id))}</button>`};
+  const row=(t,noCat)=>{const b=beltOf(t),m=`${noCat?"":cat(t.c)}${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}`;return `<button class="trow fmv" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span>${m?`<span class="meta">${m}</span>`:""}</span>${stripes(lv(t.id))}</button>`};
   return `<div class="fsk" style="--gut:${gut}px">
     <div class="fsk-src"><span class="fsk-t">${esc(TIERS[p.r])}</span><b>${esc(p.l)}</b></div>
     <svg class="fsk-lines" aria-hidden="true"></svg>
@@ -1954,7 +1964,7 @@ function reviewSheet(){
   const r=S.ui.review;if(!r||r.i>=r.q.length){S.ui.review=null;S.ui.stack=[];openSheet(`${sheetHead("Review")}<div class="stack"><h1>Done</h1><p class="muted">${r?r.q.length:0} techniques reviewed. Each comes back on a schedule based on how well you knew it.</p></div>`);S.ui.sheet={k:"done"};return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];
   openSheet(`${sheetHead(`Review ${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
-  <div class="revealcard">${techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
+  <div class="revealcard">${!(P().videos||{})[t.id]&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
   ${r.shown?`<ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol><div class="small"><b>Key:</b> ${gl(t.d[0])}</div>`:`<p>${gl(OV[t.id]||"")}</p><p class="muted small">Say the steps out loud, then tap Show steps.</p>`}</div>
   </div>`,false,r.shown?{top:`<div class="small muted">How well did you know it?</div><div class="ratebar"><button class="btn" data-a="rate" data-v="0">Again<small>1 day</small></button><button class="btn" data-a="rate" data-v="1">Hard<small>soon</small></button><button class="btn" data-a="rate" data-v="2">Good<small>later</small></button><button class="btn" data-a="rate" data-v="3">Easy<small>much later</small></button></div>`}:{act:`<button class="btn primary grow" data-a="reveal">Show steps</button>`});
 }
@@ -1962,7 +1972,7 @@ function qrSheet(){
   const r=S.ui.qr;if(!r||r.i>=r.q.length){S.ui.qr=null;S.ui.sheet={k:"done"};S.ui.stack=[];openSheet(`${sheetHead("Quick rate")}<div class="stack"><h1>Rated</h1><p class="muted">Your readiness score and review queue are set. Review cards start today.</p></div>`);return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"qr"};S.ui.stack=[];
   openSheet(`${sheetHead(`${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
-  <div class="revealcard">${techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
+  <div class="revealcard">${!(P().videos||{})[t.id]&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
   <ol class="steps qrsteps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol>
   <p class="small"><b>Key detail:</b> ${gl(t.d[0])}</p></div>
   </div>`,false,{top:`<div class="levels qrlevels">${LEVELS.map((L,i)=>`<button data-a="qrset" data-v="${i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>`,act:`<button class="btn grow" data-a="qrskip">Skip for now</button>`});
@@ -2148,6 +2158,16 @@ document.addEventListener("click",e=>{
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
     case "mypay": myPaySheet();break;
+    case "moneyview": COACH.moneyView=v;render();break;
+    case "moneyfilter": COACH.moneyFilter=v;render();break;
+    case "moneymonth": if(COACH.money){COACH.moneyMonth=monthShift(COACH.money.month,Number(v));render()}break;
+    case "moneyjump": COACH.moneyMonth=v;render();break;
+    case "remindall": {const M=COACH.money;if(!M)break;const n=M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0])&&s.email).length;confirmSheet(`Email ${n} reminder${n>1?"s":""}?`,`Everyone who still owes for ${esc(monthLabel(M.month))} and has an email gets a friendly reminder with the amount, your bank details and their reference.`,["remindyes",""],"Send reminders");break}
+    case "remindyes": remindAll();break;
+    case "moneycsv": moneyCSV();break;
+    case "addstu": addStudentSheet();break;
+    case "studelask": confirmSheet("Remove this student?","They're taken off your list. Payments you recorded stay, marked as not matched.",["studelyes",v],"Remove");break;
+    case "studelyes": api("DELETE",`/coach/students/${v}`).then(async()=>{hideSheet();await coachLoad("roster");COACH.money=null;render();toast("Removed.")}).catch(e=>toast(e.message));break;
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("flow"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
@@ -2227,7 +2247,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2238,6 +2258,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="planform")return savePlan(f);
     if(fid==="privform")return savePriv(f);
     if(fid==="bankform")return saveBank(f);
+    if(fid==="addstuform")return submitAddStudent(f);
     if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);
     if(fid==="compform")return saveComp(f);

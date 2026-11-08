@@ -41,7 +41,7 @@ const XSS = `<img src=x onerror="window.__x=1">`;
     const SCREENS = {
       anon: ["today", "learn", "flow", "log", "settings"],
       student: ["today", "learn", "flow", "log", "book", "book:private", "book:comps", "settings"],
-      coach: ["coach-today", "coach-classes", "coach-classes:month", "coach-students", "coach-students:insights", "coach-comps", "coach-money", "coach-gym"],
+      coach: ["coach-today", "coach-classes", "coach-classes:month", "coach-students", "coach-students:insights", "coach-comps", "coach-money", "coach-money:payments", "coach-money:setup", "coach-gym"],
       study: ["today", "learn", "flow", "log", "settings"],
     };
     const roles = { anon: null, student: studs[0].tok, coach: coach.tok, study: coach.tok };
@@ -62,9 +62,9 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       for (const scr of SCREENS[role]) {
         const [tab, sub] = scr.split(":");
         const ms = await p.evaluate(async ([tab, sub]) => { hideSheet(); if (sub === "month") calState("coach").mode = "month"; if (tab === "coach-classes" && !sub) calState("coach").mode = "week";
-          if (tab === "coach-students") COACH.stuView = sub === "insights" ? "insights" : "list"; if (tab === "book") S.ui.bookView = sub || "classes";
+          if (tab === "coach-students") COACH.stuView = sub === "insights" ? "insights" : "list"; if (tab === "book") S.ui.bookView = sub || "classes"; if (tab === "coach-money") COACH.moneyView = sub || "month";
           const t = performance.now(); go(tab); return performance.now() - t; }, [tab, sub]);
-        await p.waitForTimeout(tab === "coach-students" && sub === "insights" ? 900 : 350);
+        await p.waitForTimeout((tab === "coach-students" && sub === "insights") || (tab === "coach-money" && !sub) ? 1100 : 350);
         const r = await p.evaluate(() => ({ w: document.documentElement.scrollWidth, vw: innerWidth, len: document.getElementById("app").innerText.length, loading: /Loading/.test(document.getElementById("app").innerText.slice(0, 400)), x: !!window.__x, raw: /onerror=/.test(document.getElementById("app").innerText) ? 1 : 0 }));
         ok(r.w <= r.vw, `${tag} · ${scr}: nothing wider than the screen (${r.w} > ${r.vw})`);
         ok(r.len > 60 && !r.loading, `${tag} · ${scr}: screen has content (not stuck loading)`);
@@ -114,7 +114,7 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       ok(await p.evaluate(() => !document.querySelector(".calrows .swipe.open")), "scrolling up and down doesn't open a row");
       void sx; void d;
       // payments and competitions
-      await p.evaluate(() => coachGo("money")); await p.waitForTimeout(700);
+      await p.evaluate(() => { COACH.moneyView = "payments"; coachGo("money"); }); await p.waitForTimeout(700);
       await touchSwipe(p, ".list .swipe .sw-front", -140); await p.waitForTimeout(250); await p.locator(".swipe.open .sw-del").tap(); await p.waitForTimeout(300);
       ok(await p.evaluate(() => S.ui.sheet && S.ui.sheet.k === "confirm" && /Delete this payment/.test(document.getElementById("sheet").innerText)), "swipe left on a payment asks to delete it");
       const pn = await p.evaluate(() => COACH.payments.length); await p.tap('#sheetbar [data-a="paydelyes"]'); await p.waitForTimeout(1200);

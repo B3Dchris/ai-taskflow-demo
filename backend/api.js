@@ -17,6 +17,7 @@ const clean = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
 // Phone numbers as typed, minus anything that isn't a digit, space, + or dash ("082 123 4567", "+27 82 123 4567").
 const cleanPhone = (v) => { const s = String(v == null ? "" : v).replace(/[^\d+\- ]/g, "").trim().slice(0, 24); return s.replace(/\D/g, "").length >= 7 ? s : ""; };
 const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(e);
+const first = (n) => String(n || "").trim().split(/\s+/)[0] || "";
 const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d);
 // "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && (() => { const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; })();
@@ -108,6 +109,12 @@ function makeApi(pool, { secureCookies }) {
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
     if (password.length > 200) fail(400, "That password is too long.");
     const hash = await bcrypt.hash(password, 11);
+    // A coach added this person with this email before they had the app: take over that record (history, plan, payments).
+    const pre = (await q("select id, gym_id from users where email=$1 and pass_hash is null", [email])).rows[0];
+    if (pre && (!gymId || pre.gym_id === gymId || role === "student")) {
+      await q("update users set pass_hash=$1, name=$2, offline=false, claim_token=null, gym_id=coalesce($3, gym_id) where id=$4", [hash, name, gymId && role === "student" ? gymId : null, pre.id]);
+      return pre.id;
+    }
     try {
       const r = await q("insert into users(gym_id,role,name,email,pass_hash) values($1,$2,$3,$4,$5) returning id", [gymId, role, name, email, hash]);
       return r.rows[0].id;
@@ -145,7 +152,19 @@ function makeApi(pool, { secureCookies }) {
       if (!g.rows[0]) fail(404, "That gym code isn't right. Check it with your coach.");
       gymId = g.rows[0].id; role = g.rows[0].coach ? "coach" : "student";
     }
-    const id = await newUser({ ...b, role, gymId });
+    let id;
+    const claim = clean(b.claim, 40);
+    const pre = claim ? (await q("select id, gym_id from users where claim_token=$1 and pass_hash is null", [claim])).rows[0] : null;
+    if (pre && role === "student" && (!gymId || pre.gym_id === gymId)) {
+      const email = clean(b.email, 254).toLowerCase(), password = String(b.password || "");
+      if (!clean(b.name, 80)) fail(400, "Enter your name.");
+      if (!isEmail(email)) fail(400, "Enter a valid email address.");
+      if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
+      const taken = (await q("select id from users where email=$1 and id<>$2", [email, pre.id])).rows[0];
+      if (taken) fail(409, "An account with that email already exists. Sign in instead.");
+      await q("update users set name=$1, email=$2, pass_hash=$3, offline=false, claim_token=null where id=$4", [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id]);
+      id = pre.id;
+    } else id = await newUser({ ...b, role, gymId });
     await startSession(res, id);
     const m = await loadMe(id);
     if (m.role === "student") mail.sendLater({ to: m.email, ...mail.templates.welcomeStudent(m.name, m.gym_name) });
@@ -156,7 +175,7 @@ function makeApi(pool, { secureCookies }) {
     const email = clean(req.body?.email, 254).toLowerCase();
     checkSignIn(req, email);
     const r = await q("select id, pass_hash from users where email=$1", [email]);
-    const ok = r.rows[0] && (await bcrypt.compare(String(req.body?.password || ""), r.rows[0].pass_hash));
+    const ok = r.rows[0] && r.rows[0].pass_hash && (await bcrypt.compare(String(req.body?.password || ""), r.rows[0].pass_hash));
     if (!ok) fail(401, "That email and password don't match.");
     await startSession(res, r.rows[0].id);
     res.json({ me: me(await loadMe(r.rows[0].id)) });
@@ -186,7 +205,7 @@ function makeApi(pool, { secureCookies }) {
     const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
     if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
     const uid = r.rows[0].user_id;
-    await q("update users set pass_hash=$1 where id=$2", [await bcrypt.hash(password, 11), uid]);
+    await q("update users set pass_hash=$1, offline=false, claim_token=null where id=$2", [await bcrypt.hash(password, 11), uid]);
     await q("delete from sessions where user_id=$1", [uid]); // sign out everywhere else
     await startSession(res, uid);
     res.json({ me: me(await loadMe(uid)) });
@@ -223,7 +242,7 @@ function makeApi(pool, { secureCookies }) {
 
   api.delete("/me", wrap(async (req, res) => {
     const u = needUser(req);
-    if (!(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
+    if (!u.pass_hash || !(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
     if (u.gym_id) await releaseBookings(u.id, u.gym_id, u);
     await q("delete from users where id=$1", [u.id]);
     // A gym with nobody left in it goes too (its classes, plans and payments with it).
@@ -350,17 +369,42 @@ function makeApi(pool, { secureCookies }) {
       await db.query("commit");
     } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
     await tellPromoted(ids, row, u);
-    res.json({ class: classOut(row, true), promoted: ids.length });
+    // Moved to another day or time: tell the people booked (email) and, for group classes, the whole gym (in the app).
+    let told = 0;
+    if (new Date(cur.starts_at).getTime() !== new Date(row.starts_at).getTime() && new Date(row.starts_at) > new Date() && b.notify !== false) {
+      const booked = (await q("select u.id, u.email, u.name from attendance a join users u on u.id=a.user_id where a.class_id=$1 and (a.going or a.waitlisted)", [row.id])).rows;
+      const was = whenText(cur.starts_at, tzOf(u)), now = whenText(row.starts_at, tzOf(u));
+      for (const p of booked) mail.sendLater({ to: p.email, ...mail.templates.moved(p.name, u.gym_name, row.title, was, now) });
+      if (row.kind !== "private" || booked.length) await notify(u, row, booked, "moved", `Moved: ${row.title}`, `Now ${now} (was ${was}).`);
+      told = booked.length;
+    }
+    res.json({ class: classOut(row, true), promoted: ids.length, told });
   }));
   const whenText = (d, tz) => { try { return new Date(d).toLocaleString("en-ZA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); } catch (e) { return new Date(d).toISOString(); } };
+  // In-app notices: a private lesson's change goes to the people booked; a group class's goes to every student in the gym.
+  async function notify(u, c, booked, kind, title, body) {
+    if (c.kind === "private") { for (const b of booked) await q("insert into notices(gym_id,user_id,kind,title,body) values($1,$2,$3,$4,$5)", [u.gym_id, b.id, kind, title, body]); }
+    else await q("insert into notices(gym_id,user_id,kind,title,body) values($1,null,$2,$3,$4)", [u.gym_id, kind, title, body]);
+  }
   api.delete("/classes/:id", wrap(async (req, res) => {
     const u = needCoach(req), c = await ownClass(u, req.params.id);
-    const booked = await q("select u.email, u.name from attendance a join users u on u.id=a.user_id where a.class_id=$1 and (a.going or a.waitlisted)", [c.id]);
+    const booked = (await q("select u.id, u.email, u.name from attendance a join users u on u.id=a.user_id where a.class_id=$1 and (a.going or a.waitlisted)", [c.id])).rows;
     await q("delete from classes where id=$1", [c.id]);
-    if (new Date(c.starts_at) > new Date() && req.body?.notify !== false)
-      for (const b of booked.rows) mail.sendLater({ to: b.email, ...mail.templates.cancelled(b.name, u.gym_name, c.title, whenText(c.starts_at, tzOf(u))) });
-    res.json({ ok: true, notified: new Date(c.starts_at) > new Date() ? booked.rows.length : 0 });
+    const future = new Date(c.starts_at) > new Date(), tell = future && req.body?.notify !== false, when = whenText(c.starts_at, tzOf(u));
+    if (tell) {
+      for (const b of booked) mail.sendLater({ to: b.email, ...mail.templates.cancelled(b.name, u.gym_name, c.title, when) });
+      if (c.kind === "private" ? booked.length : true) await notify(u, c, booked, "cancelled", `Cancelled: ${c.title}`, c.kind === "private" ? `Your private lesson on ${when} is cancelled.` : `${c.title} on ${when} is cancelled.${booked.length ? " Everyone booked has been told." : ""}`);
+    }
+    res.json({ ok: true, notified: tell ? booked.filter((b) => b.email).length : 0, noticed: tell ? (c.kind === "private" ? booked.length : "all") : 0 });
   }));
+  api.get("/me/notices", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) return res.json({ notices: [], unread: 0 });
+    const r = await q(`select id, kind, title, body, created_at from notices where gym_id=$1 and (user_id is null or user_id=$2) and created_at > now() - interval '30 days'
+      and created_at >= $3 order by created_at desc limit 30`, [u.gym_id, u.id, u.created_at]);
+    const seen = u.notices_seen_at ? new Date(u.notices_seen_at).getTime() : 0;
+    res.json({ notices: r.rows.map((n) => ({ id: String(n.id), kind: n.kind, title: n.title, body: n.body, at: n.created_at, unread: new Date(n.created_at).getTime() > seen })), unread: r.rows.filter((n) => new Date(n.created_at).getTime() > seen).length });
+  }));
+  api.post("/me/notices/seen", wrap(async (req, res) => { const u = needUser(req); await q("update users set notices_seen_at=now() where id=$1", [u.id]); res.json({ ok: true }); }));
 
   // Fill free spots from the waitlist, longest-waiting first. Call inside a transaction holding the class row lock.
   async function promoteWaitlist(db, c) {
@@ -540,7 +584,7 @@ function makeApi(pool, { secureCookies }) {
   }));
 
   async function rosterRows(u) {
-    const r = await q(`select u.id,u.name,u.email,u.phone,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
+    const r = await q(`select u.id,u.name,u.email,u.phone,(u.pass_hash is null) as offline,u.role,u.belt,u.stripes,u.active,u.monthly_fee_cents,u.notes,u.created_at,u.plan_id,u.plan_status,u.plan_started,u.rank_changed_at
       from users u where u.gym_id=$1 order by u.role, u.name`, [u.gym_id]);
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
@@ -553,7 +597,7 @@ function makeApi(pool, { secureCookies }) {
     return { plans, vs, rows: r.rows.map((x) => {
       const plan = pm[String(x.plan_id)] || null;
       const fee = x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee;
-      return { ...person(x, s[x.id]), email: x.email, phone: x.phone || "", role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
+      return { ...person(x, s[x.id]), email: x.email || "", phone: x.phone || "", offline: !!x.offline, role: x.role, active: x.active, notes: x.notes, joined: x.created_at,
         feeCents: fee || 0, planId: plan ? String(plan.id) : null, planName: plan ? plan.name : null, planStatus: x.plan_status, planStarted: x.plan_started,
         paidThisMonthCents: Number(paid[x.id]?.month_cents || 0), pendingThisMonthCents: Number(paid[x.id]?.pending_cents || 0), lastPaid: paid[x.id]?.last_paid || null,
         visits: x.role === "student" ? studentStats(x, visits[x.id]) : null };
@@ -569,6 +613,36 @@ function makeApi(pool, { secureCookies }) {
     if (!r.rows[0]) fail(404, "That person isn't in your gym.");
     return r.rows[0];
   }
+  api.post("/coach/students", wrap(async (req, res) => {
+    const u = needCoach(req), b = req.body || {};
+    const name = clean(b.name, 80); if (!name) fail(400, "Enter the student's name.");
+    const email = clean(b.email, 254).toLowerCase(), phone = cleanPhone(b.phone);
+    if (email && !isEmail(email)) fail(400, "That email doesn't look right.");
+    if (!email && !phone) fail(400, "Add a WhatsApp number or an email, so you can reach them.");
+    if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) fail(409, "Someone with that email is already on JitsFlow. Send them your gym's invite link instead.");
+    const belt = BELTS.includes(b.belt) ? b.belt : "white", stripes = Math.min(4, Math.max(0, intOr(b.stripes, 0)));
+    let planId = null; if (b.planId) { planId = intOr(b.planId, 0); if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
+    const fee = b.feeCents === undefined || b.feeCents === null || b.feeCents === "" ? null : Math.max(0, intOr(b.feeCents, 0));
+    const r = await q(`insert into users(gym_id,role,name,email,pass_hash,phone,belt,stripes,plan_id,plan_status,plan_started,monthly_fee_cents,notes,offline)
+      values($1,'student',$2,$3,null,$4,$5,$6,$7,$8,$9,$10,$11,true) returning id`,
+      [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000)]);
+    res.status(201).json({ id: String(r.rows[0].id) });
+  }));
+  // Link that signs this person up straight into their existing record (plan, payments, attendance kept).
+  api.post("/coach/students/:id/claim-link", wrap(async (req, res) => {
+    const u = needCoach(req), st = await ownStudent(u, req.params.id);
+    if (st.pass_hash) fail(400, "They already use the app.");
+    let tok = st.claim_token;
+    if (!tok) { tok = crypto.randomBytes(12).toString("base64url"); await q("update users set claim_token=$1 where id=$2", [tok, st.id]); }
+    res.json({ url: `${mail.appUrl()}/app/?join=${u.student_code}&claim=${tok}` });
+  }));
+  api.delete("/coach/students/:id", wrap(async (req, res) => {
+    const u = needCoach(req), st = await ownStudent(u, req.params.id);
+    if (st.pass_hash) fail(400, "They have their own account. Mark them inactive instead.");
+    await q("update payments set user_id=null where user_id=$1", [st.id]);
+    await q("delete from users where id=$1", [st.id]);
+    res.json({ ok: true });
+  }));
   api.get("/coach/students/:id", wrap(async (req, res) => {
     const u = needCoach(req), st = await ownStudent(u, req.params.id);
     const s = (await summaries(u.gym_id, [st.id]))[st.id];
@@ -578,7 +652,7 @@ function makeApi(pool, { secureCookies }) {
     const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
       where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
     const plan = st.plan_id ? (await q("select * from plans where id=$1", [st.plan_id])).rows[0] : null;
-    res.json({ student: { ...person(st, s), email: st.email, phone: st.phone || "", role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
+    res.json({ student: { ...person(st, s), email: st.email || "", phone: st.phone || "", offline: !st.pass_hash, role: st.role, active: st.active, feeCents: st.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee, feeOverride: st.monthly_fee_cents,
         notes: st.notes, joined: st.created_at, planId: st.plan_id ? String(st.plan_id) : null, planStatus: st.plan_status, planStarted: st.plan_started, rankChangedAt: st.rank_changed_at,
         visits: studentStats(st, visits[st.id]) },
       classes: recent.rows.map((x) => ({ title: x.title, startsAt: x.starts_at, kind: x.kind, attended: x.attended })),
@@ -806,13 +880,14 @@ function makeApi(pool, { secureCookies }) {
     const ids = (Array.isArray(b.userIds) ? b.userIds : []).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 200);
     const to = (await q("select id, name, email from users where id = any($1) and gym_id=$2", [ids, u.gym_id])).rows;
     if (!to.length) fail(400, "Pick who to send it to.");
-    let sent = 0; const failed = [];
+    let sent = 0; const failed = [], noEmail = [];
     for (const p of to) {
+      if (!p.email) { noEmail.push(p.name); continue; }
       if (limited("msg:" + u.gym_id, 300, 24 * 3600e3)) { failed.push(p.name); continue; }
       try { await mail.send({ to: p.email, replyTo: u.email, ...mail.templates.message(p.name, u.name, u.gym_name, subject, text) }); sent++; }
       catch (e) { console.warn("mail:", e.message); failed.push(p.name); }
     }
-    res.json({ sent, failed });
+    res.json({ sent, failed, noEmail });
   }));
 
   api.patch("/coach/gym", wrap(async (req, res) => {
@@ -958,6 +1033,7 @@ function makeApi(pool, { secureCookies }) {
   const PAY_FIELDS = { holder: 80, bank: 60, account: 30, branch: 20, type: 30, link: 400, note: 300 };
   function readPaySettings(b) {
     const out = {}; for (const [k, n] of Object.entries(PAY_FIELDS)) out[k] = clean(b[k], n);
+    out.dueDay = Math.min(28, Math.max(1, intOr(b.dueDay, 1)));
     if (out.link && !/^https:\/\//i.test(out.link)) fail(400, "The payment link must start with https://");
     out.account = out.account.replace(/[^\d ]/g, ""); out.branch = out.branch.replace(/[^\d ]/g, "");
     return out;
@@ -1074,6 +1150,64 @@ function makeApi(pool, { secureCookies }) {
     const r = await q("delete from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id]);
     if (!r.rowCount) fail(404, "That payment doesn't exist.");
     res.json({ ok: true });
+  }));
+
+  // ---------- coach: money overview for a month ----------
+  // Who owes what this month, what came in, and the last six months. Expected uses each student's current fee.
+  async function moneyRows(u, month) {
+    const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
+    const ppl = (await q(`select id, name, email, phone, pass_hash is null as offline, monthly_fee_cents, plan_id, pay_ref, created_at from users
+      where gym_id=$1 and role='student' and active order by name`, [u.gym_id])).rows;
+    return ppl.map((x) => { const plan = pm[String(x.plan_id)] || null; return { ...x, plan, fee: x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? u.gym_fee ?? 0 }; });
+  }
+  api.get("/coach/money", wrap(async (req, res) => {
+    const u = needCoach(req), today = await todayIn(u);
+    const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month || "") ? req.query.month : today.slice(0, 7);
+    const start = month + "-01", next = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 1)).toISOString().slice(0, 10);
+    const rows = await moneyRows(u, month);
+    for (const x of rows) if (!x.pay_ref) x.pay_ref = await payRef(x.id);
+    const sums = Object.fromEntries((await q(`select user_id, coalesce(sum(amount_cents) filter (where status='confirmed'),0) as paid, coalesce(sum(amount_cents) filter (where status='pending'),0) as pending, max(paid_on) filter (where status='confirmed') as last
+      from payments where gym_id=$1 and user_id is not null and paid_on >= $2 and paid_on < $3 group by user_id`, [u.gym_id, start, next])).rows.map((r) => [String(r.user_id), r]));
+    const lastEver = Object.fromEntries((await q("select user_id, max(paid_on) as last from payments where gym_id=$1 and status='confirmed' and user_id is not null group by user_id", [u.gym_id])).rows.map((r) => [String(r.user_id), r.last]));
+    const inMonth = rows.filter((x) => new Date(x.created_at).toISOString().slice(0, 10) < next);
+    const students = inMonth.map((x) => { const s = sums[String(x.id)] || {}; return { id: String(x.id), name: x.name, email: x.email || "", phone: x.phone || "", offline: x.offline, plan: x.plan ? x.plan.name : null,
+      feeCents: x.fee, paidCents: Number(s.paid || 0), pendingCents: Number(s.pending || 0), lastPaid: lastEver[String(x.id)] || null, reference: x.pay_ref }; });
+    const methods = (await q(`select coalesce(nullif(method,''),'other') as m, sum(amount_cents) as c, count(*) as n from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3 group by 1 order by 2 desc`, [u.gym_id, start, next])).rows.map((r) => ({ method: r.m, cents: Number(r.c), n: Number(r.n) }));
+    const total = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as c, coalesce(sum(amount_cents) filter (where status='confirmed' and user_id is null),0) as unmatched,
+      coalesce(sum(amount_cents) filter (where status='pending'),0) as pending from payments where gym_id=$1 and paid_on >= $2 and paid_on < $3`, [u.gym_id, start, next])).rows[0];
+    // six months up to this one
+    const hist = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 - i, 1)), m = d.toISOString().slice(0, 7), nx = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+      const col = Number((await q("select coalesce(sum(amount_cents),0) as c from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3", [u.gym_id, m + "-01", nx])).rows[0].c);
+      hist.push({ month: m, collectedCents: col, expectedCents: rows.filter((x) => new Date(x.created_at).toISOString().slice(0, 10) < nx).reduce((a, x) => a + (x.fee || 0), 0) });
+    }
+    const g = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0];
+    res.json({ month, today, currency: u.currency || "ZAR", dueDay: Math.min(28, Math.max(1, intOr((g.pay || {}).dueDay, 1))), students, methods, history: hist,
+      collectedCents: Number(total.c), unmatchedCents: Number(total.unmatched), pendingCents: Number(total.pending) });
+  }));
+  // Fee reminders by email (WhatsApp reminders are sent from the coach's phone).
+  api.post("/coach/money/remind", wrap(async (req, res) => {
+    const u = needCoach(req), b = req.body || {};
+    if (!mail.mailOn()) fail(503, "Email isn't switched on yet. Use WhatsApp for reminders.");
+    const today = await todayIn(u), month = /^\d{4}-\d{2}$/.test(b.month || "") ? b.month : today.slice(0, 7);
+    const ids = (Array.isArray(b.userIds) ? b.userIds : []).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 300);
+    const rows = (await moneyRows(u, month)).filter((x) => ids.includes(Number(x.id)));
+    const start = month + "-01", next = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 1)).toISOString().slice(0, 10);
+    const pay = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0].pay || {};
+    const bank = [pay.holder && `Account holder: ${pay.holder}`, pay.bank && `Bank: ${pay.bank}`, pay.account && `Account number: ${pay.account}`, pay.branch && `Branch code: ${pay.branch}`].filter(Boolean);
+    const label = new Date(start + "T12:00:00Z").toLocaleDateString("en-ZA", { month: "long", year: "numeric", timeZone: "UTC" });
+    let sent = 0; const noEmail = [], paid = [];
+    for (const x of rows) {
+      const got = Number((await q("select coalesce(sum(amount_cents),0) as c from payments where user_id=$1 and gym_id=$2 and status='confirmed' and paid_on >= $3 and paid_on < $4", [x.id, u.gym_id, start, next])).rows[0].c);
+      const left = Math.max(0, (x.fee || 0) - got);
+      if (!left) { paid.push(x.name); continue; }
+      if (!x.email) { noEmail.push(x.name); continue; }
+      if (limited("remind:" + u.gym_id, 300, 24 * 3600e3)) break;
+      const amount = new Intl.NumberFormat("en-ZA", { style: "currency", currency: u.currency || "ZAR" }).format(left / 100);
+      mail.sendLater({ to: x.email, replyTo: u.email, ...mail.templates.feeReminder(first(x.name), u.gym_name, amount, label, x.pay_ref || (await payRef(x.id)), bank) }); sent++;
+    }
+    res.json({ sent, noEmail, paid });
   }));
 
   // ---------- inbound proof-of-payment email (from the Cloudflare email worker) ----------

@@ -140,7 +140,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(pageUrl && (await fetch(URL + pageUrl[1])).status === 200, "technique share links to its real public page: " + (pageUrl && pageUrl[1]));
     // --- fees: coach adds bank details, student pays by EFT and sends proof, coach confirms
     for (const p of [s1, co]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
-    await ev(co, () => coachGo("money")); await co.waitForTimeout(1200);
+    await ev(co, () => { COACH.moneyView = "setup"; coachGo("money"); }); await co.waitForTimeout(1200);
     ok(await ev(co, () => document.querySelector('details[data-g="m-bank"]').open && !!document.getElementById("bankform")), "Money: bank details form is open until they're filled in");
     await co.fill('#bankform [name="bank"]', "FNB"); await co.fill('#bankform [name="account"]', "62123456789"); await co.fill('#bankform [name="branch"]', "250655");
     await co.tap('#bankform [type=submit]'); await co.waitForTimeout(800);
@@ -154,7 +154,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
     await s1.fill("#mypop-amt", "650"); await s1.setInputFiles("#mypop", { name: "pop.png", mimeType: "image/png", buffer: png }); await s1.waitForTimeout(1500);
     ok(/Sent/.test(await toast(s1)) && await ev(s1, () => /Checking/.test(document.getElementById("sheet").innerText)), "student sends a screenshot as proof; it shows as Checking");
-    await ev(co, () => coachLoad()); await co.waitForTimeout(1000);
+    await ev(co, () => { COACH.moneyView = "payments"; return coachLoad(); }); await co.waitForTimeout(1000);
     ok(await ev(co, () => /To check \(1\)/i.test(document.getElementById("app").innerText) && /Ana Lima/.test(document.querySelector(".popcard").innerText) && /R\s?650/.test(document.querySelector(".popcard").innerText)), "coach sees it under To check, from Ana, R650");
     ok(await ev(co, () => !!document.querySelector('.popcard a[href*="/proof"]')), "coach can open the proof");
     await co.tap('.popcard [data-a="popok"]'); await co.waitForTimeout(1000);
@@ -177,6 +177,36 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(w.num === "27825551234" && /Day: /.test(w.text), "then the request goes straight to the coach's WhatsApp");
     await co.fill("#g-wa", "hello"); await co.tap("#gwaform [type=submit]"); await co.waitForTimeout(600);
     ok(/doesn't look like a phone number/.test(await toast(co)), "a non-number is refused");
+    // --- Money: this month / payments / setup
+    for (const p of [co, s1, s2]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
+    await ev(co, () => api("PATCH", "/coach/gym", { monthlyFeeCents: 50000 })); await ev(co, () => coachLoad()); await ev(co, () => { COACH.moneyView = "month"; coachGo("money"); }); await co.waitForTimeout(1500);
+    ok(await ev(co, () => document.querySelectorAll(".mchart .mcol").length === 6 && /Collected/i.test(document.querySelector(".stats").innerText) && /Outstanding/i.test(document.querySelector(".stats").innerText)), "Money › This month: totals and six months of history");
+    ok(await ev(co, () => { const t = document.getElementById("app").innerText; return /Ben Cole/.test(t) && /Cat Diaz/.test(t) && /(Due|Overdue)/i.test(t) && !/Ana Lima/.test(t); }), "the owing list shows who still owes (Ana has paid)");
+    await co.tap('[data-a="moneyfilter"][data-v="paid"]'); await co.waitForTimeout(200); ok(await ev(co, () => /Ana Lima/.test(document.getElementById("app").innerText)), "filter: paid");
+    await co.tap('[data-a="moneymonth"][data-v="-1"]'); await co.waitForTimeout(1200); ok(await ev(co, () => COACH.money.month < todayK().slice(0, 7)), "step back a month");
+    await co.tap('[data-a="moneymonth"][data-v="1"]'); await co.waitForTimeout(1200);
+    await co.tap('[data-a="moneyview"][data-v="setup"]'); await co.waitForTimeout(300); ok(await ev(co, () => !!document.querySelector('#bankform [name="dueDay"]') && !!document.getElementById("pop-addr")), "Setup: bank details with the due date, and the forwarding address");
+    await co.tap('[data-a="moneyview"][data-v="payments"]'); await co.waitForTimeout(300); ok(await ev(co, () => !!document.querySelector('label[for="pop-up"]') && !!document.querySelector('[data-a="paynew"]')), "Payments: upload proof and record a payment");
+    await ev(co, () => { COACH.moneyView = "month"; render(); });
+    // --- a student who isn't on the app
+    await ev(co, () => coachGo("students")); await co.waitForTimeout(500); await co.tap('[data-a="addstu"]'); await co.waitForTimeout(300);
+    await co.fill('#addstuform [name="name"]', "Nomsa Dube"); await co.fill('#addstuform [name="phone"]', "082 444 1111"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1800);
+    const inv = await ev(co, () => { const a = document.querySelector('#sheet a[data-wa="claim_invite"]'); return a && a.href; });
+    ok(await ev(co, () => /Not on the app/.test(document.getElementById("sheet").innerText)) && inv && /27824441111/.test(inv) && /claim%3D|claim=/.test(decodeURIComponent(inv)), "coach adds Nomsa by WhatsApp number; her sheet has a personal invite on WhatsApp");
+    await ev(co, () => hideSheet()); await co.waitForTimeout(200);
+    ok(await ev(co, () => /Nomsa Dube/.test(document.getElementById("roster-list").innerText) && /Not on app/.test(document.getElementById("roster-list").innerText)), "she's on the roster, tagged Not on app");
+    // --- notices: a cancelled class reaches every student
+    const cid = await ev(co, async () => { const d = new Date(Date.now() + 2 * 864e5); d.setHours(18, 0, 0, 0); return (await api("POST", "/classes", { title: "Cancel me", startsAt: d.toISOString(), durationMin: 60 })).class.id; });
+    await ev(s2, (id) => api("PUT", `/classes/${id}/rsvp`, { going: true }), cid);
+    await ev(co, (id) => api("DELETE", `/classes/${id}`), cid);
+    await ev(s3, () => { API.notices = undefined; go("book"); }); await s3.waitForTimeout(1200);
+    ok(await ev(s3, () => { const n = document.querySelector(".notices"); return n && /Cancelled: Cancel me/.test(n.innerText); }), "every student sees the cancellation under Gym updates (even if they hadn't booked)");
+    // --- thumbnails: Rate what you know and the flow map
+    await ev(s1, () => { S.ui.qr = { q: ["kimura_sc"], i: 0 }; qrSheet(); }); await s1.waitForTimeout(300);
+    ok(await ev(s1, () => !!document.querySelector('#sheet .ytbox img, #sheet .ytface img, #sheet img[src*="ytimg"]')), "Rate what you know shows the move's own video thumbnail");
+    await ev(s1, () => { hideSheet(); S.ui.flowSel = "cg_bot"; go("flow"); }); await s1.waitForTimeout(500);
+    ok(await ev(s1, () => document.querySelectorAll(".fsk .fmv .thumb img").length > 0), "flow map moves have their thumbnails back");
+    await ev(s1, () => go("book"));
     for (const p of [co, s1, s2, s3]) ok(await ev(p, () => document.documentElement.scrollWidth <= 390), "no sideways scroll");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));

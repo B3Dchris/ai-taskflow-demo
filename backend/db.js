@@ -151,6 +151,24 @@ create table if not exists competitors(
 );
 -- payments: how students pay (bank details), personal references, proof-of-payment files waiting for a coach
 alter table gyms add column if not exists wa_phone text not null default '';
+-- students a coach adds who aren't on the app yet: no email or password needed; they can claim the record later
+alter table users alter column email drop not null;
+alter table users alter column pass_hash drop not null;
+alter table users add column if not exists offline boolean not null default false;
+alter table users add column if not exists claim_token text;
+create unique index if not exists users_claim_token on users(claim_token) where claim_token is not null;
+alter table users add column if not exists notices_seen_at timestamptz;
+-- notices students see in the app: class cancelled or moved (gym-wide when user_id is null)
+create table if not exists notices(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint references users(id) on delete cascade,
+  kind text not null,
+  title text not null,
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists notices_gym on notices(gym_id, created_at desc);
 alter table gyms add column if not exists pay jsonb not null default '{}';
 alter table gyms add column if not exists pop_token text;
 alter table gyms add column if not exists pop_notice jsonb;
