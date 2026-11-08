@@ -78,6 +78,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   // --- review
   const due=await ev(()=>dueList().length);ok(due>0,'review queue has cards after rating');
   await p.locator('button[data-a="review"]').tap();
+  await p.tap('#sheetbar [data-a="reveal"]');ok(await ev(()=>{const b=[...document.querySelectorAll('#sheetbar [data-a="rate"]')].map(x=>x.innerText.replace(/\s+/g,' '));return b.length===4&&/^Forgot tomorrow$/.test(b[0])&&/^Easy in \d+ (days|weeks|months)$/.test(b[3])&&!/later|soon/.test(b.join(' '))}),'review buttons say when each move comes back');await ev(()=>{S.ui.review.shown=false;reviewSheet()});
   for(let i=0;i<due;i++){await p.tap('#sheetbar [data-a="reveal"]');ok(await ev(()=>document.querySelectorAll('#sheet ol.steps li').length>0),'review shows steps');await p.tap(`#sheetbar [data-a="rate"][data-v="${i%4}"]`)}
   ok((await sheetH1())==='Done','review finishes');await p.tap('#sheetbar .back');
   ok(await ev(()=>dueList().length===0||dueList().every(id=>P().srs[id].due<=today())),'review rescheduled cards');
