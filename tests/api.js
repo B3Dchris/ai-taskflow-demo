@@ -18,7 +18,7 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
@@ -130,7 +130,7 @@ function client(base) {
       ok(t && t.notes === "" && t.parentName === "" && t.feeCents === 0, "the new gym doesn't see the old gym's notes, fee or parent's name: " + JSON.stringify(t && [t.notes, t.parentName, t.feeCents]));
       ok(!(await pl.query("select pay_ref from users where id=$1", [tinaId])).rows[0].pay_ref, "and her old gym's payment reference goes");
       r = await cb("GET", `/coach/students/${tinaId}`); ok(r.j.logs.length === 0 && r.j.student.n30 === 0 && !Object.keys(r.j.student.stuck).length, "nor the training she logged before she joined");
-      await tina("PUT", "/logs/t2", { data: { date: today, mins: 60 } });
+      await tina("PUT", "/logs/t2", { data: { date: new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }), mins: 60 } }); // the gym's today (late at night UTC, Johannesburg is already a day on)
       r = await cb("GET", `/coach/students/${tinaId}`); ok(r.j.logs.length === 1 && r.j.logs[0].id === "t2", "it sees what she logs from now on");
       r = await tina("GET", "/logs"); ok(r.j.logs.length === 2, "and she still has her whole log");
       r = await tina("POST", "/me/leave", {}); ok(r.s === 200 && r.j.me && !r.j.me.gym, "a student leaves their gym and keeps their account");
@@ -474,20 +474,82 @@ function client(base) {
       ok(tp && tp.status === "test" && r.j.pay.paidCents === paid0, "a test payment is stored as TEST and doesn't count as paid: " + JSON.stringify(tp));
       ok((await coach("GET", "/coach/money")).j.collectedCents === col0, "nor as collected");
       await coach("DELETE", "/coach/payfast"); }
-    // --- coaches leaving: an inactive or removed coach loses access, and every coach hears when payment details change
+    // --- head coach: only they see and change money, and payment emails go to them; coaches leaving lose access
     { const co2 = client(base), x2 = { "x-forwarded-for": "198.51.100.20" }, coachId = (await coach("GET", "/me")).j.me.id;
       r = await co2("POST", "/auth/register", { code: cc, name: "Bad Coach", email: "badcoach@example.com", password: "badcoach1" }, x2); const co2Id = r.j.me.id;
       ok(r.s === 201 && r.j.me.role === "coach", "a second coach joins with the coach code");
+      r = await coach("GET", "/me"); ok(r.j.me.gym.head === true && r.j.me.gym.headCoach.id === coachId && r.j.me.gym.monthlyFeeCents === 90000, "the coach who started the gym is its head coach");
+      r = await co2("GET", "/me"); ok(r.j.me.gym.head === false && r.j.me.gym.headCoach.name === "Coach JP" && r.j.me.gym.monthlyFeeCents === undefined && r.j.me.gym.coachCode, "another coach isn't, and doesn't get the gym's fee");
+      const anyPay = (await coach("GET", "/coach/payments")).j.payments[0].id;
+      const money = [["GET", "/coach/payments"], ["POST", "/coach/payments", { userId: sam.id, amountCents: 100, paidOn: today }], ["PATCH", `/coach/payments/${anyPay}`, { note: "x" }], ["DELETE", `/coach/payments/${anyPay}`],
+        ["POST", "/coach/payments/proof", { name: "p.png", data: png }], ["GET", "/coach/money"], ["POST", "/coach/money/remind", { userIds: [sam.id] }], ["GET", "/coach/gym/pay"],
+        ["PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890" }], ["PATCH", "/coach/gym/pay-soon", { on: true }], ["POST", "/coach/gym/pay/new-address"],
+        ["GET", "/coach/billing"], ["POST", "/coach/billing/checkout", {}], ["GET", "/coach/payfast"], ["PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }], ["DELETE", "/coach/payfast"],
+        ["GET", "/coach/plans"], ["POST", "/coach/plans", { name: "Sneaky", priceCents: 100 }], ["PATCH", "/coach/plans/1", { name: "Sneaky", priceCents: 100 }], ["POST", "/coach/plans/from-rates"],
+        ["GET", "/coach/packs"], ["POST", "/coach/packs", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/packs/1", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/gym/access-fee", { accessFeeCents: 100 }],
+        ["PATCH", "/coach/gym", { monthlyFeeCents: 1 }], ["PATCH", `/coach/students/${sam.id}`, { feeCents: 100 }], ["PATCH", `/coach/students/${sam.id}`, { planId: null }], ["PATCH", `/coach/students/${sam.id}`, { planStatus: "paused" }],
+        ["POST", "/coach/students", { name: "Fee Kid", phone: "082 111 9999", feeCents: 5000 }], ["POST", "/coach/head", { userId: co2Id }], ["DELETE", "/coach/gym", { password: "badcoach1" }]];
+      const got = []; for (const [m, url, body] of money) got.push((await co2(m, url, body)).s);
+      ok(got.every((s) => s === 403), "every money route is the head coach's alone (403 for other coaches): " + money.map((x, i) => x[1] + "=" + got[i]).filter((x) => !/=403$/.test(x)).join(" "));
+      r = await coach("GET", "/me"); ok(r.j.me.role === "coach" && r.j.me.gym.head === true && (await coach("GET", "/coach/payments")).j.payments.length > 0, "so is deleting the gym: it's still there, with its payments");
+      r = await co2("GET", `/payments/${stuPop.id}/proof`); ok(r.s === 404, "nor can they open a proof of payment");
+      r = await co2("GET", "/coach/roster"); const ro2 = r.j.people.find((p) => p.id === sam.id);
+      ok(r.s === 200 && !r.j.plans && !("gymFeeCents" in r.j) && ro2 && ro2.belt && "privatesLeft" in ro2 && r.j.people.every((p) => !["feeCents", "planName", "planStatus", "paidThisMonthCents", "pendingThisMonthCents", "lastPaid", "planId"].some((k) => k in p)), "their roster has no fees, plans or payments");
+      r = await co2("GET", `/coach/students/${sam.id}`); ok(r.s === 200 && !r.j.payments && !("feeCents" in r.j.student) && !("planId" in r.j.student) && !("feeOverride" in r.j.student) && r.j.privates && r.j.student.phone, "nor does a student's page (but it has their private lessons left)");
+      r = await co2("GET", "/coach/insights"); ok(r.s === 200 && !r.j.revenue && !r.j.plans && r.j.kpis && r.j.students.every((s) => !("planName" in s)), "nor Insights");
+      r = await co2("PATCH", `/coach/students/${sam.id}`, { notes: "Works hard", belt: "white" }); ok(r.s === 200, "they still change belts and notes");
+      r = await co2("POST", "/coach/students", { name: "Coach Two Kid", phone: "082 111 9998" }); ok(r.s === 201, "add students");
+      r = await co2("POST", "/classes", { title: "Co2 class", startsAt: when }); ok(r.s === 201, "and plan classes"); await co2("DELETE", "/classes/" + r.j.class.id);
+      r = await co2("PATCH", "/coach/gym", { showAttendees: true }); ok(r.s === 200, "and change the gym's other settings");
+      r = await coach("GET", "/coach/roster"); ok(r.j.plans && r.j.people.find((p) => p.id === sam.id).feeCents === 90000, "the head coach still sees everything");
+      // payment emails go to the head coach only; who the coaches are goes to all of them
       let m0 = sink.mails.length;
-      r = await co2("PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890", branch: "470010", type: "Savings" }); await wait();
-      const told = sink.mails.slice(m0).filter((m) => m.subject === "Your gym's bank details changed");
-      ok(r.s === 200 && told.some((m) => m.to[0] === "coach@example.com") && told.some((m) => m.to[0] === "badcoach@example.com") && told.every((m) => /Bad Coach changed the bank details/.test(m.text)), "when the bank details change, every coach gets an email saying who did it");
+      r = await coach("PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890", branch: "470010", type: "Savings" }); await wait();
+      let told = sink.mails.slice(m0).filter((m) => m.subject === "Your gym's bank details changed");
+      ok(r.s === 200 && told.length === 1 && told[0].to[0] === "coach@example.com" && /Coach JP changed the bank details/.test(told[0].text), "when the bank details change, only the head coach gets the email");
       m0 = sink.mails.length; r = await coach("PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890", branch: "470010", type: "Savings", note: "New note" }); await wait();
       ok(r.s === 200 && !sink.mails.slice(m0).some((m) => /bank details changed/.test(m.subject)), "a change that leaves the bank account alone sends nothing");
-      m0 = sink.mails.length; r = await co2("PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }); await wait();
-      ok(r.s === 200 && sink.mails.slice(m0).some((m) => m.to[0] === "coach@example.com" && m.subject === "Your gym's PayFast account changed" && /Merchant ID 12345678/.test(m.text)), "connecting a PayFast account emails every coach too");
+      m0 = sink.mails.length; r = await coach("PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }); await wait();
+      told = sink.mails.slice(m0).filter((m) => m.subject === "Your gym's PayFast account changed");
+      ok(r.s === 200 && told.length === 1 && told[0].to[0] === "coach@example.com" && /Merchant ID 12345678/.test(told[0].text), "connecting a PayFast account emails the head coach only");
+      m0 = sink.mails.length; r = await stu2("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 20000 }); await wait();
+      told = sink.mails.slice(m0).filter((m) => m.subject === "A proof of payment to check");
+      ok(r.s === 201 && told.length === 1 && told[0].to[0] === "coach@example.com" && /Sam sent a proof of payment for R\s?200/.test(told[0].text), "a proof sent in the app emails the head coach only");
+      await coach("PATCH", `/coach/payments/${r.j.payment.id}`, { status: "rejected" });
       await coach("DELETE", "/coach/payfast");
       await coach("PATCH", "/coach/gym/pay", { holder: "Test Gym", bank: "FNB", account: "62-123 456 789", branch: "250655", type: "Cheque", note: "Due by the 3rd" });
+      // the head coach can't be removed or switched off: they hand over first
+      r = await co2("DELETE", `/coach/students/${coachId}`); ok(r.s === 400 && /head coach/.test(r.j.error), "the head coach can't be removed: " + (r.j && r.j.error));
+      r = await co2("PATCH", `/coach/students/${coachId}`, { active: false }); ok(r.s === 400 && /hand that role/.test(r.j.error), "or marked inactive");
+      r = await coach("POST", "/coach/head", { userId: sam.id }); ok(r.s === 400, "the role only goes to a coach");
+      m0 = sink.mails.length; r = await coach("POST", "/coach/head", { userId: co2Id }); await wait();
+      ok(r.s === 200 && r.j.me.gym.head === false && r.j.me.gym.headCoach.id === co2Id && !("monthlyFeeCents" in r.j.me.gym), "the head coach hands the role to another coach");
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "badcoach@example.com" && m.subject === "You're now the head coach"), "who's told by email");
+      r = await co2("GET", "/coach/money"); const r2 = await coach("GET", "/coach/money"); ok(r.s === 200 && r2.s === 403, "now the money is theirs, and the old head coach is a coach like the others");
+      r = await co2("DELETE", "/me", { password: "badcoach1" }); ok(r.s === 400 && /head coach/.test(r.j.error), "a head coach can't delete their account while other coaches are there");
+      r = await co2("POST", "/me/join", { code: (await other("GET", "/me")).j.me.gym.studentCode }); ok(r.s === 400 && /hand that role/i.test(r.j.error), "or move to another gym");
+      r = await co2("POST", "/coach/head", { userId: coachId }); ok(r.s === 200 && (await coach("GET", "/me")).j.me.gym.head === true, "and it can be handed back");
+      { const pl = new Pool({ connectionString: DB }), gid = (await coach("GET", "/me")).j.me.gym.id;
+        await pl.query("update gyms set head_coach_id=null where id=$1", [gid]);
+        r = await co2("GET", "/me"); ok(r.j.me.gym.head === false && r.j.me.gym.headCoach && r.j.me.gym.headCoach.id === coachId, "a gym with no head coach gets one by itself: the longest-standing active coach");
+        await pl.query("update gyms set head_coach_id=$2 where id=$1", [gid, co2Id]); await pl.query("update users set active=false where id=$1", [co2Id]);
+        await require("../backend/db").migrate(pl);
+        ok(String((await pl.query("select head_coach_id from gyms where id=$1", [gid])).rows[0].head_coach_id) === coachId, "an inactive head coach is replaced the same way (also when the server starts)");
+        await pl.query("update users set active=true where id=$1", [co2Id]); await pl.end(); }
+      // A gym from before gym_joined_at was kept: a coach whose account is older than the gym joined it later with the code.
+      // The migration makes the coach who started the gym its head coach, not them.
+      { const pl = new Pool({ connectionString: DB }), early = client(base), founder = client(base), xe = { "x-forwarded-for": "198.51.100.40" };
+        const eid = (await early("POST", "/auth/register", { name: "Early Account", email: "early@example.com", password: "earlypass1" }, xe)).j.me.id;
+        await pl.query("update users set created_at=now() - interval '2 days' where id=$1", [eid]);
+        const fg = (await founder("POST", "/auth/start-gym", { gym: "Founder Gym", name: "Founder", email: "founder@example.com", password: "founderpass1" }, xe)).j.me;
+        await pl.query("update gyms set created_at=now() - interval '1 day' where id=$1", [fg.gym.id]); await pl.query("update users set created_at=now() - interval '1 day' + interval '1 second' where id=$1", [fg.id]);
+        r = await early("POST", "/me/join", { code: fg.gym.coachCode }); ok(r.s === 200 && r.j.me.role === "coach", "an older account joins the gym as a coach");
+        await pl.query("update users set gym_joined_at=null where id=$1", [eid]); await pl.query("update gyms set head_coach_id=null where id=$1", [fg.gym.id]);
+        await require("../backend/db").migrate(pl);
+        ok(String((await pl.query("select head_coach_id from gyms where id=$1", [fg.gym.id])).rows[0].head_coach_id) === fg.id, "the migration makes the coach who started the gym its head coach, even when another coach's account is older");
+        await pl.query("update users set role='coach', active=false where id=$1", [fg.id]); await pl.query("update gyms set head_coach_id=null where id=$1", [fg.gym.id]); await require("../backend/db").migrate(pl);
+        ok(String((await pl.query("select head_coach_id from gyms where id=$1", [fg.gym.id])).rows[0].head_coach_id) === eid, "with the founder gone, that coach still takes over");
+        await pl.end(); }
       r = await coach("PATCH", `/coach/students/${co2Id}`, { active: false }); ok(r.s === 200, "a coach marks the other coach inactive");
       r = await co2("GET", "/me"); ok(r.j.me === null, "which signs them out");
       r = await co2("POST", "/auth/login", { email: "badcoach@example.com", password: "badcoach1" }, x2);
@@ -506,6 +568,110 @@ function client(base) {
       r = await co2("POST", "/me/join", { code: cc0 }); ok(r.s === 404, "the old coach code no longer works");
       r = await coach("GET", "/coach/roster"); ok(!r.j.people.some((p) => p.id === co2Id), "they're off the gym's list");
       r = await coach("DELETE", `/coach/students/${coachId}`); ok(r.s === 400, "a coach can't remove themselves"); }
+    // --- private lessons: packs of credits, privates with no credit owed at their price, and an access fee for private-only clients
+    { const hc = client(base), pc = client(base), mem = client(base), xh = { "x-forwarded-for": "198.51.100.30" };
+      const pg = (await hc("POST", "/auth/start-gym", { gym: "Private Gym", name: "Head Coach", email: "head@private.test", password: "headpass11" }, xh)).j.me.gym;
+      const pid = (await pc("POST", "/auth/register", { code: pg.studentCode, name: "Priya Private", email: "priya@private.test", password: "priyapass1" }, xh)).j.me.id;
+      const mid = (await mem("POST", "/auth/register", { code: pg.studentCode, name: "Mo Member", email: "mo@private.test", password: "mopass111" }, xh)).j.me.id;
+      const ym = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }).slice(0, 7), thisMonth = ym(Date.now()), H = 3600e3;
+      r = await hc("POST", "/coach/packs", { name: "Ten", lessons: 0, priceCents: 450000 }); ok(r.s === 400, "a pack needs some lessons");
+      r = await hc("POST", "/coach/packs", { name: "10 private lessons", lessons: 10, priceCents: 450000 }); const k10 = r.j.pack;
+      ok(r.s === 201 && k10.lessons === 10 && k10.priceCents === 450000 && k10.expiryMonths === null, "the head coach adds a 10-lesson pack");
+      r = await hc("POST", "/coach/packs", { name: "5 lessons", lessons: 5, priceCents: 250000, expiryMonths: 3 }); const k5 = r.j.pack; ok(r.s === 201 && k5.expiryMonths === 3, "and a 5-lesson pack that expires after 3 months");
+      r = await hc("PATCH", `/coach/packs/${k10.id}`, { name: "10 private lessons", lessons: 10, priceCents: 450000, active: true }); ok(r.s === 200, "packs can be edited");
+      r = await pc("GET", "/me/pay"); ok(r.j.pay.packs.length === 2 && r.j.pay.packs[0].name === "5 lessons" && r.j.pay.privatesLeft.left === 0 && r.j.pay.dueCents === 0, "students see the packs on their Pay sheet, with no privates left yet");
+      // a private two days ago (attended) and one still to come (booked), R450 each, with no credits: both owed
+      const mk = async (at, title) => (await hc("POST", "/classes", { kind: "private", title, startsAt: new Date(at).toISOString(), durationMin: 60, priceCents: 45000 })).j.class.id;
+      const before = Date.now() - 50 * H, after = Date.now() + 26 * H, p1 = await mk(before, "Private before"), f1 = await mk(after, "Private after");
+      await hc("PUT", `/coach/classes/${p1}/attendance`, { userIds: [pid] }); r = await pc("PUT", `/classes/${f1}/rsvp`, { going: true }); ok(r.s === 200 && r.j.going, "with no credits, booking a private still works");
+      // privates from before the gym's privates_from (for gyms that were already there, when this came in) were settled outside the app
+      r = await pc("GET", "/me/pay"); let P = r.j.pay;
+      ok(!P.privates.some((x) => x.classId === p1) && P.privatesLeft.used === 1 && (ym(after) !== thisMonth || P.privates.some((x) => x.classId === f1)), "a private from before privates were charged isn't owed (it still counts as used)");
+      r = await hc("GET", "/coach/money"); ok(!r.j.students.find((x) => x.id === pid).privates.some((x) => x.classId === p1), "not on the Money page either");
+      { const pl = new Pool({ connectionString: DB }); await pl.query("update gyms set privates_from=now() - interval '60 days' where id=$1", [pg.id]); await pl.end(); }
+      const owedNow = [[p1, before], [f1, after]].filter(([, t]) => ym(t) === thisMonth).map(([id]) => id);
+      r = await pc("GET", "/me/pay"); P = r.j.pay;
+      ok(P.privatesCents === 45000 * owedNow.length && P.privates.map((x) => x.classId).sort().join() === owedNow.sort().join() && P.dueCents === P.privatesCents && P.privatesLeft.booked === 1, "each private with no credit is owed at its price, in its month: " + JSON.stringify([P.privatesCents, P.privates.length]));
+      // access fee for private-only clients
+      r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: -1 }); ok(r.s === 400, "the access fee can't be negative");
+      r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: 15000 }); ok(r.s === 200 && (await hc("GET", "/coach/gym/pay")).j.accessFeeCents === 15000, "the head coach sets an access fee for private-only clients");
+      r = await pc("GET", "/me/pay"); P = r.j.pay; ok(P.accessCents === 15000 && P.dueCents === 15000 + P.privatesCents && P.membershipCents === 0, "a client with no plan who books a private pays the access fee that month");
+      // the access fee never replaces a membership fee: with a standard gym fee, a no-plan student who books a private pays the gym fee, not less
+      await hc("PATCH", "/coach/gym", { monthlyFeeCents: 90000 });
+      r = await pc("GET", "/me/pay"); P = r.j.pay; ok(P.membershipCents === 90000 && P.accessCents === 0 && P.dueCents === 90000 + P.privatesCents, "with a gym fee, a no-plan student who books a private still owes the gym fee: " + JSON.stringify([P.membershipCents, P.accessCents, P.dueCents]));
+      r = await hc("GET", "/coach/money"); let mp0 = r.j.students.find((x) => x.id === pid); ok(mp0.accessCents === 0 && mp0.feeCents === 90000 + mp0.privatesCents, "and so the Money page says");
+      r = await hc("GET", "/coach/roster"); ok(r.j.people.find((x) => x.id === pid).feeCents === mp0.feeCents, "and the roster");
+      await hc("PATCH", `/coach/students/${pid}`, { feeCents: 0 }); r = await pc("GET", "/me/pay"); P = r.j.pay;
+      ok(P.membershipCents === 0 && P.accessCents === 15000 && P.dueCents === 15000 + P.privatesCents, "a private-only client on a fee of 0 pays the access fee instead");
+      await hc("PATCH", `/coach/students/${pid}`, { feeCents: null }); await hc("PATCH", "/coach/gym", { monthlyFeeCents: 0 });
+      const plan = (await hc("POST", "/coach/plans", { name: "Unlimited", priceCents: 80000, period: "month" })).j.plan;
+      await hc("PATCH", `/coach/students/${mid}`, { planId: plan.id }); const mp = await mk(Date.now() + 30 * H, "Member private"); await mem("PUT", `/classes/${mp}/rsvp`, { going: true });
+      r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === 0 && r.j.pay.membershipCents === 80000, "a member with an active plan doesn't pay it");
+      await hc("PATCH", `/coach/students/${mid}`, { planStatus: "paused" }); r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === (ym(Date.now() + 30 * H) === thisMonth ? 15000 : 0) && r.j.pay.membershipCents === 0, "a paused member taking privates does");
+      await hc("PATCH", `/coach/students/${mid}`, { planStatus: "active" }); await mem("PUT", `/classes/${mp}/rsvp`, { going: false });
+      r = await hc("GET", "/coach/money"); const mPriya = r.j.students.find((x) => x.id === pid);
+      ok(r.j.accessFeeCents === 15000 && mPriya.accessCents === 15000 && mPriya.feeCents === 15000 + mPriya.privatesCents && mPriya.privates.length === owedNow.length, "the Money page adds the access fee and owed privates to what they owe");
+      r = await hc("GET", "/coach/roster"); ok(r.j.accessFeeCents === 15000 && r.j.people.find((x) => x.id === pid).feeCents === mPriya.feeCents, "and so does the roster");
+      let m0 = sink.mails.length; r = await hc("POST", "/coach/money/remind", { userIds: [pid] }); await wait();
+      const rm = sink.mails.slice(m0).find((m) => m.to[0] === "priya@private.test");
+      ok(r.j.sent === 1 && rm && /Access fee: R\s?150/.test(rm.text) && (!owedNow.length || /Private lesson, .*R\s?450/.test(rm.text)), "the reminder lists the access fee (and the privates) by name");
+      // buying a pack: by proof (once confirmed), by hand, by card
+      m0 = sink.mails.length; r = await pc("POST", "/me/pay/proof", { name: "pop.png", data: png, packId: k5.id }); const pop5 = r.j.payment; await wait();
+      ok(r.s === 201 && pop5.packId === k5.id && pop5.packLessons === 5 && pop5.amountCents === 250000 && pop5.status === "pending", "a student sends proof for a pack (its price filled in)");
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "head@private.test" && m.subject === "A proof of payment to check"), "the head coach is told");
+      r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 0 && r.j.pay.pendingCents === 0, "no lessons until the coach confirms (and it isn't a fee payment being checked)");
+      r = await hc("PATCH", `/coach/payments/${pop5.id}`, { status: "confirmed" }); ok(r.s === 200 && r.j.payment.packName === "5 lessons", "the head coach confirms it");
+      r = await pc("GET", "/me/pay"); P = r.j.pay;
+      ok(P.privatesLeft.left === 4 && P.privatesLeft.booked === 1 && /^\d{4}-\d{2}-\d{2}$/.test(P.privatesLeft.expiresOn) && P.paidCents === 0, "5 lessons, one held for the private still to come: 4 left (and the pack isn't counted as fees paid): " + JSON.stringify(P.privatesLeft));
+      ok(!P.privates.some((x) => x.classId === f1) && (ym(before) !== thisMonth || P.privates.some((x) => x.classId === p1)), "the coming private is covered; the one before the pack is still owed at its price");
+      r = await hc("GET", `/coach/students/${pid}`); const L = r.j.privates.ledger;
+      ok(r.j.privates.left === 4 && L.some((e) => e.kind === "pack" && e.lessons === 5) && L.some((e) => e.kind === "booked" && e.lessons === -1 && e.classId === f1), "the coach sees the balance and the ledger on the student page");
+      r = await hc("GET", `/coach/classes/${f1}`); ok(r.j.attendees[0].privatesLeft === 4, "and on the private lesson's bookings");
+      r = await hc("GET", "/coach/roster"); ok(r.j.people.find((x) => x.id === pid).privatesLeft === 4, "and on the roster");
+      await hc("PUT", `/coach/classes/${f1}/attendance`, { userIds: [pid] }); r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 4 && r.j.pay.privatesLeft.booked === 0 && r.j.pay.privatesLeft.used === 2, "checked in, the credit is used");
+      await hc("PUT", `/coach/classes/${f1}/attendance`, { userIds: [pid], attended: false }); await pc("PUT", `/classes/${f1}/rsvp`, { going: false });
+      r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 5 && !r.j.pay.privates.some((x) => x.classId === f1), "cancelled, the credit comes back");
+      r = await hc("POST", "/coach/payments", { userId: pid, amountCents: 450000, paidOn: today, method: "cash", packId: k10.id }); const man = r.j.payment;
+      ok(r.s === 201 && man.packLessons === 10 && man.months === 1, "the head coach records a pack paid by hand");
+      r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 15 && r.j.pay.paidCents === 0, "15 left");
+      await hc("PATCH", `/coach/payments/${man.id}`, { packId: null }); r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 5 && r.j.pay.paidCents > 0, "turned into an ordinary payment, its lessons go (and it counts toward fees)");
+      await hc("DELETE", `/coach/payments/${man.id}`);
+      const old = new Date(Date.now() - 150 * 864e5).toISOString().slice(0, 10);
+      r = await hc("POST", "/coach/payments", { userId: pid, amountCents: 250000, paidOn: old, packId: k5.id });
+      r = await hc("GET", `/coach/students/${pid}`); ok(r.j.privates.left === 5 && r.j.privates.ledger.some((e) => e.kind === "expired" && e.lessons === -5), "unused lessons from a pack past its expiry are gone");
+      // expiry lands on the same day of the month, or the month's last day when it's shorter
+      { const k1 = (await hc("POST", "/coach/packs", { name: "1 lesson, 1 month", lessons: 1, priceCents: 50000, expiryMonths: 1 })).j.pack;
+        const ids = [];
+        for (const [on, k] of [["2026-01-31", k1], ["2025-11-30", k5], ["2026-03-15", k1]]) ids.push((await hc("POST", "/coach/payments", { userId: pid, amountCents: k.priceCents, paidOn: on, packId: k.id })).j.payment.id);
+        r = await hc("GET", `/coach/students/${pid}`); const exp = ids.map((id) => (r.j.privates.ledger.find((e) => e.kind === "pack" && e.paymentId === id) || {}).expiresOn);
+        ok(exp.join() === "2026-02-28,2026-02-28,2026-04-15", "pack expiry doesn't run into the next month: " + exp.join());
+        for (const id of ids) await hc("DELETE", `/coach/payments/${id}`); await hc("PATCH", `/coach/packs/${k1.id}`, { name: k1.name, lessons: 1, priceCents: 50000, expiryMonths: 1, active: false }); }
+      // by card through PayFast
+      await hc("PUT", "/coach/payfast", { merchantId: "10000106", merchantKey: "abcdefghijk12", passphrase: "pack secret" });
+      r = await pc("POST", "/me/pay/payfast", { packId: k10.id, amountCents: 100 }); const pf = r.j.fields;
+      ok(r.s === 200 && pf.amount === "4500.00" && pf.custom_int3 === k10.id && /10 private lessons/.test(pf.item_name), "paying for a pack by card charges the pack's price");
+      const sig = (fields, pass) => { const str = Object.entries(fields).map(([k, v]) => `${k}=${encodeURIComponent(String(v).trim()).replace(/%20/g, "+")}`).join("&"); return str + "&signature=" + require("crypto").createHash("md5").update(str + "&passphrase=" + encodeURIComponent(pass).replace(/%20/g, "+")).digest("hex"); };
+      m0 = sink.mails.length;
+      await fetch(base + "/payfast/notify", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: sig({ m_payment_id: "pay-k", pf_payment_id: "3000001", payment_status: "COMPLETE", item_name: "Pack", amount_gross: "4500.00", custom_str1: "pay", custom_int1: pid, custom_int2: pg.id, custom_int3: k10.id, merchant_id: "10000106" }, "pack secret") });
+      await wait(); await wait();
+      r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === 15 && r.j.pay.payments.some((x) => x.method === "payfast" && x.packId === k10.id), "a card payment for a pack adds its lessons by itself");
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "head@private.test" && m.subject === "A card payment came in" && /10 private lessons/.test(m.text)), "and the head coach gets a card payment email");
+      // a checkout the student changed to pay less than the pack's price gives no lessons
+      m0 = sink.mails.length;
+      await fetch(base + "/payfast/notify", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: sig({ m_payment_id: "pay-k2", pf_payment_id: "3000002", payment_status: "COMPLETE", item_name: "Pack", amount_gross: "5.00", custom_str1: "pay", custom_int1: pid, custom_int2: pg.id, custom_int3: k10.id, merchant_id: "10000106" }, "pack secret") });
+      await wait(); await wait();
+      r = await pc("GET", "/me/pay"); const cheap = r.j.pay.payments.find((x) => x.reference === "PayFast 3000002");
+      ok(r.j.pay.privatesLeft.left === 15 && cheap && cheap.amountCents === 500 && !cheap.packId && !cheap.packLessons && /no lessons were added/.test(cheap.note), "a card payment for a pack that's less than its price adds no lessons (it's an ordinary payment): " + JSON.stringify([r.j.pay.privatesLeft, cheap]));
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "head@private.test" && /less than 10 private lessons costs/.test(m.text)), "and the head coach is told why");
+      // once a private has started with them booked, its credit is used: cancelling then is refused
+      { const sp = await mk(Date.now() + 2 * H, "Started private"), pl = new Pool({ connectionString: DB });
+        await pc("PUT", `/classes/${sp}/rsvp`, { going: true }); r = await pc("GET", "/me/pay"); const held = r.j.pay.privatesLeft;
+        await pl.query("update classes set starts_at=now() - interval '10 minutes' where id=$1", [sp]); await pl.end();
+        r = await pc("PUT", `/classes/${sp}/rsvp`, { going: false }); ok(r.s === 400 && /already started/.test(r.j.error), "a private that has started can't be cancelled: " + (r.j && r.j.error));
+        r = await pc("GET", "/me/pay"); ok(r.j.pay.privatesLeft.left === held.left && r.j.pay.privatesLeft.used === held.used + 1 && r.j.pay.privatesLeft.booked === held.booked - 1, "so its lesson stays used: " + JSON.stringify([held, r.j.pay.privatesLeft]));
+        r = await pc("PUT", `/classes/${sp}/rsvp`, { going: true }); ok(r.s === 200, "(booking it again is harmless)"); }
+      r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: 0 }); r = await pc("GET", "/me/pay"); ok(r.j.pay.accessCents === 0, "an access fee of 0 switches it off");
+      await hc("DELETE", "/coach/payfast"); }
     // --- a live server (JitsFlow's own PayFast account set): no test merchant, and limits per address that can't be faked
     { const port2 = port + 100, base2 = `http://127.0.0.1:${port2}/api`, pfm = require("../backend/payfast");
       const srv2 = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...env, PORT: String(port2), PAYFAST_MERCHANT_ID: "12345678", PAYFAST_MERCHANT_KEY: "abcdefghijk12", PAYFAST_PASSPHRASE: "live pass" }, stdio: ["ignore", "ignore", "inherit"] });

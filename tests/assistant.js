@@ -22,7 +22,7 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
   let j = null; try { j = await r.json(); } catch (e) {} return { s: r.status, j }; }; }
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists pop_files, notices, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists packs, pop_files, notices, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const ai = await fakeClaude(), site = await startGymSite();
   const port = 9600 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, ANTHROPIC_API_KEY: "test-key", ANTHROPIC_BASE_URL: ai.url, JF_IMPORT_ALLOW_LOOPBACK: "1", JF_ASSISTANT: "1", RESEND_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
@@ -40,6 +40,13 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
     r = await say("update my bank details"); ok(r.s === 200 && /account number/i.test(r.j.reply), "a request with details missing gets a follow-up question");
     const req0 = seen[seen.length - 1]; ok(req0.model === "claude-haiku-5-5" && req0.thinking && req0.thinking.type === "disabled" && req0.tools.length === 9 && /Ask Gym/.test(req0.system), "uses the cheap model, no thinking, with the gym's tools");
     r = await stu("POST", "/coach/assistant", { messages: [{ role: "user", text: "hi" }] }); ok(r.s === 403, "students can't use the coach assistant");
+    { // another coach (not the head coach) gets no money tools, and money changes are refused
+      const co2 = client(base); await co2("POST", "/auth/register", { code: (await co("GET", "/me")).j.me.gym.coachCode, name: "Coach Two", email: "two@ask.test", password: "coachpass2" });
+      const say2 = (text) => co2("POST", "/coach/assistant", { messages: [{ role: "user", text }] });
+      r = await say2("hello"); const rq = seen[seen.length - 1];
+      ok(r.s === 200 && rq.tools.length === 6 && !rq.tools.some((t) => ["update_bank_details", "record_payment", "add_plan"].includes(t.name)) && /head coach/.test(rq.system), "another coach's assistant has no money tools");
+      r = await say2("TOOL " + JSON.stringify({ name: "update_gym", input: { monthly_fee: 1 } })); ok(/^ERROR .*head coach/.test(r.j.reply), "and can't change fees: " + r.j.reply);
+      r = await say2("TOOL " + JSON.stringify({ name: "get_gym", input: {} })); ok(/^RESULT/.test(r.j.reply) && !/bank_details|monthly_fee/.test(r.j.reply), "or see bank details"); }
     // --- each tool
     r = await tool("update_bank_details", { bank: "FNB", account_number: "62 123 456 789", branch_code: "250655", account_holder: "Ask Gym", due_day: 3 });
     ok(r.s === 200 && r.j.actions.some((a) => a.summary === "Bank details updated") && r.j.refresh.includes("pay"), "bank details: changed, and the app is told to refresh");

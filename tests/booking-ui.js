@@ -7,7 +7,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink(), site = await startGymSite();
   const port = 9400 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
@@ -200,6 +200,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(s1, async () => { API.me = (await api("GET", "/me")).me; render(); }); await s1.waitForTimeout(600);
     w = waText(await ev(s1, () => document.querySelector('a[data-wa="private_ask"]').href));
     ok(w.num === "27825551234" && /Day: /.test(w.text), "then the request goes straight to the coach's WhatsApp");
+    ok(await ev(s1, () => { const at = (m) => new Date(Date.now() + m * 6e4).toISOString(), h = (c) => bookActions({ id: "9", kind: "private", durationMin: 60, myGoing: true, ...c });
+      return !/data-a="rsvp"/.test(h({ startsAt: at(-10) })) && /data-a="rsvp"/.test(h({ startsAt: at(120) })) && /data-a="rsvp"/.test(bookActions({ id: "8", kind: "class", durationMin: 60, myGoing: true, startsAt: at(-10) })); }),
+      "a booked private has a Cancel button until it starts, then not (a class still does)");
     await co.fill("#g-wa", "hello"); await co.tap("#gwaform [type=submit]"); await co.waitForTimeout(600);
     ok(/doesn't look like a phone number/.test(await toast(co)), "a non-number is refused");
     // --- Money: this month / payments / setup
@@ -326,6 +329,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // --- with two coaches, the class forms offer a list of coaches
     const cc = await ev(co, () => API.me.gym.coachCode); const c2 = await phone("coach2");
     await signup(c2, "/app/?join=" + cc, { "#a-name": "Coach Raf", "#a-email": "raf@race.test", "#a-pass": "rafpass11" });
+    await c2.waitForTimeout(600);
+    ok(await ev(c2, () => isCoach() && !isHead() && API.me.gym.headCoach.name === "Coach Kim" && document.querySelector('nav.tabs [data-v="coach-money"]').hidden && !document.querySelector('nav.tabs [data-v="coach-classes"]').hidden), "the second coach isn't the head coach: classes yes, Money tab no");
     await ev(co, async () => { await coachLoad("roster"); coachGo("classes"); }); await co.waitForTimeout(500);
     await co.tap('[data-a="classnew"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => { const s = document.getElementById("c-coach"); return s && s.tagName === "SELECT" && s.value === "Coach Kim" && [...s.options].map((o) => o.text).join("|") === "Coach Kim|Coach Raf|Someone else…"; }), "a gym with two coaches picks the coach from a list (you first)");

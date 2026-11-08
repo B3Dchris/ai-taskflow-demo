@@ -23,7 +23,7 @@ const PEOPLE = [ // name, belt, stripes, plan, how many classes a week they usua
 ];
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9600 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const srv = spawn("node", [path.join(ROOT, "server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await wait(150); } }

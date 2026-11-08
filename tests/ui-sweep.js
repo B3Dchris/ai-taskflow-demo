@@ -12,7 +12,7 @@ const XSS = `<img src=x onerror="window.__x=1">`;
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9100 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB }; delete env.RESEND_API_KEY; delete env.ANTHROPIC_API_KEY; delete env.GA_ID;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
@@ -29,6 +29,11 @@ const XSS = `<img src=x onerror="window.__x=1">`;
     const studs = []; for (let i = 0; i < 120; i++) studs.push(await mk("student", i === 0 ? "Chris Buys" : i === 1 ? "Mallory " + XSS : `Student Number ${i} With A Long Name`, `s${i}@sweep.test`, ["white", "blue", "purple", "brown"][i % 4]));
     const plan = (await pool.query("insert into plans(gym_id,name,price_cents,period,classes_per_week) values($1,'2x a week',65000,'month',2) returning id", [g1])).rows[0].id;
     await pool.query("update users set plan_id=$1 where gym_id=$2 and role='student'", [plan, g1]);
+    // private lessons: a pack bought, an access fee, and a private-only client
+    const pack = (await pool.query("insert into packs(gym_id,name,lessons,price_cents,expiry_months) values($1,$2,10,450000,6) returning id", [g1, "10 privates " + XSS])).rows[0].id;
+    await pool.query("insert into payments(gym_id,user_id,amount_cents,paid_on,pack_id,pack_lessons,pack_months) values($1,$2,450000,current_date-3,$3,10,6)", [g1, studs[0].id, pack]);
+    await pool.query("update gyms set access_fee_cents=15000 where id=$1", [g1]); await pool.query("update users set plan_id=null where id=$1", [studs[2].id]);
+    const coach2 = await mk("coach", "Coach Two", "two@sweep.test");
     const ids = [];
     for (let d = -90; d <= 40; d++) for (const h of [6, 12, 17, 18, 19]) { const t = new Date(Date.now() + d * DAY); t.setUTCHours(h, 0, 0, 0); ids.push((await pool.query("insert into classes(gym_id,title,starts_at,capacity,coach,level,kind,price_cents) values($1,$2,$3,$4,'JP','All levels',$5,$6) returning id, starts_at", [g1, h === 12 ? "Private " + XSS : "No-Gi All Levels " + (h === 19 ? XSS : ""), t, h === 12 ? 1 : 20, h === 12 ? "private" : "class", h === 12 ? 45000 : null])).rows[0]); }
     const vals = []; ids.forEach((c, i) => { const n = new Date(c.starts_at) < new Date() ? 12 : 18; for (let k = 0; k < n; k++) vals.push(`(${c.id},${studs[(i * 11 + k * 5) % 120].id},true,${new Date(c.starts_at) < new Date()})`); });
@@ -43,18 +48,20 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       student: ["today", "learn", "flow", "log", "book", "book:private", "book:comps", "settings"],
       coach: ["coach-today", "coach-classes", "coach-classes:month", "coach-students", "coach-students:insights", "coach-comps", "coach-money", "coach-money:payments", "coach-money:setup", "coach-gym"],
       study: ["today", "learn", "flow", "log", "settings"],
+      coach2: ["coach-today", "coach-classes", "coach-students", "coach-students:insights", "coach-comps", "coach-gym"],
     };
-    const roles = { anon: null, student: studs[0].tok, coach: coach.tok, study: coach.tok };
+    const roles = { anon: null, student: studs[0].tok, coach: coach.tok, study: coach.tok, coach2: coach2.tok };
     for (const [sizeName, dev] of SIZES) for (const scheme of ["light", "dark"]) for (const [role, tok] of Object.entries(roles)) {
       const ctx = await b.newContext({ ...dev, colorScheme: scheme });
       if (tok) await ctx.addCookies([{ name: "jf_s", value: tok, url: URL }]);
       await ctx.addInitScript((r) => { try { if (r === "study") localStorage.setItem("jf.coachMode", "study"); if (r === "anon") localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); } catch (e) {} }, role);
       const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message)); p.on("dialog", (d) => { errs.push("dialog opened: " + d.message()); d.dismiss(); });
-      await p.goto(URL + "/app/" + (role === "coach" ? "#coach-today" : "#today")); await p.waitForTimeout(1600);
+      await p.goto(URL + "/app/" + (role === "coach" || role === "coach2" ? "#coach-today" : "#today")); await p.waitForTimeout(1600);
       await p.evaluate(async () => { if (S.ui.sheet) { if (S.ui.sheet.k === "onboard") { P().settings.onboarded = true; saveProgress(); } hideSheet(); } });
       const tag = `${role} · ${sizeName} · ${scheme}`;
       const navOk = await p.evaluate((r) => { const vis = [...document.querySelectorAll("nav.tabs button")].filter((x) => !x.hidden).map((x) => x.dataset.v || x.dataset.a);
         if (r === "coach") return vis.join() === "coach-today,coach-classes,coach-students,coach-comps,coach-money,coach-gym";
+        if (r === "coach2") return vis.join() === "coach-today,coach-classes,coach-students,coach-comps,coach-gym";
         if (r === "student") return vis.join() === "today,learn,flow,log,book,settings";
         if (r === "study") return vis.join() === "today,learn,flow,log,manage,settings";
         return vis.join() === "today,learn,flow,log,settings"; }, role);

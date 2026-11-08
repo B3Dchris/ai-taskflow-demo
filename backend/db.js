@@ -206,7 +206,39 @@ create table if not exists password_resets(
   expires_at timestamptz not null,
   created_at timestamptz not null default now()
 );
+-- one head coach per gym: the only coach who sees money (fees, payments, bank details, PayFast, plans, billing) and gets payment emails
+alter table gyms add column if not exists head_coach_id bigint references users(id) on delete set null;
+-- private-lesson packs ("10 private lessons" for R4500). A confirmed payment for a pack gives that many credits;
+-- the lessons and expiry are copied onto the payment, so changing the pack later doesn't change what someone bought.
+create table if not exists packs(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  name text not null,
+  lessons int not null,
+  price_cents int not null default 0,
+  expiry_months int,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists packs_gym on packs(gym_id);
+alter table payments add column if not exists pack_id bigint references packs(id) on delete set null;
+alter table payments add column if not exists pack_lessons int;
+alter table payments add column if not exists pack_months int;
+-- clients who only take private lessons pay this each month they book one (0 = off)
+alter table gyms add column if not exists access_fee_cents int not null default 0;
+-- privates from this time on are charged (owed at their price with no lesson left, and counted for the access fee). Gyms that
+-- were there before get the time this column was added, so privates already paid for outside the app aren't owed; new gyms, when they start.
+alter table gyms add column if not exists privates_from timestamptz not null default now();
 `;
+
+// Gyms without an active head coach (gyms from before head coaches, or the head left): the longest-standing active coach takes it.
+// When a coach joined is gym_joined_at if they moved in with a code, or when their account was made if they signed up into the gym
+// (the coach who started it is made just after the gym). A coach whose account is older than the gym and has no gym_joined_at
+// moved in with a code before that was kept, at a time we don't know: they come after everyone whose joining time we know.
+const LONGEST = (g) => `(select u.id from users u join gyms gg on gg.id=u.gym_id where u.gym_id=${g} and u.role='coach' and u.active and u.pass_hash is not null
+  order by coalesce(u.gym_joined_at, case when u.created_at >= gg.created_at then u.created_at end) nulls last, u.created_at, u.id limit 1)`;
+const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not exists (select 1 from users h where h.id=g.head_coach_id and h.gym_id=g.id and h.role='coach' and h.active)
+  and ${LONGEST("g.id")} is not null`;
 
 // Proofs a coach marked "not a payment" leave the coach's list after 30 days. Delete them then (their files go with them).
 const purgeRejected = (pool) => pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
@@ -221,6 +253,7 @@ async function migrate(pool) {
   await pool.query(SCHEMA);
   // One row per PayFast payment, even if the same notification arrives twice at once. Older duplicates would block it: warn, don't stop.
   await pool.query("create unique index if not exists payments_payfast_ref on payments(gym_id, reference) where source='payfast'").catch((e) => console.warn("payments_payfast_ref:", e.message));
+  await pool.query(HEAD_FIX);
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
   await purgeRejected(pool);
@@ -228,4 +261,4 @@ async function migrate(pool) {
   await pool.query("delete from gyms g where g.name like '%(delete me)' and not exists (select 1 from users u where u.gym_id=g.id)");
 }
 
-module.exports = { makePool, migrate, purgeRejected };
+module.exports = { makePool, migrate, purgeRejected, LONGEST };

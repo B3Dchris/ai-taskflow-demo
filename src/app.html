@@ -2154,7 +2154,7 @@ function render(){
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
   const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}
   if(!mg&&v==="coach"&&isCoach()&&coachMode()==="study"){}
-  document.querySelectorAll("nav.tabs [data-coach]").forEach(b=>b.hidden=!mg);
+  document.querySelectorAll("nav.tabs [data-coach]").forEach(b=>b.hidden=!mg||(b.dataset.v==="coach-money"&&!isHead()));
   ["today","learn","flow","log","settings"].forEach(k=>{const b=document.querySelector(`nav.tabs [data-v="${k}"]:not([data-coach])`);if(b)b.hidden=mg});
   const sb=document.querySelector("nav.tabs [data-studycoach]");if(sb)sb.hidden=!(isCoach()&&!mg);
   const cb=document.querySelector('nav.tabs [data-v="coach"]');if(cb)cb.hidden=true;
@@ -2288,6 +2288,8 @@ document.addEventListener("click",e=>{
     case "gymdel": S.ui.gymDelOpen=true;render();break;
     case "gymdelcancel": S.ui.gymDelOpen=false;render();break;
     case "coachdelask": { const c=((COACH.roster||{}).people||[]).find(p=>p.id===v); confirmSheet(`Remove ${c?first(c.name):"this coach"}?`,"They lose coach access straight away: no roster, payments or settings. Your coach code changes too, so the old coach link stops working.",["coachdelyes",v],"Remove coach");break }
+    case "headask": { const c=((COACH.roster||{}).people||[]).find(p=>p.id===v); confirmSheet(`Make ${c?first(c.name):"them"} the head coach?`,`${c?first(c.name):"They"} will see the Money tab: fees, payments, bank details, PayFast and your JitsFlow plan, and get the payment emails. You'll keep coaching, but won't see the money any more.`,["headyes",v],"Make head coach");break }
+    case "headyes": makeHead(v);break;
     case "coachdelyes": api("DELETE",`/coach/students/${v}`).then(async j=>{if(j.me)API.me=j.me;hideSheet();await coachLoad("roster");render();toast("Coach removed. Your coach code has changed.")}).catch(e=>toast(e.message));break;
     case "mergeask": { const [o,a]=String(v).split(","),nm=x=>(((COACH.roster||{}).people||[]).find(p=>p.id===x)||{}).name||"";
       confirmSheet("Merge these two?",`${esc(nm(o))} (not on the app) goes into ${esc(nm(a))}'s account. Their payments, classes and plan move over. This can't be undone.`,["mergeyes",v],"Merge");break }
@@ -2309,6 +2311,8 @@ document.addEventListener("click",e=>{
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
     case "paycard": payByCard(); break;
+    case "packcard": payByCard(v); break;
+    case "packedit": S.ui.packEdit=v||null;render();break;
     case "paysoon": toast("Card and Instant EFT payments with PayFast are coming soon. For now, please pay by EFT."); break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
@@ -2395,6 +2399,9 @@ document.addEventListener("change",e=>{
   if(e.target.id==="ppl-in"&&e.target.files&&e.target.files.length){const fs=[...e.target.files];e.target.value="";peopleFiles(fs);return}
   if(e.target.id==="pf-soon"){const on=e.target.checked;api("PATCH","/coach/gym/pay-soon",{on}).then(()=>{if(COACH.payInfo&&COACH.payInfo.pay)COACH.payInfo.pay.cardSoon=on;toast(on?"Students now see a PayFast button marked “coming soon”.":"PayFast button hidden from students.")}).catch(x=>{e.target.checked=!on;toast(x.message)});return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
+  // A pack picked on a payment: its price is the amount, and it doesn't cover months of fees.
+  if(e.target.id==="p-pack"||e.target.id==="mypop-pack"){const o=e.target.selectedOptions[0],amt=document.getElementById(e.target.id==="p-pack"?"p-amt":"mypop-amt"),cv=document.getElementById("p-covers");
+    if(o&&o.dataset.price&&amt)amt.value=Number(o.dataset.price)/100;if(cv)cv.hidden=!!e.target.value;return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
   if(e.target.id==="p-user"){const m=document.getElementById("p-months");if(m)m.value=String(planMonths(e.target.value));return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
@@ -2418,7 +2425,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2431,6 +2438,8 @@ document.addEventListener("submit",async e=>{
     if(fid==="bankform")return saveBank(f);
     if(fid==="addstuform")return submitAddStudent(f);
     if(fid==="pfform")return savePf(f);
+    if(fid==="packform")return savePack(f);
+    if(fid==="accessform")return saveAccess(f);
     if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
     if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);
@@ -2440,7 +2449,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="compreqform")return sendCompReq(f);
     if(fid==="compentryform")return saveCompEntry(f);
     if(fid==="gymeditform")return gymSave(f);
-    if(fid==="gymform"){try{const j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
+    if(fid==="gymform"){try{const fee=f.querySelector("[name=fee]"),j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,...(fee?{monthlyFeeCents:Math.round(Number(fee.value||0)*100)}:{})});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
     if(fid==="gymdelform")return deleteGym(f);
     if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
     if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("today");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}

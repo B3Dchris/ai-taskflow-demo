@@ -78,8 +78,8 @@ const templates = {
     paras: [`Hi ${name},`, `${gym} has moved ${cls}. It was ${was}; it's now ${now}. You're still booked.`, "Can't make the new time? Cancel in the app so someone else gets the spot."],
     button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
   // join: their own invite link, for someone the coach added who isn't on the app yet
-  feeReminder: (name, gym, amount, month, ref, bankLines, join) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
-    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for ${month}.`, ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`],
+  feeReminder: (name, gym, amount, month, ref, bankLines, join, parts) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for ${month}.`, ...(parts && parts.length ? [parts.join("\n")] : []), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`],
     button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
   cancelled: (name, gym, cls, when) => ({ subject: `Cancelled: ${cls}`, title: "Class cancelled",
     paras: [`Hi ${name},`, `${gym} has cancelled ${cls} on ${when}. Your booking has been removed.`, "Have a look for another class to book."],
@@ -102,7 +102,19 @@ const templates = {
   invite: (coach, gym, url) => ({ subject: "You're invited to join your gym on JitsFlow", title: `Join ${gym} on JitsFlow`,
     paras: [`${coach} invited you to ${gym}'s JitsFlow.`, "JitsFlow is a no-gi study app: every technique from white to black belt with videos, a flow map of attacks and escapes, and a training log. Your coach uses it to plan classes around what the group needs.", "Tap the button to create your free account. Your gym code is already filled in."],
     button: { label: `Join ${gym}`, url } }),
-  // To every active coach when payment details or the coaches change. Fixed subjects.
+  // Payment news for the head coach.
+  proofIn: (coach, student, amount) => ({ subject: "A proof of payment to check", title: "Proof of payment received",
+    paras: [`Hi ${coach},`, `${student} sent a proof of payment${amount ? ` for ${amount}` : ""}.`, "Check it and confirm it in Money › Payments. It doesn't count as paid until you do."],
+    button: { label: "Check the payment", url: appUrl() + "/app/#coach-money" } }),
+  // short: a pack paid for with less than its price (the pack's name and price). It's kept as an ordinary payment, with no lessons.
+  cardPaid: (coach, student, amount, what, short) => ({ subject: "A card payment came in", title: "Card payment received",
+    paras: [`Hi ${coach},`, `${student} paid ${amount} by card or Instant EFT through PayFast${what ? ` for ${what}` : ""}.`,
+      short ? `That's less than ${short.name} costs (${short.price}), so it's recorded as an ordinary payment and no private lessons were added. If that's right, open the payment and pick the pack.` : "It's marked as paid already. There's nothing to check."],
+    button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
+  headCoach: (name, gym, by) => ({ subject: "You're now the head coach", title: "You're the head coach",
+    paras: [`Hi ${name},`, `${by} made you the head coach of ${gym} on JitsFlow.`, "You now see the Money tab: fees, payments, bank details and PayFast. Payment emails come to you."],
+    button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }),
+  // Bank or PayFast details changed (to the head coach), or the coaches changed (to every active coach). Fixed subjects.
   gymChange: (kind, name, who, detail) => { const t = {
       bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],
       payfast: ["Your gym's PayFast account changed", `${who} connected a PayFast account (Merchant ID ${detail}). Students' card payments now go to that account.`],
