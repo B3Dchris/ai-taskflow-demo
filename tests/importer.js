@@ -48,7 +48,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(p.coaches.length === 2 && p.coaches[0].name === "Thabo Nkosi" && /Black belt/.test(p.coaches[0].rank) && /15 years/.test(p.coaches[0].bio), "coaches with rank and bio");
     ok(r.logos.length >= 1 && /^data:image\/png;base64,/.test(r.logos[0].dataUrl) && /site-logo/.test(r.logos[0].url), "logo found and previewed");
     ok(r.logos.length === 1, "the same logo at two addresses is shown once");
-    ok(!site.hits.includes("/shop") && !site.hits.includes("/shop/rashguard") && r.pages.length === 8 && r.pages.some((x) => /\/the-academy\/friday$/.test(x.url)) && r.pages.some((x) => /\/hidden$/.test(x.url)), "crawls the whole site (links and sitemap), skipping the shop: " + r.pages.map((x) => x.url.replace(/^https?:\/\/[^/]+/, "")).join(" "));
+    ok(!site.hits.includes("/shop") && !site.hits.includes("/shop/rashguard") && r.pages.length === 9 && r.pages.some((x) => /\/the-academy\/friday$/.test(x.url)) && r.pages.some((x) => /\/hidden$/.test(x.url)), "crawls the whole site (links and sitemap), skipping the shop: " + r.pages.map((x) => x.url.replace(/^https?:\/\/[^/]+/, "")).join(" "));
 
     // ---- Claude read with a stand-in client
     let sent = null;
@@ -64,6 +64,9 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(sent.model === "claude-haiku-5-5" && sent.thinking && sent.thinking.type === "disabled" && !sent.betas, "request uses the cheap model (Haiku 5.5), no thinking");
     ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-schedule-2026\.png/.test(b.source.url)), "a timetable picture found anywhere on the site is sent to Claude");
     ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-adult-subs2026\.png/.test(b.source.url)) && !sent.messages[0].content.some((b) => b.type === "image" && /IMG_7684/.test(b.source.url)), "a price list picture named like 'adult-subs2026' is sent too; gym photos aren't");
+    { const urls = sent.messages[0].content.filter((b) => b.type === "image").map((b) => b.source.url).join(" ");
+      ok(/Skyfall-1024x576\.jpeg/.test(urls), "a venue's timetable picture on a page with little text is sent (\"Skyfall.jpeg\" on /skyfall)");
+      ok(!/annie\.png/.test(urls) && !/join2\.png/.test(urls), "coach headshots and pictures repeated across the site aren't"); }
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.find((b) => b.type === "text").text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
