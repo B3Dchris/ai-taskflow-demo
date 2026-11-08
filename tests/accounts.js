@@ -103,7 +103,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(await ev(co, () => /We read/.test(document.querySelector(".impban").innerText) && /\d+ classes/.test(document.querySelector(".impban").innerText)), "when it's done, the banner says what was found");
     await co.tap('.impban [data-a="impreview"]');
     await co.waitForSelector("#gymeditform", { timeout: 20000 });
-    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 9 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 10 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
     await wide(co, "import preview");
     await co.locator('#gymeditform [data-a="germ"][data-k="timetable"]').last().tap(); await co.waitForTimeout(200);
     ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 8 && !/Competition Training/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");

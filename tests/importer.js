@@ -48,7 +48,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(p.coaches.length === 2 && p.coaches[0].name === "Thabo Nkosi" && /Black belt/.test(p.coaches[0].rank) && /15 years/.test(p.coaches[0].bio), "coaches with rank and bio");
     ok(r.logos.length >= 1 && /^data:image\/png;base64,/.test(r.logos[0].dataUrl) && /site-logo/.test(r.logos[0].url), "logo found and previewed");
     ok(r.logos.length === 1, "the same logo at two addresses is shown once");
-    ok(!site.hits.includes("/shop") && !site.hits.includes("/shop/rashguard") && r.pages.length === 9 && r.pages.some((x) => /\/the-academy\/friday$/.test(x.url)) && r.pages.some((x) => /\/hidden$/.test(x.url)), "crawls the whole site (links and sitemap), skipping the shop: " + r.pages.map((x) => x.url.replace(/^https?:\/\/[^/]+/, "")).join(" "));
+    ok(!site.hits.includes("/shop") && !site.hits.includes("/shop/rashguard") && r.pages.length === 10 && r.pages.some((x) => /\/the-academy\/friday$/.test(x.url)) && r.pages.some((x) => /\/hidden$/.test(x.url)), "crawls the whole site (links and sitemap), skipping the shop: " + r.pages.map((x) => x.url.replace(/^https?:\/\/[^/]+/, "")).join(" "));
 
     // ---- Claude read with a stand-in client
     let sent = null;
@@ -72,6 +72,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.filter((b) => b.type === "text").pop().text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
+    ok(/name: Lerato Mokoena · role: Head Muay Thai Coach/.test(txt) && /name: Pieter van Wyk/.test(txt), "coaches inside an embedded block (an iframe on the team page) are read");
     ok(c.profile.timetable.length === 1 && c.profile.timetable[0].day === "Thu", "Claude's timetable replaces the plain one; invalid rows dropped");
     const fromImg = await im.importSite(site.url, { client: fake({ ...ai, timetable: [{ day: "Mon", start: "17:00", end: "", title: "Kids Gi BJJ", coach: "", level: "Kids", source: "image", quote: "MON 5PM KIDS GI BJJ" }] }) });
     ok(fromImg.profile.timetable.length === 1 && fromImg.dropped.timetable === 0, "rows Claude read from the timetable picture are kept");
@@ -111,6 +112,16 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     { const p = im.parsePage(`<html><head><meta property="og:type" content="article"><meta property="article:published_time" content="2016-07-01"></head><body class="single single-post postid-12"><p>ADCC 2016 recap</p></body></html>`, "https://x.test/adcc-2016/");
       ok(p.isPost === true, "blog posts are recognised (so they don't use up the pages read)");
       ok(im.parsePage(`<html><head><meta property="og:type" content="article"><meta property="article:published_time" content="2020-01-29"></head><body class="page page-id-325"><p>About us</p></body></html>`, "https://x.test/about-us/").isPost === false, "an ordinary page an SEO plugin calls an article is still read"); }
+    // ---- content kept in page data, scripts and embedded blocks (Wix and other builders)
+    { const html = `<html><body><p>Schedule</p><script type="application/json" id="wix-warmup-data">${JSON.stringify({ dataBinding: { recordsByCollectionId: { SCHEDULE: { "a1b2c3d4-0000-4000-8000-000000000001": { _id: "x", timeSort: 600, category: ["BOXING"], time: "06:00 - 07:00", title: "BOXING LADIES & GENTS", day: ["MONDAY"] } } } }, site: { brand: "studio", siteRevision: 341, viewerVersion: "1.334.0" }, i18n: Object.fromEntries(Array.from({ length: 50 }, (_, i) => ["form.key" + i, "Some label " + i])) })}</script>
+        <script>var plans = [ { name: "12-Month Unlimited", price: "1 250", period: "per month" } ];</script></body></html>`;
+      const t = im.parsePage(html, "https://x.test/schedule").text;
+      ok(/time: 06:00 - 07:00 · title: BOXING LADIES & GENTS · day: MONDAY/.test(t), "class records kept in a page builder's data are read: " + t.replace(/\n/g, " / ").slice(0, 200));
+      ok(/name: 12-Month Unlimited · price: 1 250 · period: per month/.test(t), "a list of plans in a small script is read");
+      ok(!/siteRevision|brand: studio|form\.key/.test(t), "builder settings and translation tables are left out"); }
+    { const t = im.parsePage(`<html><body><h3>Basic Membership</h3><p>R 45 every month</p><p>info@mysite.com</p><p>123-456-7890</p></body></html>`, "https://x.test/pricing-plans/list").text;
+      ok(!/info@mysite/.test(t) && /sample content/.test(t), "website-builder sample filler is flagged, not passed off as the gym's"); }
+    ok(r.pages.some((x) => /\/team$/.test(x.url)), "the team page is read");
     // ---- cleaning what the browser sends back
     const cl = im.cleanProfile({ name: "x".repeat(500), website: "javascript:alert(1)", socials: { instagram: "javascript:alert(1)", facebook: "https://facebook.com/a" }, timetable: [{ day: "Mon", start: "25:00" }, { day: "Tue", start: "7:05", title: "<b>Hi</b>" }], rates: [{ name: "a", price: -5 }, { name: "b", price: "100", period: "weird" }] });
     ok(cl.name.length === 100 && cl.website === "" && !cl.socials.instagram && cl.socials.facebook, "unsafe links are dropped and text is capped");

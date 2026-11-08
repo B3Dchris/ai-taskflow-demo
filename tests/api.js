@@ -123,7 +123,7 @@ function client(base) {
     r = await stu2("POST", "/coach/import", { url: site.url }); ok(r.s === 403, "students can't import");
     r = await coach("POST", "/coach/import", { url: "http://10.0.0.5/" }); ok(r.s === 400 && /public website/.test(r.j.error), "private addresses are refused by the API");
     r = await coach("POST", "/coach/import", { url: site.url });
-    ok(r.s === 200 && r.j.method === "basic" && r.j.profile.timetable.length === 9 && r.j.logos.length > 0 && r.j.pages.length === 9, "coach imports their whole website");
+    ok(r.s === 200 && r.j.method === "basic" && r.j.profile.timetable.length === 9 && r.j.logos.length > 0 && r.j.pages.length === 10, "coach imports their whole website");
     const imp = r.j;
     r = await coach("GET", "/gym"); ok(r.s === 200 && !(r.j.gym.profile.timetable || []).length, "nothing is saved until the coach confirms");
     imp.profile.timetable = imp.profile.timetable.filter((x) => x.day !== "Sat");
