@@ -249,7 +249,11 @@ function makeApi(pool, { secureCookies }) {
     if (u.gym_id) await releaseBookings(u.id, u.gym_id, u);
     await q("delete from users where id=$1", [u.id]);
     // A gym with nobody left in it goes too (its classes, plans and payments with it).
-    if (u.gym_id) await q("delete from gyms g where g.id=$1 and not exists (select 1 from users x where x.gym_id=g.id)", [u.gym_id]);
+    // Offline students (no login) don't keep a gym alive: with nobody left who can sign in, they go too.
+    if (u.gym_id && !(await q("select 1 from users where gym_id=$1 and pass_hash is not null limit 1", [u.gym_id])).rows.length) {
+      await q("delete from users where gym_id=$1 and pass_hash is null", [u.gym_id]);
+      await q("delete from gyms g where g.id=$1 and not exists (select 1 from users x where x.gym_id=g.id)", [u.gym_id]);
+    }
     res.clearCookie(COOKIE, { path: "/" });
     res.json({ ok: true });
   }));

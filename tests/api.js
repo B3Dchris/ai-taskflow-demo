@@ -105,6 +105,12 @@ function client(base) {
       const pl = new Pool({ connectionString: DB }); const before = Number((await pl.query("select count(*) from gyms where name='Solo gym'")).rows[0].count);
       await tmp("DELETE", "/me", { password: "solopass1" }); const after = Number((await pl.query("select count(*) from gyms where name='Solo gym'")).rows[0].count); await pl.end();
       ok(before === 1 && after === 0, "when a gym's last member deletes their account, the gym goes too"); }
+    { const tmp = client(base); await tmp("POST", "/auth/start-gym", { gym: "Offline gym", name: "Solo", email: "solo2@example.com", password: "solopass1" });
+      const ad = await tmp("POST", "/coach/students", { name: "Off Line", phone: "0825550199" });
+      const pl = new Pool({ connectionString: DB });
+      await tmp("DELETE", "/me", { password: "solopass1" });
+      const g = Number((await pl.query("select count(*) from gyms where name='Offline gym'")).rows[0].count), us = Number((await pl.query("select count(*) from users where name='Off Line'")).rows[0].count); await pl.end();
+      ok(ad.s === 201 && g === 0 && us === 0, "students who never signed in don't keep a gym alive after its last coach leaves"); }
     const pool2 = new Pool({ connectionString: DB });
     const left = await pool2.query("select (select count(*) from progress where user_id=$1) p, (select count(*) from training_logs where user_id=$1) l", [chris.id]);
     ok(Number(left.rows[0].p) === 0 && Number(left.rows[0].l) === 0, "their progress and sessions are deleted too");
