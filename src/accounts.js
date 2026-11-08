@@ -54,6 +54,7 @@ async function startSync(opts){
     const have=new Set(l.logs.map(x=>x.id));const extra=adopt?S.sessions.filter(x=>x&&x.id&&!have.has(x.id)):[];
     for(const s of extra.slice(0,200)){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){}}
     S.sessions=[...l.logs,...extra];lsSet("rtb.sessions",S.sessions);lsSet("rtb.owner",mine);
+    setTimeout(()=>autoLog(true),300);
   }catch(e){setSync("Saved on this device","err");toast("Couldn't reach your account. Changes are kept on this device for now.");if(!foreign)lsSet("rtb.owner",mine)}
 }
 function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
@@ -1046,3 +1047,68 @@ function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomin
 function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";const g=API.me.gym,next=(API.classes||[]).find(c=>c.myGoing&&clsEnd(c)>Date.now());
   const inv=g.inviteCode?`Come train with me at ${g.name}! I use JitsFlow to book classes and study techniques between sessions. Join here (the gym code is filled in):\n${joinURL(g.inviteCode)}`:`I'm using JitsFlow to study no-gi between classes: every position, attack chain and escape, with videos. ${location.origin}`;
   return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
+
+/* ----- training log that fills itself in from the classes you attended ----- */
+const bySess=(a,b)=>(a.date===b.date?String(b.time||"").localeCompare(String(a.time||"")):a.date<b.date?1:-1);
+async function autoLog(force){
+  if(S.mode!=="api"||!API.me||!API.me.gym||isCoach())return;
+  if(!force&&API.autoLogAt&&Date.now()-API.autoLogAt<5*60e3)return;API.autoLogAt=Date.now();
+  let cs;try{cs=(await api("GET","/me/attended?days=45")).classes}catch(e){return}
+  const have=new Set(S.sessions.map(s=>s.classId).filter(Boolean)),skip=new Set(P().logSkip||[]);
+  const add=cs.filter(c=>!have.has(c.id)&&!skip.has(c.id)).slice(0,40);if(!add.length)return;
+  let n=0,fresh=0;
+  for(const c of add){const taught=(c.ids||[]).filter(id=>TM[id]);
+    const s={id:"k"+c.id,classId:c.id,auto:true,date:dayKey(c.startsAt),time:c.startsAt,type:c.kind==="private"?"Private":"Class",title:c.title,coach:c.coach,focus:c.focus,mins:c.durationMin,rolls:0,taught,hits:[],tapped:[],stuck:[],worked:"",fix:""};
+    // anything taught that's new to you goes into your reviews
+    taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id);fresh++}});
+    if(await addSession(s))n++}
+  if(fresh)saveProgress();
+  if(n){if(["log","today"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
+}
+/* What to do next, worked out from your last few weeks of training. */
+function nextSteps(){const out=[],seen=new Set();
+  const st=stuckCounts(21)[0];
+  if(st){const p=st[0],t=fromPos(p).filter(t=>["escape","defense","sweep","guard"].includes(t.c)).sort((a,b)=>lv(a.id)-lv(b.id))[0];if(t){seen.add(t.id);out.push({why:`You got stuck in ${POS[p].l.toLowerCase()}${st[1]>1?` ${st[1]} times`:""} lately`,t})}}
+  const tc={};recent(21).forEach(s=>(s.tapped||[]).forEach(id=>{if(TM[id])tc[id]=(tc[id]||0)+1}));
+  const top=Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];if(top){const d=defFor(top[0]);if(d&&!seen.has(d.id)){seen.add(d.id);out.push({why:`${TM[top[0]].n} got you${top[1]>1?` ${top[1]} times`:""}`,t:d})}}
+  const taught=[...new Set(S.sessions.slice().sort(bySess).slice(0,6).flatMap(s=>s.taught||[]))].filter(id=>TM[id]&&lv(id)<3&&!seen.has(id));
+  if(taught.length)out.push({why:"Taught in your recent classes",ids:taught.slice(0,8)});
+  return out.slice(0,3)}
+function nextStepsCard(){const n=nextSteps();if(!n.length)return "";
+  return `<section class="panel stack nextsteps"><h2 class="label">What to work on next</h2>${n.map(x=>`<div class="nstep"><span class="small muted">${esc(x.why)}</span>${x.t?`<button class="btn" data-a="open" data-v="${x.t.id}">Study: ${esc(x.t.n)}</button>`:`<button class="btn" data-a="reviewids" data-v="${x.ids.join(",")}">Review ${x.ids.length} move${x.ids.length>1?"s":""}: ${esc(x.ids.slice(0,2).map(i=>TM[i].n).join(", "))}${x.ids.length>2?"…":""}</button>`}</div>`).join("")}</section>`}
+function sessCard(s){
+  const tags=[...(s.hits||[]).filter(i=>TM[i]).map(i=>`<span class="ltag ok">✓ ${esc(TM[i].n)}</span>`),...(s.tapped||[]).filter(i=>TM[i]).map(i=>`<span class="ltag bad">Tapped: ${esc(TM[i].n)}</span>`),...(s.stuck||[]).filter(p=>POS[p]).map(p=>`<span class="ltag warn">Stuck: ${esc(POS[p].l)}</span>`)];
+  const note=[s.worked,s.fix].filter(Boolean).join(" · ");
+  return swipeWrap(`<div class="sess lcard"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><b>${esc(s.title||s.type||"Training")}</b><div class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}${s.coach?` · ${esc(s.coach)}`:""}${Number(s.mins)?` · ${Number(s.mins)} min`:""}${Number(s.rolls)?` · ${Number(s.rolls)} rolls`:""}</div></div><span class="pill">${s.auto?"Booked":esc(s.type||"Class")}</span></div>
+    ${(s.taught||[]).filter(i=>TM[i]).length?`<div class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>`<button class="linkbtn" data-a="open" data-v="${i}">${esc(TM[i].n)}</button>`).join(", ")}</div>`:s.focus?`<div class="small"><span class="muted">Focus:</span> ${esc(s.focus)}</div>`:""}
+    ${tags.length?`<div class="ltags">${tags.join("")}</div>`:""}${note?`<div class="small">${esc(note)}</div>`:""}
+    <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">${note?"Note ✎":"+ Note"}</button></div>
+    <div class="row" style="justify-content:flex-end;gap:14px"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div></div>`,{edit:["editlog",s.id],del:["del",s.id]})}
+/* Today: the last class you went to, waiting for a quick tap or two. */
+function lastClassCard(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if(!s)return "";
+  if(Date.now()-new Date(s.time||s.date).getTime()>3*864e5||(s.hits||[]).length||(s.tapped||[]).length||(s.stuck||[]).length||s.worked)return "";
+  return `<section class="panel stack"><div><h2 class="label">How did it go?</h2><b>${esc(s.title||"Class")}</b> <span class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}</span></div>
+    ${(s.taught||[]).filter(i=>TM[i]).length?`<p class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}. Already in your reviews.</p>`:""}
+    <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">+ Note</button></div></section>`}
+/* One sheet per tag type; every tap saves straight away. */
+function tagChoices(s,k,q){const sel=new Set(s[k]||[]);q=(q||"").trim().toLowerCase();
+  const first=k==="hits"?(s.taught||[]).filter(i=>TM[i]):[...new Set(recent(90).flatMap(x=>x.tapped||[]))].filter(i=>TM[i]);
+  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!q||(t.n+" "+POS[t.f].l+" "+(CATS[t.c]||"")).toLowerCase().includes(q)).map(t=>t.id);
+  const chip=i=>`<button class="tchip wide" data-a="tagset" data-k="${k}" data-v="${i}" aria-pressed="${sel.has(i)}">${esc(TM[i].n)}</button>`;
+  const rest=pool.filter(i=>q||!first.includes(i));
+  return `${first.length&&!q?`<h2 class="label">${k==="hits"?"Taught in this class":"Got you before"}</h2><div class="tlist">${first.map(chip).join("")}</div><h2 class="label">${k==="hits"?"Anything else":"Other submissions"}</h2>`:""}<div class="tlist">${rest.slice(0,q?80:30).map(chip).join("")}</div>${!q&&rest.length>30?`<p class="small muted">Search to find more.</p>`:""}${q&&!rest.length?`<p class="small muted">Nothing matches “${esc(q)}”.</p>`:""}`}
+function tagSheet(id,k){const s=S.sessions.find(x=>x.id===id);if(!s)return;S.ui.sheet={k:"tag",id,kind:k};S.ui.stack=[];
+  const head={hits:"What worked?",tapped:"What got you?",stuck:"Where did you get stuck?",note:"Notes"}[k];
+  const body=k==="stuck"?`<p class="small muted">Tap every position you got stuck in. JitsFlow points you to its escapes.</p><div class="tgrid2">${ORDER.map(p=>`<button class="tchip" data-a="tagset" data-k="stuck" data-v="${p}" aria-pressed="${(s.stuck||[]).includes(p)}">${esc(POS[p].l)}</button>`).join("")}</div>`
+    :k==="note"?`<textarea id="tag-note" rows="6" placeholder="What clicked, what to ask your coach, how you felt…">${esc([s.worked,s.fix].filter(Boolean).join("\n"))}</textarea><p class="small muted">Saved as you type.</p>`
+    :`<p class="small muted">${k==="hits"?"Tap anything you landed or that worked in rolls. It moves up your progress.":"Tap what you got caught with. JitsFlow lines up the defense."}</p><input id="tag-q" type="search" placeholder="${k==="tapped"?"Find a submission":"Find a move"}" autocomplete="off"><div id="tag-list" class="stack">${tagChoices(s,k,"")}</div>`;
+  openSheet(`${sheetHead(esc(s.title||s.type||"Session"))}<div class="stack-lg"><h1>${head}</h1>${body}</div>`,false,{back:"Done"})}
+let tagNoteT=null;
+function tagSet(el){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.sessions.find(x=>x.id===sh.id);if(!s)return;const k=el.dataset.k,v=el.dataset.v;
+  const arr=s[k]=(s[k]||[]).slice(),on=!arr.includes(v);if(on)arr.push(v);else arr.splice(arr.indexOf(v),1);
+  document.querySelectorAll(`#sheet [data-a="tagset"][data-v="${v}"]`).forEach(b=>b.setAttribute("aria-pressed",String(on)));
+  // the app learns from it: what worked moves up to "live", what got you puts its defense in your reviews
+  if(on&&k==="hits"&&lv(v)<4){P().mastery[v]=4;ensureCard(v);saveProgress()}
+  if(on&&k==="tapped"){const d=defFor(v);if(d){if(lv(d.id)<1)P().mastery[d.id]=1;ensureCard(d.id);P().srs[d.id].due=today();saveProgress()}}
+  addSession(s)}
+function tagNote(v){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.sessions.find(x=>x.id===sh.id);if(!s)return;s.worked=String(v).slice(0,2000);s.fix="";clearTimeout(tagNoteT);tagNoteT=setTimeout(()=>addSession(s),600)}

@@ -284,6 +284,18 @@ function makeApi(pool, { secureCookies }) {
              on conflict(user_id,id) do update set date=excluded.date, data=excluded.data, updated_at=now()`, [u.id, id, date, d]);
     res.json({ ok: true });
   }));
+  // Classes this student booked or was checked into that have finished: the training log fills itself in from these.
+  api.get("/me/attended", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id) return res.json({ classes: [] });
+    const days = Math.min(90, Math.max(1, intOr(req.query.days, 45)));
+    const r = await q(`select c.*, a.attended from attendance a join classes c on c.id=a.class_id
+      where a.user_id=$1 and c.gym_id=$2 and (a.going or a.attended) and not coalesce(a.waitlisted,false)
+        and c.starts_at > now() - ($3 || ' days')::interval and c.starts_at + (c.duration_min || ' minutes')::interval < now()
+      order by c.starts_at desc limit 200`, [u.id, u.gym_id, String(days)]);
+    res.json({ classes: r.rows.map((c) => { const p = c.shared !== false && c.plan ? c.plan : {};
+      return { id: String(c.id), title: c.title, startsAt: c.starts_at, durationMin: c.duration_min, kind: c.kind, coach: c.coach || "", checkedIn: !!c.attended,
+        focus: p.focus || "", ids: Array.isArray(p.ids) ? p.ids.slice(0, 30) : [] }; }) });
+  }));
   api.delete("/logs/:id", wrap(async (req, res) => {
     const u = needUser(req);
     await q("delete from training_logs where user_id=$1 and id=$2", [u.id, String(req.params.id)]);

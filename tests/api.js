@@ -288,6 +288,18 @@ function client(base) {
     await new Promise((res) => setTimeout(res, 400));
     const rem = sink.mails.slice(mails1).find((m) => m.to[0] === "sam@example.com");
     ok(rem && /fees for/i.test(rem.subject) && rem.html.includes(mSam.reference) && /62123 456 789|62123456789/.test(rem.html), "a reminder has the amount, the bank details and their reference");
+    // --- classes you attended (the training log fills itself in from these)
+    { const past = new Date(Date.now() - 5 * 3600e3).toISOString();
+      const pub = (await coach("POST", "/classes", { title: "Logged class", startsAt: past, durationMin: 60, plan: { focus: "Guard", ids: ["hip_bump"] } })).j.class.id;
+      const hid2 = (await coach("POST", "/classes", { title: "Hidden plan class", startsAt: past, durationMin: 60, shared: false, plan: { ids: ["triangle"], notes: "secret" } })).j.class.id;
+      const fut = (await coach("POST", "/classes", { title: "Not yet", startsAt: new Date(Date.now() + 864e5).toISOString(), durationMin: 60 })).j.class.id;
+      for (const id of [pub, hid2]) await coach("PUT", `/coach/classes/${id}/attendance`, { userIds: [sam.id] });
+      await stu2("PUT", `/classes/${fut}/rsvp`, { going: true });
+      r = await stu2("GET", "/me/attended"); const got = Object.fromEntries(r.j.classes.map((c) => [c.id, c]));
+      ok(r.s === 200 && got[pub] && got[pub].ids.join() === "hip_bump" && got[pub].durationMin === 60 && got[pub].checkedIn, "attended classes come back with what was taught");
+      ok(got[hid2] && got[hid2].ids.length === 0 && !JSON.stringify(got[hid2]).includes("secret"), "a plan the coach didn't share stays hidden");
+      ok(!got[fut], "classes that haven't happened yet aren't included");
+      r = await tess("GET", "/me/attended"); ok(!r.j.classes.some((c) => c.id === pub), "only your own classes"); }
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");

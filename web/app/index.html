@@ -365,6 +365,12 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
 .tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
 .flabel{font-size:14px;color:var(--ink-2)}
+.lcard{display:flex;flex-direction:column;gap:8px}.ltags{display:flex;flex-wrap:wrap;gap:6px}.qtags{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.qtags .chip{min-height:40px;justify-content:center;padding:6px 4px;white-space:nowrap}.lcard .pill{white-space:nowrap;background:var(--surface-2)}
+.ltag{font-size:13px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink)}
+.ltag.ok{background:var(--good-soft);color:var(--good)}.ltag.bad{background:var(--bad-soft);color:var(--bad)}.ltag.warn{background:var(--warn-soft);color:var(--warn)}
+.tlist{display:flex;flex-wrap:wrap;gap:8px}.tchip.wide{padding:0 14px;text-align:left}.tgrid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.nstep{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px}.nstep:first-of-type{border-top:0;padding-top:0}.nstep .btn{justify-content:flex-start;text-align:left}
+.qrlevels button[aria-pressed="true"]{border-color:var(--blue);background:var(--blue-soft)}
 @supports (-webkit-touch-callout:none){input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:max(16px,1em)!important}}
 .mchart{margin:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:end}
 .mcol{display:grid;grid-template-rows:96px auto;gap:4px;background:none;border:0;padding:0;color:var(--ink-2);font:inherit;align-items:end;justify-items:center}
@@ -3554,6 +3560,7 @@ function header(){return `<header class="top"><div class="brand"><span class="ma
 
 /* ============ VIEWS ============ */
 function viewToday(){
+  autoLog();
   const g=goal(),G=BELT[g],pct=readiness(),b=blockIndex(),blk=curBlocks()[b.i],due=dueList(),st=P().settings;
   const hrs=(st.priorHours||0)+hoursLogged();
   const m2=monthsTo(st.perWeek||2),m3=monthsTo(Math.max(3,(st.perWeek||2)+1));
@@ -3577,7 +3584,7 @@ function viewToday(){
   const solo=P().solo.date===today()?P().solo.done:[];
   const inGym=!!(API.me&&API.me.gym);
   return `${header()}<div class="stack-lg">
-  ${typeof noticesCard==="function"?noticesCard():""}${nextClassCard()}${compTodayCard()}
+  ${typeof noticesCard==="function"?noticesCard():""}${lastClassCard()}${nextClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
     ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
     <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></div></section>
@@ -3731,28 +3738,26 @@ function viewFlow(){
 }
 
 function viewLog(){
+  autoLog();
   const st=P().settings,hrs=hoursLogged(),l30=recent(30);
   const hits=l30.reduce((a,s)=>a+(s.hits||[]).length,0),tapped=l30.reduce((a,s)=>a+(s.tapped||[]).length,0);
   const stuck=stuckCounts(60).slice(0,6);const max=stuck.length?stuck[0][1]:1;
   const tapsBy={};l30.forEach(s=>(s.tapped||[]).forEach(id=>{tapsBy[id]=(tapsBy[id]||0)+1}));
   const tb=Object.entries(tapsBy).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  const inGym=API.me&&API.me.gym&&!isCoach();
   return `${header()}<div class="stack-lg">
-  <section class="stack"><h1 style="font-size:34px">Training log</h1>
-  <div class="stats"><div class="stat"><b>${Math.round((st.priorHours||0)+hrs)}</b><span>Total hours</span></div><div class="stat"><b>${hits}</b><span>Taps · 30d</span></div><div class="stat"><b>${tapped}</b><span>Tapped · 30d</span></div></div></section>
-  <section class="stack"><h2 class="label">Where you get stuck · 60 days</h2>
-  ${stuck.length?`<div class="bars">${stuck.map(([p,c])=>`<button class="bar" data-a="pos" data-v="${p}" style="background:none;border:0;padding:0;text-align:left"><span>${esc(POS[p].l)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(100*c/max)}%"></span></span><span class="mono">${c}</span></button>`).join("")}</div><p class="small muted">Tap a bar to open that position's escapes in the flow map.</p>`:`<div class="empty">Log where you got stuck after each class. Your weak spots show up here and on the Today tab.</div>`}
-  ${tb.length?`<div class="stack"><h2 class="label">Tapped by · 30 days</h2><div class="list">${tb.map(([id,c])=>{const d=defFor(id);return `<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(TM[id]?TM[id].n:id)}</b> <span class="mono small muted">×${c}</span></span>${d?`<button class="btn" data-a="open" data-v="${d.id}">Drill the defense</button>`:""}</div>`}).join("")}</div></div>`:""}
-  </section>
+  <section class="stack"><div class="row between" style="flex-wrap:nowrap"><h1 style="font-size:34px;margin:0">Training log</h1><button class="btn sm" data-a="lognew">+ Log training</button></div>
+  <div class="stats"><div class="stat"><b>${Math.round((st.priorHours||0)+hrs)}</b><span>Total hours</span></div><div class="stat"><b>${l30.length}</b><span>Sessions · 30d</span></div><div class="stat"><b>${hits}</b><span>Worked · 30d</span></div></div>
+  <p class="small muted">${inGym?"Classes you book are added here automatically after they finish, with what was taught. Tap what worked, what got you and where you got stuck; JitsFlow works out what to study next.":"Join your gym (Settings › Your account) and the classes you book are logged here for you. For open mats and privates, tap + Log training."}</p></section>
+  ${nextStepsCard()}
   <section class="stack"><h2 class="label">Sessions</h2>
-  ${S.sessions.length?`<div>${S.sessions.slice().sort((a,b)=>a.date<b.date?1:-1).map(s=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc(fmtDate(s.date))} · ${esc(s.type||"Class")}</b><span class="mono small muted">${Number(s.mins)||0} min · ${Number(s.rolls)||0} rolls</span></div>
-  ${(s.taught||[]).length?`<div class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>`<button class="linkbtn" data-a="open" data-v="${i}">${esc(TM[i].n)}</button>`).join(", ")}</div>`:""}
-  ${(s.hits||[]).length?`<div class="small"><span class="muted">Hit:</span> ${s.hits.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}</div>`:""}
-  ${(s.tapped||[]).length?`<div class="small"><span class="muted">Tapped by:</span> ${s.tapped.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}</div>`:""}
-  ${(s.stuck||[]).length?`<div class="small"><span class="muted">Stuck in:</span> ${s.stuck.filter(p=>POS[p]).map(p=>esc(POS[p].l)).join(", ")}</div>`:""}
-  ${s.worked?`<div class="small"><span class="muted">Worked:</span> ${esc(s.worked)}</div>`:""}
-  ${s.fix?`<div class="small"><span class="muted">Fix:</span> ${esc(s.fix)}</div>`:""}
-  <div>${S.ui.confirmDel===s.id?`<div class="row"><span class="small">Delete this session?</span><button class="btn danger" data-a="delyes" data-v="${s.id}">Delete</button><button class="btn" data-a="delno">Keep</button></div>`:`<div class="row"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div>`}</div></div>`,{edit:["editlog",s.id],del:["del",s.id]})).join("")}</div>`:`<div class="empty">No sessions yet. After your next class, tap <b>Log session</b>: what was taught, how many rolls, what you hit, what got you, and where you got stuck. About a minute.</div>`}
-  </section></div>`;
+  ${S.sessions.length?`<div>${S.sessions.slice().sort(bySess).map(sessCard).join("")}</div>`:`<div class="empty">${inGym?"Nothing yet. Book a class: after it finishes, it shows up here.":"No sessions yet. After your next class, tap + Log training."}</div>`}
+  </section>
+  ${stuck.length||tb.length?`<details class="more" data-g="log-stats"${(S.ui.openG||{})["log-stats"]?" open":""}><summary><span><b>Where you get stuck · what taps you</b><br><span class="small muted">Last 30–60 days</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+  ${stuck.length?`<div class="bars">${stuck.map(([p,c])=>`<button class="bar" data-a="pos" data-v="${p}" style="background:none;border:0;padding:0;text-align:left"><span>${esc(POS[p].l)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(100*c/max)}%"></span></span><span class="mono">${c}</span></button>`).join("")}</div><p class="small muted">Tap a bar to open that position's escapes in the flow map.</p>`:""}
+  ${tb.length?`<div class="stack"><h2 class="label">Tapped by · 30 days</h2><div class="list">${tb.map(([id,c])=>{const d=defFor(id);return `<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(TM[id]?TM[id].n:id)}</b> <span class="mono small muted">×${c}</span></span>${d?`<button class="btn" data-a="open" data-v="${d.id}">Drill the defense</button>`:""}</div>`}).join("")}</div></div>`:""}
+  </div></details>`:""}
+  </div>`;
 }
 function fmtDate(s){try{return parseD(s).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}catch(e){return s}}
 
@@ -3800,13 +3805,15 @@ function techSheet(id,fromBack){
    ${(P().videos||{})[t.id]||S.ui.vidUp===t.id||!ASSETS?"":`<section class="stack"><h2 class="label">Video</h2>${videoBlock(t)}</section>`}
   </div>`,false,{act:!ASSETS?"":(P().videos||{})[t.id]?`<button class="btn grow" data-a="playvid">▶ Play video</button>`:`<label class="btn grow" for="vid-${t.id}" style="cursor:pointer">Add a video</label>`});
 }
+/* ‹ Prev / Next › for review cards and Rate what you know (Next skips without rating). */
+function prevNext(k,r,short){return `<button class="btn" data-a="${k}prev"${r.i?"":" disabled"} aria-label="Previous">‹${short?"":" Prev"}</button><button class="btn${short?"":" grow"}" data-a="${k}next" aria-label="Next, skip for now">${short?"›":"Next ›"}</button>`}
 function reviewSheet(){
   const r=S.ui.review;if(!r||r.i>=r.q.length){const n=r?r.q.length:0;S.ui.review=null;S.ui.stack=[];closeSheet();render();if(n)toast(`${n} reviewed. Each comes back when it's due.`);return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];if(!P().settings.quiz)r.shown=true;
   openSheet(`${sheetHead(`Review ${r.i+1} of ${r.q.length}`)}<div class="stack-lg"><div class="progress"><i style="width:${Math.round(100*r.i/r.q.length)}%"></i></div>
   <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1>
   ${r.shown?`<ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol><div class="small"><b>Key:</b> ${gl(t.d[0])}</div>`:`<p>${gl(OV[t.id]||"")}</p><p class="muted small">Quiz mode: say the steps out loud, then tap Show steps.</p>`}</div>
-  </div>`,false,r.shown?{top:(()=>{const c=P().srs[t.id];return `<div class="small muted">Did you remember the steps? It comes back:</div><div class="ratebar">${[["Forgot",0],["Partly",1],["Got it",2],["Easy",3]].map(([l,n])=>`<button class="btn" data-a="rate" data-v="${n}">${l}<small>${whenBack(nextIvl(c,n))}</small></button>`).join("")}</div>`})()}:{act:`<button class="btn primary grow" data-a="reveal">Show steps</button>`});
+  </div>`,false,r.shown?{top:(()=>{const c=P().srs[t.id];return `<div class="small muted">Did you remember the steps? It comes back:</div><div class="ratebar">${[["Forgot",0],["Partly",1],["Got it",2],["Easy",3]].map(([l,n])=>`<button class="btn" data-a="rate" data-v="${n}">${l}<small>${whenBack(nextIvl(c,n))}</small></button>`).join("")}</div>`})(),act:prevNext("rev",r)}:{act:`${prevNext("rev",r,true)}<button class="btn primary grow" data-a="reveal">Show steps</button>`});
 }
 function qrSheet(){
   const r=S.ui.qr;if(!r||r.i>=r.q.length){const n=r?r.q.length:0;S.ui.qr=null;S.ui.stack=[];closeSheet();render();if(n)toast("Rated. Your plan and reviews are set.");return}
@@ -3815,7 +3822,7 @@ function qrSheet(){
   <div class="revealcard">${!(P().videos||{})[t.id]&&!techImg(t.id)&&!inClaude()&&vidOf(t.id)?ytPlayer(t.id,t.n):techMedia(t,"sm")}<div class="fromto"><span class="posbtn">${esc(POS[t.f].L)}</span><span>→</span><span class="posbtn">${t.t==="sub"?"Tap":esc(POS[t.t].L)}</span></div><h1>${esc(t.n)}</h1><p class="lead">${gl(OV[t.id]||"")}</p>
   <ol class="steps qrsteps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol>
   <p class="small"><b>Key detail:</b> ${gl(t.d[0])}</p></div>
-  </div>`,false,{top:`<div class="levels qrlevels">${LEVELS.map((L,i)=>`<button data-a="qrset" data-v="${i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>`,act:`<button class="btn grow" data-a="qrskip">Skip for now</button>`});
+  </div>`,false,{top:`<div class="levels qrlevels">${LEVELS.map((L,i)=>`<button data-a="qrset" data-v="${i}" aria-pressed="${t.id in P().mastery&&lv(t.id)===i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>`,act:prevNext("qr",r)});
 }
 function newForm(){return {date:today(),type:"Class",mins:P().settings.sessionMins||90,taught:[],rolls:5,hits:[],tapped:[],stuck:[],worked:"",fix:"",feel:3}}
 function techOptions(filter){return ORDER.map(p=>{const ts=TECH.filter(t=>t.f===p&&(!filter||filter(t)));return ts.length?`<optgroup label="${esc(POS[p].L)}">${ts.map(t=>`<option value="${t.id}">${esc(t.n)}</option>`).join("")}</optgroup>`:""}).join("")}
@@ -3878,7 +3885,7 @@ function render(){
   const app=document.getElementById("app");
   const v=S.ui.tab;
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
-  const fab=(v==="today"||v==="log")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
+  const fab=(v==="today")?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches in study mode) the study tabs.
   const mg=managing();if(mg&&v!=="coach"){S.ui.tab="coach";return go("coach-"+(COACH.view||"today"))}
   if(!mg&&v==="coach"&&isCoach()&&coachMode()==="study"){}
@@ -4014,6 +4021,13 @@ document.addEventListener("click",e=>{
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
     case "review": S.ui.review={q:dueList(),i:0,shown:false}; reviewSheet(); break;
     case "reveal": S.ui.review.shown=true; reviewSheet(); break;
+    case "revprev": { const r=S.ui.review;if(r&&r.i>0){r.i--;r.shown=false;reviewSheet()}break }
+    case "revnext": { const r=S.ui.review;if(r){r.i++;r.shown=false;reviewSheet()}break }
+    case "qrprev": { const r=S.ui.qr;if(r&&r.i>0){r.i--;qrSheet()}break }
+    case "qrnext": { const r=S.ui.qr;if(r){r.i++;qrSheet()}break }
+    case "reviewids": { const ids=String(v||"").split(",").filter(id=>TM[id]);ids.forEach(ensureCard);if(ids.length){S.ui.review={q:ids,i:0,shown:false};reviewSheet()}break }
+    case "tag": tagSheet(v,el.dataset.k); break;
+    case "tagset": tagSet(el); break;
     case "rate": { const r=S.ui.review;rateCard(r.q[r.i],Number(v));r.i++;r.shown=false;reviewSheet();break }
     case "qr": { let q=rateQueue();if(!q.length)q=TECH.filter(t=>t.p!=="plus").sort(byPos).map(t=>t.id);S.ui.qr={q,i:0};qrSheet();break }
     case "qrset": { const r=S.ui.qr;const n=Number(v);P().mastery[r.q[r.i]]=n;if(n>=1)ensureCard(r.q[r.i]);saveProgress();r.i++;qrSheet();break }
@@ -4034,7 +4048,10 @@ document.addEventListener("click",e=>{
     case "viddelyes": { const o=P().videos[v];delete P().videos[v];S.ui.vidConfirm=null;saveProgress();if(o&&ASSETS){ASSETS.delete(o.v).catch(()=>{});if(o.th)ASSETS.delete(o.th).catch(()=>{})}techSheet(v,true);toast("Video removed.");break }
     case "phno": S.ui.phConfirm=null; render(); break;
     case "phdelyes": { const id=P().photos[v];delete P().photos[v];S.ui.phConfirm=null;saveProgress();if(id&&ASSETS)ASSETS.delete(id).catch(()=>{});render();toast("Photo removed.");break }
-    case "del": { const old=S.sessions.find(x=>x.id===v);if(!old)break;deleteSession(v).then(()=>toast("Session deleted.",{label:"Undo",fn:async()=>{const ok=await addSession(old);if(ok){render();toast("Session restored.")}}}));break }
+    case "del": { const old=S.sessions.find(x=>x.id===v);if(!old)break;
+      // a class that logged itself stays deleted (it isn't added back from your bookings)
+      if(old.classId){const sk=P().logSkip||(P().logSkip=[]);if(!sk.includes(old.classId))sk.push(old.classId);saveProgress()}
+      deleteSession(v).then(()=>toast("Session deleted.",{label:"Undo",fn:async()=>{if(old.classId){P().logSkip=(P().logSkip||[]).filter(x=>x!==old.classId);saveProgress()}const ok=await addSession(old);if(ok){render();toast("Session restored.")}}}));break }
     case "toastact": { const f=toast._act;toast._act=null;document.getElementById("toast").hidden=true;if(f)f();break }
     case "delno": S.ui.confirmDel=null; render(); break;
     case "delyes": S.ui.confirmDel=null; deleteSession(v); break;
@@ -4058,6 +4075,8 @@ document.addEventListener("keydown",e=>{
 });
 let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
+  if(e.target.id==="tag-q"){const sh=S.ui.sheet,s=sh&&S.sessions.find(x=>x.id===sh.id);if(s)document.getElementById("tag-list").innerHTML=tagChoices(s,sh.kind,e.target.value);return}
+  if(e.target.id==="tag-note"){tagNote(e.target.value);return}
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
   if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
@@ -4182,6 +4201,7 @@ async function startSync(opts){
     const have=new Set(l.logs.map(x=>x.id));const extra=adopt?S.sessions.filter(x=>x&&x.id&&!have.has(x.id)):[];
     for(const s of extra.slice(0,200)){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){}}
     S.sessions=[...l.logs,...extra];lsSet("rtb.sessions",S.sessions);lsSet("rtb.owner",mine);
+    setTimeout(()=>autoLog(true),300);
   }catch(e){setSync("Saved on this device","err");toast("Couldn't reach your account. Changes are kept on this device for now.");if(!foreign)lsSet("rtb.owner",mine)}
 }
 function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
@@ -5174,6 +5194,71 @@ function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomin
 function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";const g=API.me.gym,next=(API.classes||[]).find(c=>c.myGoing&&clsEnd(c)>Date.now());
   const inv=g.inviteCode?`Come train with me at ${g.name}! I use JitsFlow to book classes and study techniques between sessions. Join here (the gym code is filled in):\n${joinURL(g.inviteCode)}`:`I'm using JitsFlow to study no-gi between classes: every position, attack chain and escape, with videos. ${location.origin}`;
   return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
+
+/* ----- training log that fills itself in from the classes you attended ----- */
+const bySess=(a,b)=>(a.date===b.date?String(b.time||"").localeCompare(String(a.time||"")):a.date<b.date?1:-1);
+async function autoLog(force){
+  if(S.mode!=="api"||!API.me||!API.me.gym||isCoach())return;
+  if(!force&&API.autoLogAt&&Date.now()-API.autoLogAt<5*60e3)return;API.autoLogAt=Date.now();
+  let cs;try{cs=(await api("GET","/me/attended?days=45")).classes}catch(e){return}
+  const have=new Set(S.sessions.map(s=>s.classId).filter(Boolean)),skip=new Set(P().logSkip||[]);
+  const add=cs.filter(c=>!have.has(c.id)&&!skip.has(c.id)).slice(0,40);if(!add.length)return;
+  let n=0,fresh=0;
+  for(const c of add){const taught=(c.ids||[]).filter(id=>TM[id]);
+    const s={id:"k"+c.id,classId:c.id,auto:true,date:dayKey(c.startsAt),time:c.startsAt,type:c.kind==="private"?"Private":"Class",title:c.title,coach:c.coach,focus:c.focus,mins:c.durationMin,rolls:0,taught,hits:[],tapped:[],stuck:[],worked:"",fix:""};
+    // anything taught that's new to you goes into your reviews
+    taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id);fresh++}});
+    if(await addSession(s))n++}
+  if(fresh)saveProgress();
+  if(n){if(["log","today"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
+}
+/* What to do next, worked out from your last few weeks of training. */
+function nextSteps(){const out=[],seen=new Set();
+  const st=stuckCounts(21)[0];
+  if(st){const p=st[0],t=fromPos(p).filter(t=>["escape","defense","sweep","guard"].includes(t.c)).sort((a,b)=>lv(a.id)-lv(b.id))[0];if(t){seen.add(t.id);out.push({why:`You got stuck in ${POS[p].l.toLowerCase()}${st[1]>1?` ${st[1]} times`:""} lately`,t})}}
+  const tc={};recent(21).forEach(s=>(s.tapped||[]).forEach(id=>{if(TM[id])tc[id]=(tc[id]||0)+1}));
+  const top=Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];if(top){const d=defFor(top[0]);if(d&&!seen.has(d.id)){seen.add(d.id);out.push({why:`${TM[top[0]].n} got you${top[1]>1?` ${top[1]} times`:""}`,t:d})}}
+  const taught=[...new Set(S.sessions.slice().sort(bySess).slice(0,6).flatMap(s=>s.taught||[]))].filter(id=>TM[id]&&lv(id)<3&&!seen.has(id));
+  if(taught.length)out.push({why:"Taught in your recent classes",ids:taught.slice(0,8)});
+  return out.slice(0,3)}
+function nextStepsCard(){const n=nextSteps();if(!n.length)return "";
+  return `<section class="panel stack nextsteps"><h2 class="label">What to work on next</h2>${n.map(x=>`<div class="nstep"><span class="small muted">${esc(x.why)}</span>${x.t?`<button class="btn" data-a="open" data-v="${x.t.id}">Study: ${esc(x.t.n)}</button>`:`<button class="btn" data-a="reviewids" data-v="${x.ids.join(",")}">Review ${x.ids.length} move${x.ids.length>1?"s":""}: ${esc(x.ids.slice(0,2).map(i=>TM[i].n).join(", "))}${x.ids.length>2?"…":""}</button>`}</div>`).join("")}</section>`}
+function sessCard(s){
+  const tags=[...(s.hits||[]).filter(i=>TM[i]).map(i=>`<span class="ltag ok">✓ ${esc(TM[i].n)}</span>`),...(s.tapped||[]).filter(i=>TM[i]).map(i=>`<span class="ltag bad">Tapped: ${esc(TM[i].n)}</span>`),...(s.stuck||[]).filter(p=>POS[p]).map(p=>`<span class="ltag warn">Stuck: ${esc(POS[p].l)}</span>`)];
+  const note=[s.worked,s.fix].filter(Boolean).join(" · ");
+  return swipeWrap(`<div class="sess lcard"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><b>${esc(s.title||s.type||"Training")}</b><div class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}${s.coach?` · ${esc(s.coach)}`:""}${Number(s.mins)?` · ${Number(s.mins)} min`:""}${Number(s.rolls)?` · ${Number(s.rolls)} rolls`:""}</div></div><span class="pill">${s.auto?"Booked":esc(s.type||"Class")}</span></div>
+    ${(s.taught||[]).filter(i=>TM[i]).length?`<div class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>`<button class="linkbtn" data-a="open" data-v="${i}">${esc(TM[i].n)}</button>`).join(", ")}</div>`:s.focus?`<div class="small"><span class="muted">Focus:</span> ${esc(s.focus)}</div>`:""}
+    ${tags.length?`<div class="ltags">${tags.join("")}</div>`:""}${note?`<div class="small">${esc(note)}</div>`:""}
+    <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">${note?"Note ✎":"+ Note"}</button></div>
+    <div class="row" style="justify-content:flex-end;gap:14px"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div></div>`,{edit:["editlog",s.id],del:["del",s.id]})}
+/* Today: the last class you went to, waiting for a quick tap or two. */
+function lastClassCard(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if(!s)return "";
+  if(Date.now()-new Date(s.time||s.date).getTime()>3*864e5||(s.hits||[]).length||(s.tapped||[]).length||(s.stuck||[]).length||s.worked)return "";
+  return `<section class="panel stack"><div><h2 class="label">How did it go?</h2><b>${esc(s.title||"Class")}</b> <span class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}</span></div>
+    ${(s.taught||[]).filter(i=>TM[i]).length?`<p class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}. Already in your reviews.</p>`:""}
+    <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">+ Note</button></div></section>`}
+/* One sheet per tag type; every tap saves straight away. */
+function tagChoices(s,k,q){const sel=new Set(s[k]||[]);q=(q||"").trim().toLowerCase();
+  const first=k==="hits"?(s.taught||[]).filter(i=>TM[i]):[...new Set(recent(90).flatMap(x=>x.tapped||[]))].filter(i=>TM[i]);
+  const pool=(k==="tapped"?TECH.filter(t=>t.t==="sub"):TECH).filter(t=>!q||(t.n+" "+POS[t.f].l+" "+(CATS[t.c]||"")).toLowerCase().includes(q)).map(t=>t.id);
+  const chip=i=>`<button class="tchip wide" data-a="tagset" data-k="${k}" data-v="${i}" aria-pressed="${sel.has(i)}">${esc(TM[i].n)}</button>`;
+  const rest=pool.filter(i=>q||!first.includes(i));
+  return `${first.length&&!q?`<h2 class="label">${k==="hits"?"Taught in this class":"Got you before"}</h2><div class="tlist">${first.map(chip).join("")}</div><h2 class="label">${k==="hits"?"Anything else":"Other submissions"}</h2>`:""}<div class="tlist">${rest.slice(0,q?80:30).map(chip).join("")}</div>${!q&&rest.length>30?`<p class="small muted">Search to find more.</p>`:""}${q&&!rest.length?`<p class="small muted">Nothing matches “${esc(q)}”.</p>`:""}`}
+function tagSheet(id,k){const s=S.sessions.find(x=>x.id===id);if(!s)return;S.ui.sheet={k:"tag",id,kind:k};S.ui.stack=[];
+  const head={hits:"What worked?",tapped:"What got you?",stuck:"Where did you get stuck?",note:"Notes"}[k];
+  const body=k==="stuck"?`<p class="small muted">Tap every position you got stuck in. JitsFlow points you to its escapes.</p><div class="tgrid2">${ORDER.map(p=>`<button class="tchip" data-a="tagset" data-k="stuck" data-v="${p}" aria-pressed="${(s.stuck||[]).includes(p)}">${esc(POS[p].l)}</button>`).join("")}</div>`
+    :k==="note"?`<textarea id="tag-note" rows="6" placeholder="What clicked, what to ask your coach, how you felt…">${esc([s.worked,s.fix].filter(Boolean).join("\n"))}</textarea><p class="small muted">Saved as you type.</p>`
+    :`<p class="small muted">${k==="hits"?"Tap anything you landed or that worked in rolls. It moves up your progress.":"Tap what you got caught with. JitsFlow lines up the defense."}</p><input id="tag-q" type="search" placeholder="${k==="tapped"?"Find a submission":"Find a move"}" autocomplete="off"><div id="tag-list" class="stack">${tagChoices(s,k,"")}</div>`;
+  openSheet(`${sheetHead(esc(s.title||s.type||"Session"))}<div class="stack-lg"><h1>${head}</h1>${body}</div>`,false,{back:"Done"})}
+let tagNoteT=null;
+function tagSet(el){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.sessions.find(x=>x.id===sh.id);if(!s)return;const k=el.dataset.k,v=el.dataset.v;
+  const arr=s[k]=(s[k]||[]).slice(),on=!arr.includes(v);if(on)arr.push(v);else arr.splice(arr.indexOf(v),1);
+  document.querySelectorAll(`#sheet [data-a="tagset"][data-v="${v}"]`).forEach(b=>b.setAttribute("aria-pressed",String(on)));
+  // the app learns from it: what worked moves up to "live", what got you puts its defense in your reviews
+  if(on&&k==="hits"&&lv(v)<4){P().mastery[v]=4;ensureCard(v);saveProgress()}
+  if(on&&k==="tapped"){const d=defFor(v);if(d){if(lv(d.id)<1)P().mastery[d.id]=1;ensureCard(d.id);P().srs[d.id].due=today();saveProgress()}}
+  addSession(s)}
+function tagNote(v){const sh=S.ui.sheet;if(!sh||sh.k!=="tag")return;const s=S.sessions.find(x=>x.id===sh.id);if(!s)return;s.worked=String(v).slice(0,2000);s.fix="";clearTimeout(tagNoteT);tagNoteT=setTimeout(()=>addSession(s),600)}
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;try{if(managing())return}catch(e){}/* coaches running the gym skip the study questions until they open study mode */

@@ -63,7 +63,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
   await p.tap('nav.tabs [data-v="today"]');await p.tap('.panel.accent button[data-a="qr"]');
   const total=await ev(()=>S.ui.qr.q.length);const want=await ev(()=>rateable().length);ok(total===want&&total>54,`rate queue is ${total}, expected ${want}`);
-  await p.tap('#sheetbar [data-a="qrskip"]');
+  await p.tap('#sheetbar [data-a="qrnext"]');
   for(let i=1;i<total;i++){await p.tap(`#sheetbar [data-a="qrset"][data-v="${i%5}"]`)}
   await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/Rated/.test(document.getElementById('toast').textContent)),'quick rate finishes by itself, no screen to close');
   const rq=await ev(()=>rateQueue().length);ok(rq===1,`one skipped technique left to rate (got ${rq})`);
@@ -93,7 +93,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok((await sheetH1())==='Knee cut (knee slice) pass','swipe right goes back one technique');
   await p.tap('#sheetbar .back');ok(await ev(()=>document.getElementById('sheet').hidden),'Close returns to the tab');
   // --- log: new, effects, edit, delete
-  await p.tap('nav.tabs [data-v="log"]');await p.tap('.fab');
+  await p.tap('nav.tabs [data-v="log"]');await p.tap('[data-a="lognew"]');
   await p.selectOption('#f-taught','over_under');await p.selectOption('#f-hits','triangle');await p.selectOption('#f-tapped','rnc');
   await p.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();await p.locator('#sheet [data-a="stuck"][data-v="sc_bot"]').tap();
   await p.locator('#f-worked').fill('Knee shield held up');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
@@ -177,7 +177,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.tap('nav.tabs [data-v="learn"]');await p.locator('[data-a="filter"][data-k="kind"][data-v="def"]').tap();
   ok(await ev(()=>{const r=[...document.querySelectorAll('#learn-groups .trow')].map(b=>TM[b.dataset.v]);return r.length>15&&r.every(t=>isDef(t))}),'defense filter shows only escapes and defenses');
   await p.locator('[data-a="filter"][data-k="kind"][data-v="all"]').tap();
-  await p.tap('nav.tabs [data-v="log"]');await p.tap('.fab');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
+  await p.tap('nav.tabs [data-v="log"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'log links rear-naked choke to its defense');
   await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
   // --- name, Belts tab, belt path
