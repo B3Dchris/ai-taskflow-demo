@@ -27,12 +27,18 @@ def main(args):
     for f in files:
         stem = os.path.splitext(os.path.basename(f))[0]
         belt = re.match(r"^belt[-_ ]?(blue|purple|brown|black)$", stem, re.I)
-        ident = None if belt else by_key.get(key(stem))
+        # "move-" / "pos-" settle names used by both a move and a position (ashi_def)
+        pre = re.match(r"^(move|pos)[-_ ](.+)$", stem, re.I)
+        if pre and not belt:
+            want = pre.group(2); ident = want if (want in names if pre.group(1).lower() == "move" else want in POS) else None
+            kind = "techniques" if pre.group(1).lower() == "move" else "positions"
+        else:
+            ident = None if belt else by_key.get(key(stem)); kind = None
         if not belt and not ident: skipped.append(os.path.basename(f)); continue
         try: im = ImageOps.exif_transpose(Image.open(f)).convert("RGB")
         except Exception: skipped.append(os.path.basename(f) + " (not an image)"); continue
         im = ImageOps.fit(im, (1000, 1000), Image.LANCZOS, centering=(0.5, 0.45))
-        sub, name = ("belts", belt.group(1).lower()) if belt else (("positions" if ident in POS else "techniques"), ident)
+        sub, name = ("belts", belt.group(1).lower()) if belt else (kind or ("positions" if ident in POS else "techniques"), ident)
         out = os.path.join(ROOT, "web", "img", sub, name + ".jpg"); os.makedirs(os.path.dirname(out), exist_ok=True)
         im.save(out, "JPEG", quality=82, optimize=True, progressive=True); done.append(f"{sub}/{name}.jpg")
     print(f"added {len(done)}:", *done, sep="\n  ")
