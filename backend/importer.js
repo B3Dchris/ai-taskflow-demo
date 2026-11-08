@@ -420,6 +420,8 @@ const INFO_PAGE = /time-?table|schedule|class|pric(e|es|ing)|fees?\b|rates?\b|me
 // One read of a whole site now and then leaves something out (a coach, the logo, a few classes), and a second
 // read usually catches it. So every import reads twice at the same time and keeps everything either read found.
 const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// "Adult Beginners (Edgemead)" → "edgemead": classes at different venues are never the same class.
+const venueOf = (t) => { const m = String(t || "").match(/\(([^()]*)\)\s*$/); return m && !/\d|y\/o|years?|gi\b|beginner|advanced|intermediate|kids|adult/i.test(m[1]) ? nk(m[1]) : ""; };
 function unionBy(a, b, key, better) {
   const out = [], at = new Map();
   for (const it of [...(a || []), ...(b || [])]) { if (!it) continue; const k = key(it); if (!k) { out.push(it); continue; }
@@ -436,8 +438,9 @@ function unionAi(a, b) {
   // Same day and start time with titles that share a word ("Kids" / "Kids Gi BJJ") is one class; keep the fuller one.
   const seen = new Map(); out.timetable = [];
   for (const r of [...(a.timetable || []), ...(b.timetable || [])]) {
-    const k = `${r.day}|${r.start}`, w = new Set(nk(r.title).split(" ").filter((x) => x.length > 2));
-    const same = (seen.get(k) || []).find((o) => { const ow = nk(o.title).split(" ").filter((x) => x.length > 2); return !ow.length || !w.size || ow.some((x) => w.has(x)); });
+    const k = `${r.day}|${r.start}`, w = new Set(nk(r.title).split(" ").filter((x) => x.length > 2)), v = venueOf(r.title);
+    const same = (seen.get(k) || []).find((o) => { const ov = venueOf(o.title); if (v && ov && v !== ov) return false;
+      const ow = nk(o.title).split(" ").filter((x) => x.length > 2); return !ow.length || !w.size || ow.some((x) => w.has(x)); });
     if (same) { const i = out.timetable.indexOf(same), f = fuller(same, r); out.timetable[i] = f; seen.set(k, seen.get(k).map((o) => (o === same ? f : o))); }
     else { out.timetable.push(r); seen.set(k, [...(seen.get(k) || []), r]); }
   }
@@ -445,10 +448,20 @@ function unionAi(a, b) {
   out.coaches = unionBy(a.coaches, b.coaches, (c) => nk(c.name), fuller);
   return out;
 }
+// A dense timetable picture is read on its own as well: one focused look per picture catches classes that a read of
+// the whole site (with several pictures at once) skips.
+async function readPicture(client, img, pages) {
+  const others = pages.map((p) => p.title).filter(Boolean).slice(0, 12).join(" · ");
+  return ai.extract(client, { system: SYSTEM, schema: SCHEMA, maxTokens: 6000, timeout: 90000, effort: "medium", content: [
+    { type: "image", source: { type: "url", url: img.url } },
+    { type: "text", text: `WEBSITE: ${pages[0].url}\nThis picture is on the page "${img.title}" (${img.page}). The site's pages: ${others}.\nRead every class and price in this picture. Leave the other fields empty and set logo_choice to -1.` },
+  ] });
+}
 async function readTwice(client, pages, logos, images) {
-  const [x, y] = await Promise.allSettled([claudeRead(client, pages, logos, images), claudeRead(client, pages, logos, images)]);
-  if (x.status === "rejected" && y.status === "rejected") throw x.reason;
-  return unionAi(x.status === "fulfilled" ? x.value : null, y.status === "fulfilled" ? y.value : null);
+  const res = await Promise.allSettled([claudeRead(client, pages, logos, images.map((i) => i.url)), claudeRead(client, pages, logos, images.map((i) => i.url)), ...images.map((im) => readPicture(client, im, pages))]);
+  const got = res.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  if (!got.length) throw res[0].reason;
+  return got.reduce((a, b) => unionAi(a, b));
 }
 
 /* ---------------- checking Claude's answer against the pages ---------------- */
@@ -575,14 +588,14 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
   // with little text are searched too. Left out: logos, photos, headshots on the coaches page, and pictures on most pages.
   const onMany = new Map(); pages.forEach((p) => new Set(p.imgs.map((i) => i.src)).forEach((src) => onMany.set(src, (onMany.get(src) || 0) + 1)));
   const furniture = (im) => /logo|icon|favicon|avatar|emoji|badge|IMG_\d|DSC_?\d|photo|portrait|headshot/i.test(imgName(im) + " " + im.cls) || (pages.length >= 4 && onMany.get(im.src) >= 3);
-  const named = pages.flatMap((p) => p.imgs).filter((im) => INFO_IMG.test(imgName(im)) && !/logo|icon|favicon|avatar/i.test(imgName(im)));
+  const named = pages.flatMap((p) => p.imgs.map((im) => ({ ...im, from: p }))).filter((im) => INFO_IMG.test(imgName(im)) && !/logo|icon|favicon|avatar/i.test(imgName(im)));
   const people = (p) => /coach|team|instructor|staff|faculty/i.test(new URL(p.url).pathname + " " + p.title);
   const infoPages = pages.filter((p) => INFO_PAGE.test(new URL(p.url).pathname + " " + p.title) && !people(p));
   const thinPages = pages.filter((p) => p !== pages[0] && !people(p) && !infoPages.includes(p) && p.text.length < 2500);
-  const onPages = [...infoPages, ...thinPages].flatMap((p) => p.imgs.filter((im) => !furniture(im)).slice(0, 3));
+  const onPages = [...infoPages, ...thinPages].flatMap((p) => p.imgs.filter((im) => !furniture(im)).slice(0, 3).map((im) => ({ ...im, from: p })));
   const base = (src) => src.replace(/\?format=\d+w$/, "").replace(/-\d{2,4}x\d{2,4}(?=\.\w+$)/, "");
-  const picked = new Map(); for (const im of [...named, ...onPages]) { const k = base(im.src); if (!picked.has(k)) picked.set(k, im.src.replace(/\?format=\d+w$/, "?format=1500w")); }
-  const ttImages = [...picked.values()].slice(0, 8);
+  const picked = new Map(); for (const im of [...named, ...onPages]) { const k = base(im.src); if (!picked.has(k)) picked.set(k, { url: im.src.replace(/\?format=\d+w$/, "?format=1500w"), page: im.from.url, title: im.from.title }); }
+  const ttImages = [...picked.values()].slice(0, 6);
   let profile = plain, method = "basic", aiError = null, logoChoice = -2, dropped = null;
   const c = client === undefined ? getClient() : client;
   if (c) {
