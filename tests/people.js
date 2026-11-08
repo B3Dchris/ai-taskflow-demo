@@ -17,11 +17,14 @@ const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
     { kind: "student", name: "Lee", phone: "", children: [] },
     { kind: "student", name: "Lee", phone: "", children: [] },
     { kind: "student", name: "", phone: "12", children: [] },
+    { kind: "parent", name: "Mama Kea", phone: "+27 83 555 0303", children: [] },
+    { kind: "student", name: "Lindi's mum", phone: "", children: [] },
   ]);
-  ok(rows.length === 5, "one row per student, duplicates and junk dropped: " + rows.length);
+  ok(rows.length === 7, "one row per student, duplicates and junk dropped: " + rows.length);
   ok(rows[0].name === "Thabo M" && rows[0].parentName === "", "the ~ display name is used for an unsaved number");
   ok(rows[1].name === "Aya" && rows[2].name === "Ben" && rows[1].parentName === "Nomsa" && rows[2].phone === rows[1].phone, "a parent of two gives two kids on one number");
   ok(rows[3].name === "" && rows[3].parentName === "Parent", "a parent with no kid named waits for the coach to type it");
+  ok(rows[5].name === "Kea" && rows[5].parentName === "Parent" && rows[6].name === "Lindi", "\"Mama Kea\" and \"Lindi's mum\" become kids even when Claude doesn't split them");
   let sent;
   const client = { messages: { create: async (body) => { sent = body; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ people: [{ kind: "parent", name: "Zanele", phone: "083 111 2222", children: ["Kea"] }] }) }] }; } } };
   const out = await people.readPeople({ client, images: [{ type: "image/jpeg", data: Buffer.from("x") }, { type: "image/png", data: Buffer.from("y") }] });

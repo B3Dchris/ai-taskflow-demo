@@ -39,6 +39,9 @@ function toRows(people) {
   for (const p of Array.isArray(people) ? people : []) {
     const name = tidy(p.name), phone = digits(p.phone).length >= 7 ? String(p.phone).trim().slice(0, 30) : "";
     const kids = (Array.isArray(p.children) ? p.children : []).map(tidy).filter(Boolean);
+    // "Mama Kea" with no kid listed: the name itself says who the kid is.
+    const k = !kids.length ? kidFromName(name) : null;
+    if (k) { push({ name: k.name, parentName: k.parentName, phone }); continue; }
     if (p.kind === "parent") {
       const parentName = name || "";
       if (kids.length) kids.forEach((k) => push({ name: k, parentName: parentName || "Parent", phone }));
