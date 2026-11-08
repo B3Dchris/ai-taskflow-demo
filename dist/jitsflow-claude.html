@@ -349,16 +349,40 @@ textarea{min-height:76px;resize:vertical}
 .flowsvg .node.t4 rect{stroke:var(--warn)} .flowsvg .node.t5 rect{stroke:var(--bad)}
 .flowsvg .node.sel rect{fill:var(--blue);stroke:var(--blue)}
 .flowsvg .node.sel text{fill:var(--on-blue)}
-.flowsvg .node.dest rect{fill:var(--blue-soft)}
 .flowsvg .node{cursor:pointer}
-.flowsvg .tier{font-family:var(--f-display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;fill:var(--ink-2);font-weight:700}
-.flowsvg .kbar-bg{fill:var(--surface-2)!important;stroke:none!important}.flowsvg .kbar{fill:var(--good)!important;stroke:none!important}
+.flowsvg .tier{font-family:var(--f-display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;fill:var(--ink-2);font-weight:700;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
+.flowsvg .kbar-bg{fill:var(--line)!important;stroke:none!important}.flowsvg .kbar{fill:var(--good)!important;stroke:none!important}
 .flowsvg .node.sel .kbar-bg{fill:rgba(255,255,255,.3)!important}.flowsvg .node.sel .kbar{fill:var(--on-blue)!important}
-.flowsvg .dbadge{fill:var(--blue)!important;stroke:var(--surface)!important;stroke-width:2!important}.flowsvg .dbadgetx{fill:var(--on-blue)!important;font-size:10px!important;font-weight:700!important}
-.flowsvg .node.dest rect:first-child{stroke:var(--blue);stroke-width:2.2}
 .flowkey{display:flex;flex-wrap:wrap;gap:6px 14px}.flowkey span{display:inline-flex;align-items:center;gap:6px}
-.flowkey i{font-style:normal;display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;font-size:10px;font-weight:700}
-.k-dest{background:var(--blue);color:var(--on-blue)}.k-sub{background:var(--bad);color:#fff}.k-bar{width:22px;min-width:22px!important;height:4px!important;border-radius:2px!important;background:var(--good)}
+.flowkey i{display:inline-block}.k-bar{width:22px;height:4px;border-radius:2px;background:var(--good)}
+.lk{width:22px;height:3px;border-radius:2px;position:relative}.lk::after{content:"";position:absolute;right:-3px;top:-3px;border-left:6px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}
+.lk.up{background:var(--good);color:var(--good)}.lk.side{background:var(--blue);color:var(--blue)}.lk.down{background:var(--warn);color:var(--warn)}.lk.fin{background:var(--bad);color:var(--bad)}
+/* map: arrows and what they point at */
+.flowsvg .edge{fill:none;stroke-linecap:round;opacity:.9;animation:edgein .45s ease both;animation-delay:calc(var(--i) * 45ms)}
+@keyframes edgein{from{opacity:0}to{opacity:.9}}
+.flowsvg .edge.up,.fsk .fl.up{stroke:var(--good)}.flowsvg .edge.side,.fsk .fl.side{stroke:var(--blue)}.flowsvg .edge.down,.fsk .fl.down{stroke:var(--warn)}.flowsvg .edge.fin,.fsk .fl.fin{stroke:var(--bad)}.fsk .fl.stay{stroke:var(--ink-2)}
+.ah.up path{fill:var(--good)}.ah.side path{fill:var(--blue)}.ah.down path{fill:var(--warn)}.ah.fin path{fill:var(--bad)}.ah.stay path{fill:var(--ink-2)}
+.flowsvg .node.dest rect:first-of-type{stroke-width:2.2}
+.flowsvg .node.dest.up rect:first-of-type{stroke:var(--good);fill:var(--good-soft)}.flowsvg .node.dest.side rect:first-of-type{stroke:var(--blue);fill:var(--blue-soft)}.flowsvg .node.dest.down rect:first-of-type{stroke:var(--warn);fill:var(--warn-soft)}
+.flowsvg .node.dim rect:first-of-type{stroke-opacity:.3}.flowsvg .node.dim text{fill:var(--ink-2);font-weight:500}
+.flowsvg .node.fin rect{fill:var(--surface);stroke:var(--bad);stroke-dasharray:4 3}.flowsvg .node.fin text{fill:var(--bad);font-family:var(--f-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.flowsvg .node.fin.dest rect{fill:var(--bad-soft);stroke-dasharray:none;stroke-width:2.2}.flowsvg .node.fin.dim{opacity:.5}
+@media (prefers-reduced-motion:reduce){.flowsvg .edge,.fsk-lines.anim .fl{animation:none}}
+/* "From here": lines run down the gutter into each destination */
+.fsk{position:relative;display:flex;flex-direction:column;gap:10px}
+.fsk-src{background:var(--blue);color:var(--on-blue);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column}
+.fsk-src b{font-family:var(--f-display);font-size:22px;text-transform:uppercase;line-height:1.05}
+.fsk-t{font-family:var(--f-display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.8;font-weight:700}
+.fsk-lines{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.fsk .fl{fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:.9}.fsk-lines.anim .fl{animation:edgein .45s ease both;animation-delay:calc(var(--i) * 45ms)}
+.fsk-dests{display:flex;flex-direction:column;gap:10px;margin-left:var(--gut)}
+.fsk-d{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--lc,var(--line));border-radius:12px;padding:8px 12px 2px;min-width:0}
+.fsk-d.up{--lc:var(--good)}.fsk-d.side{--lc:var(--blue)}.fsk-d.down{--lc:var(--warn)}.fsk-d.fin{--lc:var(--bad)}.fsk-d.stay{--lc:var(--ink-2)}
+.fsk-dir{display:block;font-size:12px;font-weight:600;color:var(--lc)}
+.fsk-h{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:36px;background:none;border:0;padding:0 0 4px;text-align:left;color:var(--ink);font:inherit}
+.fsk-h b{display:block;font-family:var(--f-display);font-size:20px;text-transform:uppercase;line-height:1.05}
+.fsk-go{font-weight:700;color:var(--blue);font-size:15px;white-space:nowrap;min-height:44px;display:inline-flex;align-items:center;padding-left:12px}
+.fsk .fmv{grid-template-columns:minmax(0,1fr) auto;padding-block:9px}
 .routesteps{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:grid;gap:6px}
 .routesteps .rpos{font-weight:700;position:relative}.routesteps .rpos::before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--blue)}
 .routesteps .rmove{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding-left:10px}.routesteps .rmove::before{content:"↓";color:var(--ink-2);margin-left:-10px}
@@ -3563,22 +3587,64 @@ function learnGroups(){
 }
 
 function posKnown(p,max){const ts=fromPos(p,max);if(!ts.length)return null;return ts.reduce((x,t)=>x+Math.min(4,lv(t.id)),0)/(ts.length*4)}
+/* Where a move goes, compared with where it starts: up the ladder, same level, down, a finish, or staying put. */
+function flowDir(sel,d){if(d==="sub")return "fin";if(d===sel)return "stay";const a=POS[sel].r,b=POS[d].r;return b<a?"up":b>a?"down":"side"}
+const FDIR={fin:"Submission",up:"To a better position",side:"Same level",down:"To a worse position",stay:"Stay and control"};
+function flowGroups(sel,mx){const g={};fromPos(sel,mx).forEach(t=>{(g[t.t]=g[t.t]||[]).push(t)});const flat=ROWS.flat();
+  const rank=d=>d==="sub"?-1:d===sel?999:POS[d].r*100+flat.indexOf(d);
+  return Object.keys(g).sort((a,b)=>rank(a)-rank(b)).map(d=>({d,dir:flowDir(sel,d),ts:g[d]}))}
 function flowSVG(sel){
-  const W=400,NW=92,NH=38,G=8,top=24,RH=66,mx=flowMax();const pos={};
-  ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+ri*RH}})});
-  // Where the selected position leads: count the moves to each destination (no lines: they crossed the labels and said nothing).
-  const outs=fromPos(sel,mx),cnt={};outs.forEach(t=>{if(t.t!=="sub"&&t.t!==sel)cnt[t.t]=(cnt[t.t]||0)+1});
-  const subs=outs.filter(t=>t.t==="sub").length;
-  const labels=TIERS.map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
-  let nodes="";Object.entries(pos).forEach(([p,c])=>{const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(cnt[p])cls.push("dest");
-    const k=posKnown(p,mx),n=cnt[p];
+  // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
+  const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
+  ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH}})});
+  const FW=150;pos.sub={x:(W-FW)/2,y:top,w:FW};
+  const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};gs.forEach(g=>cnt[g.d]=g.ts.length);
+  const s=pos[sel],scx=s.x+NW/2,wOf=p=>pos[p].w||NW;
+  // spread the arrow starts along the edge they leave from, in the order of where they land, so they don't cross at the start
+  const leave={top:[],bot:[]};gs.forEach(g=>{const e=pos[g.d];(e.y>s.y?leave.bot:leave.top).push(g)});
+  const sx={};for(const k of ["top","bot"]){const L=leave[k].sort((a,b)=>(pos[a.d].x+wOf(a.d)/2)-(pos[b.d].x+wOf(b.d)/2)),step=Math.min(14,(NW-24)/Math.max(1,L.length-1));L.forEach((g,i)=>sx[g.d]=scx+(i-(L.length-1)/2)*step)}
+  const edges=gs.map((g,i)=>{const e=pos[g.d],ecx=e.x+wOf(g.d)/2,n=g.ts.length,sw=(1.6+Math.min(5,n)*.75).toFixed(1),x1=sx[g.d];let d;
+    if(e.y<s.y){const y1=s.y,y2=e.y+NH+3,k=Math.min(46,(y1-y2)/2);d=`M${x1},${y1} C${x1},${y1-k} ${ecx},${y2+k} ${ecx},${y2}`}
+    else if(e.y>s.y){const y1=s.y+NH,y2=e.y-3,k=Math.min(46,(y2-y1)/2);d=`M${x1},${y1} C${x1},${y1+k} ${ecx},${y2-k} ${ecx},${y2}`}
+    else{const y=s.y,lift=26;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-3}`}
+    return `<path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#ah-${g.dir})"/>`}).join("");
+  const marks=["fin","up","side","down"].map(k=>`<marker id="ah-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
+  const labels=["Finish",...TIERS].map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
+  const any=gs.length>0;let nodes="";
+  Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p];
+    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":any?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submissions${n?`: ${n} from ${esc(POS[sel].l)}`:""}"><rect x="${c.x}" y="${c.y}" width="${w}" height="${NH}" rx="19"/><text x="${c.x+w/2}" y="${c.y+NH/2+4}" text-anchor="middle">Submission</text></g>`;return}
+    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(any)cls.push("dim");
+    const k=posKnown(p,mx);
     nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${n?`, ${n} move${n>1?"s":""} from ${esc(POS[sel].l)}`:""}${k!==null?`, you know ${Math.round(k*100)}% of its moves`:""}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="7"/>
       <text x="${c.x+NW/2}" y="${c.y+NH/2+2}" text-anchor="middle">${esc(POS[p].l)}</text>
-      ${k!==null?`<rect class="kbar-bg" x="${c.x+8}" y="${c.y+NH-8}" width="${NW-16}" height="3" rx="1.5"/><rect class="kbar" x="${c.x+8}" y="${c.y+NH-8}" width="${Math.max(0,(NW-16)*k)}" height="3" rx="1.5"/>`:""}
-      ${n?`<circle class="dbadge" cx="${c.x+NW-3}" cy="${c.y+3}" r="9"/><text class="dbadgetx" x="${c.x+NW-3}" y="${c.y+6.5}" text-anchor="middle">${n}</text>`:""}
-      ${p===sel&&subs?`<circle class="badge" cx="${c.x+NW-3}" cy="${c.y+3}" r="9"/><text class="badgetx" x="${c.x+NW-3}" y="${c.y+6.5}" text-anchor="middle">${subs}</text>`:""}</g>`});
-  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+5*RH+NH+8}" role="group" aria-label="Position map">${labels}${nodes}</svg>`;
+      ${k!==null?`<rect class="kbar-bg" x="${c.x+10}" y="${c.y+NH-8}" width="${NW-20}" height="3.5" rx="1.75"/><rect class="kbar" x="${c.x+10}" y="${c.y+NH-8}" width="${Math.max(0,(NW-20)*k)}" height="3.5" rx="1.75"/>`:""}</g>`});
+  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+6*RH+NH+8}" role="group" aria-label="Position map"><defs>${marks}</defs><g class="edges">${edges}</g>${labels}${nodes}</svg>`;
 }
+/* "From here": a transit-map view. Coloured lines leave the position and run down a gutter to each destination, which lists the moves that get you there. */
+function flowFrom(sel){const mx=flowMax(),gs=flowGroups(sel,mx),p=POS[sel];
+  if(!gs.length)return `<div class="empty">No techniques start here yet.</div>`;
+  const lw=n=>+(Math.min(6,2+n*.8)).toFixed(1),GAP=2.5;
+  const ws=gs.map(g=>lw(g.ts.length)),gut=Math.round(20+ws.reduce((a,b)=>a+b,0)+GAP*(gs.length-1)+6);
+  let x=gut-18;const xs=ws.map((w,i)=>{if(i)x-=ws[i-1]/2+GAP+w/2;else x-=w/2;return +x.toFixed(1)});
+  const head=g=>g.d==="sub"?`<div class="fsk-h"><b>Submissions</b></div>`
+    :g.d===sel?`<div class="fsk-h"><b>Control ${esc(p.l.toLowerCase())}</b></div>`
+    :`<button class="fsk-h" data-a="pos" data-v="${g.d}" aria-label="Go to ${esc(POS[g.d].L)}"><b>${esc(POS[g.d].l)}</b><span class="fsk-go">Go ›</span></button>`;
+  const dirLine=g=>`${g.d==="sub"?"Finish":g.d===sel?"Stay here":FDIR[g.dir]} · ${g.ts.length} move${g.ts.length>1?"s":""}`;
+  const row=(t,noCat)=>{const b=beltOf(t),m=`${noCat?"":cat(t.c)}${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}`;return `<button class="trow fmv" data-a="open" data-v="${t.id}"><span><span class="nm">${esc(t.n)}</span>${m?`<span class="meta">${m}</span>`:""}</span>${stripes(lv(t.id))}</button>`};
+  return `<div class="fsk" style="--gut:${gut}px">
+    <div class="fsk-src"><span class="fsk-t">${esc(TIERS[p.r])}</span><b>${esc(p.l)}</b></div>
+    <svg class="fsk-lines" aria-hidden="true"></svg>
+    <div class="fsk-dests">${gs.map((g,i)=>`<div class="fsk-d ${g.dir}" id="fsk-${g.d}" data-x="${xs[i]}" data-w="${ws[i]}"><span class="fsk-dir">${dirLine(g)}</span>${head(g)}<div class="list">${g.ts.map(t=>row(t,g.d==="sub")).join("")}</div></div>`).join("")}</div>
+  </div>`}
+function drawFlowLines(anim){const box=document.querySelector(".fsk");if(!box)return;const svg=box.querySelector(".fsk-lines"),B=box.getBoundingClientRect();box._w=B.width;svg.classList.toggle("anim",!!anim);
+  const gut=parseFloat(box.style.getPropertyValue("--gut"))||40,y0=box.querySelector(".fsk-src").getBoundingClientRect().bottom-B.top;
+  svg.setAttribute("width",gut);svg.setAttribute("height",Math.ceil(B.height));svg.setAttribute("viewBox",`0 0 ${gut} ${Math.ceil(B.height)}`);
+  let out=`<defs>${["fin","up","side","down","stay"].map(k=>`<marker id="fa-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("")}</defs>`;
+  box.querySelectorAll(".fsk-d").forEach((c,i)=>{const h=c.querySelector(".fsk-h").getBoundingClientRect(),yc=Math.round(h.top+h.height/2-B.top),x=+c.dataset.x,w=+c.dataset.w,r=Math.min(10,gut-x-8),k=c.classList[1];
+    out+=`<path class="fl ${k}" style="--i:${i}" stroke-width="${w}" d="M${x},${y0-2} L${x},${yc-r} Q${x},${yc} ${x+r},${yc} L${gut-3},${yc}" marker-end="url(#fa-${k})"/>`});
+  svg.innerHTML=out}
+// iOS fires resize when the toolbar hides on scroll: only redraw when the width really changed, and without the fade.
+addEventListener("resize",()=>{const b=S.ui.tab==="flow"&&document.querySelector(".fsk");if(b&&Math.abs(b.getBoundingClientRect().width-(b._w||0))>1)drawFlowLines()});
 /* Shortest chain of techniques from one position to another (breadth-first over "from → to" moves). */
 function routeFind(from,to,max){if(from===to)return [];const prev={[from]:null},q=[from];
   while(q.length){const p=q.shift();for(const t of fromPos(p,max)){if(t.t==="sub"||t.t===p||t.t in prev)continue;prev[t.t]=t;if(t.t===to){const path=[];let x=to;while(prev[x]){path.unshift(prev[x]);x=prev[x].f}return path}q.push(t.t)}}
@@ -3592,17 +3658,15 @@ function routeBlock(sel){const mx=flowMax(),to=S.ui.routeTo&&POS[S.ui.routeTo]&&
        <p class="small muted">${r.length} move${r.length===1?"":"s"}: the shortest chain in the curriculum${mx<4?` up to your filter`:""}. Tap a move to study it.</p>`}</section>`}
 function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),outs=fromPos(sel,mx),ins=intoPos(sel,mx);
-  const groups={};outs.forEach(t=>{(groups[t.c]=groups[t.c]||[]).push(t)});
-  const order=["escape","defense","sweep","guard","pass","takedown","entry","back","control","sub"];
   return `${header()}<div class="stack-lg">
   <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions from best (top) to worst (bottom). Tap one to see where it leads.</p>
   <div style="overflow-x:auto">${flowSVG(sel)}</div>
-  <div class="flowkey small muted"><span><i class="k-dest">2</i>moves from ${esc(p.l.toLowerCase())} to there</span><span><i class="k-sub">3</i>submissions</span><span><i class="k-bar"></i>how much of a position's moves you know</span></div></section>
-  <section class="panel stack"><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${OPP[sel]?`<button class="btn" data-a="pos" data-v="${OPP[sel]}">See it from the other side: ${esc(POS[OPP[sel]].l)}</button>`:""}${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></section>
-  <section class="stack"><div class="row between"><h2 class="label">Every move from here</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
+  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>`})()}</section>
+  <section class="stack" id="flow-from"><div class="row between"><h2 class="label">From ${esc(p.l.toLowerCase())}</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
   <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
-  ${outs.length?order.filter(c=>groups[c]).map(c=>`<div class="stack"><div class="small muted"><b>${CATS[c]}</b></div><div class="list">${groups[c].map(t=>`<div class="row between" style="flex-wrap:nowrap;border-top:1px solid var(--line);padding-block:6px"><div style="flex:1;min-width:0">${tRow(t).replace('class="trow"','class="trow" style="border:0;padding-block:4px"')}</div>${t.t!=="sub"&&t.t!==sel?`<button class="posbtn" data-a="pos" data-v="${t.t}" aria-label="Go to ${esc(POS[t.t].L)}">→ ${esc(POS[t.t].l)}</button>`:""}</div>`).join("")}</div></div>`).join(""):`<div class="empty">No techniques start here yet.</div>`}
+  ${flowFrom(sel)}
   </section>
+  <section class="panel stack"><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${OPP[sel]?`<button class="btn" data-a="pos" data-v="${OPP[sel]}">See it from the other side: ${esc(POS[OPP[sel]].l)}</button>`:""}${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></section>
   ${routeBlock(sel)}
   ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
   ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
@@ -3770,6 +3834,7 @@ function render(){
   const cb=document.querySelector('nav.tabs [data-v="coach"]');if(cb)cb.hidden=true;
   const bb=document.querySelector('nav.tabs [data-v="book"]');if(bb)bb.hidden=mg||!(API.me&&API.me.gym&&!isCoach());
   app.innerHTML=(v==="coach"?viewCoach():v==="book"?viewBook():v==="learn"?viewLearn():v==="flow"?viewFlow():v==="log"?viewLog():v==="settings"?viewSettings():viewToday())+fab;
+  if(v==="flow"){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",(b.dataset.v===v&&v!=="coach")||(v==="coach"&&b.dataset.v==="coach-"+COACH.view)?"page":"false"));
 }
 function go(tab){hideTerm();if(!TABS.includes(tab))tab="today";
@@ -3870,6 +3935,7 @@ document.addEventListener("click",e=>{
     case "qrskip": { const r=S.ui.qr;r.i++;qrSheet();break }
     case "hand": P().settings.hand=v;saveProgress();render();toast(v==="left"?"Set for left hand.":"Set for right hand.");break;
     case "level": { const id=el.dataset.id;setLevel(id,Number(v));const y=window.scrollY;techSheet(id,true);window.scrollTo(0,y);break }
+    case "flowfin": {const f=document.getElementById("fsk-sub");if(f)f.scrollIntoView({behavior:"smooth",block:"start"});else toast("No submissions from here.");break}
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("flow"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
