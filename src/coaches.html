@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JitsFlow for coaches: run your BJJ gym from your phone</title>
+<meta name="description" content="Timetable, bookings and waitlists, memberships and fees, attendance insights, competitions and WhatsApp invites for Jiu-Jitsu gyms. Import your timetable from your website in a minute.">
+<link rel="canonical" href="https://www.jitsflow.com/coaches/">
+<meta name="theme-color" content="#1D4FB5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:url" content="https://www.jitsflow.com/coaches/">
+<meta property="og:title" content="JitsFlow for coaches: run your gym from your phone">
+<meta property="og:description" content="Timetable, bookings, waitlists, memberships, who's training and who's gone quiet, competitions and WhatsApp invites.">
+<meta property="og:image" content="https://www.jitsflow.com/og/coaches.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+@@LDJSON@@
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+@@LANDING_CSS@@
+/* coaches page */
+.hero .phone{width:min(300px,100%)}
+.hero .phone img{aspect-ratio:390/600}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.checks li{padding-left:28px;position:relative}
+.checks li::before{content:"";position:absolute;left:4px;top:.62em;width:12px;height:6px;border-left:2.5px solid var(--good);border-bottom:2.5px solid var(--good);transform:translateY(-50%) rotate(-45deg)}
+.night .checks li{color:#C9D3E6}.night .checks li::before{border-color:#6FD3A0}
+.wamsg{font-family:var(--f-mono);font-size:14px;line-height:1.6;background:var(--surface);border:1px solid var(--line);border-left:4px solid #25A35A;border-radius:12px;padding:14px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.studentside{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:28px}
+.studentside div{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:8px}
+@media (min-width:760px){.studentside{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.toplinks .here{color:#F4F6FB;font-weight:700;font-size:15px;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="night">
+<header class="wrap top">
+  <a class="brand" href="/" aria-label="JitsFlow home"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
+  <nav class="toplinks"><a class="signin" href="/">For students</a><a class="signin" href="/app/?signin=1">Sign in</a><a class="btn sm primary" href="/app/?start=1">Start a gym</a></nav>
+</header>
+
+  <section class="wrap hero">
+    <div>
+      <p class="eyebrow">For coaches and gym owners</p>
+      <h1 style="margin-top:12px">Run your gym from your phone.</h1>
+      <p class="lede">Your timetable, bookings, memberships and competition team in one place, with your students booking from their own phones. Paste your gym's website and JitsFlow reads in your classes, coaches and rates.</p>
+      <div class="cta"><a class="btn primary" href="/app/?start=1">Start your gym</a><a class="btn ghost" href="#features">See what it does</a></div>
+      <ul class="checks" style="margin-top:22px">
+        <li>No app store: students open a link and add it to their home screen</li>
+        <li>Works on any phone, iPhone or Android</li>
+        <li>Your students also get the full no-gi study app</li>
+      </ul>
+    </div>
+    <div class="phone"><img src="/img/coach/today.jpg" alt="The coach's Today screen: today's class with 8 of 24 booked, and what needs attention: a competition request, unpaid fees, a student at risk of dropping off" width="390" height="600"></div>
+  </section>
+</div><!-- /night -->
+<main>
+
+  <section class="block wrap" id="setup">
+    <div class="intro">
+      <h2>Set up before tonight's class</h2>
+      <p class="muted">No spreadsheet to fill in. If your gym has a website, JitsFlow reads it for you.</p>
+    </div>
+    <ol class="steps">
+      <li><h3>Paste your website</h3><p class="muted">JitsFlow reads your timetable, coaches, rates, contact details and logo, including timetables posted as images. You check everything before it's saved.</p></li>
+      <li><h3>Send the invite</h3><p class="muted">Share your gym's join link on WhatsApp. Students sign up in under a minute and land in your gym.</p></li>
+      <li><h3>Students book</h3><p class="muted">They see the week's classes, book a spot, join a waitlist or book a private lesson. You see who's coming.</p></li>
+    </ol>
+  </section>
+
+  <section class="block wrap" id="features" style="padding-top:0">
+    <div class="intro">
+      <h2>What you get</h2>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Timetable and bookings</h3>
+        <ul class="checks">
+          <li>Week and month calendar. Plan a class once and repeat it weekly, or copy a whole week forward.</li>
+          <li>Set a spot limit per class. When it's full, students join a waitlist, and they're moved in and emailed when a spot opens.</li>
+          <li>Private lesson slots with your price. Students book them like a class.</li>
+          <li>Cancel a class and everyone booked gets an email.</li>
+          <li>Students check in when they arrive, or you mark attendance after class.</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="/img/coach/calendar.jpg" alt="Coach calendar: Monday with Morning No-Gi, Fundamentals and Advanced classes and how many are booked" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature flip">
+      <div class="copy">
+        <h3>Who's training, and who's gone quiet</h3>
+        <p>Visits per week over the last three months, your regulars, and the students who used to come twice a week and haven't been in for a fortnight. Message them from the same screen before they quietly cancel.</p>
+        <ul class="checks">
+          <li>Busiest and emptiest class slots</li>
+          <li>How many new members are still training after 90 days</li>
+          <li>Who might be ready for a stripe or belt review</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="/img/coach/insights.jpg" alt="Insights: 16 active members, visits per week, visits per member and a 12-week chart" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Memberships and fees</h3>
+        <p>Set up your plans, like Unlimited or 2x a week, and put each student on one. A 2x-a-week member can't book a third class that week. Record EFT and cash payments, and Today shows who hasn't paid this month.</p>
+        <p class="muted">JitsFlow doesn't take card payments. Money still goes straight to you, the way it does now.</p>
+      </div>
+      <div class="shot"><img src="/img/coach/today.jpg" alt="Today screen listing who hasn't paid this month" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature flip">
+      <div class="copy">
+        <h3>Your competition team</h3>
+        <p>Paste the event page and JitsFlow reads the name, date, venue, entry deadline, fees and divisions. Students ask to enter from their phones, you approve them, and you track divisions, who has paid the entry fee, and results.</p>
+      </div>
+      <div class="shot"><img src="/img/coach/comps.jpg" alt="Competitions: Gauteng No-Gi Open with five on the team and one student asking to compete" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>WhatsApp, already written</h3>
+        <p>Pick a message and JitsFlow fills it in from your timetable: this week's classes with spots left, tomorrow's classes, a fees reminder, a competition with your team list, or an invite with your join link. Change anything, then send it to your gym group.</p>
+        <div class="wamsg">*Southside Grappling: classes this week*
+
+*Monday 9 Nov*
+• 06:00 Morning No-Gi (All levels) (18 spots left)
+• 18:00 No-Gi Fundamentals (Beginners) (11 spots left)
+• 19:15 No-Gi Advanced (Blue belt +) (9 spots left)
+
+Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
+      </div>
+      <div class="shot"><img src="/img/coach/whatsapp.jpg" alt="WhatsApp panel with message choices and a prefilled list of this week's classes" loading="lazy" width="390" height="600"></div>
+    </div>
+  </section>
+
+  <section class="block wrap" id="students" style="padding-top:0">
+    <div class="intro">
+      <h2>What your students get</h2>
+      <p class="muted">The same app they book with is a no-gi study guide. They go over what you taught between classes instead of forgetting it by Thursday.</p>
+    </div>
+    <div class="studentside">
+      <div><h3>Book in two taps</h3><p class="muted">See the week, book or cancel, join a waitlist, and see who else is coming if you allow it.</p></div>
+      <div><h3>Study what you taught</h3><p class="muted">@@NTECH@@ techniques with steps, common mistakes, drills and videos, plus a map of every position and what to do next.</p></div>
+      <div><h3>Their own progress</h3><p class="muted">Their membership, classes used this week, upcoming competitions and a training log.</p></div>
+    </div>
+    <p style="margin-top:20px"><a href="/">See the study app</a></p>
+
+    <div class="faq">
+      <details><summary>Do students have to download an app?</summary><p>No. They open your invite link in Safari or Chrome and can add it to their home screen. It opens full screen like any app, and the study parts work offline.</p></details>
+      <details><summary>Do I have to type my timetable in?</summary><p>Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward.</p></details>
+      <details><summary>Can other coaches help run it?</summary><p>Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach.</p></details>
+      <details><summary>Can students see who else is booked?</summary><p>Only if you turn it on. It's one switch in the Gym tab.</p></details>
+      <details><summary>Does JitsFlow take payments?</summary><p>No. Students pay you the way they do now. You record payments in JitsFlow and see who's behind.</p></details>
+      <details><summary>Where is the data kept?</summary><p>On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the <a href="/privacy/">privacy notice</a>.</p></details>
+      <details><summary>Is it only for no-gi?</summary><p>The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi.</p></details>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Start with your website</h2>
+      <p style="font-size:20px;max-width:32em">Start your gym, paste your website's link, and check what JitsFlow reads in. You can have your timetable up before tonight's class.</p>
+      <a class="btn" href="/app/?start=1">Start your gym</a>
+      <p style="font-size:16px">Questions? <a href="mailto:hello@jitsflow.com" style="color:inherit">hello@jitsflow.com</a></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b>JitsFlow</b> · Gym management and no-gi study app.</span>
+    <span class="footlinks"><a href="/">For students</a> · <a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
+    <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
+  </div>
+</footer>
+<script>
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
+</script>
+</body>
+</html>

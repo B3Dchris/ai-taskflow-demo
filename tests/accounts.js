@@ -19,11 +19,12 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     // ---- coach finds sign-in from the landing page, then starts a gym
     const { p: co } = await phone();
     await co.goto(URL + "/"); await co.waitForTimeout(400);
-    await co.locator('.toplinks .signin').tap(); await co.waitForTimeout(900);
+    await co.locator('.toplinks .signin[href*="signin"]').tap(); await co.waitForTimeout(900);
     ok(await ev(co, () => location.pathname === "/app/" && S.ui.sheet && S.ui.sheet.k === "auth" && S.ui.authMode === "login"), "landing 'Coach sign in' opens the sign-in sheet");
     await co.tap('[data-a="authmode"][data-v="gym"]');
     await co.fill("#a-gym", "JPB Martial Arts Academy"); await co.fill("#a-name", "Coach JP"); await co.fill("#a-email", "coach@example.com"); await co.fill("#a-pass", "coachpass1");
     await co.tap('#sheetbar [type=submit]'); await co.waitForTimeout(900);
+    ok(await ev(co, () => !(S.ui.sheet && S.ui.sheet.k === "onboard")), "a new coach isn't asked the student study questions");
     ok(await ev(co, () => isCoach() && location.hash === "#coach-today" && !document.querySelector('nav.tabs [data-v="coach-classes"]').hidden && document.querySelector('nav.tabs [data-v="learn"]').hidden && document.querySelector('nav.tabs [data-v="flow"]').hidden), "coach lands on their gym's Today; the bar shows coach tabs, not Belts or Flow map");
     ok(await ev(co, () => /Coach/.test(document.querySelector(".sync.who").textContent)), "header shows who's signed in");
     ok(await ev(co, () => { hideSheet(); go("today"); return !!document.querySelector(".sync.who") && !document.querySelector('[data-a="auth"][data-v="login"].who'); }), "signed-in header shows the name, not Sign in");

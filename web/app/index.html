@@ -3832,7 +3832,7 @@ document.addEventListener("click",e=>{
     case "attendall": { const cd=S.ui.classData,ids=cd.attendees.filter(a=>a.going&&!a.attended).map(a=>a.id);api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userIds:ids,attended:true}).then(()=>{cd.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=true});drawClassSheet(true);toast(`Checked in ${ids.length}.`)}).catch(e=>toast(e.message));break }
     case "coachview": case "coachgo": coachGo(v);break;
     case "stuview": COACH.stuView=v;render();break;
-    case "coachmode": setCoachMode(v);if(v==="study"){go("today");toast("Study tools. Tap Coach in the bottom bar to go back.")}else coachGo("today");break;
+    case "coachmode": setCoachMode(v);if(v==="study"){go("today");toast("Study tools. Tap Coach in the bottom bar to go back.");maybeOnboard()}else coachGo("today");break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
     case "classnewday": S.ui.cplan=null;classForm(null,v);break;
     case "calday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.sel=(el.dataset.k!=="coach"&&st.sel===v)?null:v;st.anchor=v;render();break }
@@ -4859,7 +4859,8 @@ function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())retur
   return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
 
 /* ============ FIRST-RUN SETUP ============ */
-function maybeOnboard(){if(S.ui.obChecked)return;S.ui.obChecked=true;const st=P().settings;if(st.onboarded)return;
+function maybeOnboard(){if(S.ui.obChecked)return;try{if(managing())return}catch(e){}/* coaches running the gym skip the study questions until they open study mode */
+  S.ui.obChecked=true;const st=P().settings;if(st.onboarded)return;
   if(Object.keys(P().mastery).length||S.sessions.length){st.onboarded=true;saveProgress();return}
   if(!document.getElementById("sheet").hidden)return;S.ui.ob={belt:"white",months:"9",pw:2,hand:st.hand||"left"};onboardSheet()}
 function onboardSheet(keep){const o=S.ui.ob;S.ui.sheet={k:"onboard"};S.ui.stack=[];

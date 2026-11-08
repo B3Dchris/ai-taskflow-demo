@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JitsFlow for coaches: run your BJJ gym from your phone</title>
+<meta name="description" content="Timetable, bookings and waitlists, memberships and fees, attendance insights, competitions and WhatsApp invites for Jiu-Jitsu gyms. Import your timetable from your website in a minute.">
+<link rel="canonical" href="https://www.jitsflow.com/coaches/">
+<meta name="theme-color" content="#1D4FB5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:url" content="https://www.jitsflow.com/coaches/">
+<meta property="og:title" content="JitsFlow for coaches: run your gym from your phone">
+<meta property="og:description" content="Timetable, bookings, waitlists, memberships, who's training and who's gone quiet, competitions and WhatsApp invites.">
+<meta property="og:image" content="https://www.jitsflow.com/og/coaches.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "url": "https://www.jitsflow.com/coaches/", "mainEntity": [{"@type": "Question", "name": "Do students have to download an app?", "acceptedAnswer": {"@type": "Answer", "text": "No. They open your invite link in Safari or Chrome and can add it to their home screen. It opens full screen like any app, and the study parts work offline."}}, {"@type": "Question", "name": "Do I have to type my timetable in?", "acceptedAnswer": {"@type": "Answer", "text": "Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward."}}, {"@type": "Question", "name": "Can other coaches help run it?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach."}}, {"@type": "Question", "name": "Can students see who else is booked?", "acceptedAnswer": {"@type": "Answer", "text": "Only if you turn it on. It's one switch in the Gym tab."}}, {"@type": "Question", "name": "Does JitsFlow take payments?", "acceptedAnswer": {"@type": "Answer", "text": "No. Students pay you the way they do now. You record payments in JitsFlow and see who's behind."}}, {"@type": "Question", "name": "Where is the data kept?", "acceptedAnswer": {"@type": "Answer", "text": "On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the privacy notice."}}, {"@type": "Question", "name": "Is it only for no-gi?", "acceptedAnswer": {"@type": "Answer", "text": "The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi."}}]}</script>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: one column on phones, two-column hero and feature rows on wide screens. Motif: the belt bar, white to black. */
+:root{
+  --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E3E8EF; --ink:#111722; --ink-2:#4E5869; --line:#D3DAE4;
+  --blue:#1D4FB5; --blue-soft:#DCE5F8; --on-blue:#FFFFFF; --warn:#995A00; --good:#1D7748;
+  --b-white:#F4F4F0; --b-blue:#1F4FB0; --b-purple:#5E2D8C; --b-brown:#6A4326; --b-black:#151515; --b-red:#B3261E;
+  --f-display:"Saira Condensed","Arial Narrow",Impact,sans-serif;
+  --f-body:"Source Sans 3",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0C0F14; --surface:#151A22; --surface-2:#1F2631; --ink:#E8EBF1; --ink-2:#9AA5B8; --line:#2A323F;
+  --blue:#82A5FF; --blue-soft:#1B2949; --on-blue:#0C1220; --warn:#E6A84C; --good:#52C78E; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.5;-webkit-text-size-adjust:100%}
+img{max-width:100%;display:block}
+a{color:var(--blue)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.02;letter-spacing:.005em}
+h2{font-size:clamp(34px,5vw,52px);font-weight:800;text-transform:uppercase}
+h3{font-size:26px;font-weight:700}
+p{margin:0}
+.muted{color:var(--ink-2)}
+.eyebrow{font-family:var(--f-mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+
+/* nav */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:18px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:800;font-size:28px;text-transform:uppercase;text-decoration:none;color:var(--ink)}
+.brand .mark{width:36px;height:12px;border-radius:2px;background:var(--b-black);position:relative;outline:1px solid var(--line)}
+.brand .mark::after{content:"";position:absolute;right:5px;top:0;bottom:0;width:11px;background:var(--b-red)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 22px;border-radius:12px;font-weight:700;font-size:17px;text-decoration:none;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
+.btn.sm{min-height:44px;padding:0 16px;font-size:15px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:36px;padding-block:24px 56px;align-items:center}
+.hero h1{font-size:clamp(48px,10vw,96px);font-weight:800;text-transform:uppercase}
+.hero h1 em{font-style:normal;color:var(--blue)}
+.nw{white-space:nowrap}
+.lede{font-size:clamp(19px,2.2vw,22px);max-width:34em;margin-top:18px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.facts{margin-top:18px;font-size:16px;color:var(--ink-2)}
+.toplinks a{white-space:nowrap}
+/* animated attack chain in the hero: a marker steps down the chain, lighting each move in turn */
+.flow{margin:0;position:relative;display:grid;gap:12px;width:min(420px,100%);justify-self:center}
+.flow figcaption{font-size:15px;color:#A9B5CC}
+.flow ol{list-style:none;margin:0;padding:0 0 0 30px;display:grid;gap:12px;position:relative}
+.flow ol::before{content:"";position:absolute;left:9px;top:12px;bottom:12px;width:2px;background:rgba(255,255,255,.18)}
+.flow li{position:relative;min-height:78px;border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px 14px;display:grid;align-content:center;gap:2px;background:rgba(255,255,255,.03);animation:lit 8s infinite;animation-delay:calc(var(--i) * 2s)}
+.flow li::before{content:"";position:absolute;left:-26px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:#0D1730;border:2px solid rgba(255,255,255,.35)}
+.flow li b{font-family:var(--f-display);font-size:24px;text-transform:uppercase;line-height:1;color:#F4F6FB}
+.flow li span{font-size:15px;color:#A9B5CC}
+.flow li em{font-style:normal;font-family:var(--f-mono);font-size:12px;letter-spacing:.04em;color:#E6A84C}
+.flow .dot{position:absolute;left:4px;top:0;width:12px;height:12px;border-radius:50%;background:#5B8CFF;animation:step 8s infinite;pointer-events:none}
+@keyframes lit{0%,22%{border-color:#5B8CFF;background:rgba(91,140,255,.14)}26%,100%{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.03)}}
+@media (prefers-reduced-motion:reduce){.flow li{animation:none}.flow .dot{display:none}}
+.beltbar{display:grid;grid-template-columns:repeat(5,1fr);height:14px;border-radius:3px;overflow:hidden;margin-top:34px;max-width:520px;outline:1px solid var(--line)}
+.beltbar i:nth-child(1){background:var(--b-white)}.beltbar i:nth-child(2){background:var(--b-blue)}.beltbar i:nth-child(3){background:var(--b-purple)}.beltbar i:nth-child(4){background:var(--b-brown)}
+.beltbar i:nth-child(5){background:var(--b-black);position:relative}.beltbar i:nth-child(5)::after{content:"";position:absolute;right:14%;top:0;bottom:0;width:26%;background:var(--b-red)}
+.beltlabels{display:grid;grid-template-columns:repeat(5,1fr);max-width:520px;margin-top:6px;font-family:var(--f-mono);font-size:12px;color:var(--ink-2)}
+.phone{justify-self:center;width:min(340px,100%);border-radius:38px;padding:12px;background:#0B0D11;box-shadow:0 30px 60px -20px rgba(17,23,34,.45),0 0 0 1px rgba(255,255,255,.06) inset}
+.phone img{border-radius:28px;width:100%;height:auto;aspect-ratio:390/664;object-fit:cover;object-position:top}
+
+/* night band: header, hero and stats on deep navy in both themes */
+.night{position:relative;overflow:hidden;color:#EEF2FA;background:#0D1730}
+.night .heroart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:70% 40%;opacity:.95}
+.night.has-art::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,16,32,.96) 0%,rgba(10,16,32,.85) 38%,rgba(10,16,32,.25) 75%,rgba(10,16,32,.55) 100%);z-index:1}
+.night>header,.night>section,.night>.strip{position:relative;z-index:2}
+.night .brand{color:#F4F6FB}
+.night .eyebrow{color:#9FB0D0}
+.night .hero h1{color:#F4F6FB}
+.night .lede{color:#C9D3E6}
+.night .facts{color:#A9B5CC}
+.night .btn{background:rgba(255,255,255,.06);color:#F4F6FB;border-color:rgba(255,255,255,.22)}
+.night .btn.primary{background:#5B8CFF;border-color:#5B8CFF;color:#07101F}
+.night .beltlabels{color:#9FB0D0}
+.night .beltbar{outline-color:rgba(255,255,255,.18)}
+.toplinks{display:flex;align-items:center;gap:16px}
+.browse{display:grid;gap:12px;margin:8px 0 28px}@media (min-width:720px){.browse{grid-template-columns:1fr 1fr}}
+.browse a{display:grid;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink)}
+.browse a b{font-family:var(--f-display);font-size:24px;text-transform:uppercase}.browse a span{color:var(--ink-2);font-size:16px}
+.footlinks a{color:inherit}
+.toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
+/* narrow phones: two text links fit, the button doesn't (the hero repeats it right below) */
+@media (max-width:520px){.toplinks .btn{display:none}.toplinks{gap:14px}}
+/* stats strip */
+.strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
+.stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.strip .wrap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;padding-block:30px}
+.stat b{display:block;font-family:var(--f-display);font-weight:800;font-size:46px;line-height:1}
+.stat span{font-size:15px;color:#A9B5CC}
+
+/* sections */
+section.block{padding-block:72px}
+.intro{max-width:40em;display:flex;flex-direction:column;gap:16px}
+.intro p{font-size:20px}
+.feature{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;align-items:center;margin-top:56px}
+.feature .copy{display:flex;flex-direction:column;gap:14px;max-width:34em}
+.feature ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.shot{justify-self:center;width:min(330px,100%);border-radius:22px;overflow:hidden;border:1px solid var(--line);box-shadow:0 18px 40px -22px rgba(17,23,34,.35);background:var(--surface)}
+.shot img{width:100%;height:auto;aspect-ratio:390/600;object-fit:cover;object-position:top}
+.chainline{font-family:var(--f-mono);font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;line-height:1.7;overflow-x:auto}
+.chainline .if{color:var(--warn)}
+
+/* positions gallery */
+.gallery{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,64%);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;margin-top:28px;-webkit-overflow-scrolling:touch}
+.gallery figure{margin:0;scroll-snap-align:start;background:#0E1626;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 40px -24px rgba(17,23,34,.6)}
+.gallery img{width:100%;aspect-ratio:1/1;object-fit:cover}
+.gallery figcaption{padding:10px 14px 14px;color:#EEF2FA;font-weight:700;display:flex;flex-direction:column;gap:2px}
+.gallery figcaption span{font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#9FB0D0}
+.beltcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:4px 0 6px}
+.beltcards img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+/* steps */
+.steps{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:32px;counter-reset:s;padding:0;list-style:none}
+.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:8px}
+.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:44px;line-height:1;color:var(--blue)}
+
+/* who + faq */
+.who{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:28px}
+.who div{border-left:4px solid var(--blue);padding:4px 0 4px 16px}
+.faq{margin-top:28px;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:700;font-size:19px;display:flex;justify-content:space-between;gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--f-mono);color:var(--ink-2)}
+.faq details[open] summary::after{content:"–"}
+.faq details p{padding-bottom:18px;color:var(--ink-2);max-width:42em}
+
+/* final cta + footer */
+.final{background:var(--blue);color:var(--on-blue)}
+.final .wrap{padding-block:64px;display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+.final h2{color:var(--on-blue)}
+.final .btn{background:var(--on-blue);color:var(--blue);border-color:var(--on-blue)}
+footer{padding-block:32px;font-size:14px;color:var(--ink-2)}
+footer .wrap{display:flex;flex-direction:column;gap:8px}
+
+@media (min-width:760px){
+  .gallery{grid-auto-columns:minmax(240px,23%)}
+  .hero{grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);padding-block:40px 80px}
+  .strip .wrap{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .feature{grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:56px}
+  .feature.flip .copy{order:2}
+  .steps{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .who{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion: no-preference){.btn{transition:transform .12s}.btn:hover{transform:translateY(-1px)}}
+
+/* coaches page */
+.hero .phone{width:min(300px,100%)}
+.hero .phone img{aspect-ratio:390/600}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.checks li{padding-left:28px;position:relative}
+.checks li::before{content:"";position:absolute;left:4px;top:.62em;width:12px;height:6px;border-left:2.5px solid var(--good);border-bottom:2.5px solid var(--good);transform:translateY(-50%) rotate(-45deg)}
+.night .checks li{color:#C9D3E6}.night .checks li::before{border-color:#6FD3A0}
+.wamsg{font-family:var(--f-mono);font-size:14px;line-height:1.6;background:var(--surface);border:1px solid var(--line);border-left:4px solid #25A35A;border-radius:12px;padding:14px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.studentside{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:28px}
+.studentside div{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:8px}
+@media (min-width:760px){.studentside{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.toplinks .here{color:#F4F6FB;font-weight:700;font-size:15px;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="night">
+<header class="wrap top">
+  <a class="brand" href="/" aria-label="JitsFlow home"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
+  <nav class="toplinks"><a class="signin" href="/">For students</a><a class="signin" href="/app/?signin=1">Sign in</a><a class="btn sm primary" href="/app/?start=1">Start a gym</a></nav>
+</header>
+
+  <section class="wrap hero">
+    <div>
+      <p class="eyebrow">For coaches and gym owners</p>
+      <h1 style="margin-top:12px">Run your gym from your phone.</h1>
+      <p class="lede">Your timetable, bookings, memberships and competition team in one place, with your students booking from their own phones. Paste your gym's website and JitsFlow reads in your classes, coaches and rates.</p>
+      <div class="cta"><a class="btn primary" href="/app/?start=1">Start your gym</a><a class="btn ghost" href="#features">See what it does</a></div>
+      <ul class="checks" style="margin-top:22px">
+        <li>No app store: students open a link and add it to their home screen</li>
+        <li>Works on any phone, iPhone or Android</li>
+        <li>Your students also get the full no-gi study app</li>
+      </ul>
+    </div>
+    <div class="phone"><img src="/img/coach/today.jpg" alt="The coach's Today screen: today's class with 8 of 24 booked, and what needs attention: a competition request, unpaid fees, a student at risk of dropping off" width="390" height="600"></div>
+  </section>
+</div><!-- /night -->
+<main>
+
+  <section class="block wrap" id="setup">
+    <div class="intro">
+      <h2>Set up before tonight's class</h2>
+      <p class="muted">No spreadsheet to fill in. If your gym has a website, JitsFlow reads it for you.</p>
+    </div>
+    <ol class="steps">
+      <li><h3>Paste your website</h3><p class="muted">JitsFlow reads your timetable, coaches, rates, contact details and logo, including timetables posted as images. You check everything before it's saved.</p></li>
+      <li><h3>Send the invite</h3><p class="muted">Share your gym's join link on WhatsApp. Students sign up in under a minute and land in your gym.</p></li>
+      <li><h3>Students book</h3><p class="muted">They see the week's classes, book a spot, join a waitlist or book a private lesson. You see who's coming.</p></li>
+    </ol>
+  </section>
+
+  <section class="block wrap" id="features" style="padding-top:0">
+    <div class="intro">
+      <h2>What you get</h2>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Timetable and bookings</h3>
+        <ul class="checks">
+          <li>Week and month calendar. Plan a class once and repeat it weekly, or copy a whole week forward.</li>
+          <li>Set a spot limit per class. When it's full, students join a waitlist, and they're moved in and emailed when a spot opens.</li>
+          <li>Private lesson slots with your price. Students book them like a class.</li>
+          <li>Cancel a class and everyone booked gets an email.</li>
+          <li>Students check in when they arrive, or you mark attendance after class.</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="/img/coach/calendar.jpg" alt="Coach calendar: Monday with Morning No-Gi, Fundamentals and Advanced classes and how many are booked" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature flip">
+      <div class="copy">
+        <h3>Who's training, and who's gone quiet</h3>
+        <p>Visits per week over the last three months, your regulars, and the students who used to come twice a week and haven't been in for a fortnight. Message them from the same screen before they quietly cancel.</p>
+        <ul class="checks">
+          <li>Busiest and emptiest class slots</li>
+          <li>How many new members are still training after 90 days</li>
+          <li>Who might be ready for a stripe or belt review</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="/img/coach/insights.jpg" alt="Insights: 16 active members, visits per week, visits per member and a 12-week chart" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Memberships and fees</h3>
+        <p>Set up your plans, like Unlimited or 2x a week, and put each student on one. A 2x-a-week member can't book a third class that week. Record EFT and cash payments, and Today shows who hasn't paid this month.</p>
+        <p class="muted">JitsFlow doesn't take card payments. Money still goes straight to you, the way it does now.</p>
+      </div>
+      <div class="shot"><img src="/img/coach/today.jpg" alt="Today screen listing who hasn't paid this month" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature flip">
+      <div class="copy">
+        <h3>Your competition team</h3>
+        <p>Paste the event page and JitsFlow reads the name, date, venue, entry deadline, fees and divisions. Students ask to enter from their phones, you approve them, and you track divisions, who has paid the entry fee, and results.</p>
+      </div>
+      <div class="shot"><img src="/img/coach/comps.jpg" alt="Competitions: Gauteng No-Gi Open with five on the team and one student asking to compete" loading="lazy" width="390" height="600"></div>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>WhatsApp, already written</h3>
+        <p>Pick a message and JitsFlow fills it in from your timetable: this week's classes with spots left, tomorrow's classes, a fees reminder, a competition with your team list, or an invite with your join link. Change anything, then send it to your gym group.</p>
+        <div class="wamsg">*Southside Grappling: classes this week*
+
+*Monday 9 Nov*
+• 06:00 Morning No-Gi (All levels) (18 spots left)
+• 18:00 No-Gi Fundamentals (Beginners) (11 spots left)
+• 19:15 No-Gi Advanced (Blue belt +) (9 spots left)
+
+Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
+      </div>
+      <div class="shot"><img src="/img/coach/whatsapp.jpg" alt="WhatsApp panel with message choices and a prefilled list of this week's classes" loading="lazy" width="390" height="600"></div>
+    </div>
+  </section>
+
+  <section class="block wrap" id="students" style="padding-top:0">
+    <div class="intro">
+      <h2>What your students get</h2>
+      <p class="muted">The same app they book with is a no-gi study guide. They go over what you taught between classes instead of forgetting it by Thursday.</p>
+    </div>
+    <div class="studentside">
+      <div><h3>Book in two taps</h3><p class="muted">See the week, book or cancel, join a waitlist, and see who else is coming if you allow it.</p></div>
+      <div><h3>Study what you taught</h3><p class="muted">137 techniques with steps, common mistakes, drills and videos, plus a map of every position and what to do next.</p></div>
+      <div><h3>Their own progress</h3><p class="muted">Their membership, classes used this week, upcoming competitions and a training log.</p></div>
+    </div>
+    <p style="margin-top:20px"><a href="/">See the study app</a></p>
+
+    <div class="faq">
+      <details><summary>Do students have to download an app?</summary><p>No. They open your invite link in Safari or Chrome and can add it to their home screen. It opens full screen like any app, and the study parts work offline.</p></details>
+      <details><summary>Do I have to type my timetable in?</summary><p>Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward.</p></details>
+      <details><summary>Can other coaches help run it?</summary><p>Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach.</p></details>
+      <details><summary>Can students see who else is booked?</summary><p>Only if you turn it on. It's one switch in the Gym tab.</p></details>
+      <details><summary>Does JitsFlow take payments?</summary><p>No. Students pay you the way they do now. You record payments in JitsFlow and see who's behind.</p></details>
+      <details><summary>Where is the data kept?</summary><p>On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the <a href="/privacy/">privacy notice</a>.</p></details>
+      <details><summary>Is it only for no-gi?</summary><p>The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi.</p></details>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Start with your website</h2>
+      <p style="font-size:20px;max-width:32em">Start your gym, paste your website's link, and check what JitsFlow reads in. You can have your timetable up before tonight's class.</p>
+      <a class="btn" href="/app/?start=1">Start your gym</a>
+      <p style="font-size:16px">Questions? <a href="mailto:hello@jitsflow.com" style="color:inherit">hello@jitsflow.com</a></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b>JitsFlow</b> · Gym management and no-gi study app.</span>
+    <span class="footlinks"><a href="/">For students</a> · <a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
+    <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
+  </div>
+</footer>
+<script>
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
+</script>
+</body>
+</html>

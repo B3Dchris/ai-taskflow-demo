@@ -133,6 +133,15 @@ def landing_ld(landing):
     return "\n".join('<script type="application/ld+json">%s</script>' % json.dumps(d, ensure_ascii=False).replace("<", "\\u003c") for d in data)
 
 
+def page_ld(page, url):
+    """FAQ structured data for a marketing page, read from its own <details> blocks."""
+    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
+    faq = [{"@type": "Question", "name": strip(q), "acceptedAnswer": {"@type": "Answer", "text": strip(a)}}
+           for q, a in re.findall(r"<details><summary>(.*?)</summary><p>(.*?)</p></details>", page, re.S)]
+    data = {"@context": "https://schema.org", "@type": "FAQPage", "url": "https://www.jitsflow.com" + url, "mainEntity": faq}
+    return '<script type="application/ld+json">%s</script>' % json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+
+
 def build_web(app):
     # Everything before the app's own markup (title, meta, font links, styles) goes in <head>.
     cut = app.index('<div class="wrap app"')
@@ -146,7 +155,13 @@ def build_web(app):
     landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
-    version = hashlib.sha256((html + landing).encode()).hexdigest()[:10]
+    # Coaches page: same look as the landing page (its stylesheet is shared), own copy and FAQ.
+    css = re.search(r"<style>\n(.*?)</style>", read("src", "landing.html"), re.S).group(1)
+    coaches = read("src", "coaches.html").replace("@@LANDING_CSS@@", css).replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"]))
+    coaches = coaches.replace("@@LDJSON@@", page_ld(coaches, "/coaches/"))
+    assert "@@" not in coaches, "unfilled placeholder in coaches page"
+    write(coaches, "web", "coaches", "index.html")
+    version = hashlib.sha256((html + landing + coaches).encode()).hexdigest()[:10]
     write(read("tools", "sw.template.js").replace("__VERSION__", version), "web", "sw.js")
     return version
 

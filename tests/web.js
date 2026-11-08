@@ -23,6 +23,13 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
       if(r.status!==200||!t.includes('<link rel="canonical" href="'+u+'">')||!/<title>[^<]{10,}<\/title>/.test(t)||!/name="description" content="[^"]{40,}"/.test(t)||!/og:image" content="https:\/\/www\.jitsflow\.com\/og\//.test(t)||!ld.length||!parsed)bad.push(u)}
     ok(!bad.length,'content pages have a title, description, canonical, share image and valid structured data '+bad.join(' '));
     const og=await fetch(URL+'og/home.jpg');ok(og.status===200&&og.headers.get('content-type')==='image/jpeg','share images are served');
+    ok(locs.includes('https://www.jitsflow.com/coaches/'),'sitemap lists the coaches page');
+    {const r=await fetch(URL+'coaches/'),h=await r.text();const imgs=[...h.matchAll(/src="(\/img\/coach\/[^"]+)"/g)].map(m=>m[1]);
+     const st=await Promise.all([...new Set(imgs)].map(async u=>(await fetch(URL+u.slice(1))).status));
+     ok(r.status===200&&/Run your gym from your phone/.test(h)&&/href="\/app\/\?start=1"/.test(h)&&/"FAQPage"/.test(h)&&!/@@/.test(h),'coaches page: headline, Start your gym link, FAQ data');
+     ok(imgs.length>=5&&st.every(x=>x===200),'coaches page screenshots load ('+imgs.length+')');
+     ok((await fetch(URL+'og/coaches.jpg')).status===200,'coaches share card exists');
+     ok(/href="\/coaches\/"/.test(await (await fetch(URL)).text()),'home page links to the coaches page');}
     const rb=await (await fetch(URL+'robots.txt')).text();ok(/Sitemap: https:\/\/www\.jitsflow\.com\/sitemap\.xml/.test(rb)&&/Disallow: \/api\//.test(rb),'robots.txt points to the sitemap');
     const tp=locs.find(u=>/\/techniques\/[^/]+\/$/.test(u)).replace('https://www.jitsflow.com/','');
     const rr=await fetch(URL+tp.replace(/\/$/,''),{redirect:'manual'});ok(rr.status===301&&rr.headers.get('location')==='/'+tp,'pages without the trailing slash redirect to one address');

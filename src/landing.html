@@ -110,6 +110,8 @@ p{margin:0}
 .footlinks a{color:inherit}
 .toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
 .toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
+/* narrow phones: two text links fit, the button doesn't (the hero repeats it right below) */
+@media (max-width:520px){.toplinks .btn{display:none}.toplinks{gap:14px}}
 /* stats strip */
 .strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
 .stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -178,7 +180,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 @@HERO_ART@@
 <header class="wrap top">
   <a class="brand" href="/" aria-label="JitsFlow home"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
-  <nav class="toplinks"><a class="signin" href="/app/?signin=1">Sign in</a><a class="btn sm primary" href="/app/">Open app</a></nav>
+  <nav class="toplinks"><a class="signin" href="/coaches/">For coaches</a><a class="signin" href="/app/?signin=1">Sign in</a><a class="btn sm primary" href="/app/">Open app</a></nav>
 </header>
 
   <section class="wrap hero">
@@ -282,7 +284,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
     <div class="faq">
       <details><summary>Does it replace my coach?</summary><p>No. JitsFlow is for study between classes. Coaches teach details differently, so moves where that matters are flagged with "Check with your coach", and each belt has a coach review list to go through together.</p></details>
-      <details><summary>Where do coaches sign in?</summary><p>Tap <a href="/app/?signin=1">Sign in</a> at the top of this page. New coaches choose <a href="/app/?start=1">Start a gym</a>, then send students the invite link from the Coach tab's Gym page.</p></details>
+      <details><summary>I run a gym. What does it do for coaches?</summary><p>Timetable, bookings and waitlists, memberships, attendance insights, competitions and WhatsApp invites. See <a href="/coaches/">JitsFlow for coaches</a>, or <a href="/app/?start=1">start your gym</a>. Existing coaches tap <a href="/app/?signin=1">Sign in</a> at the top of this page.</p></details>
       <details><summary>What does it cost?</summary><p>It's free to use, with no account needed.</p></details>
       <details><summary>Can I read the techniques without the app?</summary><p>Yes. Every move has its own page in the <a href="/techniques/">technique library</a>, with steps, details, common mistakes, a drill and a video. There's also a <a href="/glossary/">glossary</a> of BJJ terms and the <a href="/belts/">belt curriculum</a>.</p></details>
       <details><summary>Where's my data?</summary><p>On your phone, unless you create a free account. Then your progress and training log are saved to your account so they're on any device, and you can delete everything in Settings. See the <a href="/privacy/">privacy notice</a>.</p></details>
@@ -306,7 +308,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
   <div class="wrap">
     <span><b>JitsFlow</b> · No-gi technique library and flow map.</span>
     <span>Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</span>
-    <span class="footlinks"><a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/glossary/">Glossary</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
+    <span class="footlinks"><a href="/coaches/">For coaches</a> · <a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/glossary/">Glossary</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
     <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
   </div>
 </footer>
