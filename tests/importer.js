@@ -52,6 +52,8 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
 
     // ---- Claude read with a stand-in client
     let sent = null;
+    // Pictures go as bytes, each after a "Picture from <url>:" line.
+    const picsIn = (params) => { const c = params.messages[0].content; return c.map((b, i) => (b.type === "image" && c[i - 1] && c[i - 1].type === "text" ? (c[i - 1].text.match(/^Picture from (\S+):/) || [])[1] : null)).filter(Boolean); };
     const fake = (out, extra = {}) => ({ messages: { create: async (params) => { sent = params; return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }], ...extra }; } } });
     const ai = { name: "Fourways Grappling Club", tagline: "BJJ for everyone.", address: "", phone: "", email: "", logo_choice: 1,
       socials: { instagram: "", facebook: "", youtube: "https://www.youtube.com/@fgc", tiktok: "", whatsapp: "", x: "" },
@@ -62,13 +64,13 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const c = await im.importSite(site.url, { client: fake(ai) });
     ok(c.method === "claude", "with a client it uses the Claude read");
     ok(sent.model === "claude-haiku-5-5" && sent.thinking && sent.thinking.type === "disabled" && !sent.betas, "request uses the cheap model (Haiku 5.5), no thinking");
-    ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-schedule-2026\.png/.test(b.source.url)), "a timetable picture found anywhere on the site is sent to Claude");
-    ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-adult-subs2026\.png/.test(b.source.url)) && !sent.messages[0].content.some((b) => b.type === "image" && /IMG_7684/.test(b.source.url)), "a price list picture named like 'adult-subs2026' is sent too; gym photos aren't");
-    { const urls = sent.messages[0].content.filter((b) => b.type === "image").map((b) => b.source.url).join(" ");
+    ok(picsIn(sent).some((u) => /fgc-schedule-2026\.png/.test(u)), "a timetable picture found anywhere on the site is sent to Claude");
+    ok(picsIn(sent).some((u) => /fgc-adult-subs2026\.png/.test(u)) && !picsIn(sent).some((u) => /IMG_7684/.test(u)), "a price list picture named like 'adult-subs2026' is sent too; gym photos aren't");
+    { const urls = picsIn(sent).join(" ");
       ok(/Skyfall-1024x576\.jpeg/.test(urls), "a venue's timetable picture on a page with little text is sent (\"Skyfall.jpeg\" on /skyfall)");
       ok(!/annie\.png/.test(urls) && !/join2\.png/.test(urls), "coach headshots and pictures repeated across the site aren't"); }
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
-    const txt = sent.messages[0].content.find((b) => b.type === "text").text;
+    const txt = sent.messages[0].content.filter((b) => b.type === "text").pop().text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
     ok(c.profile.timetable.length === 1 && c.profile.timetable[0].day === "Thu", "Claude's timetable replaces the plain one; invalid rows dropped");
     const fromImg = await im.importSite(site.url, { client: fake({ ...ai, timetable: [{ day: "Mon", start: "17:00", end: "", title: "Kids Gi BJJ", coach: "", level: "Kids", source: "image", quote: "MON 5PM KIDS GI BJJ" }] }) });
@@ -103,6 +105,12 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const broken = await im.importSite(site.url, { client: { messages: { create: async () => { throw Object.assign(new Error("overloaded"), { status: 529 }); } } } });
     ok(broken.method === "basic" && broken.profile.rates.length > 0, "an API error falls back to the plain read");
 
+    // ---- a timetable table keeps which day each class is on
+    { const t = im.parsePage(`<html><body><table><tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th></tr><tr><td>15h30-16h15</td><td>—</td><td>Kids Class 5-8 yrs</td><td>—</td></tr><tr><td>18h00</td><td>Kick Boxing</td><td>Fundamentals</td><td>Kick Boxing</td></tr></table></body></html>`, "https://x.test/").text;
+      ok(/Time: 15h30-16h15 · Tuesday: Kids Class 5-8 yrs/.test(t) && /Monday: Kick Boxing · Tuesday: Fundamentals · Wednesday: Kick Boxing/.test(t), "table cells keep their day headings: " + t.replace(/\n/g, " / ")); }
+    { const p = im.parsePage(`<html><head><meta property="og:type" content="article"><meta property="article:published_time" content="2016-07-01"></head><body class="single single-post postid-12"><p>ADCC 2016 recap</p></body></html>`, "https://x.test/adcc-2016/");
+      ok(p.isPost === true, "blog posts are recognised (so they don't use up the pages read)");
+      ok(im.parsePage(`<html><head><meta property="og:type" content="article"><meta property="article:published_time" content="2020-01-29"></head><body class="page page-id-325"><p>About us</p></body></html>`, "https://x.test/about-us/").isPost === false, "an ordinary page an SEO plugin calls an article is still read"); }
     // ---- cleaning what the browser sends back
     const cl = im.cleanProfile({ name: "x".repeat(500), website: "javascript:alert(1)", socials: { instagram: "javascript:alert(1)", facebook: "https://facebook.com/a" }, timetable: [{ day: "Mon", start: "25:00" }, { day: "Tue", start: "7:05", title: "<b>Hi</b>" }], rates: [{ name: "a", price: -5 }, { name: "b", price: "100", period: "weird" }] });
     ok(cl.name.length === 100 && cl.website === "" && !cl.socials.instagram && cl.socials.facebook, "unsafe links are dropped and text is capped");

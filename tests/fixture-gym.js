@@ -35,7 +35,7 @@ function startGymSite() {
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, "http://x"); hits.push(u.pathname);
     if (u.pathname === "/sitemap.xml") { res.writeHead(200, { "content-type": "application/xml" }); return res.end(`<?xml version="1.0"?><urlset><url><loc>${"http://" + req.headers.host}/hidden</loc></url><url><loc>${"http://" + req.headers.host}/</loc></url></urlset>`); }
-    if (u.pathname === "/img/site-logo.png" || u.pathname === "/apple.png" || u.pathname === "/img/fgc-schedule-2026.png") { res.writeHead(200, { "content-type": "image/png" }); return res.end(LOGO); }
+    if (u.pathname === "/img/site-logo.png" || u.pathname === "/apple.png" || u.pathname === "/img/fgc-schedule-2026.png" || u.pathname === "/img/fgc-adult-subs2026.png" || u.pathname === "/img/Skyfall-1024x576.jpeg" || u.pathname === "/img/join2.png" || u.pathname === "/img/annie.png") { res.writeHead(200, { "content-type": "image/png" }); return res.end(LOGO); }
     if (u.pathname === "/evil.svg") { res.writeHead(200, { "content-type": "image/svg+xml" }); return res.end('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'); }
     if (u.pathname === "/to-metadata") { res.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" }); return res.end(); }
     if (u.pathname === "/huge") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<p>" + "x".repeat(3e6) + "</p>"); }

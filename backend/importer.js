@@ -103,8 +103,19 @@ function attrs(tag) {
   return out;
 }
 const squash = (s) => s.replace(/[ \t\f\v ​]+/g, " ").trim();
+// A timetable table flattened to "15h30 | — | Kids | — | Kids" loses which day each class is on. Keep the headings:
+// "Time: 15h30-16h15 · Tuesday: Kids Class 5-8 yrs · Thursday: Kids Class 5-8 yrs".
+function tableToText(t) {
+  const cell = (h) => squash(decode(h.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ")));
+  const rows = [...t.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi)].map((r) => [...r[1].matchAll(/<t([dh])\b([^>]*)>([\s\S]*?)<\/t[dh]\s*>/gi)].flatMap((c) => { const span = Math.min(7, Number((c[2].match(/colspan="?(\d+)/i) || [])[1]) || 1); return Array(span).fill(cell(c[3])); }));
+  if (rows.length < 2) return "\n" + rows.map((r) => r.join(" | ")).join("\n") + "\n";
+  const head = rows[0], empty = (v) => !v || /^[-–—x·.]+$/i.test(v);
+  if (head.length < 3 || head.filter(Boolean).length < 3) return "\n" + rows.map((r) => r.join(" | ")).join("\n") + "\n";
+  return "\n" + head.join(" | ") + "\n" + rows.slice(1).map((r) => r.map((v, i) => (empty(v) ? "" : (head[i] ? head[i] + ": " : "") + v)).filter(Boolean).join(" · ")).filter(Boolean).join("\n") + "\n";
+}
 function htmlToText(html) {
   let s = html.replace(/<!--[\s\S]*?-->/g, " ").replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1\s*>/gi, " ");
+  s = s.replace(/<table\b[\s\S]*?<\/table\s*>/gi, (t) => tableToText(t).replace(/</g, " "));
   s = s.replace(/<\/(td|th)\s*>/gi, " | ").replace(/<br\s*\/?>/gi, "\n").replace(/<\/?(p|div|li|ul|ol|h[1-6]|tr|table|section|article|header|footer|nav|main|aside|dd|dt|figure|figcaption|blockquote|form|label|button)\b[^>]*>/gi, "\n");
   s = decode(s.replace(/<[^>]+>/g, " "));
   const lines = []; let prev = "";
@@ -130,13 +141,17 @@ function parsePage(html, base) {
   const headerHtml = (html.match(/<header\b[\s\S]*?<\/header>/i) || [""])[0];
   const headerImgs = [];
   for (const m of headerHtml.matchAll(/<img\b[^>]*>/gi)) { const a = attrs(m[0]); const src = a.src || a["data-src"] || a["data-image"]; if (src && !/^data:/i.test(src)) headerImgs.push({ src: abs(src), alt: a.alt || "", cls: (a.class || "") + " " + (a.id || "") }); }
-  return { url: base, title, meta, links, imgs, headerImgs, icons, ld, text: htmlToText(html) };
+  // A blog post, by the site's own page type (SEO plugins label ordinary pages "article" with dates too, so those don't count).
+  const bodyCls = (html.match(/<body\b[^>]*class="([^"]*)"/i) || [])[1] || "";
+  const isPost = /\bsingle-post\b/.test(bodyCls) || (/collection-type-blog/.test(bodyCls) && /view-item/.test(bodyCls));
+  return { url: base, title, meta, links, imgs, headerImgs, icons, ld, isPost, text: htmlToText(html) };
 }
 
 /* ---------------- finding the useful pages ---------------- */
 const PAGE_HINT = /time-?table|schedule|class(es)?(-?times?)?\b|rooster|program(me)?s?|pric(e|es|ing)|fees?\b|rates?\b|membership|join|sign-?up|coach(es)?|instructor|team|staff|about|contact|location|find-?us|kids|adults|bjj|jiu|no-?gi|mma/i;
 // Crawl the whole site (same address only), most promising pages first, within a page and time budget.
 // Pages are found from links on every page read plus the site's sitemap.xml.
+const SKIP_MORE = /\/(blocks|elements?|demos?|wp-json)\/|\/page\/\d+|\/\d{4}\/\d{2}(\/|$)|\/events\/\d{4}|privacy|cookie|terms|refund|returns-|disclaimer|popia|paia/i;
 const SKIP_PATH = /\/(cart|checkout|basket|login|log-in|signin|sign-in|account|my-account|wp-admin|wp-login|feed|cdn-cgi|search|tag|tags|category|categories|author|shop|store|product|products|collections|apparel|merch)(\/|$)|\.(pdf|jpe?g|png|gif|webp|svg|zip|mp4|mov|docx?|xlsx?|ics|xml|json|css|js)$/i;
 function pageScore(path, text, depth) {
   const hay = (path + " " + text).toLowerCase();
@@ -159,7 +174,7 @@ async function crawl(home, { maxPages = 30, maxDepth = 4, budgetMs = 20000, conc
   const offer = (u, text, depth) => {
     const n = normPage(u); if (!n || seen.has(n) || depth > maxDepth) return;
     let url; try { url = new URL(n); } catch (e) { return; }
-    if (url.origin !== origin || SKIP_PATH.test(url.pathname)) return;
+    if (url.origin !== origin || SKIP_PATH.test(url.pathname) || SKIP_MORE.test(url.pathname)) return;
     seen.add(n); queue.push({ url: n, depth, score: pageScore(url.pathname, text || "", depth) });
   };
   for (const l of home.links) offer(l.abs, l.text + " " + l.label, 1);
@@ -180,6 +195,7 @@ async function crawl(home, { maxPages = 30, maxDepth = 4, budgetMs = 20000, conc
     }));
     for (const g of got) {
       if (!g || pages.some((x) => normPage(x.url) === normPage(g.page.url))) continue;
+      if (g.page.isPost && !/time-?table|schedule|class(es)?\b|pric(e|es|ing)|fees?\b|membership|coach|contact/i.test(new URL(g.page.url).pathname + " " + g.page.title)) continue; // old news and blog posts
       g.page.depth = g.depth; g.page.score = pageScore(new URL(g.page.url).pathname, g.page.title + " " + g.page.text.slice(0, 3000), g.depth);
       pages.push(g.page);
       for (const l of g.page.links) offer(l.abs, l.text + " " + l.label, g.depth + 1);
@@ -408,7 +424,7 @@ async function claudeRead(client, pages, logos, timetableImages) {
   const linkList = [...new Set(pages.flatMap((p) => p.links.map((l) => l.abs)).filter((h) => h && (socialOf(h) || /^(tel|mailto):/i.test(h))))].slice(0, 40);
   const text = `WEBSITE: ${pages[0].url}\n\nLOGO CANDIDATES:\n${logos.map((l, i) => `${i}. ${l.url} (${l.why})`).join("\n") || "(none)"}\n\nCONTACT AND SOCIAL LINKS FOUND:\n${linkList.join("\n") || "(none)"}\n\nPAGES:\n${parts.join("\n\n")}${timetableImages.length ? "\n\nThe images attached may be the gym's timetable or price list. Read them too." : ""}`;
   const ask = (withImages) => ai.extract(client, { system: SYSTEM, schema: SCHEMA, maxTokens: 12000, timeout: 90000, effort: "medium", content: [
-    ...(withImages ? timetableImages.map((url) => ({ type: "image", source: { type: "url", url } })) : []),
+    ...(withImages ? timetableImages.flatMap((im) => [{ type: "text", text: `Picture from ${im.url}:` }, { type: "image", source: { type: "base64", media_type: im.type, data: im.body.toString("base64") } }]) : []),
     { type: "text", text },
   ] });
   try { return await ask(timetableImages.length > 0); }
@@ -585,11 +601,15 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
   const named = pages.flatMap((p) => p.imgs).filter((im) => INFO_IMG.test(imgName(im)) && !/logo|icon|favicon|avatar/i.test(imgName(im)));
   const people = (p) => /coach|team|instructor|staff|faculty/i.test(new URL(p.url).pathname + " " + p.title);
   const infoPages = pages.filter((p) => INFO_PAGE.test(new URL(p.url).pathname + " " + p.title) && !people(p));
-  const thinPages = pages.filter((p) => p !== pages[0] && !people(p) && !infoPages.includes(p) && p.text.length < 2500);
+  // A venue page has a picture or two; a gallery has dozens of photos.
+  const thinPages = pages.filter((p) => p !== pages[0] && !people(p) && !infoPages.includes(p) && p.text.length < 2500 && !/gallery|photos|media|blog|news/i.test(new URL(p.url).pathname) && p.imgs.filter((im) => !furniture(im)).length <= 4);
   const onPages = [...infoPages, ...thinPages].flatMap((p) => p.imgs.filter((im) => !furniture(im)).slice(0, 3));
   const base = (src) => src.replace(/\?format=\d+w$/, "").replace(/-\d{2,4}x\d{2,4}(?=\.\w+$)/, "");
   const picked = new Map(); for (const im of [...named, ...onPages]) { const k = base(im.src); if (!picked.has(k)) picked.set(k, im.src.replace(/\?format=\d+w$/, "?format=1500w")); }
-  const ttImages = [...picked.values()].slice(0, 8);
+  const okUrl = (u) => /^https?:\/\//i.test(u) && !/\[\[|\{\{|%7B|%5B|loading|spinner|placeholder|blank\.gif|pixel/i.test(u);
+  const cands = [...picked.values()].filter(okUrl).slice(0, 12);
+  const got = await Promise.all(cands.map((u) => fetchImage(u, 3500000).then((img) => (img && img.body.length > 500 && !(img.type === "image/gif" && img.body.length < 20000) ? { url: u, ...img } : null)).catch(() => null)));
+  const ttImages = got.filter(Boolean).slice(0, 8);
   let profile = plain, method = "basic", aiError = null, logoChoice = -2, dropped = null;
   const c = client === undefined ? getClient() : client;
   if (c) {
