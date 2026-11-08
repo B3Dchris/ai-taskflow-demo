@@ -1960,6 +1960,270 @@ const OV_BLACK={
  guard_ret_pressure:"Keeping your guard against heavy passers with frames, hip movement and leg pummeling, without inverting. Use it when a pressure passer starts to pin your legs and flatten you.",
  seated_counter_wrestle:"Counters from seated guard when they wrestle up or shoot in: snap down to the front headlock, then guillotine or go-behind. Use it when they drive into you with their head low.",
 };
+/* --- content-extra.js --- */
+const TECH_EXTRA=[
+T("japanese_necktie","Japanese necktie from front headlock","sub","fhl_top","sub","key",
+ ["From the front headlock with them on their knees, sprawl your hips back and keep your chest heavy on the back of their head and shoulders.",
+  "Thread your arm under their near armpit and under their neck, as for a D'Arce, so their head and near arm are inside your arms.",
+  "Clasp your hands palm to palm instead of grabbing your biceps. Bring your top elbow down over the back of their neck.",
+  "Drop your top shoulder to the mat past their head and lie across the back of their neck and shoulders, with your stomach covering the back of their head.",
+  "Hook their near leg with your inside leg and pull it toward you so they cannot turn away.",
+  "Finish slowly. Pull your clasped hands in to your chest and squeeze your elbows together while your hips come in a little at a time. Release on the tap."],
+ ["The pressure must come from your arm and their own shoulder on the sides of the neck. If you only feel the jaw or the back of the head, reset the arm.","Keep your weight on their upper back the whole time. If your chest comes off, they turn in and the choke opens."],
+ ["Driving your full bodyweight down onto the neck fast, which cranks the spine instead of choking.","Falling to the mat before your arm is deep, so the grip ends up on the jaw."],
+ "Partner on knees at 50 percent. 3 rounds of 2 minutes: snap to front headlock, thread the arm, drop to the shoulder, finish slowly, reset. Switch sides each round.",["peruvian_necktie","darce","anaconda"],
+ "This choke also loads the neck. IBJJF bans chokes with a spinal lock for competitors under 16; adult divisions allow them. Apply it very slowly, never jerk or twist the head, and release the moment they tap."),
+
+T("peruvian_necktie","Peruvian necktie from front headlock","sub","fhl_top","sub","key",
+ ["From the front headlock with them on their knees, sprawl and trap their head and one arm together.",
+  "Feed your choking arm under their neck and out past the armpit of the trapped arm. Bring your other arm over the back of their shoulder and lock a gable grip, palm to palm. Their head and that arm are inside.",
+  "Come up on your feet. Walk the leg on the trapped-arm side up beside their head and lay it over the back of their neck, so your hamstring rests on it.",
+  "Sit down onto that hip beside their trapped shoulder, at an angle, not straight back. As you sit, throw your other leg over their upper back.",
+  "Keep your arms straight and your grip tight. Both legs are now on their back and neck, pinning them down.",
+  "Finish slowly. Pull up with your arms while you press down with your legs, a little at a time. Release on the tap."],
+ ["The choke comes from your arms pulling up while your legs press down. Keep both legs on their back, not just one.","Sit to the side of the trapped arm. Falling straight back lets them push your leg off their head and escape."],
+ ["Sitting down before the gable grip is tight, so their arm slides out.","Pulling with bent arms while your legs stay loose, which only strains the neck."],
+ "Partner on knees at 50 percent. 8 reps each side to the seated position with no squeeze, then 4 reps each side finishing slowly.",["japanese_necktie","anaconda","fhl_go_behind"],
+ "This choke also loads the neck. IBJJF bans chokes with a spinal lock for competitors under 16; adult divisions allow them. Apply it very slowly, keep the pressure even, and release the moment they tap."),
+
+T("flying_guillotine","Flying guillotine","sub","standing","sub","plus",
+ ["From a collar tie or a snap down, wait for their head to drop below yours as they come forward.",
+  "Wrap their neck: the blade of your wrist under their chin, your arm over the back of their neck. Grip your hands palm to palm.",
+  "Pull their head tight to your chest and keep your choking elbow tight to your side before you leave the ground.",
+  "Jump and lock your legs around their waist in a high closed guard, keeping the grip. If they are not balanced for it, sit to guard with the grip instead of jumping.",
+  "When you land on your back, keep the guard closed high on their waist and their head trapped against your chest.",
+  "Finish slowly. Pull your forearm up into their throat and stretch your hips away from them, a little at a time. Release on the tap."],
+ ["The grip must be locked before you jump. Jumping to find the neck lands you in their guard with nothing.","Your guard holds their hips away while your arm pulls up. Both are needed for the finish."],
+ ["Jumping when they lean back, so both of you fall badly.","Hanging on the neck with your bodyweight in the air, which cranks it instead of choking."],
+ "Partner standing, ready for the jump, on soft mats. 5 sit-to-guard entries each side, then 5 jumping entries each side. Finish slowly only after you land.",["guillotine_cg","hw_guillotine","guillotine"],
+ "IBJJF bans jumping to closed guard in white belt divisions, and many gyms ban jumping guard in open training. Only jump on a partner who knows it is coming, on soft mats. Sitting to guard with the grip is the safer version."),
+
+T("von_flue_choke","Von Flue choke: guillotine counter from side control","sub","sc_top","sub","key",
+ ["When they hold an arm-out guillotine from guard, put both hands on their choking wrist and pull it down to free your throat.",
+  "Pass to side control on the side away from their choking arm, the opposite side from where your head is trapped. Your legs end on one side of their body and your head on the other.",
+  "Slide your leading arm under their head. Bring your trailing arm over the wrist and forearm of their choking arm to keep it wrapped around your neck. Clasp your hands palm to palm.",
+  "Squeeze your far shoulder up to your ear so they cannot drop the arm and unwrap.",
+  "Sprawl your legs back and come up on your toes.",
+  "Finish slowly. Drive your weight down through your near shoulder toward their head. Your shoulder closes one side of the neck and their own arm closes the other. Release on the tap."],
+ ["Go to the side away from their choking arm. On the same side the guillotine gets tighter.","If they let go of the neck, stop the choke and attack the free arm with a kimura or americana."],
+ ["Moving to side control with your weight off them, so they roll you while the guillotine is still on.","Squeezing hard and fast. This choke works quickly and can knock someone out."],
+ "Partner locks a loose arm-out guillotine from guard. 5 passes each side to the locked hands, then 3 slow finishes each side.",["sc_control","kimura_sc","americana"],
+ "This choke acts fast. Apply it slowly and release the moment they tap."),
+
+T("gogoplata","Gogoplata from closed guard","sub","cg_bot","sub","plus",
+ ["From closed guard, break their posture and overhook one arm tight to your chest so their head stays low.",
+  "Climb your legs high on their back. On the overhook side, bring your knee up so your leg sits over their shoulder with their arm trapped under it.",
+  "Hold your ankle with your free hand and pull your foot past the front of their face, so your shin slides under their chin and your foot ends past their far ear.",
+  "Cup the back of their head with both hands, or hold their head with one hand and your toes with the other.",
+  "Keep their trapped arm inside your leg so they cannot push your shin away.",
+  "Finish slowly. Pull their head down onto your shin and curl your hips up a little at a time. Release on the tap."],
+ ["Your shin must be under the chin, not on the jaw or face.","This needs open hips. Warm up your hips and knees first and stop if your own knee hurts."],
+ ["Trying it with their arm outside your leg, so they push your shin straight off.","Yanking the head down fast, which hurts the throat before they can tap."],
+ "From closed guard with a cooperative partner. 3 rounds of 1 minute: break posture, overhook, place the shin, hold 3 seconds with no squeeze, reset.",["omoplata","triangle","cg_break_posture"],
+ "The shin presses the windpipe, which can be hurt with little force. Apply it very slowly and release the moment they tap."),
+
+T("truck_calf_slicer","Calf slicer from the truck","sub","back_top","sub","plus",
+ ["Get to the truck: sit behind and to the side of them with your legs locked around their near leg, your leg threaded behind their knee.",
+  "Make sure your shin is deep in the back of their trapped knee. Keep the lock on their leg tight.",
+  "Reach down and hug their trapped ankle and foot to your chest with both arms.",
+  "Keep their upper body turned away from you with your chest and shoulder so they cannot sit up into you.",
+  "Finish slowly. Pull their foot toward your chest while you extend your hips and locked legs away, folding their calf around your shin a little at a time. Release on the tap."],
+ ["Your shin is the blade. It must sit deep in the knee pit or there is no pressure.","The finish is a slow fold. Calf slicers damage the knee before they hurt much."],
+ ["Grabbing the foot before your shin is deep in the knee.","Jerking the foot toward you instead of folding the leg slowly."],
+ "From the truck with a partner who knows the move. 6 entries each side to the foot grip with no pressure. Finish only slowly, with a partner you trust.",["banana_split","truck_back","back_control"],
+ "IBJJF allows calf slicers only at brown and black belt, in gi and no-gi; ADCC and most submission-only events allow them. Follow your gym's rules. Apply it slowly and release at the tap."),
+
+T("banana_split","Banana split from the truck","sub","back_top","sub","plus",
+ ["Get to the truck: sit behind and to the side of them with your legs locked around their near leg.",
+  "Lie back onto your side and pull them back toward you so their hips stay trapped by your legs.",
+  "Reach under their free far leg and hug the thigh behind the knee with both arms.",
+  "Pull their far leg toward your head while you keep the lock on their near leg.",
+  "Finish very slowly. Extend your locked legs to push their near leg away while you pull the far leg in, splitting their legs a little at a time. Release on the tap."],
+ ["The stretch comes from both directions at once: legs push one way, arms pull the other.","This is a groin and hip attack. Many people have no feeling of danger until it is too late, so go slower than you think."],
+ ["Pulling the far leg with your arms only while your locked legs stay bent.","Rolling or jerking into the split. Small, slow movements only."],
+ "From the truck with a partner who knows the move. 6 entries each side to the leg grip with no stretch. Finish only very slowly, with a partner you trust.",["truck_calf_slicer","truck_back","back_control"],
+ "Leg-splitting submissions strain the groin, hips and lower back. IBJJF currently bans them only in the 4 to 12 kids divisions, but many gyms and events ban them for everyone. Follow your gym's rules, apply it very slowly, and release the moment they tap."),
+
+T("toe_hold","Toe hold from outside ashi","sub","ashi","sub","key",
+ ["From outside ashi or a single-leg X, keep their knee bent and pinned with your legs and their foot by your hip.",
+  "Grab the top of their foot near the toes with the hand on the side of their little toe.",
+  "Thread your other arm under their Achilles and grab your own wrist. This is a figure four on the foot.",
+  "Keep their knee bent near 90 degrees and their leg pinned with your legs so it cannot straighten or turn.",
+  "Finish slowly. Turn their toes down and in toward their buttocks with your figure four, a few degrees at a time. Release on the tap."],
+ ["The grip on the toes must be over the top of the foot, not the ankle.","Pin the leg first. If their knee is free, they turn with the lock and it fails."],
+ ["Letting their leg straighten, so the lock slides off.","Twisting fast. The foot and knee can tear before they feel pain."],
+ "From outside ashi with a partner. 8 grips each side with no turn, then 4 slow finishes each side.",["sal","ashi_control","kneebar"],
+ "IBJJF allows toe holds only at brown and black belt, and turning the foot outward only in brown and black no-gi divisions; ADCC and most submission-only events allow them. Follow your gym's rules. Apply it slowly and release at the tap."),
+
+T("wrist_lock_cg","Wrist lock from closed guard against a posted hand","sub","cg_bot","sub","plus",
+ ["In closed guard, wait for them to post a hand flat on your chest or stomach.",
+  "Cover the back of that hand with both of your hands and pin it flat to your body. Keep their palm on you.",
+  "Hold your guard closed and pull them in with your legs so their elbow stays bent.",
+  "Keep their elbow pointing out to the side and their forearm angled toward your face.",
+  "Finish very slowly. Curl your chest up toward their forearm, bending their wrist back, a few degrees at a time. Release on the tap."],
+ ["The hand must stay flat on your body. If the palm lifts, the lock is gone.","Small movement, big pressure. Wrist locks hurt quickly, so go slowly."],
+ ["Grabbing the fingers instead of covering the whole hand.","Sitting up fast and snapping the wrist."],
+ "Partner posts a hand from inside your closed guard. 8 reps each side to the pinned hand, then 3 very slow finishes each side.",["kimura_cg","armbar_cg","hip_bump"],
+ "IBJJF bans wrist locks for competitors under 18 and for adult white belts. Wrist locks can injure with little warning. Apply it very slowly and release the moment they tap."),
+
+T("electric_chair_sweep","Electric chair sweep from lockdown half guard","sweep","hg_bot","hg_top","key",
+ ["From half guard bottom, lock your legs around their trapped leg in a lockdown and extend your legs to stretch it back. Their base breaks.",
+  "Get the underhook on the trapped-leg side and slide your head and shoulders under them toward their far leg, as if going to deep half. Keep the lockdown on.",
+  "Reach under their far thigh with your free arm and hug it. Pull their far knee onto your shoulder.",
+  "Extend your lockdown to push their trapped leg away while you pull their far leg toward you. With both legs split, they cannot post and fall to their back on the far side.",
+  "Release the lockdown, come up on your knees, and settle on top in half guard. Start passing."],
+ ["Stretch first, then reach for the far leg. Without the stretch they keep their weight on you.","Move to their far leg with your head under them. If you stay flat, you cannot reach it."],
+ ["Letting go of the lockdown before they are on their back.","Staying on the split to force a tap instead of coming up on top."],
+ "Partner in your half guard at 50 percent. 3 rounds of 2 minutes: lockdown, stretch, far leg, sweep, come up on top, reset.",["hg_pass","smash_pass","banana_split"],
+ "Holding the split for a tap is the electric chair submission, a leg-splitting attack. IBJJF currently bans those only in the 4 to 12 kids divisions, but many gyms ban them. Follow your gym's rules and apply any split very slowly."),
+
+T("granby_roll","Granby roll from turtle to guard","escape","turtle_bot","seated","key",
+ ["From turtle with them on your back or side, tuck your chin and look under your body toward your far hip.",
+  "Post on your feet and drive one shoulder to the mat under you.",
+  "Roll across your shoulders, not your neck, pulling your knees toward your chest as you go.",
+  "Keep turning until your hips face them and your legs come between you.",
+  "Put your feet on their hips or knees and frame with your hands. Recover your guard."],
+ ["Roll on your shoulders. Tuck your chin and turn your head away so your neck stays out of it.","Keep your knees tight to your chest through the roll so your legs come back fast."],
+ ["Rolling straight over your head.","Stopping halfway on your back with your legs still behind you."],
+ "Solo first: 10 Granby rolls each side on the mat. Then partner rides your turtle at 50 percent, 5 rolls each side to guard.",["guard_retention","wrestle_up","shin_to_shin"]),
+
+T("wrestling_switch","Wrestling switch from turtle","escape","turtle_bot","turtle_top","plus",
+ ["From turtle with them at your side and an arm around your waist, get your hands and knees under you.",
+  "Reach your near arm over the top of their arm that is around your waist, and put your hand deep on the inside of their near thigh.",
+  "Sit your hips through away from them, so your arm levers down on their shoulder.",
+  "As their shoulder drops, circle your hips behind them and come up on your knees at their back.",
+  "Settle with your chest on their back and an arm around their waist. You are now on top of their turtle."],
+ ["The lever is your arm over theirs. Sit your hips away to make it work, not your arm strength.","Get your hand deep to the inside of their thigh, or they pull the arm out."],
+ ["Reaching for the leg without sitting your hips out.","Sitting through so far that you land on your back."],
+ "Partner rides your turtle at 50 percent. 3 rounds of 1 minute: switch, come behind, reset. Change sides each round.",["turtle_backtake","power_half","back_control"]),
+
+T("turtle_standup","Stand-up from turtle","escape","turtle_bot","standing","core",
+ ["From turtle with them behind you, lift your head and push your back up into their chest.",
+  "Grab the hand around your waist with both hands so they cannot lock their grip.",
+  "Post your outside foot flat on the mat, then the other, and stand up with your back pressing into them.",
+  "Peel their hands off your waist, turning your hips away from their grip.",
+  "Turn to face them with your elbows in and get back to your stance."],
+ ["Head up and back pressure first. With your head down, they keep you flat.","Fight their hands the whole time. If they lock their grip around your waist, they can lift and return you."],
+ ["Standing up with your back bent forward.","Turning to face them before their hands are off your waist."],
+ "Partner rides your turtle at 50 percent. 6 stand-ups to stance, then 3 rounds of 1 minute where you only score by getting to stance.",["stance_motion","single_leg","double_leg"]),
+
+T("russian_tie","Russian tie (two-on-one) to the back or single leg","entry","standing","back_top","key",
+ ["From stance, grab one of their wrists with one hand.",
+  "Bring your other arm across and clamp their upper arm just above the elbow, with your armpit over the top of their shoulder and your chest on their arm.",
+  "Hip in tight beside them and pull the arm down so their weight sinks onto the near leg.",
+  "If they pull back, drop your level and switch to a single leg on the near leg.",
+  "If they push in or turn toward you, step behind them, release the arm, and lock your hands around their waist from behind."],
+ ["Your chest controls the arm, not just your hands. Stay glued to their shoulder.","Keep your hips beside theirs. If you stand square in front, they spin out."],
+ ["Holding the arm with straight arms at a distance.","Bending forward so they lift their head and turn into you."],
+ "Partner in stance at 50 percent. 3 rounds of 2 minutes: Russian tie, then single leg or go-behind depending on their reaction.",["single_leg","drag_bodylock_return","back_control"]),
+
+T("tripod_sweep","Tripod sweep against a standing passer","sweep","seated","open_top","core",
+ ["From open guard with them standing, grab behind both their heels.",
+  "Hook the instep of your foot behind one of their heels from the outside.",
+  "Put your other foot on their hip on the other side.",
+  "Push the hip away with your foot while you pull the hooked heel toward you. They cannot step back with that leg and fall back.",
+  "Come up on top as they land: technical stand-up, or follow them down and start passing."],
+ ["Pull the heel and push the hip at the same moment.","Keep your hand on the heel until they hit the mat."],
+ ["Pushing the hip with a bent leg, so nothing happens.","Lying flat after the sweep instead of coming up."],
+ "Partner stands in your open guard at 50 percent. 10 sweeps each side, coming up on top each time.",["knee_cut","toreando","sal"]),
+
+T("lumberjack_sweep","Lumberjack sweep when they stand in your closed guard","sweep","cg_bot","mount_top","key",
+ ["When they stand up in your closed guard, keep your guard closed and sit up toward them.",
+  "Reach down and cup behind both their heels.",
+  "Open your guard and keep your knees in front of their hips.",
+  "Drive your hips and chest forward into their thighs while you pull both heels toward you. They fall onto their back.",
+  "Follow them down and land on top with your knees on the mat beside their hips, in mount."],
+ ["Grab the heels before they break your guard and step back.","Drive forward with your hips, not just your arms."],
+ ["Letting them get their posture and step away first.","Releasing the heels too early, so they sit down and keep you in guard."],
+ "Partner stands up in your closed guard at 50 percent. 10 sweeps to mount, then 5 where they try to step back as you reach.",["mount_control","mount_armbar","arm_tri"]),
+
+T("firemans_carry","Fireman's carry takedown","takedown","standing","sc_top","plus",
+ ["From a collar tie or two-on-one, control their arm just above the elbow.",
+  "Pull the arm down and across so their weight goes onto their near leg.",
+  "Drop step between their feet onto your knees, with their arm over your shoulder and your head on the outside of their body.",
+  "Reach your free arm between their legs and hook the near leg.",
+  "Keep pulling the arm, turn your head away, and roll them across your shoulders. They land on their back and side.",
+  "Follow them and settle chest to chest in side control."],
+ ["Keep hold of their arm all the way down. That is what puts them on their back and not their head.","Get your hips under their hips. If you are too far away, you just pull them down on top of you."],
+ ["Lifting them high and dropping them.","Letting go of the arm, so they post and land on top."],
+ "On crash pads first. 5 slow reps each side with a partner who knows how to fall, then 5 at normal speed each side.",["sc_control","sc_to_mount","kob_armbar"],
+ "Drill on crash pads with a partner who can breakfall. Stay on your knees and roll them across your shoulders. Never lift and drop them; slams are illegal in every IBJJF division."),
+
+T("knee_tap","Knee tap takedown","takedown","standing","open_top","key",
+ ["From a collar tie, pull their head down and toward the side of the knee you will tap.",
+  "Step your lead foot in close to their lead foot.",
+  "Drop your level by bending your knees. Put your free hand on the outside of their near knee.",
+  "Keep their knee blocked with your hand while you pull the collar tie down and across their body. They fall toward the blocked knee.",
+  "Follow them down, keep your weight on them, and start passing."],
+ ["The collar tie moves their head over the blocked knee. Head and knee work together.","Block the knee, don't grab it. The hand is a wall they trip over."],
+ ["Reaching for the knee from too far away, with your back bent.","Pulling the head straight down instead of down and across."],
+ "Partner in stance at 50 percent. 10 knee taps each side, following them down to a pass.",["knee_cut","toreando","sc_control"]),
+
+T("scissor_sweep","Scissor sweep with collar tie and wrist control","sweep","cg_bot","mount_top","core",
+ ["From closed guard, get a collar tie on one side and control their wrist on the other.",
+  "Open your guard and hip out to the side of the collar tie.",
+  "Put your top shin across their belly with your knee near their ribs. Put your bottom leg flat on the mat against the outside of their knee.",
+  "Pull them forward with the collar tie and wrist so their weight comes onto your shin.",
+  "Kick your top shin across their body while your bottom leg chops their knee toward you.",
+  "Roll with them and come up in mount."],
+ ["Their weight must be on your shin before you chop. Pull first, then kick.","Control the wrist on the side they fall to, so they cannot post that hand."],
+ ["Chopping with their weight still back.","Letting go of the collar tie as they fall, so they recover guard."],
+ "Partner kneels in your closed guard at 50 percent. 10 sweeps each side to mount.",["mount_control","mount_armbar","arm_tri"]),
+
+T("inside_trip","Inside trip (ouchi gari) from the clinch","takedown","standing","open_top","key",
+ ["From an over-under clinch or a collar tie and elbow, pull them close so your chest is on theirs.",
+  "Step in deep between their feet.",
+  "Hook one of their legs from the inside with your leg, the back of your calf against the back of their calf or knee.",
+  "Reap that leg out to the side and back while you drive your chest forward into them.",
+  "They fall onto their back. Stay chest to chest, land on top, and start passing."],
+ ["Chest pressure and the reap happen at the same time.","Hook low on the leg, at the calf or knee, not the thigh."],
+ ["Reaching for the leg from a distance, so you stand on one leg in front of them.","Driving forward with your head down, so they sprawl."],
+ "Partner in clinch at 50 percent. 10 inside trips each side, landing in a passing position.",["knee_cut","bodylock_pass","hg_pass"]),
+];
+const OV_EXTRA={
+ japanese_necktie:"A front headlock choke with a D'Arce-style arm, finished by dropping over their head and pulling your clasped hands in. Use it when they stay on their knees and block the D'Arce finish.",
+ peruvian_necktie:"A head-and-arm choke from the front headlock where you sit beside them and lay both legs on their back and neck. Use it when they are on their knees with their head low and one arm close to their head.",
+ flying_guillotine:"A guillotine you lock standing and then jump or sit to closed guard to finish. Use it when they shoot or drive in with their head low, and only where jumping guard is allowed.",
+ von_flue_choke:"A counter to the guillotine where you pass to the far side and choke them with your shoulder and their own arm. Use it when they keep holding a guillotine after you start to pass.",
+ gogoplata:"A choke from closed guard with your shin under their chin and their head pulled down. Use it when you have their posture broken and your hips are flexible enough to bring the shin in front.",
+ truck_calf_slicer:"A compression lock on the knee from the truck, folding their calf around your shin. Use it when you hold the truck and they block the back take, only where calf slicers are allowed.",
+ banana_split:"A leg-splitting submission from the truck where you push one leg away and pull the other in. Use it rarely, very slowly, and only where your gym allows it.",
+ toe_hold:"A figure four grip on the foot that turns it in toward their buttocks. Use it from outside ashi or single-leg X when they hide the heel, only where toe holds are allowed.",
+ wrist_lock_cg:"A wrist lock from closed guard against a hand posted flat on your chest. Use it when they post on you to keep posture, only where wrist locks are allowed.",
+ electric_chair_sweep:"A lockdown half guard sweep where you stretch their trapped leg and pull their far leg over your shoulder. Use it when they keep their weight back and resist the old-school sweep.",
+ granby_roll:"A shoulder roll from turtle that brings your legs back in front of them. Use it when they are about to take your back and you need to recover guard fast.",
+ wrestling_switch:"A wrestling reversal from turtle where you lever over their arm and come out behind them. Use it when they ride your turtle with an arm around your waist.",
+ turtle_standup:"A wrestling stand-up from turtle with your back pressing into them while you fight their hands. Use it when you would rather be standing than fight from the bottom.",
+ russian_tie:"A two-on-one arm control from standing that leads to a single leg or a go-behind. Use it against someone who reaches with their arm or hand-fights square in front of you.",
+ tripod_sweep:"An open guard sweep that pulls one heel while you push the opposite hip. Use it when they stand in your open guard with their weight back.",
+ lumberjack_sweep:"A sweep from closed guard when they stand up: grab both heels and drive into their thighs. Use it the moment they stand to break your guard.",
+ firemans_carry:"A wrestling takedown where you drop under their arm and roll them across your shoulders. Use it when they reach with an arm or lean heavy on your collar tie.",
+ knee_tap:"A collar tie takedown where you block their knee and pull their head across. Use it when they stand tall with their weight on their lead leg.",
+ scissor_sweep:"A closed guard sweep with a shin across their belly and a chop on their knee. Use it when they kneel in your guard and you can pull their weight forward.",
+ inside_trip:"A clinch takedown that hooks one leg from the inside and drives them backward. Use it when they lean into you or stand with their feet wide.",
+};
+const EXTRA_BELT={
+ japanese_necktie:"brown",
+ peruvian_necktie:"brown",
+ flying_guillotine:"black",
+ von_flue_choke:"purple",
+ gogoplata:"brown",
+ truck_calf_slicer:"brown",
+ banana_split:"black",
+ toe_hold:"brown",
+ wrist_lock_cg:"purple",
+ electric_chair_sweep:"purple",
+ granby_roll:"purple",
+ wrestling_switch:"purple",
+ turtle_standup:"blue",
+ russian_tie:"purple",
+ tripod_sweep:"blue",
+ lumberjack_sweep:"blue",
+ firemans_carry:"purple",
+ knee_tap:"blue",
+ scissor_sweep:"blue",
+ inside_trip:"blue",
+};
 /* --- videos.js --- */
 /* Picked YouTube videos per technique and position (checked with YouTube oEmbed). */
 const VIDEO_PICKS={
@@ -2840,7 +3104,131 @@ const VIDEO_PICKS={
 "v": "1TduATN1_xQ"
 }
 };
-const ADV=[["blue",typeof TECH_DEF_BLUE!=="undefined"?TECH_DEF_BLUE:[],typeof OV_DEF!=="undefined"?OV_DEF:{}],["purple",typeof TECH_DEF_PURPLE!=="undefined"?TECH_DEF_PURPLE:[],{}],["purple",typeof TECH_PURPLE!=="undefined"?TECH_PURPLE:[],typeof OV_PURPLE!=="undefined"?OV_PURPLE:{}],["brown",typeof TECH_BROWN!=="undefined"?TECH_BROWN:[],typeof OV_BROWN!=="undefined"?OV_BROWN:{}],["black",typeof TECH_BLACK!=="undefined"?TECH_BLACK:[],typeof OV_BLACK!=="undefined"?OV_BLACK:{}]];
+/* Lesser-known techniques (checked with YouTube oEmbed). */
+Object.assign(VIDEO_PICKS,{
+"japanese_necktie": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Intro to the Japanese Necktie by Keith Krikorian",
+"v": "mJcrR4Xttsg"
+},
+"peruvian_necktie": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Peruvian Necktie by Keith Krikorian",
+"v": "7J0hJPRPpRQ"
+},
+"flying_guillotine": {
+"channel": "JiuJitsu FLO",
+"nogi": false,
+"title": "Jumping Closed Guard Guillotine Drill",
+"v": "sV6GkUzcHtQ"
+},
+"von_flue_choke": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Von Flue Choke by Batuhan Asig",
+"v": "wIAVYLB8oXE"
+},
+"gogoplata": {
+"channel": "predadorbjj",
+"nogi": false,
+"title": "BJJ - Shin choke 'Gogoplata' from closed guard",
+"v": "Ws0iz_j0ddQ"
+},
+"truck_calf_slicer": {
+"channel": "Brandon Mccaghren",
+"nogi": true,
+"title": "Painful Calf Slicer from The Truck - 1 Minute Jiu Jitsu Hack",
+"v": "1JUGqwxsDKg"
+},
+"banana_split": {
+"channel": "Precision Boxing & MMA",
+"nogi": true,
+"title": "Banana split from the truck - Learn to Grapple",
+"v": "AKmsVbDMo6o"
+},
+"toe_hold": {
+"channel": "Brian Glick",
+"nogi": true,
+"title": "Attacking the Toehold from Outside Ashi Garami (No Gi BJJ/Jiu-Jitsu)",
+"v": "zsnGef5-N2g"
+},
+"wrist_lock_cg": {
+"channel": "BJJ Fanatics",
+"nogi": false,
+"title": "Wristlock From Closed Guard by Fredson Paixão",
+"v": "XrFuBJwk_2Y"
+},
+"electric_chair_sweep": {
+"channel": "SBG Idaho - Boise's Best BJJ & MMA Gym",
+"nogi": false,
+"title": "Electric Chair Sweep from Half Guard",
+"v": "satVeCbc8b4"
+},
+"granby_roll": {
+"channel": "O2 BJJ",
+"nogi": false,
+"title": "The Granby Roll Escape Everyone Should Know | BJJ Fundamentals",
+"v": "yLzOn-piehY"
+},
+"wrestling_switch": {
+"channel": "Peter Mettler Martial Arts",
+"nogi": true,
+"title": "American reversal a.k.a. the Switch from Referee Position - Sit Out Backtake from Turtle",
+"v": "wkj5FrUjj9Q"
+},
+"turtle_standup": {
+"channel": "Ben Egli",
+"nogi": false,
+"title": "Escaping the turtle position in a fight or BJJ with a stand-up",
+"v": "Hto8vSvnry0"
+},
+"russian_tie": {
+"channel": "Stuart Tomlinson",
+"nogi": true,
+"title": "How Elite Wrestlers use the Russian Tie for BJJ / MMA",
+"v": "pTbiUDyFDQE"
+},
+"tripod_sweep": {
+"channel": "Bernardo Faria BJJ Fanatics",
+"nogi": true,
+"title": "Hidden Details In The BJJ Tripod Sweep (Open Guard) That You Have Never Seen Before by Gordon Ryan",
+"v": "iGhMeN3TUPM"
+},
+"lumberjack_sweep": {
+"channel": "Kenny Florian",
+"nogi": false,
+"title": "Cut them down with the “Lumberjack Sweep”",
+"v": "QOXCJFEI78Y"
+},
+"firemans_carry": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "How to do Fireman's Carry by Charles Negromonte",
+"v": "Ur55EzfW6jo"
+},
+"knee_tap": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Knee Tap by Michael Pixley",
+"v": "phKg556osOY"
+},
+"scissor_sweep": {
+"channel": "Gabriel Gonzaga",
+"nogi": true,
+"title": "Scissor Sweep from Guard NoGi- Gabriel \"Napão\" Gonzaga",
+"v": "bSLZgTu8jUA"
+},
+"inside_trip": {
+"channel": "welcomematstevescott",
+"nogi": true,
+"title": "NO GI O UCHI GARI By John Saylor",
+"v": "FxxURexKrvk"
+}
+});
+const ADV=[["blue",typeof TECH_DEF_BLUE!=="undefined"?TECH_DEF_BLUE:[],typeof OV_DEF!=="undefined"?OV_DEF:{}],["purple",typeof TECH_DEF_PURPLE!=="undefined"?TECH_DEF_PURPLE:[],{}],["purple",typeof TECH_PURPLE!=="undefined"?TECH_PURPLE:[],typeof OV_PURPLE!=="undefined"?OV_PURPLE:{}],["brown",typeof TECH_BROWN!=="undefined"?TECH_BROWN:[],typeof OV_BROWN!=="undefined"?OV_BROWN:{}],["black",typeof TECH_BLACK!=="undefined"?TECH_BLACK:[],typeof OV_BLACK!=="undefined"?OV_BLACK:{}],
+ ...(typeof TECH_EXTRA!=="undefined"?["blue","purple","brown","black"].map(b=>[b,TECH_EXTRA.filter(t=>EXTRA_BELT[t.id]===b),OV_EXTRA]):[])];
 ADV.forEach(([b,ts])=>ts.forEach(t=>{t.b=b;if(!TECH.some(x=>x.id===t.id))TECH.push(t)}));
 const RANK={blue:1,purple:2,brown:3,black:4};
 ["single_leg_def","double_leg_def","knee_cut_def","bodylock_def"].forEach(id=>{const t=TECH.find(x=>x.id===id);if(t)t.c="defense"});
@@ -3669,7 +4057,12 @@ function scoreEntry(x,toks,qn){const qc=qn.replace(/ /g,"");let s=0,all=true;
   if(x.k==="p"&&all&&toks.every(w=>nameW.some(n=>n===w||n.startsWith(w)||(w.length>=4&&lev(n,w,1)<=1))))s+=12; // the position itself beats moves that mention it
   return s+(x.k==="t"?1:0)}
 function searchAll(q,lim){const qn=norm(q);if(!qn)return [];const toks=qn.split(" ").filter(Boolean);
-  return searchIndex().map(x=>({x,s:scoreEntry(x,toks,qn)})).filter(r=>r.s>0).sort((a,b)=>b.s-a.s||a.x.label.length-b.x.label.length).slice(0,lim||8).map(r=>r.x)}
+  const run=(t,n)=>searchIndex().map(x=>({x,s:scoreEntry(x,t,n)})).filter(r=>r.s>0).sort((a,b)=>b.s-a.s||a.x.label.length-b.x.label.length).slice(0,lim||8).map(r=>r.x);
+  let out=run(toks,qn);
+  // "flag pole guillotine": drop the words nothing matches and search with the rest
+  if(!out.length&&toks.length>1&&toks.length<=5){for(let k=toks.length-1;k>=1&&!out.length;k--){const subs=[];(function pick(i,acc){if(acc.length===k){subs.push(acc);return}for(let j=i;j<toks.length;j++)pick(j+1,acc.concat(toks[j]))})(0,[]);
+    for(const t of subs.reverse()){out=run(t,t.join(" "));if(out.length)break}}}
+  return out}
 /* moves a query finds: direct matches, plus everything from a position it names */
 function searchTechIds(q){const r=searchAll(q,400);const ids=new Set(r.filter(x=>x.k==="t").map(x=>x.id));r.filter(x=>x.k==="p").forEach(p=>fromPos(p.id).forEach(t=>ids.add(t.id)));return ids}
 function suggestHTML(q){const r=searchAll(q,6);if(!norm(q))return "";

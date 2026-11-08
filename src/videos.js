@@ -877,3 +877,126 @@ const VIDEO_PICKS={
 "v": "1TduATN1_xQ"
 }
 };
+/* Lesser-known techniques (checked with YouTube oEmbed). */
+Object.assign(VIDEO_PICKS,{
+"japanese_necktie": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Intro to the Japanese Necktie by Keith Krikorian",
+"v": "mJcrR4Xttsg"
+},
+"peruvian_necktie": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Peruvian Necktie by Keith Krikorian",
+"v": "7J0hJPRPpRQ"
+},
+"flying_guillotine": {
+"channel": "JiuJitsu FLO",
+"nogi": false,
+"title": "Jumping Closed Guard Guillotine Drill",
+"v": "sV6GkUzcHtQ"
+},
+"von_flue_choke": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Von Flue Choke by Batuhan Asig",
+"v": "wIAVYLB8oXE"
+},
+"gogoplata": {
+"channel": "predadorbjj",
+"nogi": false,
+"title": "BJJ - Shin choke 'Gogoplata' from closed guard",
+"v": "Ws0iz_j0ddQ"
+},
+"truck_calf_slicer": {
+"channel": "Brandon Mccaghren",
+"nogi": true,
+"title": "Painful Calf Slicer from The Truck - 1 Minute Jiu Jitsu Hack",
+"v": "1JUGqwxsDKg"
+},
+"banana_split": {
+"channel": "Precision Boxing & MMA",
+"nogi": true,
+"title": "Banana split from the truck - Learn to Grapple",
+"v": "AKmsVbDMo6o"
+},
+"toe_hold": {
+"channel": "Brian Glick",
+"nogi": true,
+"title": "Attacking the Toehold from Outside Ashi Garami (No Gi BJJ/Jiu-Jitsu)",
+"v": "zsnGef5-N2g"
+},
+"wrist_lock_cg": {
+"channel": "BJJ Fanatics",
+"nogi": false,
+"title": "Wristlock From Closed Guard by Fredson Paixão",
+"v": "XrFuBJwk_2Y"
+},
+"electric_chair_sweep": {
+"channel": "SBG Idaho - Boise's Best BJJ & MMA Gym",
+"nogi": false,
+"title": "Electric Chair Sweep from Half Guard",
+"v": "satVeCbc8b4"
+},
+"granby_roll": {
+"channel": "O2 BJJ",
+"nogi": false,
+"title": "The Granby Roll Escape Everyone Should Know | BJJ Fundamentals",
+"v": "yLzOn-piehY"
+},
+"wrestling_switch": {
+"channel": "Peter Mettler Martial Arts",
+"nogi": true,
+"title": "American reversal a.k.a. the Switch from Referee Position - Sit Out Backtake from Turtle",
+"v": "wkj5FrUjj9Q"
+},
+"turtle_standup": {
+"channel": "Ben Egli",
+"nogi": false,
+"title": "Escaping the turtle position in a fight or BJJ with a stand-up",
+"v": "Hto8vSvnry0"
+},
+"russian_tie": {
+"channel": "Stuart Tomlinson",
+"nogi": true,
+"title": "How Elite Wrestlers use the Russian Tie for BJJ / MMA",
+"v": "pTbiUDyFDQE"
+},
+"tripod_sweep": {
+"channel": "Bernardo Faria BJJ Fanatics",
+"nogi": true,
+"title": "Hidden Details In The BJJ Tripod Sweep (Open Guard) That You Have Never Seen Before by Gordon Ryan",
+"v": "iGhMeN3TUPM"
+},
+"lumberjack_sweep": {
+"channel": "Kenny Florian",
+"nogi": false,
+"title": "Cut them down with the “Lumberjack Sweep”",
+"v": "QOXCJFEI78Y"
+},
+"firemans_carry": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "How to do Fireman's Carry by Charles Negromonte",
+"v": "Ur55EzfW6jo"
+},
+"knee_tap": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Knee Tap by Michael Pixley",
+"v": "phKg556osOY"
+},
+"scissor_sweep": {
+"channel": "Gabriel Gonzaga",
+"nogi": true,
+"title": "Scissor Sweep from Guard NoGi- Gabriel \"Napão\" Gonzaga",
+"v": "bSLZgTu8jUA"
+},
+"inside_trip": {
+"channel": "welcomematstevescott",
+"nogi": true,
+"title": "NO GI O UCHI GARI By John Saylor",
+"v": "FxxURexKrvk"
+}
+});

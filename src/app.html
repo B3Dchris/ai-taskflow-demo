@@ -1033,7 +1033,8 @@ T("ashi_def","Leg lock defense","escape","ashi_def","open_top","core",
  "Leg lock escape game: 3 × 1 min.",["knee_cut"])
 ];
 /*@@ADV_TECH@@*/
-const ADV=[["blue",typeof TECH_DEF_BLUE!=="undefined"?TECH_DEF_BLUE:[],typeof OV_DEF!=="undefined"?OV_DEF:{}],["purple",typeof TECH_DEF_PURPLE!=="undefined"?TECH_DEF_PURPLE:[],{}],["purple",typeof TECH_PURPLE!=="undefined"?TECH_PURPLE:[],typeof OV_PURPLE!=="undefined"?OV_PURPLE:{}],["brown",typeof TECH_BROWN!=="undefined"?TECH_BROWN:[],typeof OV_BROWN!=="undefined"?OV_BROWN:{}],["black",typeof TECH_BLACK!=="undefined"?TECH_BLACK:[],typeof OV_BLACK!=="undefined"?OV_BLACK:{}]];
+const ADV=[["blue",typeof TECH_DEF_BLUE!=="undefined"?TECH_DEF_BLUE:[],typeof OV_DEF!=="undefined"?OV_DEF:{}],["purple",typeof TECH_DEF_PURPLE!=="undefined"?TECH_DEF_PURPLE:[],{}],["purple",typeof TECH_PURPLE!=="undefined"?TECH_PURPLE:[],typeof OV_PURPLE!=="undefined"?OV_PURPLE:{}],["brown",typeof TECH_BROWN!=="undefined"?TECH_BROWN:[],typeof OV_BROWN!=="undefined"?OV_BROWN:{}],["black",typeof TECH_BLACK!=="undefined"?TECH_BLACK:[],typeof OV_BLACK!=="undefined"?OV_BLACK:{}],
+ ...(typeof TECH_EXTRA!=="undefined"?["blue","purple","brown","black"].map(b=>[b,TECH_EXTRA.filter(t=>EXTRA_BELT[t.id]===b),OV_EXTRA]):[])];
 ADV.forEach(([b,ts])=>ts.forEach(t=>{t.b=b;if(!TECH.some(x=>x.id===t.id))TECH.push(t)}));
 const RANK={blue:1,purple:2,brown:3,black:4};
 ["single_leg_def","double_leg_def","knee_cut_def","bodylock_def"].forEach(id=>{const t=TECH.find(x=>x.id===id);if(t)t.c="defense"});
@@ -1862,7 +1863,12 @@ function scoreEntry(x,toks,qn){const qc=qn.replace(/ /g,"");let s=0,all=true;
   if(x.k==="p"&&all&&toks.every(w=>nameW.some(n=>n===w||n.startsWith(w)||(w.length>=4&&lev(n,w,1)<=1))))s+=12; // the position itself beats moves that mention it
   return s+(x.k==="t"?1:0)}
 function searchAll(q,lim){const qn=norm(q);if(!qn)return [];const toks=qn.split(" ").filter(Boolean);
-  return searchIndex().map(x=>({x,s:scoreEntry(x,toks,qn)})).filter(r=>r.s>0).sort((a,b)=>b.s-a.s||a.x.label.length-b.x.label.length).slice(0,lim||8).map(r=>r.x)}
+  const run=(t,n)=>searchIndex().map(x=>({x,s:scoreEntry(x,t,n)})).filter(r=>r.s>0).sort((a,b)=>b.s-a.s||a.x.label.length-b.x.label.length).slice(0,lim||8).map(r=>r.x);
+  let out=run(toks,qn);
+  // "flag pole guillotine": drop the words nothing matches and search with the rest
+  if(!out.length&&toks.length>1&&toks.length<=5){for(let k=toks.length-1;k>=1&&!out.length;k--){const subs=[];(function pick(i,acc){if(acc.length===k){subs.push(acc);return}for(let j=i;j<toks.length;j++)pick(j+1,acc.concat(toks[j]))})(0,[]);
+    for(const t of subs.reverse()){out=run(t,t.join(" "));if(out.length)break}}}
+  return out}
 /* moves a query finds: direct matches, plus everything from a position it names */
 function searchTechIds(q){const r=searchAll(q,400);const ids=new Set(r.filter(x=>x.k==="t").map(x=>x.id));r.filter(x=>x.k==="p").forEach(p=>fromPos(p.id).forEach(t=>ids.add(t.id)));return ids}
 function suggestHTML(q){const r=searchAll(q,6);if(!norm(q))return "";

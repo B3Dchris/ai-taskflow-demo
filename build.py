@@ -11,7 +11,7 @@ import hashlib, json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, "src")
-CONTENT = ["content-defense.js", "content-purple.js", "content-brown.js", "content-black.js", "videos.js"]
+CONTENT = ["content-defense.js", "content-purple.js", "content-brown.js", "content-black.js", "content-extra.js", "videos.js"]
 
 
 def read(*p):
