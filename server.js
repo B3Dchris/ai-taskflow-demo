@@ -46,7 +46,7 @@ const SECURITY = {
     "manifest-src 'self'",
     "worker-src 'self'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https://www.payfast.co.za https://sandbox.payfast.co.za",
     "frame-ancestors 'self'",
   ].join("; "),
 };

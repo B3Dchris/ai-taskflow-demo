@@ -22,7 +22,9 @@ function client(base) {
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", INBOUND_SECRET: "test-inbound-secret" }; delete env.ANTHROPIC_API_KEY;
+  // Stands in for PayFast's "is this notification real?" check.
+  let pfValid = "VALID"; const pfSrv = require("http").createServer((q, r) => { let b = ""; q.on("data", (c) => (b += c)); q.on("end", () => { pfSrv.last = b; r.end(pfValid); }); }).listen(0);
+  const env = { PAYFAST_VALIDATE_URL: `http://127.0.0.1:${pfSrv.address().port}/eng/query/validate`, ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", INBOUND_SECRET: "test-inbound-secret" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   try {
@@ -316,11 +318,44 @@ function client(base) {
       ok(got[hid2] && got[hid2].ids.length === 0 && !JSON.stringify(got[hid2]).includes("secret"), "a plan the coach didn't share stays hidden");
       ok(!got[fut], "classes that haven't happened yet aren't included");
       r = await tess("GET", "/me/attended"); ok(!r.j.classes.some((c) => c.id === pub), "only your own classes"); }
+    // --- PayFast: the gym's plan, card payments, payment notifications
+    { const pf = require("../backend/payfast");
+      r = await coach("GET", "/coach/billing"); ok(r.s === 200 && r.j.billing.status === "trial" && r.j.billing.trialEnds === "2027-02-08" && r.j.billing.priceCents === 9900 && r.j.billing.feePct === 2 && r.j.billing.test, "a gym gets three free months, then R99 a month: " + JSON.stringify(r.j.billing));
+      r = await coach("POST", "/coach/billing/checkout", {}); const f = r.j.fields;
+      ok(r.s === 200 && /sandbox\.payfast\.co\.za\/eng\/process$/.test(r.j.action) && f.amount === "0.00" && f.billing_date === "2027-02-08" && f.recurring_amount === "99.00" && f.frequency === "3" && f.subscription_type === "1" && f.cycles === "0", "adding a card charges nothing until the free months end, then R99 monthly");
+      ok(f.signature === pf.sign(f, pf.TEST.pass) && f.notify_url === "https://www.jitsflow.test/api/payfast/notify", "the checkout is signed with the passphrase");
+      r = await coach("PUT", "/coach/payfast", { merchantId: "123", merchantKey: "x" }); ok(r.s === 400, "a wrong Merchant ID is refused with how to find it");
+      r = await coach("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: "gym secret" }); ok(r.s === 200, "a coach connects their own PayFast account");
+      { const raw = (await (new Pool({ connectionString: DB })).query("select payfast from gyms where payfast is not null limit 1")).rows[0].payfast; ok(raw.merchantId === "10000105" && raw.key !== "abcdefghijk12" && !JSON.stringify(raw).includes("gym secret"), "their key and passphrase are stored encrypted"); }
+      r = await stu2("GET", "/me/pay"); ok(r.j.pay.card === true, "students see they can pay by card");
+      r = await stu2("POST", "/me/pay/payfast", { amountCents: 65000 }); const sf = r.j.fields, split = JSON.parse(sf.setup || "{}").split_payment;
+      ok(r.s === 200 && sf.merchant_id === "10000105" && sf.amount === "650.00" && sf.custom_str1 === "pay" && split && split.merchant_id === 10000100 && split.percentage === 2, "a student pays into the gym's account, with JitsFlow's 2% split off");
+      ok(sf.signature === pf.sign(sf, "gym secret"), "signed with the gym's passphrase (the split isn't part of the signature)");
+      r = await stu2("POST", "/me/pay/payfast", { amountCents: 100 }); ok(r.s === 400, "tiny amounts are refused");
+      const meId = (await stu2("GET", "/me")).j.me.id;
+      const itn = (fields, pass) => { const pairs = Object.entries(fields); const str = pairs.map(([k, v]) => `${k}=${encodeURIComponent(String(v).trim()).replace(/%20/g, "+")}`).join("&") + (pass ? `&passphrase=${encodeURIComponent(pass).replace(/%20/g, "+")}` : "");
+        return str.replace(/&passphrase=.*$/, "") + "&signature=" + require("crypto").createHash("md5").update(str).digest("hex"); };
+      const post = (body) => fetch(base + "/payfast/notify", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
+      const pay = { m_payment_id: "pay-x", pf_payment_id: "1089250", payment_status: "COMPLETE", item_name: "Gym fees", item_description: "", amount_gross: "650.00", amount_fee: "-15.18", amount_net: "634.82", custom_str1: "pay", custom_str2: "", custom_int1: String(meId), custom_int2: "", name_first: "", email_address: "", merchant_id: "10000105" };
+      const gymId = (await coach("GET", "/me")).j.me.gym.id; pay.custom_int2 = String(gymId);
+      const countPf = async () => Number((await (new Pool({ connectionString: DB })).query("select count(*) from payments where source='payfast'")).rows[0].count);
+      r = await post(itn(pay, "wrong")); await new Promise((s) => setTimeout(s, 400)); ok(r.status === 200 && (await countPf()) === 0, "a notification with a bad signature changes nothing");
+      pfValid = "INVALID"; await post(itn(pay, "gym secret")); await new Promise((s) => setTimeout(s, 400)); ok((await countPf()) === 0, "nor one PayFast doesn't confirm"); pfValid = "VALID";
+      await post(itn(pay, "gym secret")); await new Promise((s) => setTimeout(s, 400));
+      r = await stu2("GET", "/me/pay"); const got = r.j.pay.payments.find((x) => x.method === "payfast");
+      ok((await countPf()) === 1 && got && got.amountCents === 65000 && got.status === "confirmed", "a confirmed card payment is marked paid by itself");
+      ok(pfSrv.last && /pf_payment_id=1089250/.test(pfSrv.last) && !/signature=/.test(pfSrv.last), "every notification is checked with PayFast first");
+      await post(itn(pay, "gym secret")); await new Promise((s) => setTimeout(s, 400)); ok((await countPf()) === 1, "the same notification twice is recorded once");
+      const sub = { m_payment_id: "sub-x", pf_payment_id: "1089251", payment_status: "COMPLETE", item_name: "JitsFlow monthly plan", amount_gross: "0.00", custom_str1: "sub", custom_int1: String(gymId), token: "dc0521d3-55fe-269b-fa00-b647310d760f", merchant_id: "10000100" };
+      await post(itn(sub, pf.TEST.pass)); await new Promise((s) => setTimeout(s, 400));
+      r = await coach("GET", "/coach/billing"); ok(r.j.billing.status === "active" && r.j.billing.card === true, "after adding a card the plan shows as active");
+      r = await coach("DELETE", "/coach/payfast"); r = await stu2("GET", "/me/pay"); ok(r.j.pay.card === false, "disconnecting PayFast hides card payments"); }
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");
     r = await anon("GET", "/nope"); ok(r.s === 404, "unknown API path is 404");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
+  pfSrv.close();
   srv.kill(); site.close(); sink.close();
   console.log(`api: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));
   process.exit(fail ? 1 : 0);

@@ -2295,6 +2295,10 @@ document.addEventListener("click",e=>{
     case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
+    case "paycard": payByCard(); break;
+    case "billcard": billCard(); break;
+    case "pftest": pfTest(); break;
+    case "pfremove": pfRemove(); break;
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
@@ -2395,7 +2399,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -2407,6 +2411,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="privform")return savePriv(f);
     if(fid==="bankform")return saveBank(f);
     if(fid==="addstuform")return submitAddStudent(f);
+    if(fid==="pfform")return savePf(f);
     if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
     if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);

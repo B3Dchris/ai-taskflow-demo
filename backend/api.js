@@ -9,6 +9,7 @@ const pop = require("./pop");
 const ai = require("./ai");
 const assistant = require("./assistant");
 const people = require("./people");
+const payfast = require("./payfast");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -59,7 +60,8 @@ function makeApi(pool, { secureCookies }) {
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
-    if (req.method !== "GET" && req.headers["x-jf"] !== "1") return res.status(403).json({ error: "Request blocked." });
+    // (PayFast's payment notifications come from PayFast's servers and are checked separately.)
+    if (req.method !== "GET" && req.headers["x-jf"] !== "1" && req.path !== "/payfast/notify") return res.status(403).json({ error: "Request blocked." });
     next();
   });
 
@@ -1165,12 +1167,12 @@ function makeApi(pool, { secureCookies }) {
   }
   api.get("/me/pay", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") return res.json({ pay: null });
-    const g = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0];
+    const g = (await q("select pay, (payfast->>'merchantId') is not null as card from gyms where id=$1", [u.gym_id])).rows[0];
     const sums = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as paid, coalesce(sum(amount_cents) filter (where status='pending'),0) as pending
       from payments where user_id=$1 and gym_id=$2 and paid_on >= date_trunc('month', now() at time zone $3)`, [u.id, u.gym_id, tzOf(u)])).rows[0];
     const recent = (await q(`select ${PAY_COLS} from payments p where p.user_id=$1 and p.gym_id=$2 and p.paid_on > current_date - 200 order by p.paid_on desc, p.id desc limit 12`, [u.id, u.gym_id])).rows;
     res.json({ pay: { dueCents: (await feeFor(u)) || 0, paidCents: Number(sums.paid), pendingCents: Number(sums.pending), currency: u.currency || "ZAR",
-      reference: await payRef(u.id), bank: g.pay || {}, payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
+      reference: await payRef(u.id), bank: g.pay || {}, card: !!g.card, payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
   }));
   api.post("/me/pay/proof", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
@@ -1309,6 +1311,88 @@ function makeApi(pool, { secureCookies }) {
       mail.sendLater({ to: x.email, replyTo: u.email, ...mail.templates.feeReminder(first(x.name), u.gym_name, amount, label, x.pay_ref || (await payRef(x.id)), bank) }); sent++;
     }
     res.json({ sent, noEmail, paid });
+  }));
+
+  // ---------- PayFast: the gym's JitsFlow plan, and students paying their gym by card ----------
+  const LAUNCH = "2026-11-08"; // gyms that joined before paid plans began get their free months from this day
+  const addMonths = (day, n) => { const d = new Date(day + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+  async function billingOf(gymId) {
+    const g = (await q("select billing, created_at from gyms where id=$1", [gymId])).rows[0]; const b = g.billing || {};
+    if (!b.trialEnds) { const start = g.created_at.toISOString().slice(0, 10); b.trialEnds = addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS()); await q("update gyms set billing = billing || $1 where id=$2", [{ trialEnds: b.trialEnds }, gymId]); }
+    return b;
+  }
+  const notifyUrl = () => mail.appUrl() + "/api/payfast/notify";
+  api.get("/coach/billing", wrap(async (req, res) => {
+    const u = needCoach(req), b = await billingOf(u.gym_id), P = payfast.platform();
+    res.json({ billing: { status: b.status || "trial", trialEnds: b.trialEnds, card: !!b.token, lastPaidAt: b.lastPaidAt || null, priceCents: payfast.PRICE_CENTS(), feePct: payfast.FEE_PCT(), test: P.sandbox } });
+  }));
+  // Card details for the monthly plan. During the free months nothing is charged now; PayFast starts on the first day after them.
+  api.post("/coach/billing/checkout", wrap(async (req, res) => {
+    const u = needCoach(req), b = await billingOf(u.gym_id), P = payfast.platform(), today = await todayIn(u);
+    const inTrial = today < b.trialEnds, price = payfast.money(payfast.PRICE_CENTS());
+    const c = payfast.checkout({ merchant_id: P.id, merchant_key: P.key, return_url: mail.appUrl() + "/app/?billing=done", cancel_url: mail.appUrl() + "/app/?billing=cancel", notify_url: notifyUrl(),
+      name_first: first(u.name), email_address: u.email || "", m_payment_id: `sub-${u.gym_id}-${Date.now()}`, amount: inTrial ? "0.00" : price, item_name: "JitsFlow monthly plan",
+      item_description: clean(u.gym_name, 100), custom_int1: String(u.gym_id), custom_str1: "sub", subscription_type: "1", billing_date: inTrial ? b.trialEnds : addMonths(today, 1),
+      recurring_amount: price, frequency: "3", cycles: "0" }, { pass: P.pass, sandbox: P.sandbox });
+    res.json(c);
+  }));
+  // A gym's own PayFast account, for students paying by card or Instant EFT. Keys are kept encrypted.
+  const pfOf = (row) => { const p = row && row.payfast; if (!p || !p.merchantId) return null; return { id: p.merchantId, key: payfast.open(p.key), pass: payfast.open(p.pass), sandbox: p.merchantId === payfast.TEST.id }; };
+  api.get("/coach/payfast", wrap(async (req, res) => {
+    const u = needCoach(req), p = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
+    res.json({ payfast: { connected: !!p, merchantId: p ? p.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
+  }));
+  api.put("/coach/payfast", wrap(async (req, res) => {
+    const u = needCoach(req), b = req.body || {};
+    let id = String(b.merchantId || "").replace(/\s/g, ""), key = String(b.merchantKey || "").trim(), pass = String(b.passphrase || "").trim();
+    if (b.test) { if (!payfast.platform().sandbox) fail(400, "Test payments are switched off."); ({ id, key, pass } = payfast.TEST); }
+    if (!/^\d{8}$/.test(id)) fail(400, "Your PayFast Merchant ID is 8 digits. Find it in PayFast under Settings, Developer settings.");
+    if (!/^[a-z0-9]{13}$/i.test(key)) fail(400, "Your PayFast Merchant Key is 13 letters and numbers, from the same page.");
+    if (pass.length > 100) fail(400, "That passphrase is too long.");
+    await q("update gyms set payfast=$1 where id=$2", [{ merchantId: id, key: payfast.seal(key), pass: payfast.seal(pass), at: new Date().toISOString() }, u.gym_id]);
+    res.json({ ok: true });
+  }));
+  api.delete("/coach/payfast", wrap(async (req, res) => { const u = needCoach(req); await q("update gyms set payfast=null where id=$1", [u.gym_id]); res.json({ ok: true }); }));
+  // A student pays their gym. The money goes to the gym's PayFast account; PayFast sends JitsFlow's share to JitsFlow.
+  api.post("/me/pay/payfast", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
+    const g = (await q("select name, payfast from gyms where id=$1", [u.gym_id])).rows[0], p = pfOf(g);
+    if (!p) fail(400, "Your gym doesn't take card payments yet.");
+    const cents = intOr(req.body?.amountCents, 0); if (cents < 500 || cents > 5e6) fail(400, "Enter an amount from R5.");
+    const P = payfast.platform(), split = p.id !== P.id ? { merchant_id: Number(P.id), percentage: payfast.FEE_PCT() } : null;
+    const [fn, ...ln] = String(u.name || "").trim().split(/\s+/);
+    res.json(payfast.checkout({ merchant_id: p.id, merchant_key: p.key, return_url: mail.appUrl() + "/app/?paid=card", cancel_url: mail.appUrl() + "/app/", notify_url: notifyUrl(),
+      name_first: clean(fn, 100), name_last: clean(ln.join(" "), 100), email_address: u.email || "", m_payment_id: `pay-${u.id}-${Date.now()}`, amount: payfast.money(cents),
+      item_name: clean(`${g.name} fees`, 100), item_description: clean(u.name, 255), custom_int1: String(u.id), custom_int2: String(u.gym_id), custom_str1: "pay" }, { pass: p.pass, sandbox: p.sandbox, split }));
+  }));
+  // PayFast's payment notification. Answer straight away, then check it four ways before anything changes.
+  api.post("/payfast/notify", express.text({ type: () => true, limit: "64kb" }), wrap(async (req, res) => {
+    res.status(200).end();
+    const pairs = payfast.parseItn(req.body), d = Object.fromEntries(pairs);
+    try {
+      let pass, sandbox, merchant, gymId;
+      if (d.custom_str1 === "sub") { const P = payfast.platform(); pass = P.pass; sandbox = P.sandbox; merchant = P.id; gymId = intOr(d.custom_int1, 0); }
+      else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const p = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]); if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
+      else throw new Error("unknown notification " + String(d.custom_str1 || "").slice(0, 20));
+      if (!payfast.itnSignatureOk(pairs, pass)) throw new Error("bad signature");
+      if (String(d.merchant_id) !== String(merchant)) throw new Error("wrong merchant");
+      const ip = String(req.headers["cf-connecting-ip"] || String(req.headers["x-forwarded-for"] || "").split(",")[0] || req.socket.remoteAddress || "").trim();
+      if (!(await payfast.payfastIps()).has(ip)) console.warn("payfast itn: from an unlisted address " + ip + " (still confirmed with PayFast below)");
+      if (!(await payfast.confirmWithPayfast(pairs, sandbox))) throw new Error("PayFast didn't confirm it");
+      const gross = Math.round(Number(d.amount_gross || 0) * 100);
+      if (d.custom_str1 === "sub") {
+        const now = new Date().toISOString();
+        const patch = d.payment_status === "COMPLETE" ? { status: "active", token: clean(d.token, 80), cardAt: now, ...(gross > 0 ? { lastPaidAt: now, lastPaidCents: gross } : {}) } : d.payment_status === "CANCELLED" ? { status: "cancelled" } : null;
+        if (patch) await q("update gyms set billing = billing || $1 where id=$2", [patch, gymId]);
+      } else if (d.payment_status === "COMPLETE" && gross > 0) {
+        const uid = intOr(d.custom_int1, 0), ref = "PayFast " + clean(d.pf_payment_id, 40);
+        const st = (await q("select u.id, g.timezone from users u join gyms g on g.id=u.gym_id where u.id=$1 and u.gym_id=$2", [uid, gymId])).rows[0];
+        if (st && !(await q("select 1 from payments where gym_id=$1 and reference=$2", [gymId, ref])).rows[0]) {
+          await q(`insert into payments(gym_id,user_id,amount_cents,paid_on,reference,note,source,method,status) values($1,$2,$3,(now() at time zone $4)::date,$5,$6,'payfast','payfast','confirmed')`,
+            [gymId, uid, gross, st.timezone || "Africa/Johannesburg", ref, `Card or Instant EFT via PayFast${d.amount_fee ? ` (PayFast fee R${Math.abs(Number(d.amount_fee)).toFixed(2)})` : ""}`]);
+        }
+      }
+    } catch (e) { console.warn("payfast itn:", e.message); }
   }));
 
   // ---------- inbound proof-of-payment email (from the Cloudflare email worker) ----------

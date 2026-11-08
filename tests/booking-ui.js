@@ -146,11 +146,26 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await co.tap('#bankform [type=submit]'); await co.waitForTimeout(800);
     ok(/Payment details saved/.test(await toast(co)) && await ev(co, () => /FNB · 62123456789/.test(document.querySelector('details[data-g="m-bank"] summary').innerText)), "coach saves bank details");
     ok(await ev(co, () => /^pop-[a-z0-9]{10}@jitsflow\.com$/.test(document.getElementById("pop-addr").value)), "Money shows the gym's forwarding address");
+    // --- PayFast: the coach connects (test account), the gym's plan shows its free months
+    await co.locator('details[data-g="m-pf"] summary').tap(); await co.waitForTimeout(200);
+    ok(await ev(co, () => { const t = document.querySelector('details[data-g="m-pf"]').innerText; return /Split Payments/.test(t) && /10000100/.test(t) && /2%/.test(t); }), "Money explains card payments, the 2% fee and the PayFast steps");
+    await co.tap('[data-a="pftest"]'); await co.waitForTimeout(900);
+    ok(/Test account connected/.test(await toast(co)) && await ev(co, () => /Connected/.test(document.querySelector('details[data-g="m-pf"] summary').innerText)), "the coach connects PayFast (test account)");
+    await ev(co, () => coachGo("gym")); await co.waitForTimeout(700);
+    ok(await ev(co, () => { const p = document.querySelector(".planpanel"); return p && /Free until/.test(p.innerText) && /R\s?99/.test(p.innerText) && !!p.querySelector('[data-a="billcard"]'); }), "Gym shows the free months, the R99 plan and Add a card");
+    await ev(co, () => coachGo("money")); await co.waitForTimeout(300);
     await ev(s1, () => { API.pay = undefined; go("book"); }); await s1.waitForTimeout(1200);
     const ref = await ev(s1, () => API.pay && API.pay.reference);
     ok(/^JF[A-Z2-9]{5}$/.test(ref) && await ev(s1, (r) => !!document.querySelector(".feecard") && document.querySelector(".feecard").innerText.includes(r), ref), "student's Classes tab shows a fees card with their reference");
     await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400);
     ok(await ev(s1, (r) => { const t = document.getElementById("sheet").innerText; return /62123456789/.test(t) && /250655/.test(t) && t.includes(r) && !!document.querySelector('#sheet [data-a="copy"][data-v="62123456789"]'); }, ref), "pay sheet: bank details, copy buttons and the reference");
+    ok(await ev(s1, () => !!document.querySelector('#sheet [data-a="paycard"]') && /Pay by card or Instant EFT/.test(document.getElementById("sheet").innerText)), "the student can pay by card or Instant EFT");
+    { let posted = null; await s1.route("https://sandbox.payfast.co.za/**", (rt) => { posted = rt.request().postData(); rt.fulfill({ status: 200, contentType: "text/html", body: "<title>PayFast</title>" }); });
+      await s1.tap('[data-a="paycard"]'); await s1.waitForTimeout(1500);
+      const f = new URLSearchParams(posted || "");
+      ok(f.get("merchant_id") === "10000100" && /^\d+\.\d{2}$/.test(f.get("amount") || "") && f.get("custom_str1") === "pay" && /^[a-f0-9]{32}$/.test(f.get("signature") || ""), "Pay by card opens PayFast's checkout with a signed payment: " + (posted || "").slice(0, 80));
+      await s1.unroute("https://sandbox.payfast.co.za/**"); await s1.goto(URL + "/app/?paid=card"); await s1.waitForTimeout(1500);
+      ok(/PayFast confirms/.test(await toast(s1)), "back from PayFast, the student is told it shows once confirmed"); await ev(s1, () => go("book")); await s1.waitForTimeout(800); await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400); }
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
     await s1.fill("#mypop-amt", "650"); await s1.setInputFiles("#mypop", { name: "pop.png", mimeType: "image/png", buffer: png }); await s1.waitForTimeout(1500);
     ok(/Sent/.test(await toast(s1)) && await ev(s1, () => /Checking/.test(document.getElementById("sheet").innerText)), "student sends a screenshot as proof; it shows as Checking");

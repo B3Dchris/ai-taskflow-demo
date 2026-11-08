@@ -4489,6 +4489,10 @@ document.addEventListener("click",e=>{
     case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
+    case "paycard": payByCard(); break;
+    case "billcard": billCard(); break;
+    case "pftest": pfTest(); break;
+    case "pfremove": pfRemove(); break;
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
@@ -4589,7 +4593,7 @@ document.addEventListener("change",e=>{
 });
 document.addEventListener("submit",async e=>{
   const fid=e.target.id;
-  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform"].includes(fid)){e.preventDefault();const f=e.target;
+  if(["authform","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform"].includes(fid)){e.preventDefault();const f=e.target;
     if(fid==="authform")return submitAuth(f);
     if(fid==="classform")return submitClass(f);
     if(fid==="studentform")return submitStudent(f);
@@ -4601,6 +4605,7 @@ document.addEventListener("submit",async e=>{
     if(fid==="privform")return savePriv(f);
     if(fid==="bankform")return saveBank(f);
     if(fid==="addstuform")return submitAddStudent(f);
+    if(fid==="pfform")return savePf(f);
     if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
     if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
     if(fid==="popform")return savePop(f);
@@ -4658,6 +4663,12 @@ async function acctInit(){
   if(rt){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
   const cl=qs.get("claim");if(cl)S.ui.claim=cl;
+  // Back from PayFast
+  const paid=qs.get("paid"),bill=qs.get("billing");
+  if(paid||bill){try{const k=new URLSearchParams(location.search);k.delete("paid");k.delete("billing");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
+    if(paid==="card")setTimeout(()=>{toast("Thanks! Your payment shows as paid once PayFast confirms it, usually within a minute.");setTimeout(()=>loadPay().then(render),8000)},400);
+    if(bill==="done")setTimeout(()=>{toast("Card saved with PayFast. Thanks!");COACH.bill=undefined;setTimeout(render,6000)},400);
+    if(bill==="cancel")setTimeout(()=>toast("No card added. You can add one any time under Gym."),400)}
   const q=qs.get("join");
   if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
@@ -5149,6 +5160,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
         <label class="f">Fees are due on<select name="dueDay">${Array.from({length:28},(_,i)=>i+1).map(d=>`<option value="${d}"${d===(bank.dueDay||1)?" selected":""}>the ${d}${d===1||d===21?"st":d===2||d===22?"nd":d===3||d===23?"rd":"th"} of the month</option>`).join("")}</select></label>
         <label class="f">Note for students (optional)<input name="note" value="${esc(bank.note||"")}" placeholder="Fees are due by the 3rd of each month"></label>
         <button class="btn" type="submit">Save payment details</button></form></div></details>
+    ${pfPanel()}
     <details class="more" data-g="m-mail"${og["m-mail"]?" open":""}><summary><span><b>Forward proof-of-payment emails</b><br><span class="small muted">A Gmail or Outlook rule to your JitsFlow address</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
       ${pi?`${pi.popReady?"":`<p class="small warn-t">Email forwarding is being switched on. You can set up the rule now; emails are read once it's live.</p>`}
       <div class="codebox" style="word-break:break-all">${esc(pi.popAddress)}</div><input id="pop-addr" value="${esc(pi.popAddress)}" hidden><div class="row"><button class="btn sm" data-a="copytext" data-v="pop-addr">Copy address</button><button class="linkbtn small" data-a="popnewaddr">Get a new address</button></div>
@@ -5188,6 +5200,8 @@ function feesCard(){const p=API.pay;if(!p)return "";const left=Math.max(0,p.dueC
     <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${ready?"How to pay":"Send proof of payment"}</button></section>`}
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,left=Math.max(0,p.dueCents-p.paidCents-p.pendingCents);S.ui.sheet={k:"mypay"};S.ui.stack=[];
   openSheet(`${sheetHead("Pay your fees")}<div class="stack-lg">
+    ${p.card?`<section class="stack"><h2 class="label">Pay now</h2><label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${left?left/100:p.dueCents?p.dueCents/100:""}"></label>
+      <button class="btn primary" data-a="paycard">Pay by card or Instant EFT</button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast. Your coach sees it straight away.</p></section>`:""}
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
       <div class="kv refrow"><span class="small muted">Reference</span><b class="mono">${esc(p.reference)}</b><button class="linkbtn small" data-a="copy" data-v="${esc(p.reference)}">Copy</button></div></div>
       <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference. It tells your coach the payment is yours.${left?` Amount: <b>${money(left,cur)}</b>.`:""}</p></section>`:""}
@@ -5213,7 +5227,7 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
   try{await api("POST","/coach/payments",{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100),paidOn:v("date"),method:v("method"),reference:v("ref"),note:v("note")});
     toast("Payment recorded.");hideSheet();await coachLoad();coachGo("money")}catch(e){toast(e.message)}}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack">${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
+  return `<section class="stack">${planPanel()}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
@@ -5930,6 +5944,42 @@ const BRAND_SWATCHES=["#1d4fb5","#c62828","#2e7d32","#6a1b9a","#ef6c00","#00838f
 function lookPanel(){const cur=(API.me.gym.brand||{}).accent||"";
   return `<div class="panel stack"><h2 class="label">Look</h2><p class="small">Your logo shows at the top of the app for you and your students, and buttons use your colour. The rest stays JitsFlow.</p>
     <div class="row" style="gap:8px">${(API.me.gym.logo?[`<button class="swatch fromlogo" data-a="brandlogo" title="Match my logo" aria-label="Match my logo"><img src="${esc(API.me.gym.logo)}" alt=""></button>`]:[]).join("")}${BRAND_SWATCHES.map(c=>`<button class="swatch" data-a="brandset" data-v="${c}" style="--sw:${c}" aria-pressed="${cur===c}" aria-label="Use ${c}"></button>`).join("")}<button class="swatch none" data-a="brandset" data-v="" aria-pressed="${!cur}" aria-label="JitsFlow blue">JF</button></div></div>`}
+
+/* ============ PAYFAST: students pay by card; the gym's JitsFlow plan ============ */
+// PayFast takes a normal form post: build it and send the browser there.
+function payfastGo(c){const f=document.createElement("form");f.method="POST";f.action=c.action;f.style.display="none";
+  for(const [k,v] of Object.entries(c.fields)){const i=document.createElement("input");i.type="hidden";i.name=k;i.value=v;f.appendChild(i)}
+  document.body.appendChild(f);f.submit()}
+async function payByCard(){const amt=Math.round(Number((document.getElementById("card-amt")||{}).value||0)*100);
+  if(!(amt>=500)){toast("Enter the amount, from R5.");return}
+  toast("Opening PayFast…");try{const c=await api("POST","/me/pay/payfast",{amountCents:amt});jfTrack("pay_card",{cents:amt});payfastGo(c)}catch(e){toast(e.message)}}
+function pfPanel(){const og=S.ui.openG||{};
+  if(COACH.pf===undefined){COACH.pf=null;api("GET","/coach/payfast").then(j=>{COACH.pf=j.payfast;if(S.ui.tab==="coach")render()}).catch(()=>{})}
+  const p=COACH.pf;if(!p)return "";
+  return `<details class="more" data-g="m-pf"${og["m-pf"]?" open":""}><summary><span><b>Card and Instant EFT (PayFast)</b><br><span class="small muted">${p.connected?`Connected · ${esc(p.merchantId)}${p.test?" (test account)":""}`:"Students pay in the app; it's marked paid by itself"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+    <p class="small">Students tap <b>Pay by card or Instant EFT</b>. The money goes into your own PayFast account and the payment shows here as paid, with no proof to check. JitsFlow's fee is ${p.feePct}% of each payment, taken by PayFast at the time; PayFast's own fee applies too.</p>
+    ${p.connected?`<div class="row"><span class="pill ok">Connected</span><span class="small mono">${esc(p.merchantId)}</span><button class="linkbtn small" data-a="pfremove">Disconnect</button></div>`:""}
+    <ol class="small steps qrsteps"><li><span>Open a PayFast business account at payfast.io (free) and finish their verification.</span></li>
+      <li><span>In PayFast, go to <b>Settings › Integration</b>. Switch on <b>Split Payments</b> and add <b class="mono">${esc(p.jitsflowMerchantId)}</b> to the <i>Destination Merchant ID Whitelist</i>. That's how JitsFlow's ${p.feePct}% reaches JitsFlow.</span></li>
+      <li><span>On the same page, set a <b>passphrase</b>. Then copy your Merchant ID, Merchant Key and passphrase into the boxes below.</span></li></ol>
+    <form id="pfform" class="stack" novalidate>
+      <div class="grid2"><label class="f">Merchant ID<input name="merchantId" inputmode="numeric" autocomplete="off" placeholder="8 digits" value="${esc(p.connected?p.merchantId:"")}"></label><label class="f">Merchant Key<input name="merchantKey" autocomplete="off" placeholder="13 letters and numbers"></label></div>
+      <label class="f">Passphrase<input name="passphrase" type="password" autocomplete="off"></label>
+      <button class="btn" type="submit">${p.connected?"Update PayFast details":"Connect PayFast"}</button></form>
+    ${p.testMode?`<button class="linkbtn small" data-a="pftest">Use PayFast's test account (for trying it out; no real money)</button>`:""}</div></details>`}
+async function savePf(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
+  try{await api("PUT","/coach/payfast",{merchantId:v("merchantId"),merchantKey:v("merchantKey"),passphrase:v("passphrase")});COACH.pf=undefined;toast("PayFast connected. Students can now pay by card or Instant EFT.");render()}catch(e){toast(e.message)}}
+async function pfTest(){try{await api("PUT","/coach/payfast",{test:true});COACH.pf=undefined;toast("Test account connected. Payments go to PayFast's sandbox; no real money.");render()}catch(e){toast(e.message)}}
+async function pfRemove(){try{await api("DELETE","/coach/payfast");COACH.pf=undefined;toast("PayFast disconnected. Students can still pay by EFT.");render()}catch(e){toast(e.message)}}
+// The gym's own JitsFlow plan.
+function planPanel(){
+  if(COACH.bill===undefined){COACH.bill=null;api("GET","/coach/billing").then(j=>{COACH.bill=j.billing;if(S.ui.tab==="coach")render()}).catch(()=>{})}
+  const b=COACH.bill;if(!b)return "";const price=money(b.priceCents,"ZAR"),until=fmtDate(b.trialEnds),trial=todayK()<b.trialEnds;
+  const line=b.status==="active"?`${price} a month, on the card you added${trial?`, starting ${esc(until)}`:""}.`:b.status==="cancelled"?`Your plan was cancelled. Add a card to carry on after ${esc(until)}.`
+    :trial?`Free until <b>${esc(until)}</b>, then ${price} a month. Add a card now; nothing is charged until then.`:`Your free months ended on ${esc(until)}. Add a card to keep using JitsFlow for ${price} a month.`;
+  return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Card needed</span>`}</div>
+    <p class="small">${line}</p>${b.status==="active"?"":`<button class="btn${trial?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+async function billCard(){toast("Opening PayFast…");try{const c=await api("POST","/coach/billing/checkout",{});jfTrack("bill_card",{});payfastGo(c)}catch(e){toast(e.message)}}
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;try{if(managing())return}catch(e){}/* coaches running the gym skip the study questions until they open study mode */
