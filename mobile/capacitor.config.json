@@ -1,0 +1,10 @@
+{
+  "appId": "com.jitsflow.app",
+  "appName": "JitsFlow",
+  "webDir": "www",
+  "server": {
+    "url": "https://www.jitsflow.com/app/",
+    "allowNavigation": ["www.jitsflow.com", "jitsflow.com", "www.payfast.co.za", "sandbox.payfast.co.za"]
+  },
+  "ios": { "contentInset": "never", "scheme": "JitsFlow" }
+}

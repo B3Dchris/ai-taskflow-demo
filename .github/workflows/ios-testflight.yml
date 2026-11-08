@@ -1,0 +1,49 @@
+# Builds the JitsFlow iPhone app (mobile/) on a Mac and uploads it to TestFlight.
+# Needs these repository secrets: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8 file's contents).
+# Runs when anything in mobile/ changes on the Jitsflow branch, or by hand from the Actions tab.
+name: iOS to TestFlight
+on:
+  workflow_dispatch:
+  push:
+    branches: [Jitsflow]
+    paths: ["mobile/**", ".github/workflows/ios-testflight.yml"]
+jobs:
+  ios:
+    runs-on: macos-15
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Check the Apple keys are set
+        id: keys
+        run: |
+          if [ -z "$APPLE_TEAM_ID" ] || [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "Apple keys not added yet; skipping the build." ; echo "ready=no" >> "$GITHUB_OUTPUT"
+          else echo "ready=yes" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.keys.outputs.ready == 'yes'
+      - uses: actions/setup-node@v4
+        if: steps.keys.outputs.ready == 'yes'
+        with: { node-version: 22 }
+      - name: Install and sync
+        if: steps.keys.outputs.ready == 'yes'
+        working-directory: mobile
+        run: npm ci && npx cap sync ios
+      - name: Archive
+        if: steps.keys.outputs.ready == 'yes'
+        working-directory: mobile/ios/App
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys" && printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey.p8"
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/JitsFlow.xcarchive" -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="${{ github.run_number }}" archive
+      - name: Upload to TestFlight
+        if: steps.keys.outputs.ready == 'yes'
+        working-directory: mobile/ios
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :teamID string $APPLE_TEAM_ID" ExportOptions.plist
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/JitsFlow.xcarchive" -exportOptionsPlist ExportOptions.plist -exportPath "$RUNNER_TEMP/out" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"

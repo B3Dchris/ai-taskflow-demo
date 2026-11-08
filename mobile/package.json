@@ -1,0 +1,19 @@
+{
+  "name": "jitsflow-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JitsFlow for iPhone and Android: the web app at www.jitsflow.com/app in a native shell, with the phone's contacts.",
+  "scripts": {
+    "sync": "cap sync",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor-community/contacts": "8.0.0",
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}

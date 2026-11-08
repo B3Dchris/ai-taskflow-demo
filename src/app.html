@@ -2296,6 +2296,8 @@ document.addEventListener("click",e=>{
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
     case "paycard": payByCard(); break;
+    case "cpick": cpToggle(+v); break;
+    case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;
     case "pftest": pfTest(); break;
     case "pfremove": pfRemove(); break;
@@ -2364,6 +2366,7 @@ let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   if(e.target.id==="tag-q"){const sh=S.ui.sheet,s=sh&&S.sessions.find(x=>x.id===sh.id);if(s)document.getElementById("tag-list").innerHTML=tagChoices(s,sh.kind,e.target.value);return}
   if(e.target.id==="tag-note"){tagNote(e.target.value);return}
+  if(e.target.id==="cp-q"&&S.ui.cpick){S.ui.cpick.q=e.target.value;const l=document.getElementById("cp-list");if(l)l.innerHTML=contactRows();return}
   if(e.target.dataset&&e.target.dataset.bk){const b=S.ui.bulk,p=b&&b.people[+e.target.dataset.i];if(p)p[e.target.dataset.bk]=e.target.value;return}
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}

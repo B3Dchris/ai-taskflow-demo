@@ -1218,7 +1218,10 @@ function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roste
 
 /* ============ ADD STUDENTS: A WHATSAPP GROUP SCREENSHOT, CONTACTS OR A LIST ============ */
 const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-const canPickContacts=()=>!!(navigator.contacts&&navigator.contacts.select&&window.ContactsManager);
+// In the App Store app, the phone's own contacts (Capacitor); in Android browsers, the browser's contact picker.
+const NATIVE=()=>!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
+const nativeContacts=()=>NATIVE()&&Capacitor.Plugins&&Capacitor.Plugins.Contacts;
+const canPickContacts=()=>!!(nativeContacts()||(navigator.contacts&&navigator.contacts.select&&window.ContactsManager));
 // "Lerato's mom", "Thabo (Lwazi's dad)", "Mama Sipho": the student is the kid, the parent is who we message.
 const PARENT_W="mom|mum|mommy|mummy|mother|mama|dad|daddy|father|papa|parent|ouma|oupa|granny|gran";
 function kidFromName(n){const t=String(n||"").replace(/^[~\s]+/,"").replace(/\s+/g," ").trim();let m;
@@ -1275,7 +1278,7 @@ async function peopleFiles(fs){const isImg=f=>/^image\//.test(f.type)||/\.(png|j
     const kids=got.filter(p=>p.parentName).length,old=got.filter(p=>p.already).length;
     toast(got.length?`Found ${got.length} ${got.length===1?"person":"people"}${kids?` (${kids} kid${kids>1?"s":""})`:""}${old?`, ${old} already on your list`:""}. Check them, then add.`:"Couldn't see any names. Screenshot the group's member list and try again.");jfTrack("people_read",{n:got.length,shots:images.length})}
   catch(e){if(S.ui.bulk){S.ui.bulk.busy=0;if(S.ui.sheet&&S.ui.sheet.k==="bulk")bulkSheet()}toast(e.message)}}
-async function pickContacts(){try{const cs=await navigator.contacts.select(["name","tel","email"],{multiple:true});
+async function pickContacts(){if(nativeContacts())return pickNative();try{const cs=await navigator.contacts.select(["name","tel","email"],{multiple:true});
   const ppl=cs.map(c=>({name:(c.name||[])[0]||"",phone:(c.tel||[])[0]||"",email:(c.email||[])[0]||""})).filter(p=>p.name);
   bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));if(!ppl.length)toast("None of those had a name.")}catch(e){}}
 async function bulkAdd(){const b=S.ui.bulk;if(!b)return;const idx=b.people.map((_,i)=>i).filter(i=>b.pick[i]);if(!idx.length)return;
@@ -1343,7 +1346,26 @@ function planPanel(){
   if(COACH.bill===undefined){COACH.bill=null;api("GET","/coach/billing").then(j=>{COACH.bill=j.billing;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   const b=COACH.bill;if(!b)return "";const price=money(b.priceCents,"ZAR"),until=fmtDate(b.trialEnds),trial=todayK()<b.trialEnds;
   const line=b.status==="active"?`${price} a month, on the card you added${trial?`, starting ${esc(until)}`:""}.`:b.status==="cancelled"?`Your plan was cancelled. Add a card to carry on after ${esc(until)}.`
-    :trial?`Free until <b>${esc(until)}</b>, then ${price} a month. Add a card now; nothing is charged until then.`:`Your free months ended on ${esc(until)}. Add a card to keep using JitsFlow for ${price} a month.`;
+    :trial?`Free until <b>${esc(until)}</b>, then ${price} a month.${NATIVE()?"":" Add a card now; nothing is charged until then."}`:`Your free months ended on ${esc(until)}. Add a card to keep using JitsFlow for ${price} a month.`;
   return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Card needed</span>`}</div>
-    <p class="small">${line}</p>${b.status==="active"?"":`<button class="btn${trial?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+    <p class="small">${line}</p>${b.status==="active"?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
 async function billCard(){toast("Opening PayFast…");try{const c=await api("POST","/coach/billing/checkout",{});jfTrack("bill_card",{});payfastGo(c)}catch(e){toast(e.message)}}
+
+/* The whole address book in the App Store app: search and tick several people. */
+async function pickNative(){const C=nativeContacts();
+  try{let st=await C.checkPermissions();if(st.contacts!=="granted"&&st.contacts!=="limited")st=await C.requestPermissions();
+    if(st.contacts!=="granted"&&st.contacts!=="limited"){toast("JitsFlow can't see your contacts. Allow it in Settings › JitsFlow › Contacts.");return}
+    const r=await C.getContacts({projection:{name:true,phones:true,emails:true}});
+    const all=(r.contacts||[]).map(c=>({name:((c.name&&(c.name.display||[c.name.given,c.name.family].filter(Boolean).join(" ")))||"").trim(),phone:((c.phones||[]).find(p=>p.isPrimary)||(c.phones||[])[0]||{}).number||"",email:((c.emails||[])[0]||{}).address||""}))
+      .filter(c=>c.name).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!all.length){toast("No contacts found on this phone.");return}
+    S.ui.cpick={all,pick:new Set(),q:""};contactSheet()}catch(e){toast("Couldn't open your contacts.")}}
+function contactRows(){const c=S.ui.cpick,q=(c.q||"").toLowerCase().trim();
+  const list=c.all.map((p,i)=>[p,i]).filter(([p])=>!q||p.name.toLowerCase().includes(q)||String(p.phone).replace(/\D/g,"").includes(q.replace(/\D/g,"")||"~"));
+  return list.slice(0,300).map(([p,i])=>`<div class="bulkrow${c.pick.has(i)?" on":""}"><button class="bx" data-a="cpick" data-v="${i}" aria-pressed="${c.pick.has(i)}" aria-label="${esc(p.name)}">${c.pick.has(i)?"✓":""}</button><div class="bk" data-a="cpick" data-v="${i}"><b>${esc(p.name)}</b><span class="meta">${esc(p.phone||p.email||"No number")}</span></div><span></span></div>`).join("")+(list.length>300?`<p class="small muted">Showing 300 of ${list.length}. Search to find more.</p>`:"")||`<p class="small muted">No one called that.</p>`}
+function contactSheet(){const c=S.ui.cpick;if(!c)return;S.ui.sheet={k:"cpick"};S.ui.stack=[];const n=c.pick.size;
+  openSheet(`${sheetHead("Your contacts")}<div class="stack-lg"><h1>Who trains with you?</h1><input id="cp-q" type="search" placeholder="Search ${c.all.length} contacts" value="${esc(c.q)}" autocomplete="off"><div class="list bulklist" id="cp-list">${contactRows()}</div></div>`,true,
+    {act:`<button class="btn primary grow" data-a="cpdone"${n?"":" disabled"}>${n?`Add ${n} to the list`:"Tick the people to add"}</button>`})}
+function cpToggle(i){const c=S.ui.cpick;if(!c)return;c.pick.has(i)?c.pick.delete(i):c.pick.add(i);const l=document.getElementById("cp-list");if(l)l.innerHTML=contactRows();
+  const b=document.querySelector('#sheetbar [data-a="cpdone"]');if(b){const n=c.pick.size;b.disabled=!n;b.textContent=n?`Add ${n} to the list`:"Tick the people to add"}}
+function cpDone(){const c=S.ui.cpick;if(!c)return;const ppl=[...c.pick].map(i=>c.all[i]);S.ui.cpick=null;bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)))}
