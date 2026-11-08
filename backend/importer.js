@@ -411,6 +411,43 @@ async function claudeRead(client, pages, logos, timetableImages) {
   catch (e) { if (timetableImages.length && e && e.status === 400) return await ask(false); throw e; }
 }
 
+const INFO_IMG = /time-?table|schedule|class(es)?[- ]?times?|rooster|pric(e|es|ing)|fees?\b|tariff|rates?\b|subs(cription)?|membership|program(me)?s?\b|packages?\b/i;
+const INFO_PAGE = /time-?table|schedule|class|pric(e|es|ing)|fees?\b|rates?\b|membership|program(me)?s?\b|academy|join|kids|adults/i;
+/* ---------------- two reads, combined ---------------- */
+// One read of a whole site now and then leaves something out (a coach, the logo, a few classes), and a second
+// read usually catches it. So every import reads twice at the same time and keeps everything either read found.
+const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function unionBy(a, b, key, better) {
+  const out = [], at = new Map();
+  for (const it of [...(a || []), ...(b || [])]) { if (!it) continue; const k = key(it); if (!k) { out.push(it); continue; }
+    if (at.has(k)) { const i = at.get(k); out[i] = better(out[i], it); } else { at.set(k, out.length); out.push(it); } }
+  return out;
+}
+const fuller = (x, y) => { const sx = Object.values(x).join(" ").length, sy = Object.values(y).join(" ").length; return sy > sx ? y : x; };
+function unionAi(a, b) {
+  if (!a) return b; if (!b) return a;
+  const out = { ...a };
+  for (const k of ["name", "tagline", "address", "phone", "email", "notes"]) out[k] = a[k] || b[k] || "";
+  out.socials = { ...(b.socials || {}) }; for (const [k, v] of Object.entries(a.socials || {})) if (v) out.socials[k] = v;
+  out.logo_choice = Number.isInteger(a.logo_choice) && a.logo_choice >= 0 ? a.logo_choice : b.logo_choice;
+  // Same day and start time with titles that share a word ("Kids" / "Kids Gi BJJ") is one class; keep the fuller one.
+  const seen = new Map(); out.timetable = [];
+  for (const r of [...(a.timetable || []), ...(b.timetable || [])]) {
+    const k = `${r.day}|${r.start}`, w = new Set(nk(r.title).split(" ").filter((x) => x.length > 2));
+    const same = (seen.get(k) || []).find((o) => { const ow = nk(o.title).split(" ").filter((x) => x.length > 2); return !ow.length || !w.size || ow.some((x) => w.has(x)); });
+    if (same) { const i = out.timetable.indexOf(same), f = fuller(same, r); out.timetable[i] = f; seen.set(k, seen.get(k).map((o) => (o === same ? f : o))); }
+    else { out.timetable.push(r); seen.set(k, [...(seen.get(k) || []), r]); }
+  }
+  out.rates = unionBy(a.rates, b.rates, (r) => `${Number(r.price)}|${r.period}`, fuller);
+  out.coaches = unionBy(a.coaches, b.coaches, (c) => nk(c.name), fuller);
+  return out;
+}
+async function readTwice(client, pages, logos, images) {
+  const [x, y] = await Promise.allSettled([claudeRead(client, pages, logos, images), claudeRead(client, pages, logos, images)]);
+  if (x.status === "rejected" && y.status === "rejected") throw x.reason;
+  return unionAi(x.status === "fulfilled" ? x.value : null, y.status === "fulfilled" ? y.value : null);
+}
+
 /* ---------------- checking Claude's answer against the pages ---------------- */
 // Claude can produce a plausible timetable for a site that has none. Every timetable row, price and coach must be
 // traceable to the page text (its quote, or its time/price/name actually appearing there), or it is dropped.
@@ -434,7 +471,8 @@ function verifyAi(ai, pages, usedImages) {
   const has = (s) => { const n = normText(s); return n.length >= 3 && corpus.includes(n); };
   const hasToken = (s) => new RegExp("(^|[^0-9a-z])" + normText(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(corpus);
   const quoted = (it) => (it.quote && has(it.quote)) || (usedImages && (it.source === "image" || /\bimage\b/i.test(String(it.quote || ""))));
-  const words = (s) => normText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !["class", "classes", "session", "training", "level", "levels"].includes(w));
+  // Class names are often short words ("No-Gi", "BJJ", "MMA"), so two letters count; filler words don't.
+  const words = (s) => normText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 2 && !["class", "classes", "session", "sessions", "training", "level", "levels", "all", "and", "the", "with", "for", "of", "to", "in", "on", "at"].includes(w));
   const dropped = { timetable: 0, rates: 0, coaches: 0 };
   const keep = (k, test) => { const before = (ai[k] || []).length; ai[k] = (ai[k] || []).filter(test); dropped[k] = before - ai[k].length; };
   const inQuote = (it, forms) => { const q = " " + normText(it.quote) + " "; return forms.some((f) => new RegExp("(^|[^0-9a-z])" + normText(f).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^0-9a-z])").test(q)); };
@@ -527,15 +565,17 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
 
   const plain = cleanProfile(plainRead(pages));
   const logos = logoCandidates(pages);
-  // Timetables and price lists are often pictures. Prefer images named like one; then images on schedule/pricing pages.
-  const named = pages.flatMap((p) => p.imgs).filter((im) => /time-?table|schedule|class-?times|rooster|price|pricing|fees|membership/i.test(im.src + " " + im.alt));
-  const onPages = pages.filter((p) => /time-?table|schedule|class-?times|pricing|prices|fees/i.test(p.url + " " + p.title)).flatMap((p) => p.imgs.filter((im) => !/logo|icon|favicon|avatar/i.test(im.src + " " + im.alt + " " + im.cls)).slice(0, 2));
-  const ttImages = [...new Set([...named, ...onPages].map((im) => im.src.replace(/\?format=\d+w$/, "?format=1500w")))].slice(0, 3);
+  // Timetables and price lists are often pictures. Prefer images named like one ("timetable.png", "adult-subs2026.png");
+  // then graphics (not photos or logos) on the timetable, pricing, membership and programme pages.
+  const imgName = (im) => { let n = im.src; try { n = decodeURIComponent(n); } catch (e) {} return n.replace(/\+/g, " ") + " " + im.alt; };
+  const named = pages.flatMap((p) => p.imgs).filter((im) => INFO_IMG.test(imgName(im)) && !/logo|icon|favicon|avatar/i.test(imgName(im)));
+  const onPages = pages.filter((p) => INFO_PAGE.test(p.url + " " + p.title)).flatMap((p) => p.imgs.filter((im) => !/logo|icon|favicon|avatar|IMG_\d|DSC|photo|portrait|headshot/i.test(imgName(im) + " " + im.cls)).slice(0, 2));
+  const ttImages = [...new Set([...named, ...onPages].map((im) => im.src.replace(/\?format=\d+w$/, "?format=1500w")))].slice(0, 6);
   let profile = plain, method = "basic", aiError = null, logoChoice = -2, dropped = null;
   const c = client === undefined ? getClient() : client;
   if (c) {
     try {
-      const ai = await claudeRead(c, pages, logos, ttImages);
+      const ai = await readTwice(c, pages, logos, ttImages);
       dropped = verifyAi(ai, pages, ttImages.length > 0);
       if (dropped.timetable || dropped.rates || dropped.coaches) log(`import: dropped unverifiable items ${JSON.stringify(dropped)}`);
       logoChoice = Number.isInteger(ai.logo_choice) ? ai.logo_choice : -2;
@@ -544,14 +584,15 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
     } catch (e) { aiError = String(e.message || e).slice(0, 200); log("import: Claude read failed: " + aiError); }
   }
   // Logo previews (as data URLs so the page's image policy can show them).
-  const order = logoChoice >= 0 && logos[logoChoice] ? [logos[logoChoice], ...logos.filter((_, i) => i !== logoChoice)] : logoChoice === -1 ? [] : logos;
+  // Claude's pick goes first; the other candidates stay as options (it sometimes says "none" when one is right).
+  const order = logoChoice >= 0 && logos[logoChoice] ? [logos[logoChoice], ...logos.filter((_, i) => i !== logoChoice)] : logos;
   const previews = [];
   const imgs = await Promise.all(order.slice(0, 6).map((l) => fetchImage(l.url, 300000).catch(() => null)));
   order.slice(0, 6).forEach((l, i) => { const img = imgs[i]; if (!img || previews.length >= 3) return; const d = img.body.toString("base64"); if (!previews.some((x) => x.dataUrl.endsWith(d))) previews.push({ url: l.url, why: l.why, dataUrl: `data:${img.type};base64,${d}` }); });
   return { profile, logos: previews, method, aiError, dropped, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
 }
 
-module.exports = { verifyAi, timeForms, priceForms, importSite, fetchImage, cleanProfile, safeGet, checkUrl, privateIp, parsePage, plainRead, ImportError, DAYS, PERIODS, SCHEMA };
+module.exports = { unionAi, verifyAi, timeForms, priceForms, importSite, fetchImage, cleanProfile, safeGet, checkUrl, privateIp, parsePage, plainRead, ImportError, DAYS, PERIODS, SCHEMA };
 
 /* ---------------- competitions: read an event page ---------------- */
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];

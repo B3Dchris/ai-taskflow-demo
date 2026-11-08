@@ -19,7 +19,7 @@ const PAGES = {
   "/contact": page("Contact | Fourways Grappling Club", `<h1>Contact</h1><p>Call or WhatsApp: 082 123 4567</p>`),
   "/shop": page("Shop", `<p>Rashguard R 450</p><a href="/shop/rashguard">Rashguard</a>`),
   "/shop/rashguard": page("Rashguard", `<p>Rashguard R 450</p>`),
-  "/the-academy": page("The Academy | Fourways Grappling Club", `<h1>The academy</h1><p>Founded in 2019.</p><img src="/img/fgc-schedule-2026.png" alt=""><a href="/the-academy/friday">Friday sessions</a><a href="/the-academy?itemId=a1">Photo 1</a><a href="/the-academy?itemId=a2">Photo 2</a>`),
+  "/the-academy": page("The Academy | Fourways Grappling Club", `<h1>The academy</h1><p>Founded in 2019.</p><img src="/img/fgc-schedule-2026.png" alt=""><img src="/img/fgc-adult-subs2026.png" alt=""><img src="/img/IMG_7684.jpg" alt=""><a href="/the-academy/friday">Friday sessions</a><a href="/the-academy?itemId=a1">Photo 1</a><a href="/the-academy?itemId=a2">Photo 2</a>`),
   "/the-academy/friday": page("Friday | Fourways Grappling Club", `<h3>Friday</h3><p>12:00 - 13:00 Wrestling for BJJ</p>`),
   "/events/gauteng-open": `<!doctype html><html><head><title>Gauteng Open 2026 | Grapple SA</title><meta property="og:site_name" content="Grapple SA">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"SportsEvent","name":"Gauteng Open No-Gi 2026","startDate":"2026-12-12T08:00:00+02:00","endDate":"2026-12-13","location":{"@type":"Place","name":"Wanderers Stadium Hall","address":{"@type":"PostalAddress","addressLocality":"Johannesburg"}},"organizer":{"@type":"Organization","name":"Grapple SA"},"offers":{"@type":"Offer","price":"650","priceCurrency":"ZAR"}}</script></head>

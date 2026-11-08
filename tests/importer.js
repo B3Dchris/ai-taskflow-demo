@@ -63,6 +63,7 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(c.method === "claude", "with a client it uses the Claude read");
     ok(sent.model === "claude-haiku-5-5" && sent.thinking && sent.thinking.type === "disabled" && !sent.betas, "request uses the cheap model (Haiku 5.5), no thinking");
     ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-schedule-2026\.png/.test(b.source.url)), "a timetable picture found anywhere on the site is sent to Claude");
+    ok(sent.messages[0].content.some((b) => b.type === "image" && /fgc-adult-subs2026\.png/.test(b.source.url)) && !sent.messages[0].content.some((b) => b.type === "image" && /IMG_7684/.test(b.source.url)), "a price list picture named like 'adult-subs2026' is sent too; gym photos aren't");
     ok(sent.output_config.format.type === "json_schema" && sent.output_config.effort === "medium" && sent.output_config.format.schema.properties.timetable, "request asks for structured output");
     const txt = sent.messages[0].content.find((b) => b.type === "text").text;
     ok(/<page url=".*\/timetable"/.test(txt) && /LOGO CANDIDATES/.test(txt) && /untrusted/.test(sent.system), "pages, logo candidates and an untrusted-content warning are sent");
@@ -77,6 +78,21 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     ok(none.method === "claude" && none.dropped.timetable === 1, "an invented timetable for a site without one is dropped");
     ok(c.profile.phone && c.profile.socials.instagram && c.profile.socials.youtube && c.profile.notes === "First class free.", "blank Claude fields are filled from the plain read");
     ok(c.logos[0] && c.logos[0].url !== r.logos[0].url, "Claude's logo choice goes first");
+    // ---- two reads at once, combined: what one read misses, the other usually has
+    { let n = 0; const reads = [
+        { ...ai, logo_choice: -1, coaches: [], timetable: [{ day: "Mon", start: "18:00", end: "19:30", title: "No-Gi", coach: "", level: "", source: "text", quote: "Monday 18:00 - 19:30 No-Gi All levels" }] },
+        { ...ai, phone: "", coaches: [{ name: "Thabo Nkosi", rank: "Black belt", bio: "", source: "text", quote: "Thabo Nkosi" }], timetable: [{ day: "Mon", start: "18:00", end: "19:30", title: "No-Gi All levels", coach: "", level: "All levels", source: "text", quote: "Monday 18:00 - 19:30 No-Gi All levels" }, { day: "Sat", start: "09:00", end: "10:30", title: "Open mat", coach: "", level: "", source: "text", quote: "Saturday 09:00 - 10:30 Open mat" }] } ];
+      const two = await im.importSite(site.url, { client: { messages: { create: async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(reads[n++ % 2]) }] }) } } });
+      ok(n === 2, "every import reads the site twice, at the same time");
+      ok(two.profile.coaches.some((c) => c.name === "Thabo Nkosi") && two.profile.timetable.some((r) => r.day === "Sat" && r.start === "09:00"), "anything either read found is kept");
+      ok(two.profile.timetable.filter((r) => r.day === "Mon" && r.start === "18:00").length === 1 && two.profile.timetable.find((r) => r.day === "Mon" && r.start === "18:00").title === "No-Gi All levels", "the same class read twice is kept once, with the fuller name");
+      ok(two.logos.length >= 1, "a 'no logo' answer from one read doesn't throw the logo away"); }
+    { const u = im.unionAi({ timetable: [{ day: "Tue", start: "17:00", title: "Kids" }], rates: [], coaches: [] }, { timetable: [{ day: "Tue", start: "17:00", title: "Adults No-Gi" }], rates: [], coaches: [] });
+      ok(u.timetable.length === 2, "two different classes at the same time both stay"); }
+    { let n = 0; const one = await im.importSite(site.url, { client: { messages: { create: async () => { if (n++ === 0) throw Object.assign(new Error("overloaded"), { status: 529 }); return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(ai) }] }; } } } });
+      ok(one.method === "claude" && !one.aiError, "if one of the two reads fails, the other is used"); }
+    const noLogo = await im.importSite(site.url, { client: fake({ ...ai, logo_choice: -1 }) });
+    ok(noLogo.logos.length >= 1, "when Claude says none of the logos fit, the options are still offered");
     const refused = await im.importSite(site.url, { client: { messages: { create: async () => ({ stop_reason: "refusal", content: [] }) } } });
     ok(refused.method === "basic" && /declined/.test(refused.aiError) && refused.profile.timetable.length === 9, "a refusal falls back to the plain read");
     const broken = await im.importSite(site.url, { client: { messages: { create: async () => { throw Object.assign(new Error("overloaded"), { status: 529 }); } } } });
