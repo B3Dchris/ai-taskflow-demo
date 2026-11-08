@@ -906,7 +906,7 @@ function makeApi(pool, { secureCookies }) {
     return { id: String(p.id), userId: p.user_id ? String(p.user_id) : null, amountCents: p.amount_cents, currency: p.currency, paidOn: p.paid_on,
       reference: p.reference, note: p.note, source: p.source, emailFrom: p.email_from, emailSubject: p.email_subject, createdAt: p.created_at,
       method: p.method || "", status: p.status || "confirmed", hasProof: !!p.has_proof,
-      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, reading: !!a.reading, error: a.error ? "Couldn't read it automatically." : "" } : null };
+      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? "Couldn't read it automatically." : "" } : null };
   }
   const PAY_COLS = "p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof";
   const todayIn = async (u) => (await q("select to_char(now() at time zone $1,'YYYY-MM-DD') as d", [tzOf(u)])).rows[0].d;
@@ -1003,8 +1003,12 @@ function makeApi(pool, { secureCookies }) {
         const read = await pop.readPop({ client: c, files: [file] });
         const amount = row.amount_cents || read.amountCents || 0, mismatch = row.amount_cents && read.amountCents && read.amountCents !== row.amount_cents;
         const otherRef = pop.refsIn(read.reference).find((r) => r !== (u.pay_ref || "")) || null;
-        await q("update payments set ai=$1, amount_cents=$2, paid_on=coalesce($3::date, paid_on) where id=$4 and status='pending'",
-          [{ ...read, match: "student", typedCents: row.amount_cents || 0, amountMismatch: !!mismatch, otherRef }, amount, on ? null : (read.date || null), row.id]);
+        const paidOn = on || read.date || row.paid_on;
+        // Now the amount and date are known: is this the same payment as one already on the list (e.g. the coach uploaded it too)?
+        const dup = amount ? (await q(`select id from payments where gym_id=$1 and id<>$2 and amount_cents=$3 and paid_on=$4 and status<>'rejected' and (user_id=$5 or ($6<>'' and reference=$6)) limit 1`,
+          [u.gym_id, row.id, amount, paidOn, u.id, clean(read.reference || "", 140)])).rows[0] : null;
+        await q("update payments set ai=$1, amount_cents=$2, paid_on=$3 where id=$4 and status='pending'",
+          [{ ...read, match: "student", typedCents: row.amount_cents || 0, amountMismatch: !!mismatch, otherRef, duplicateOf: dup ? String(dup.id) : null }, amount, paidOn, row.id]);
       } catch (e) { console.error("pop read:", e.message); await q("update payments set ai = coalesce(ai,'{}'::jsonb) - 'reading' || '{\"error\":\"read failed\"}' where id=$1", [row.id]).catch(() => {}); }
     });
   }));

@@ -4461,7 +4461,7 @@ function proofLine(p){const r=p.read,cur=p.currency;if(!r)return "";if(r.reading
   const bits=[r.amountCents?money(r.amountCents,cur):"",r.date?esc(fmtDate(r.date)):"",r.reference?`ref ${esc(r.reference)}`:"",r.payer?`from ${esc(r.payer)}`:"",r.bank?esc(r.bank):""].filter(Boolean);
   return bits.length?`<span class="small">Proof says: ${bits.join(" · ")}</span>`:r.error?`<span class="small muted">${esc(r.error)} Open it and fill in the amount.</span>`:""}
 function proofFlags(p){const r=p.read||{},f=[];if(r.duplicateOf)f.push("Looks like a payment you already have");if(r.isPayment===false)f.push("Doesn't look like a proof of payment");
-  if(r.amountCents&&p.amountCents&&r.amountCents!==p.amountCents)f.push(`Proof shows ${money(r.amountCents,p.currency)}`);if(r.match==="name")f.push("Matched by name: check it's the right person");if(r.match==="several names")f.push("More than one student could match");
+  if(r.amountCents&&p.amountCents&&r.amountCents!==p.amountCents)f.push(`Proof shows ${money(r.amountCents,p.currency)}`);if(r.match==="name")f.push("Matched by name: check it's the right person");if(r.otherRef)f.push(`Reference ${r.otherRef} is another student's`);if(r.match==="several names")f.push("More than one student could match");
   return f.map(x=>`<span class="pill due">${esc(x)}</span>`).join("")}
 function popCard(p,byId){const who=p.userId?(byId[p.userId]||{}).name||"Former student":null,fl=proofFlags(p);
   return `<div class="panel stack popcard" data-pop="${p.id}"><div class="row between" style="flex-wrap:nowrap"><b class="mono">${p.amountCents?money(p.amountCents,p.currency):"Amount?"}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div>
