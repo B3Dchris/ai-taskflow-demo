@@ -190,7 +190,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.fill("#s-fee", ""); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(800);
     ok(await ev(co, () => /2x a week/.test(document.getElementById("roster-list").innerText)), "coach puts the student on the plan");
     await st.evaluate(() => { API.mem = undefined; }); await st.tap('[data-a="bookview"][data-v="classes"]'); await st.waitForTimeout(900);
-    ok(await ev(st, () => /2x a week/.test(document.querySelector(".memcard").innerText) && /1\/2/.test(document.querySelector(".memcard").innerText)), "student sees their plan and bookings used this week");
+    ok(await ev(st, () => /2x a week/.test(document.querySelector(".memcard").innerText) && new RegExp((() => { const c = API.classes.find((x) => x.myGoing && x.kind !== "private"); const ws = weekStart(todayK()); const k = dayKey(c.startsAt); return (k >= ws && k <= addDays2(ws, 6) ? 1 : 0) + "\\/2"; })()).test(document.querySelector(".memcard").innerText)), "student sees their plan and bookings used this week");
     await co.tap('nav.tabs [data-v="coach-students"]'); await co.tap('[data-a="stuview"][data-v="insights"]'); await co.waitForTimeout(1200);
     ok(await ev(co, () => !!document.querySelector(".chart svg .bar") && /Active members/i.test(document.getElementById("app").innerText) && document.querySelectorAll(".segpills button").length === 6 && /Chris/.test(document.getElementById("app").innerText)), "coach opens Insights: numbers, weekly chart, student groups");
     await co.locator(".chart .bar").last().tap(); ok(/visits by/.test(await toast(co)), "tapping a bar reads out the week");

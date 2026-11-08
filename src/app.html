@@ -286,9 +286,6 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .codebox{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:13px;word-break:break-all}
 .sync.who{background:var(--blue-soft);color:var(--blue);border-color:transparent;font-weight:700;cursor:pointer}
 .nextclass h3{font-size:24px}
-.partnerline{display:flex;align-items:center;gap:10px;align-self:center;text-decoration:none;color:var(--ink-2);font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
-.partnerline b{color:var(--ink);font-size:14px}.partnerline small{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
-.partnerline img{height:36px;width:auto;border-radius:6px}
 .vid{display:flex;flex-direction:column;gap:8px}
 .vid video{width:100%;max-width:100%;max-height:60vh;border-radius:12px;background:#000;display:block}
 .beltpath{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -1007,8 +1004,6 @@ function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
   if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
   return `<div class="ytbox"><button class="ytface" data-a="ytplay" data-v="${esc(v.v)}" aria-label="Play video: ${esc(v.title||label)}"><img src="${ytThumb(v.v)}" alt="" loading="lazy"><span class="ytbig" aria-hidden="true">▶</span></button>${cap}</div>`}
 const inClaude=()=>!!(window.claude&&window.claude.use);
-const PARTNER_LOGO="__PARTNER_LOGO__";
-const partnerBadge=()=>`<a class="partnerline" href="https://www.jpbuys.com/academy" target="_blank" rel="noopener">${/^data:/.test(PARTNER_LOGO)?`<img src="${PARTNER_LOGO}" alt="JPB Martial Arts Academy logo">`:""}<span><small>In partnership with</small><b>JPB Martial Arts Academy</b></span></a>`;
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
 /* ============ DESCRIPTIONS ============ */
@@ -1948,7 +1943,6 @@ function viewSettings(){
   <textarea id="exporttxt" readonly hidden></textarea></section>
   <section class="stack"><h2 class="label">Reset</h2>${S.ui.confirmReset?`<div class="row"><span class="small">Clear all ratings, reviews and notes? Sessions stay.</span><button class="btn danger" data-a="resetyes">Clear</button><button class="btn" data-a="resetno">Cancel</button></div>`:`<button class="btn danger" data-a="reset">Clear ratings & reviews</button>`}</section>
   </div></details>
-  ${partnerBadge()}
   <p class="small muted credit" style="text-align:center;padding-block:8px 4px">Built and developed by <a class="link" href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
   </div>`;
 }
