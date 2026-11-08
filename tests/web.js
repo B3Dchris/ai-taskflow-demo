@@ -31,6 +31,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
      ok((await fetch(URL+'og/coaches.jpg')).status===200,'coaches share card exists');
      {const home=await (await fetch(URL)).text();ok(/class="gymlink" href="\/coaches\/">For gyms</.test(home)&&/id="gyms"/.test(home),'home page: For gyms in the header and its own section');}
      for(const pth of ['gyms','gym','gyms/','for-gyms']){const rr=await fetch(URL+pth,{redirect:'manual'});ok(rr.status===301&&rr.headers.get('location')==='/coaches/',`/${pth} goes to the gyms page`)}}
+    {const app=await (await fetch(URL+'app/')).text();ok(/maximum-scale=1/.test(app)&&/iP\(hone\|od\|ad\)/.test(app),'app stops iPhone Safari zooming in on text boxes (iOS only)');}
     const rb=await (await fetch(URL+'robots.txt')).text();ok(/Sitemap: https:\/\/www\.jitsflow\.com\/sitemap\.xml/.test(rb)&&/Disallow: \/api\//.test(rb),'robots.txt points to the sitemap');
     const tp=locs.find(u=>/\/techniques\/[^/]+\/$/.test(u)).replace('https://www.jitsflow.com/','');
     const rr=await fetch(URL+tp.replace(/\/$/,''),{redirect:'manual'});ok(rr.status===301&&rr.headers.get('location')==='/'+tp,'pages without the trailing slash redirect to one address');

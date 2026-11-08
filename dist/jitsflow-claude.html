@@ -264,7 +264,7 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 @media (prefers-reduced-motion:reduce){.swipe>.sw-front{transition:none}}
 .btn.wa{gap:8px;border-color:#25D366;text-decoration:none;color:var(--ink)}.btn.wa .waico{width:20px;height:20px;fill:none;stroke:#1FAF54;stroke-width:1.8;stroke-linejoin:round;flex:none}
 .btn.wa.primary-wa{background:#1FAF54;border-color:#1FAF54;color:#fff}.btn.wa.primary-wa .waico{stroke:#fff}
-#wa-panel textarea{font-size:15px}
+#wa-panel textarea{font-size:16px}
 .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick .btn{min-height:52px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
 .bc-main{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;text-align:left;background:none;border:0;padding:12px 12px 6px;color:inherit;font:inherit}
@@ -344,6 +344,7 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .tchip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;font-weight:600}
 .tchip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
 .flabel{font-size:14px;color:var(--ink-2)}
+@supports (-webkit-touch-callout:none){input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:max(16px,1em)!important}}
 .mchart{margin:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:end}
 .mcol{display:grid;grid-template-rows:96px auto;gap:4px;background:none;border:0;padding:0;color:var(--ink-2);font:inherit;align-items:end;justify-items:center}
 .mcol .mbar{width:70%;max-width:40px;border:1.5px solid var(--line);border-radius:6px;display:flex;align-items:flex-end;overflow:hidden;min-height:2px}
