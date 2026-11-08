@@ -570,6 +570,8 @@ function verifyAi(ai, pages, usedImages) {
 /* ---------------- cleaning and merging ---------------- */
 const hhmm = (t) => { const m = String(t || "").match(/^(\d{1,2}):(\d{2})$/); if (!m) return ""; const h = Number(m[1]), mi = Number(m[2]); return h < 24 && mi < 60 ? String(h).padStart(2, "0") + ":" + m[2] : ""; };
 const httpUrl = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href.slice(0, 300) : ""; } catch (e) { return ""; } };
+// "2026-05-13" or "123-456-7890" isn't the gym's phone number.
+const looksLikePhone = (v) => { const t = String(v || "").trim(), d = t.replace(/\D/g, ""); return d.length >= 9 && d.length <= 15 && !/^\d{4}-\d{2}-\d{2}$/.test(t) && !/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(t) && !/123-?456-?7890/.test(t); };
 function cleanProfile(p) {
   p = p && typeof p === "object" ? p : {};
   const soc = p.socials && typeof p.socials === "object" ? p.socials : {};
@@ -577,7 +579,7 @@ function cleanProfile(p) {
     .filter((r) => r && r.day && r.start).slice(0, 120);
   tt.sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
   return {
-    name: clip(p.name, 100), tagline: clip(p.tagline, 300), address: clip(p.address, 200), phone: clip(p.phone, 40), email: clip(p.email, 120).replace(/^mailto:/i, ""),
+    name: clip(p.name, 100), tagline: clip(p.tagline, 300), address: clip(p.address, 200), phone: looksLikePhone(p.phone) ? clip(p.phone, 40) : "", email: clip(p.email, 120).replace(/^mailto:/i, ""),
     website: httpUrl(p.website),
     socials: Object.fromEntries(SOCIALS.map((k) => [k, httpUrl(soc[k])]).filter(([, v]) => v)),
     timetable: tt,
