@@ -489,7 +489,7 @@ function client(base) {
         ["PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890" }], ["PATCH", "/coach/gym/pay-soon", { on: true }], ["POST", "/coach/gym/pay/new-address"],
         ["GET", "/coach/billing"], ["POST", "/coach/billing/checkout", {}], ["GET", "/coach/payfast"], ["PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }], ["DELETE", "/coach/payfast"],
         ["GET", "/coach/plans"], ["POST", "/coach/plans", { name: "Sneaky", priceCents: 100 }], ["PATCH", "/coach/plans/1", { name: "Sneaky", priceCents: 100 }], ["POST", "/coach/plans/from-rates"],
-        ["GET", "/coach/packs"], ["POST", "/coach/packs", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/packs/1", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/gym/access-fee", { accessFeeCents: 100 }],
+        ["GET", "/coach/packs"], ["POST", "/coach/packs", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/packs/1", { name: "x", lessons: 5, priceCents: 1000 }], ["PATCH", "/coach/gym/access-fee", { accessFeeCents: 100 }], ["PATCH", "/coach/gym/access-fee", { mode: "none" }],
         ["PATCH", "/coach/gym", { monthlyFeeCents: 1 }], ["PATCH", `/coach/students/${sam.id}`, { feeCents: 100 }], ["PATCH", `/coach/students/${sam.id}`, { planId: null }], ["PATCH", `/coach/students/${sam.id}`, { planStatus: "paused" }],
         ["POST", "/coach/students", { name: "Fee Kid", phone: "082 111 9999", feeCents: 5000 }], ["POST", "/coach/head", { userId: co2Id }], ["DELETE", "/coach/gym", { password: "badcoach1" }]];
       const got = []; for (const [m, url, body] of money) got.push((await co2(m, url, body)).s);
@@ -777,6 +777,87 @@ function client(base) {
       // a gym that sets none of this: the slot's price, as before
       r = await hc("PATCH", "/coach/gym/private-price", { privateCents: null }); ok(r.j.privateCents === null && (await hc("GET", "/coach/gym/pay")).j.privateCents === null, "the price for clients without a membership can be cleared");
       const s3 = await slot(11); mp = await seen("none", s3); ok(mp.cents === 45000 && mp.label === "", "with no price set, they pay the slot's price");
+      await pl.end(); }
+    // --- what private-only clients need: nothing extra, an access fee, or a membership to book
+    { const xh = { "x-forwarded-for": "198.51.100.41" }, hc = client(base), co = client(base), pl = new Pool({ connectionString: DB }), H = 3600e3;
+      const ag = (await hc("POST", "/auth/start-gym", { gym: "Access Gym", name: "Access Head", email: "head@access.test", password: "accesshead1" }, xh)).j.me.gym;
+      await co("POST", "/auth/register", { code: ag.coachCode, name: "Access Coach", email: "coach@access.test", password: "accesscoach1" }, xh);
+      const st = {}; for (const n of ["solo", "acc", "full", "kid", "paused"]) { const c = client(base); c.id = (await c("POST", "/auth/register", { code: ag.studentCode, name: "Access " + n, email: n + "@access.test", password: n + "pass1234" }, xh)).j.me.id; st[n] = c; }
+      const ym = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }).slice(0, 7), inMonth = ym(Date.now() + 30 * H) === ym(Date.now());
+      await pl.query("update gyms set privates_from=now() - interval '1 day' where id=$1", [ag.id]);
+      r = await hc("GET", "/coach/gym/pay"); ok(r.j.accessMode === "fee" && r.j.accessFeeCents === 0 && r.j.privatePlanIds.length === 0, "a new gym starts on 'fee' at 0: nothing extra is charged, as before");
+      // the first screen checks a gym code before sign-up
+      r = await client(base)("GET", "/gyms/by-code/" + ag.studentCode.toLowerCase()); ok(r.s === 200 && r.j.gym.name === "Access Gym" && r.j.gym.coach === false, "a gym code is checked before sign-up, and gives the gym's name");
+      r = await client(base)("GET", "/gyms/by-code/" + ag.coachCode); ok(r.j.gym.coach === true, "a coach code says so");
+      r = await client(base)("GET", "/gyms/by-code/BADCODE1"); ok(r.s === 200 && r.j.gym === null, "a wrong code is { gym: null } (no error in the console)");
+      const acc = (await hc("POST", "/coach/plans", { name: "Access", priceCents: 50000, period: "month" })).j.plan, full = (await hc("POST", "/coach/plans", { name: "Full", priceCents: 120000, period: "month" })).j.plan;
+      const kids = (await hc("POST", "/coach/plans", { name: "Kids", priceCents: 60000, period: "month" })).j.plan;
+      for (const [n, pid, status] of [["acc", acc.id, "active"], ["full", full.id, "active"], ["kid", kids.id, "active"], ["paused", full.id, "paused"]]) await hc("PATCH", `/coach/students/${st[n].id}`, { planId: pid, planStatus: status });
+      const slot = async (h) => (await hc("POST", "/classes", { kind: "private", title: "Private " + h, startsAt: new Date(Date.now() + h * H).toISOString(), durationMin: 60, priceCents: 45000 })).j.class.id;
+      // only the head coach picks, and only from what's on offer
+      r = await co("PATCH", "/coach/gym/access-fee", { mode: "membership", planIds: [acc.id] }); ok(r.s === 403, "another coach can't change what private-only clients need");
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "free" }); ok(r.s === 400, "an unknown choice is refused");
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "membership", planIds: [] }); ok(r.s === 400 && /Tick the plans/.test(r.j.error), "'need a membership' needs at least one plan ticked");
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "membership", planIds: [acc.id, "99999999"] }); ok(r.s === 404, "and only this gym's plans");
+      // (b) an access fee
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "fee", accessFeeCents: 15000 }); ok(r.s === 200 && r.j.accessMode === "fee" && r.j.accessFeeCents === 15000, "(b) the head coach sets an access fee of R150 a month");
+      const s1 = await slot(30);
+      r = await st.solo("GET", "/classes"); let mp1 = r.j.classes.find((c) => c.id === s1).myPrice;
+      ok(mp1.accessCents === 15000 && mp1.month === ym(Date.now() + 30 * H), "before booking, a private-only client sees the access fee that month on the slot: " + JSON.stringify(mp1));
+      r = await st.acc("GET", "/classes"); ok(!r.j.classes.find((c) => c.id === s1).myPrice.accessCents, "a member doesn't");
+      r = await st.solo("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.s === 200 && r.j.going, "a private-only client books a private");
+      { const s1b = await slot(30.5); r = await st.solo("GET", "/classes");
+        ok(!r.j.classes.find((c) => c.id === s1).myPrice.accessCents && (ym(Date.now() + 30.5 * H) !== ym(Date.now() + 30 * H) || !r.j.classes.find((c) => c.id === s1b).myPrice.accessCents), "once they have a private that month, no more access fee is shown for it");
+        await hc("DELETE", `/classes/${s1b}`); }
+      r = await st.solo("GET", "/me/pay"); ok(r.j.pay.accessCents === (inMonth ? 15000 : 0) && !r.j.pay.privateAccess, "and pays the access fee that month: " + r.j.pay.accessCents);
+      // (a) nothing extra: the fee is kept for later, but not charged
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "none" }); ok(r.s === 200 && r.j.accessMode === "none" && r.j.accessFeeCents === 15000, "(a) 'pay nothing extra' keeps the fee for later");
+      r = await st.solo("GET", "/me/pay"); ok(r.j.pay.accessCents === 0 && r.j.pay.dueCents === r.j.pay.privatesCents, "with 'pay nothing extra' they owe only the private's price");
+      r = await hc("GET", "/coach/money"); ok(r.j.accessFeeCents === 0 && r.j.students.find((x) => x.id === st.solo.id).accessCents === 0, "and the Money page charges no access fee");
+      r = await hc("GET", "/coach/roster"); ok(r.j.accessFeeCents === 0, "nor the roster");
+      r = await st.solo("GET", "/classes"); ok(r.j.privateAccess === undefined, "anyone can book a private");
+      ok(r.j.classes.filter((c) => c.kind === "private").every((c) => !c.myPrice.accessCents), "and no access fee is shown on any slot");
+      await st.solo("PUT", `/classes/${s1}/rsvp`, { going: false });
+      // (c) a membership to book
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "membership", planIds: [acc.id, full.id] });
+      ok(r.s === 200 && r.j.accessMode === "membership" && r.j.privatePlanIds.sort().join() === [acc.id, full.id].sort().join(), "(c) the head coach ticks the plans that allow privates (Access and Full)");
+      r = await hc("GET", "/coach/gym/pay"); ok(r.j.accessMode === "membership" && r.j.privatePlanIds.length === 2 && r.j.accessFeeCents === 15000, "the setting is saved, with the fee kept");
+      r = await st.solo("GET", "/classes"); let pa = r.j.privateAccess;
+      ok(pa && pa.message === "Join the Access or Full membership to book privates." && pa.plans.map((p) => p.name + ":" + p.priceCents).join() === "Access:50000,Full:120000", "a student with no plan is told which memberships to join, with prices: " + JSON.stringify(pa));
+      ok(r.j.classes.some((c) => c.id === s1), "they still see the slot");
+      r = await st.solo("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.s === 403 && /Join the Access or Full membership to book privates/.test(r.j.error), "the server refuses their booking: " + r.j.error);
+      r = await st.solo("GET", "/me/pay"); ok(r.j.pay.privateAccess && r.j.pay.privateAccess.plans.length === 2 && r.j.pay.accessCents === 0, "their Pay sheet says how to join (and there's no access fee)");
+      r = await st.kid("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.s === 403, "a member on a plan that isn't ticked (Kids) can't book either");
+      r = await st.paused("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.s === 403 && r.j.error === "Your Full membership is paused. Ask your coach to restart it to book privates.", "nor a Full member who's paused, who is told to restart it, not to join: " + r.j.error);
+      r = await st.paused("GET", "/classes"); ok(r.j.privateAccess.status === "paused" && /restart it/.test(r.j.privateAccess.message) && r.j.privateAccess.plans.map((p) => p.name).join() === "Full", "their Classes screen says the same: " + JSON.stringify(r.j.privateAccess));
+      await hc("PATCH", `/coach/students/${st.paused.id}`, { planId: full.id, planStatus: "cancelled" });
+      r = await st.paused("GET", "/classes"); ok(r.j.privateAccess.status === "cancelled" && r.j.privateAccess.message === "Your Full membership is cancelled. Ask your coach to restart it to book privates.", "and a cancelled one too");
+      await hc("PATCH", `/coach/students/${st.paused.id}`, { planId: full.id, planStatus: "paused" });
+      r = await st.acc("GET", "/classes"); ok(r.j.privateAccess === undefined, "an Access member isn't asked to join");
+      r = await st.acc("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.s === 200 && r.j.going, "and books the private");
+      r = await st.acc("GET", "/me/pay"); ok(!r.j.pay.privateAccess, "with nothing to join on their Pay sheet");
+      const g1 = (await hc("POST", "/classes", { kind: "class", title: "Open mat", startsAt: new Date(Date.now() + 5 * H).toISOString(), durationMin: 60 })).j.class.id;
+      r = await st.solo("PUT", `/classes/${g1}/rsvp`, { going: true }); ok(r.s === 200 && r.j.going, "group classes aren't affected");
+      // a coach can still add anyone, and they can check in
+      const s2 = await slot(0.25); r = await hc("PUT", `/coach/classes/${s2}/attendance`, { userIds: [st.solo.id], attended: false }); ok(r.s === 200, "a coach still adds a student without the membership to a private");
+      r = await st.solo("POST", `/classes/${s2}/checkin`); ok(r.s === 200, "and they can check in to it");
+      { // a coach books someone onto a future private (Add a student): booked, with the price locked in, even if they'd cancelled before
+        const s4 = await slot(34); await pl.query("insert into attendance(class_id,user_id,going) values($1,$2,false)", [s4, st.kid.id]);
+        r = await co("PUT", `/coach/classes/${s4}/attendance`, { userId: st.kid.id, attended: false, going: true }); ok(r.s === 200, "a coach adds a student to a future private");
+        r = await hc("GET", `/coach/classes/${s4}`); const k = r.j.attendees.find((a) => a.id === st.kid.id);
+        ok(k && k.going && !k.attended && k.priceCents === 45000, "they're booked (not checked in) at their price: " + JSON.stringify(k && { going: k.going, attended: k.attended, priceCents: k.priceCents }));
+        r = await st.kid("GET", "/classes"); ok(r.j.classes.find((c) => c.id === s4).myGoing, "and see it as booked");
+        r = await co("PUT", `/coach/classes/${s4}/attendance`, { userId: st.kid.id, attended: true, going: true }); r = await co("PUT", `/coach/classes/${s4}/attendance`, { userId: st.kid.id, attended: false, going: true });
+        r = await hc("GET", `/coach/classes/${s4}`); ok(r.j.attendees.find((a) => a.id === st.kid.id).attended, "adding someone already checked in doesn't undo the check-in"); }
+      const s3 = await slot(0.3); r = await st.solo("POST", `/classes/${s3}/checkin`); ok(r.s === 403, "they can't check in to a private they weren't booked on");
+      // a ticked plan no longer offered isn't suggested, while another is
+      await hc("PATCH", `/coach/plans/${acc.id}`, { name: "Access", priceCents: 50000, period: "month", active: false });
+      r = await st.solo("GET", "/classes"); ok(r.j.privateAccess.message === "Join the Full membership to book privates." && r.j.privateAccess.plans.length === 1, "a ticked plan that's no longer offered isn't suggested");
+      r = await st.acc("PUT", `/classes/${await slot(31)}/rsvp`, { going: true }); ok(r.s === 200, "but members still on it can book");
+      // back to the fee: the plans are kept
+      r = await hc("PATCH", "/coach/gym/access-fee", { mode: "fee", accessFeeCents: 15000 }); ok(r.j.privatePlanIds.length === 2, "switching back to the fee keeps the ticked plans");
+      r = await st.solo("PUT", `/classes/${await slot(32)}/rsvp`, { going: true }); ok(r.s === 200, "and anyone can book again");
+      r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: 0 }); ok(r.j.accessMode === "fee" && r.j.accessFeeCents === 0, "the old call (just a fee) still works");
       await pl.end(); }
     // --- a live server (JitsFlow's own PayFast account set): no test merchant, and limits per address that can't be faked
     { const port2 = port + 100, base2 = `http://127.0.0.1:${port2}/api`, pfm = require("../backend/payfast");

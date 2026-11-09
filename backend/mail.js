@@ -66,7 +66,7 @@ const sendLater = (msg) => { send(msg).catch((e) => console.warn("mail:", e.mess
 
 const templates = {
   compRequest: (coach, student, comp, when, division) => ({ subject: `${student} wants to compete at ${comp}`, title: "Competition request",
-    paras: [`Hi ${coach},`, `${student} asked to enter ${comp} (${when})${division ? `, ${division}` : ""}.`, "Approve or decline it in the Coach tab › Comps."],
+    paras: [`Hi ${coach},`, `${student} asked to enter ${comp} (${when})${division ? `, ${division}` : ""}.`, "Approve or decline it in Members › Competitions."],
     button: { label: "Open Comps", url: appUrl() + "/app/#coach" } }),
   compDecision: (name, comp, when, entered, note) => ({ subject: entered ? `You're on the team for ${comp}` : `About ${comp}`, title: entered ? "You're on the team" : "Not this time",
     paras: [`Hi ${name},`, entered ? `Your coach has entered you for ${comp} (${when}).` : `Your coach hasn't entered you for ${comp} (${when}) this time.`, ...(note ? [`Coach's note: ${note}`] : []), entered ? "Check the details and the rest of the team in JitsFlow." : "Talk to your coach about what to work on for the next one."],
@@ -97,8 +97,8 @@ const templates = {
   // Subjects never carry text a sign-up or a coach typed (gym or coach names): these go to addresses nobody has checked yet.
   welcomeCoach: (name, gym, invite) => ({ subject: "Your gym is set up on JitsFlow", title: `${gym} is ready`,
     paras: [`Hi ${name},`, "Send your students this invite link. It opens JitsFlow with your gym code filled in:", invite,
-      "In the Coach tab you can import your timetable from your website, plan classes, see who's coming and what they need to work on, and keep your roster and payments."],
-    button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }),
+      "In JitsFlow you can import your timetable from your website, plan classes, see who's coming and what they need to work on, and keep your roster and payments."],
+    button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }),
   invite: (coach, gym, url) => ({ subject: "You're invited to join your gym on JitsFlow", title: `Join ${gym} on JitsFlow`,
     paras: [`${coach} invited you to ${gym}'s JitsFlow.`, "JitsFlow is a no-gi study app: every technique from white to black belt with videos, a flow map of attacks and escapes, and a training log. Your coach uses it to plan classes around what the group needs.", "Tap the button to create your free account. Your gym code is already filled in."],
     button: { label: `Join ${gym}`, url } }),
@@ -113,15 +113,15 @@ const templates = {
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
   headCoach: (name, gym, by) => ({ subject: "You're now the head coach", title: "You're the head coach",
     paras: [`Hi ${name},`, `${by} made you the head coach of ${gym} on JitsFlow.`, "You now see the Money tab: fees, payments, bank details and PayFast. Payment emails come to you."],
-    button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }),
+    button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }),
   // Bank or PayFast details changed (to the head coach), or the coaches changed (to every active coach). Fixed subjects.
   gymChange: (kind, name, who, detail) => { const t = {
       bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],
       payfast: ["Your gym's PayFast account changed", `${who} connected a PayFast account (Merchant ID ${detail}). Students' card payments now go to that account.`],
       removed: ["A coach was removed from your gym", `${who} removed ${detail} as a coach. They can't see your roster or payments any more, and your coach code has changed.`],
       inactive: ["A coach was marked inactive", `${who} marked ${detail} as inactive. They can't use the coach tools until a coach switches them back on.`] }[kind];
-    return { subject: t[0], title: t[0], paras: [`Hi ${name},`, t[1], "Didn't expect this? Open the Coach tab now and check your payment details and who your coaches are."],
-      button: { label: "Open the Coach tab", url: appUrl() + "/app/#coach" } }; },
+    return { subject: t[0], title: t[0], paras: [`Hi ${name},`, t[1], "Didn't expect this? Open JitsFlow now and check your payment details and who your coaches are."],
+      button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
 };
 
 module.exports = { send, sendLater, templates, mailOn, appUrl, layout };

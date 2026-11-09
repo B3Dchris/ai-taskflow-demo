@@ -50,6 +50,9 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing screenshots load');
     await p.locator('.hero .cta a.btn.primary').tap();await p.waitForTimeout(800);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&document.title==='JitsFlow'&&!window.claude),'"Open JitsFlow" opens the app');
+    // with accounts on (a database), a new visitor first picks how they use JitsFlow; without, the study setup shows straight away
+    ok(await p.evaluate(()=>S.ui.sheet&&(API.on?S.ui.sheet.k==='how'&&document.querySelectorAll('#sheet .howbtn').length===3:S.ui.sheet.k==='onboard')),'website shows the first screen');
+    if(await p.evaluate(()=>S.ui.sheet.k==='how'))await p.tap('#sheet [data-a="how"][data-v="solo"]');
     ok(await p.evaluate(()=>S.ui.sheet&&S.ui.sheet.k==='onboard'),'website shows first-run setup');
     await p.tap('#sheetbar [data-a="obdone"]');
     ok(await p.evaluate(()=>document.getElementById('sync').textContent==='Saved on this device'),'website saves on the device');
@@ -61,7 +64,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'service worker controls the page');
     await p.evaluate(()=>{P().mastery.knee_cut=3;saveProgress()});
     await ctx.setOffline(true);await p.reload();await p.waitForTimeout(800);
-    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button:not([hidden])').length===5&&lv('knee_cut')===3),'works offline and keeps your data');
+    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button:not([hidden])').length===4&&lv('knee_cut')===3),'works offline and keeps your data');
     await ctx.setOffline(false);
     await p.evaluate(()=>techSheet('knee_cut'));ok(await p.evaluate(()=>/youtube\.com\/results/.test(document.querySelector('#sheet a.yt:not(.ytpick)').href)&&!document.getElementById('explain-box')&&!document.querySelector('label[for^="vid-"]')),'website: YouTube button present, claude.ai-only features hidden');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'no sideways scroll');

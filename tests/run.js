@@ -26,7 +26,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   const overflow=async(label)=>{const w=await p.evaluate(()=>document.documentElement.scrollWidth);ok(w<=vw,`${label}: page scrolls sideways (${w}px > ${vw}px)`)};
   const ev=(f,a)=>p.evaluate(f,a);const sheetH1=()=>ev(()=>document.querySelector('#sheet h1')?.innerText||'');
   await p.goto(URL+'#today');await p.waitForTimeout(MODE==='db'?400:200);
-  if(MODE==='db'){ok((await ev(()=>document.getElementById('sync').textContent))==='Saved to your account','db: sync label shows account saving')}
+  if(MODE==='db'){ok((await ev(()=>document.getElementById('sync').textContent))==='Saved to your account','db: sync label shows account saving');ok(await ev(()=>getComputedStyle(document.getElementById('sync')).display==='none'),'db: the saved status stays out of the way when all is saved')}
   // --- first-run setup
   await p.waitForTimeout(500);
   ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='onboard'&&/Welcome to JitsFlow/.test(document.body.innerText)),'first launch shows setup');
@@ -34,7 +34,20 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.selectOption('#ob-months','9');await p.locator('[data-a="obset"][data-k="hand"][data-v="left"]').tap();await p.tap('#sheetbar [data-a="obdone"]');
   ok(await ev(()=>goal()==='blue'&&P().settings.perWeek===2&&P().settings.onboarded===true&&P().settings.days.join()==='1,3'&&P().settings.priorHours===117),'setup saves belt goal, schedule and hours');
   // --- tabs render
-  for(const t of ['today','learn','flow','log','settings']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
+  ok(await ev(()=>[...document.querySelectorAll('nav.tabs button:not([hidden])')].map(b=>b.textContent.trim()).join()==='Home,Learn,Journal,Me'),'self-study gets 4 plain tabs: Home, Learn, Journal, Me (no Classes without a gym)');
+  for(const t of ['home','learn','journal','me']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
+  await p.tap('nav.tabs [data-v="learn"]');
+  for(const v of ['moves','map','belt']){await p.tap(`.learnseg [data-v="learn-${v}"]`);await p.waitForTimeout(60);ok(await ev(v=>S.ui.learnView===v&&location.hash===(v==='moves'?'#learn':'#learn-'+v)&&document.querySelector(`.learnseg [data-v="learn-${v}"]`).getAttribute('aria-pressed')==='true'&&document.getElementById('app').innerText.length>200,v),`Learn › ${v} renders`);await overflow('learn '+v)}
+  await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="learn"]');ok(await ev(()=>S.ui.learnView==='belt'),'Learn remembers the part you last had open');
+  // --- old addresses open the new places
+  for(const [h,want,lv] of [['flow','#learn-map','map'],['log','#journal'],['settings','#me'],['today','#home'],['learn','#learn','moves']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.learnView===lv),[want,lv]),`#${h} opens ${want}`)}
+  // --- first-visit tips: one line per tab, gone once closed or after 3 visits
+  await p.tap('nav.tabs [data-v="journal"]');
+  ok(await ev(()=>/training journal/i.test((document.querySelector('.tip')||{}).textContent||'')),'Journal shows its tip on the first visits');
+  await p.tap('.tip [data-a="tipx"]');ok(await ev(()=>!document.querySelector('.tip')&&(lsGet('jf.tips.me')||{}).journal===-1),'closing a tip hides it');
+  await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="journal"]');ok(await ev(()=>!document.querySelector('.tip')),'a closed tip stays closed');
+  await ev(()=>{const t=lsGet('jf.tips.me')||{};delete t.me;lsSet('jf.tips.me',t)});
+  for(let i=1;i<=4;i++){await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="me"]');ok(await ev(()=>!!document.querySelector('.tip'))===(i<=3),`Me tip on visit ${i}: ${i<=3?'shown':'gone'}`)}
   // --- every technique sheet
   const ids=await ev(()=>TECH.map(t=>t.id));
   for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img, #sheet .posimg img, #sheet .ytembed iframe, #sheet a.ytpick'),yt:(document.querySelector('#sheet a.yt:not(.ytpick)')||{}).href||''}),id);
@@ -42,7 +55,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     ok(r.h===r.name&&r.lead.length>40&&r.steps===r.n&&r.fig,`technique sheet ${id} incomplete`);}
   await overflow('technique sheet');await ev(()=>closeSheet());
   // --- every flow node
-  await p.tap('nav.tabs [data-v="flow"]');
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');
   const pos=await ev(()=>Object.keys(POS));
   for(const k of pos){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();const r=await ev(k=>({h3:document.querySelector('.panel h3')?.innerText,want:POS[k].L,d:document.querySelector('.panel')?.innerText.includes(PD[k].d),sel:!!document.querySelector(`.flowsvg g.node.sel[data-v="${k}"]`),yt:!!document.querySelector('.panel a.yt[href*="youtube.com/results"]')}),k);ok(r.yt,`position ${k} has a YouTube link`);ok(r.h3===r.want&&r.d&&r.sel,`flow node ${k}`)}
   await overflow('flow');
@@ -61,7 +74,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('.panel [data-a="pos"][data-v="hg_top"]').tap();ok(await ev(()=>S.ui.flowSel==='hg_top'),'"See it from the other side" flips to half guard top');
   await overflow('flow route');
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
-  await p.tap('nav.tabs [data-v="today"]');await p.tap('.panel.accent button[data-a="qr"]');
+  await p.tap('nav.tabs [data-v="home"]');await p.tap('.panel.accent button[data-a="qr"]');
   const total=await ev(()=>S.ui.qr.q.length);const want=await ev(()=>rateable().length);ok(total===want&&total>54,`rate queue is ${total}, expected ${want}`);
   await p.tap('#sheetbar [data-a="qrnext"]');
   for(let i=1;i<total;i++){await p.tap(`#sheetbar [data-a="qrset"][data-v="${i%5}"]`)}
@@ -93,32 +106,32 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok((await sheetH1())==='Knee cut (knee slice) pass','swipe right goes back one technique');
   await p.tap('#sheetbar .back');ok(await ev(()=>document.getElementById('sheet').hidden),'Close returns to the tab');
   // --- log: new, effects, edit, delete
-  await p.tap('nav.tabs [data-v="log"]');await p.tap('[data-a="lognew"]');
+  await p.tap('nav.tabs [data-v="journal"]');await p.tap('[data-a="lognew"]');
   await p.selectOption('#f-taught','over_under');await p.selectOption('#f-hits','triangle');await p.selectOption('#f-tapped','rnc');
   await p.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();await p.locator('#sheet [data-a="stuck"][data-v="sc_bot"]').tap();
   await p.locator('#f-worked').fill('Knee shield held up');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
-  ok(await ev(()=>location.hash==='#log'&&document.querySelectorAll('.sess').length===1),'session saved and listed');
+  ok(await ev(()=>location.hash==='#journal'&&document.querySelectorAll('.sess').length===1),'session saved and listed');
   ok(await ev(()=>lv('triangle')===4&&lv('over_under')>=1),'logging updates technique levels');
   ok(await ev(()=>document.body.innerText.includes('Half guard')&&!!document.querySelector('.bar')),'stuck chart shows');
   await p.locator('.linkbtn[data-a="editlog"]').tap();ok((await ev(()=>document.querySelector('.sheettitle').innerText))==='Edit session','edit opens with title');
   ok(await ev(()=>document.getElementById('f-worked').value==='Knee shield held up'),'edit form prefilled');
   await p.locator('#f-mins').fill('75');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>S.sessions.length===1&&Number(S.sessions[0].mins)===75),'edit updates the same session');
-  await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
-  ok(await ev(()=>document.querySelector('.stat b')&&weekStreak()===1),'week streak counts this week');
-  await p.tap('nav.tabs [data-v="log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
+  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
+  ok(await ev(()=>/1 week streak/.test(document.querySelector('.lprog').innerText)&&weekStreak()===1),'week streak counts this week');
+  await p.tap('nav.tabs [data-v="journal"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
   ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
   await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
   await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
   // --- flow map: tapping a position keeps your place on the page
-  await p.tap('nav.tabs [data-v="flow"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
   {const y0=await ev(()=>window.scrollY);await p.locator('.flowsvg g.node[data-v="mount_top"]').tap();await p.waitForTimeout(250);
    ok(await ev(y0=>S.ui.flowSel==='mount_top'&&Math.abs(window.scrollY-y0)<3,y0),'tapping a position on the map doesn\'t jump the page');}
   // --- smart search: typos, slang, initials; suggestions as you type
   ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('rnc')==='rnc'&&/kimura/.test(top('kimra'))&&/triangle/.test(top('trangle'))&&top('dbl leg')==='double_leg'&&/^Armbar/.test((searchAll('arm bar',1)[0]||{}).label)&&searchAll('xyzzy').length===0}),'search forgives typos, knows slang and initials (rnc, kimra, trangle, dbl leg)');
   ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('japanese neck tie')==='japanese_necktie'&&top('peruvian necktie')==='peruvian_necktie'&&searchAll('flag pole guillotine',8).some(x=>x.id==='flying_guillotine')&&!!VIDS.japanese_necktie&&!!VIDS.peruvian_necktie}),'lesser-known moves are in, with videos; an unknown word in a search is skipped');
   ok(await ev(()=>{const r=searchAll('half gaurd',3);return r[0].k==='p'&&/half guard/i.test(r[0].label)}),'a misspelt position finds the position first');
-  await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('kimra');await p.waitForTimeout(400);
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#q').tap();await p.keyboard.type('kimra');await p.waitForTimeout(400);
   ok(await ev(()=>{const rows=[...document.querySelectorAll('#qsugg .qsugg-row')];return rows.length>0&&/Kimura/.test(rows[0].innerText)&&document.activeElement.id==='q'&&[...document.querySelectorAll('#learn-groups .trow .nm')].some(n=>/Kimura/.test(n.innerText))}),'suggestions appear as you type and the list filters, keyboard stays up');
   await p.locator('#qsugg .qsugg-row').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'&&/kimura/.test(S.ui.sheet.id)),'tapping a suggestion opens it');await ev(()=>closeSheet());
   await p.fill('#q','');await p.waitForTimeout(250);ok(await ev(()=>!document.querySelector('#qsugg .qsugg-row')),'clearing the search clears the suggestions');
@@ -128,7 +141,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>{techSheet('rnc');return /If they defend, switch to/.test([...document.querySelectorAll('#sheet .flowsec')][1].innerText)}),'a submission says what to switch to if they defend');
   await ev(()=>closeSheet());
   // --- curriculum search keeps keyboard focus; filters; collapsible
-  await p.tap('nav.tabs [data-v="learn"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
   ok(await ev(()=>document.activeElement&&document.activeElement.id==='q'),'search keeps focus while typing');
   ok(await ev(()=>{const rows=[...document.querySelectorAll('#learn-groups details.grp[open] .trow')];const ids=searchTechIds('armbar');return rows.length===ids.size&&rows.length>=3&&rows.some(r=>/defense/i.test(r.innerText))&&rows.some(r=>/^Armbar/m.test(r.innerText))}),'search "armbar" finds attacks and defenses, across belts');
   await p.locator('#q').fill('zzzz');await p.waitForTimeout(250);await p.locator('[data-a="clearq"]').tap();
@@ -136,9 +149,9 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="filter"][data-v="plus"]').tap();ok(await ev(()=>document.querySelectorAll('#learn-groups .trow').length===TECH.filter(t=>t.p==='plus'&&beltOf(t)==='blue').length),'bonus filter');
   await p.locator('[data-a="filter"][data-v="all"]').first().tap();
   // --- solo drills
-  await p.tap('nav.tabs [data-v="today"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
+  await p.tap('nav.tabs [data-v="home"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
   // --- settings: hand, numbers, backup, import, reset
-  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.locator('[data-a="hand"][data-v="right"]').tap();ok(await ev(()=>document.documentElement.classList.contains('righty')),'right-hand mode');
+  await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.locator('[data-a="hand"][data-v="right"]').tap();ok(await ev(()=>document.documentElement.classList.contains('righty')),'right-hand mode');
   await p.locator('[data-a="hand"][data-v="left"]').tap();
   await p.locator('#s-pw').fill('3');ok(await ev(()=>P().settings.perWeek===3),'sessions per week saved');
   await p.locator('[data-a="export"]').tap();await p.waitForTimeout(100);
@@ -149,7 +162,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="importshow"]').tap();await p.locator('#importtxt').fill(backup);await p.locator('[data-a="importdo"]').tap();
   ok(await ev(()=>Object.keys(P().mastery).length>=54),'backup restores ratings');
   // --- photos (account mode only)
-  if(MODE==='db'){await p.tap('nav.tabs [data-v="flow"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();
+  if(MODE==='db'){await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
     await p.setInputFiles('#ph-hg_bot',{name:'a.png',mimeType:'image/png',buffer:png});await p.waitForTimeout(800);
     ok(await ev(()=>!!P().photos.hg_bot&&!!document.querySelector('.panel .photo img')&&!document.querySelector('.panel .posfig')),'photo upload replaces diagram');
@@ -157,31 +170,32 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     // reload: data comes back from the account
     await p.waitForTimeout(900);await p.reload();await p.waitForTimeout(500);
     ok(await ev(()=>Object.keys(P().mastery).length>=54&&P().notes.knee_cut==='Underhook first!'),'db: progress survives reload');
-    await p.tap('nav.tabs [data-v="today"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
+    await p.tap('nav.tabs [data-v="home"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
   }
   // --- belt stages
-  await p.tap('nav.tabs [data-v="learn"]');
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');
   for(const k of ['purple','brown','black','blue']){await p.locator(`.beltchips [data-v="${k}"]`).tap();const r=await ev(k=>({n:document.querySelectorAll('#learn-groups .trow').length,want:TECH.filter(t=>beltOf(t)===k).length}),k);ok(r.n===r.want&&r.want>0,`belt stage ${k} lists ${r.n} of ${r.want}`);await overflow('belt '+k)}
-  await p.locator('.beltchips [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
+  await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltchips [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
   ok(await ev(()=>goal()==='purple'&&rateable().length>54&&curBlocks()!==BLOCKS&&curBlocks().every(b=>b.ids.every(id=>TM[id]))),'purple goal changes blocks and rating scope');
   await p.locator('.bstage details.grp summary').first().tap();await p.locator('.bstage [data-a="comp"]').first().tap();ok(await ev(()=>(P().comp.purple||[]).length===1),'coach checklist ticks');
-  await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/Purple-belt skill readiness/.test(document.body.innerText)&&!!document.querySelector('.belt .b.blue')),'Today shows purple goal on a blue belt');await overflow('today purple');
-  await p.tap('nav.tabs [data-v="flow"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
+  ok(await ev(()=>/Purple-belt skill readiness/.test(document.body.innerText)&&!!document.querySelector('.belt .b.blue')),'Belt shows purple goal on a blue belt');await overflow('belt purple');
+  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/ready for Purple belt/.test(document.querySelector('.lprog').innerText)),'Home shows a short progress line for the goal');await overflow('home purple');
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
   const upTo=await ev(()=>document.querySelectorAll('.list .trow').length);await p.locator('[data-a="flowbelt"][data-v="black"]').tap();const all=await ev(()=>document.querySelectorAll('.list .trow').length);
   await p.locator('[data-a="flowbelt"][data-v="blue"]').tap();const blueOnly=await ev(()=>document.querySelectorAll('.list .trow').length);ok(all>=upTo&&upTo>=blueOnly&&all>blueOnly,`flow belt filter (${blueOnly} ≤ ${upTo} ≤ ${all})`);
-  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
+  await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
   // --- video (account mode)
   if(MODE==='db'){await ev(()=>techSheet('knee_cut'));
     await p.setInputFiles('#vid-knee_cut',{name:'big.mp4',mimeType:'video/mp4',buffer:Buffer.alloc(21*1024*1024,1)});await p.waitForTimeout(200);
     ok(await ev(()=>/limit is 20 MB/.test(document.getElementById('toast').textContent)&&!P().videos.knee_cut),'oversized video rejected with message');
     await p.setInputFiles('#vid-knee_cut',{name:'clip.mov',mimeType:'video/quicktime',buffer:Buffer.alloc(4096,1)});await p.waitForTimeout(1500);
     ok(await ev(()=>!!P().videos.knee_cut&&!!document.querySelector('#sheet video#vidplayer')&&/Play video/.test(document.getElementById('sheetbar').innerText)),'video uploads and plays in the technique page');
-    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
+    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
     ok(await ev(()=>!!document.querySelector('.trow[data-v="knee_cut"] .thumb .play')),'technique row shows video marker');
     await ev(()=>techSheet('knee_cut'));await p.locator('[data-a="viddel"]').tap();await p.locator('[data-a="viddelyes"]').tap();ok(await ev(()=>!P().videos.knee_cut&&!document.querySelector('#sheet video')),'video removed');await p.tap('#sheetbar .back');
   }
   // --- chains: every attacking position has a tree; mirrors show defenses
-  await p.tap('nav.tabs [data-v="flow"]');
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');
   for(const k of await ev(()=>Object.keys(CHAINS))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
     const r=await ev(k=>({att:document.querySelectorAll('ul.tree.root')[0]?.querySelectorAll('.tnode').length||0,first:document.querySelector('.tree .tnode')?.dataset.v}),k);ok(r.att>0,`attack chain renders for ${k}`)}
   for(const [k,o] of await ev(()=>Object.entries(OPP).filter(([k,o])=>CHAINS[o]))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
@@ -191,17 +205,17 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('.tnode[data-v="triangle"]').first().tap();ok((await sheetH1())==='Triangle choke','chain node opens technique');await p.tap('#sheetbar .back');
   await overflow('flow chains');
   // --- defense filter and tapped-by -> defense
-  await p.tap('nav.tabs [data-v="learn"]');await p.locator('[data-a="filter"][data-k="kind"][data-v="def"]').tap();
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('[data-a="filter"][data-k="kind"][data-v="def"]').tap();
   ok(await ev(()=>{const r=[...document.querySelectorAll('#learn-groups .trow')].map(b=>TM[b.dataset.v]);return r.length>15&&r.every(t=>isDef(t))}),'defense filter shows only escapes and defenses');
   await p.locator('[data-a="filter"][data-k="kind"][data-v="all"]').tap();
-  await p.tap('nav.tabs [data-v="log"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
+  await p.tap('nav.tabs [data-v="journal"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'log links rear-naked choke to its defense');
-  await p.tap('nav.tabs [data-v="today"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
+  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
   // --- name, Belts tab, belt path
   ok(await ev(()=>document.title==='JitsFlow'&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
-  ok(await ev(()=>document.querySelector('nav.tabs [data-v="learn"]').textContent.trim()==='Belts'),'tab is called Belts');
-  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="today"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
-    ok(await ev(k=>location.hash==='#learn'&&document.querySelector(`.beltchips [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
+  ok(await ev(()=>document.querySelector('nav.tabs [data-v="learn"]').textContent.trim()==='Learn'),'tab is called Learn');
+  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="learn-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
+    ok(await ev(k=>location.hash==='#learn-belt'&&document.querySelector(`.beltchips [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
   // --- glossary terms
   await ev(()=>techSheet('hg_frames'));const terms=await ev(()=>[...document.querySelectorAll('#sheet .term')].map(b=>b.dataset.v));
   ok(terms.includes('Underhook')&&terms.length>=4,`technique page has tappable terms (${terms.join(', ')})`);
@@ -226,20 +240,20 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     await p.tap('#sheetbar .back');
   }else{await p.tap('#sheetbar .back')}
   // --- weekly plan, training days, coach review, video embed
-  await p.tap('nav.tabs [data-v="today"]');
+  await p.tap('nav.tabs [data-v="home"]');
   ok(await ev(()=>document.querySelectorAll('.week .wd').length===7&&document.querySelectorAll('.week .wd.cls').length===(P().settings.days||[]).length&&!!document.querySelector('.week .wd.today')),'this week shows 7 days with class days and today');
   await p.locator('.week .wd.cls').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'class day opens its technique');await p.tap('#sheetbar .back');
-  await p.tap('nav.tabs [data-v="settings"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));const before=await ev(()=>P().settings.days.length);await p.locator('[data-a="day"][data-v="5"]').tap();
+  await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));const before=await ev(()=>P().settings.days.length);await p.locator('[data-a="day"][data-v="5"]').tap();
   ok(await ev(n=>P().settings.days.length===n+1&&P().settings.perWeek===n+1,before),'adding a training day updates the plan');await p.locator('[data-a="day"][data-v="5"]').tap();
   await ev(()=>techSheet('buggy_choke'));ok(await ev(()=>/Check with your coach/.test(document.querySelector('.coachbox').innerText)),'flagged move asks for a coach check');
   await p.locator('[data-a="coachok"]').tap();ok(await ev(()=>coachOK('buggy_choke')&&/Coach checked/.test(document.querySelector('.coachbox').innerText)),'coach check can be ticked');await p.tap('#sheetbar .back');
-  await p.tap('nav.tabs [data-v="learn"]');await p.locator('.beltchips [data-v="black"]').tap();
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltchips [data-v="black"]').tap();
   ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltchips [data-v="blue"]').tap();
   await ev(()=>{window.__savedVid=VIDS.knee_cut;VIDS.knee_cut={v:'dQw4w9WgXcQ',title:'Knee cut pass',channel:'Test Channel',nogi:true};techSheet('knee_cut')});
   if(MODE==='local'){
     ok(await ev(()=>{const f=document.querySelector('#sheet .ytembed iframe');return f&&/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/.test(f.src)&&f.getAttribute('loading')==='lazy'&&/autoplay/.test(f.getAttribute('allow'))&&/Test Channel/.test(document.querySelector('#sheet .ytcap').innerText)&&!document.querySelector('#sheet .ytface')}),'technique page shows YouTube\'s own player (lazy-loaded), so one tap plays it');
     ok(await ev(()=>/More Knee cut pass videos on YouTube/.test(document.querySelector('#sheet a.yt:not(.ytpick)').innerText)),'search button stays as "More videos"');
-    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
+    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
     ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/mqdefault/.test((document.querySelector('.trow[data-v="knee_cut"] .thumb img')||{}).src||'')),'technique list uses the video thumbnail');
   }else{
     ok(await ev(()=>!document.querySelector('#sheet .ytembed,#sheet .ytface')&&/youtube\.com\/watch\?v=dQw4w9WgXcQ/.test((document.querySelector('#sheet a.ytpick')||{}).href||'')),'claude.ai links to the picked video instead of embedding');

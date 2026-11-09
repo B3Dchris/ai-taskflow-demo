@@ -69,7 +69,7 @@ function clientIp(req) {
 
 // Who's signed in, with their gym and its head coach (only while that coach is still an active coach there).
 const ME_COLS = `u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup,
-  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, g.private_price_cents as gym_private_cents, h.id as head_id, h.name as head_name`;
+  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, g.access_mode, g.private_plan_ids, g.private_price_cents as gym_private_cents, h.id as head_id, h.name as head_name`;
 const ME_JOIN = "left join gyms g on g.id=u.gym_id left join users h on h.id=g.head_coach_id and h.gym_id=g.id and h.role='coach' and h.active";
 
 function makeApi(pool, { secureCookies }) {
@@ -440,12 +440,16 @@ function makeApi(pool, { secureCookies }) {
     // Students see what each private costs them: from a pack, at the price locked in when they booked, or at today's price for them.
     if (!coach && u.role === "student" && r.rows.some((c) => c.kind === "private")) {
       const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null, pv = (await privatesOf(u.gym_id, [u.id], tzOf(u), await todayIn(u)))[u.id];
+      // Private-only clients on a gym with an access fee pay it once in each month they have a private: say so before they book.
+      const fee = memberOf(u, plan, u) ? 0 : accessFee(u);
       for (const c of out) if (c.kind === "private") {
         const b = pv.prices[c.id], day = dayIn(c.startsAt, tzOf(u)), now = privatePrice(u, plan, u, c.priceCents);
         c.myPrice = b ? { cents: b.cents, label: b.label, pack: b.covered, left: pv.left } : { cents: now.cents, label: now.label, pack: pv.left > 0 && (!pv.until || day < pv.until), left: pv.left };
+        if (!b && fee > 0 && !pv.months.has(day.slice(0, 7))) Object.assign(c.myPrice, { accessCents: fee, month: day.slice(0, 7) });
       }
     }
-    res.json({ classes: out, showAttendees: u.show_attendees !== false });
+    const pa = coach ? null : await privateAccess(u);
+    res.json({ classes: out, showAttendees: u.show_attendees !== false, ...(pa ? { privateAccess: pa } : {}) });
   }));
 
   function readClass(b) {
@@ -566,7 +570,9 @@ function makeApi(pool, { secureCookies }) {
   // A plan's weekly limit counts bookings and waitlist places (someone waiting can be moved in later). Call inside the transaction.
   async function canBook(db, u, c) {
     if (u.active === false) fail(403, "Your gym has marked you as inactive. Talk to your coach to book classes.");
-    if (u.role !== "student" || !u.plan_id) return;
+    if (u.role !== "student") return;
+    if (c.kind === "private") { const pa = await privateAccess(u, db); if (pa) fail(403, pa.status ? pa.message : `${pa.message} Your coach can put you on it.`); }
+    if (!u.plan_id) return;
     if (u.plan_status === "paused" || u.plan_status === "cancelled") fail(403, `Your membership is ${u.plan_status}. Talk to your coach to book classes.`);
     const p = (await db.query("select * from plans where id=$1", [u.plan_id])).rows[0];
     if (p && p.classes_per_week && c.kind !== "private") {
@@ -764,12 +770,30 @@ function makeApi(pool, { secureCookies }) {
   const realPlan = (p) => !!p && !/^(none|no plan)$/i.test(String(p.name || "").trim());
   const membershipOf = (x, plan, gym) => feeOff(x.plan_status) ? 0 : x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? gym.gym_fee ?? 0;
   const memberOf = (x, plan, gym) => (realPlan(plan) && !feeOff(x.plan_status)) || membershipOf(x, plan, gym) > 0;
+  // The access fee only applies when the gym picked it ('fee'): 'none' charges just the private, 'membership' needs a plan to book.
+  const accessFee = (gym) => (gym.access_mode || "fee") === "fee" ? gym.access_fee_cents || 0 : 0;
   function duesFor(x, plan, gym, priv, month) {
-    const membershipCents = membershipOf(x, plan, gym), member = memberOf(x, plan, gym);
-    const accessCents = !member && gym.access_fee_cents > 0 && priv && priv.months.has(month) ? gym.access_fee_cents : 0;
+    const membershipCents = membershipOf(x, plan, gym), member = memberOf(x, plan, gym), fee = accessFee(gym);
+    const accessCents = !member && fee > 0 && priv && priv.months.has(month) ? fee : 0;
     const privates = priv ? priv.owed.filter((o) => o.month === month && o.priceCents > 0).map((o) => ({ classId: o.classId, title: o.title, startsAt: o.startsAt, priceCents: o.priceCents, label: o.label || "" })) : [];
     const privatesCents = privates.reduce((t, o) => t + o.priceCents, 0);
     return { membershipCents, accessCents, privatesCents, privates, dueCents: membershipCents + accessCents + privatesCents };
+  }
+  // Gyms on 'membership' only let students on one of the plans they ticked (and not paused or cancelled) book a private.
+  // null: this student can book. Otherwise the plans that allow privates (the ones still offered, if any are), and what to tell them.
+  // u needs role, gym_id, plan_id, plan_status, access_mode and private_plan_ids (the signed-in user has them).
+  async function privateAccess(u, db = pool) {
+    if (u.role !== "student" || u.access_mode !== "membership") return null;
+    const ids = (u.private_plan_ids || []).map(String);
+    const onIt = u.plan_id && ids.includes(String(u.plan_id));
+    if (onIt && !feeOff(u.plan_status)) return null;
+    // On a plan that allows privates, but it's paused or cancelled: restarting it is what they need, not joining.
+    if (onIt) { const p = (await db.query("select * from plans where id=$1", [u.plan_id])).rows[0];
+      return { plans: p ? [planOut(p)] : [], status: u.plan_status, message: `Your ${p ? p.name + " " : ""}membership is ${u.plan_status}. Ask your coach to restart it to book privates.` }; }
+    const all = (await db.query("select * from plans where gym_id=$1 and id = any($2::bigint[]) order by price_cents, name", [u.gym_id, ids])).rows;
+    const ps = all.some((p) => p.active) ? all.filter((p) => p.active) : all;
+    const names = ps.map((p) => p.name), list = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] || "a";
+    return { plans: ps.map(planOut), message: `Join the ${list} membership to book privates.` };
   }
   // ---------- private-lesson price tiers ----------
   // What a private costs someone with no pack lesson for it. Someone on an active (or trial) plan with a private price pays that.
@@ -817,8 +841,11 @@ function makeApi(pool, { secureCookies }) {
     const st = await q("select id from users where id = any($1) and gym_id=$2", [ids, u.gym_id]);
     if (st.rows.length !== ids.length || !ids.length) fail(404, "That student isn't in your gym.");
     const had = new Set((await q("select user_id from attendance where class_id=$1 and user_id = any($2) and (going or attended)", [c.id, ids])).rows.map((x) => String(x.user_id)));
-    for (const sid of ids) await q(`insert into attendance(class_id,user_id,going,attended) values($1,$2,true,$3)
-             on conflict(class_id,user_id) do update set attended=excluded.attended, going=attendance.going or excluded.attended, waitlisted=false, updated_at=now()`, [c.id, sid, req.body?.attended !== false]);
+    // going: true adds them as booked (a coach putting someone on a class or private), without touching a check-in they already have.
+    const book = req.body?.going === true;
+    for (const sid of ids) await q(`insert into attendance(class_id,user_id,going,attended,booked_at) values($1,$2,true,$3,clock_timestamp())
+             on conflict(class_id,user_id) do update set attended=case when $4 then attendance.attended or excluded.attended else excluded.attended end,
+               going=attendance.going or excluded.attended or $4, waitlisted=false, updated_at=now()`, [c.id, sid, req.body?.attended !== false, book]);
     // Someone the coach adds to a private gets today's price for them, locked in like a booking.
     await lockPrice(pool, c, ids.filter((x) => !had.has(String(x))));
     res.json({ ok: true, count: ids.length });
@@ -857,7 +884,7 @@ function makeApi(pool, { secureCookies }) {
   api.get("/coach/roster", wrap(async (req, res) => {
     const u = needCoach(req), { plans, rows } = await rosterRows(u);
     if (!isHead(u)) return res.json({ currency: u.currency, people: rows.map(noMoney) });
-    res.json({ gymFeeCents: u.gym_fee, accessFeeCents: u.access_fee_cents || 0, currency: u.currency, plans: plans.map(planOut), people: rows });
+    res.json({ gymFeeCents: u.gym_fee, accessFeeCents: accessFee(u), currency: u.currency, plans: plans.map(planOut), people: rows });
   }));
 
   async function ownStudent(u, id) {
@@ -1323,6 +1350,13 @@ function makeApi(pool, { secureCookies }) {
     const g = r.rows[0];
     res.json({ gym: { id: String(g.id), name: g.name, currency: g.currency, profile: g.profile || {}, updatedAt: g.profile_updated_at, logo: g.logo_v ? `/api/gyms/${g.id}/logo?v=${g.logo_v}` : null } });
   }));
+  // The first screen checks a gym code before sign-up ("Joining Lions BJJ"). Just the name; an unknown code is { gym: null }.
+  api.get("/gyms/by-code/:code", wrap(async (req, res) => {
+    if (limited("code:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
+    const c = clean(req.params.code, 20).toUpperCase();
+    const g = c ? (await q("select name, (coach_code=$1) as coach from gyms where student_code=$1 or coach_code=$1", [c])).rows[0] : null;
+    res.json({ gym: g ? { name: g.name, coach: !!g.coach } : null });
+  }));
   api.get("/gyms/:id/logo", wrap(async (req, res) => {
     const r = await q("select logo, logo_type from gyms where id=$1 and logo is not null", [intOr(req.params.id, 0)]);
     if (!r.rows[0]) return res.status(404).json({ error: "No logo." });
@@ -1485,7 +1519,7 @@ function makeApi(pool, { secureCookies }) {
     const u = needHead(req), g = (await q("select pay, pop_token, pop_notice from gyms where id=$1", [u.gym_id])).rows[0];
     let tok = g.pop_token;
     if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
-    res.json({ pay: g.pay || {}, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, privateCents: u.gym_private_cents ?? null });
+    res.json({ pay: g.pay || {}, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, accessMode: u.access_mode || "fee", privatePlanIds: (u.private_plan_ids || []).map(String), privateCents: u.gym_private_cents ?? null });
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
     const u = needHead(req), pay = readPaySettings(req.body || {});
@@ -1500,12 +1534,21 @@ function makeApi(pool, { secureCookies }) {
     await q("update gyms set pay = coalesce(pay,'{}'::jsonb) || $1 where id=$2", [{ cardSoon: on }, u.gym_id]);
     res.json({ cardSoon: on });
   }));
-  // Clients who only take private lessons pay this each month they book one (0 switches it off).
+  // What clients who only take private lessons need: mode 'none' (just the private's price), 'fee' (an access fee each month
+  // they book one; 0 switches it off) or 'membership' (one of planIds to book a private). No mode is 'fee', as before modes.
+  // The fee and plans not in use are kept, so switching back brings them back.
   api.patch("/coach/gym/access-fee", wrap(async (req, res) => {
-    const u = needHead(req), c = intOr(req.body?.accessFeeCents, NaN);
-    if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, "Enter the access fee, or 0 to switch it off.");
-    await q("update gyms set access_fee_cents=$1 where id=$2", [c, u.gym_id]);
-    res.json({ accessFeeCents: c });
+    const u = needHead(req), b = req.body || {}, mode = b.mode === undefined ? "fee" : b.mode;
+    if (!["none", "fee", "membership"].includes(mode)) fail(400, "Pick what clients who only take private lessons pay.");
+    let c = u.access_fee_cents || 0, ids = (u.private_plan_ids || []).map(String);
+    if (mode === "fee" || b.accessFeeCents !== undefined) { c = intOr(b.accessFeeCents, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, "Enter the access fee, or 0 to switch it off."); }
+    if (mode === "membership" || b.planIds !== undefined) {
+      ids = [...new Set((Array.isArray(b.planIds) ? b.planIds : []).map((x) => intOr(x, 0)).filter(Boolean))].slice(0, 50);
+      if ((await q("select id from plans where gym_id=$1 and id = any($2::bigint[])", [u.gym_id, ids])).rows.length !== ids.length) fail(404, "That plan doesn't exist.");
+      if (mode === "membership" && !ids.length) fail(400, "Tick the plans that allow private lessons.");
+    }
+    await q("update gyms set access_mode=$1, access_fee_cents=$2, private_plan_ids=$3::bigint[] where id=$4", [mode, c, ids, u.gym_id]);
+    res.json({ accessMode: mode, accessFeeCents: c, privatePlanIds: ids.map(String) });
   }));
   // What a private lesson costs a client without a membership (null: the slot's own price). Bookings already made keep their price.
   api.patch("/coach/gym/private-price", wrap(async (req, res) => {
@@ -1549,7 +1592,8 @@ function makeApi(pool, { secureCookies }) {
     const recent = (await q(`select ${PAY_COLS} from payments p where p.user_id=$1 and p.gym_id=$2 and p.paid_on > current_date - 200 order by p.paid_on desc, p.id desc limit 12`, [u.id, u.gym_id])).rows;
     const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null, pv = (await privatesOf(u.gym_id, [u.id], tzOf(u), today))[u.id];
     const d = duesFor(u, plan, u, pv, today.slice(0, 7)), packs = (await q("select * from packs where gym_id=$1 and active order by lessons, price_cents", [u.gym_id])).rows.map(packOut);
-    res.json({ pay: { dueCents: d.dueCents, membershipCents: d.membershipCents, accessCents: d.accessCents, privatesCents: d.privatesCents, privates: d.privates,
+    const pa = await privateAccess(u);
+    res.json({ pay: { dueCents: d.dueCents, privateAccess: pa, membershipCents: d.membershipCents, accessCents: d.accessCents, privatesCents: d.privatesCents, privates: d.privates,
       paidCents: Number(sums.paid), pendingCents: Number(sums.pending), currency: u.currency || "ZAR", privatesLeft: privOut(pv), packs,
       reference: await payRef(u.id), bank: g.pay || {}, card: !!pfLive(pfOf(g)), payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
   }));
@@ -1678,7 +1722,7 @@ function makeApi(pool, { secureCookies }) {
       hist.push({ month: m, collectedCents: col, expectedCents: rows.filter((x) => new Date(x.created_at).toISOString().slice(0, 10) < nx).reduce((a, x) => a + x.dues(m).dueCents, 0) });
     }
     const g = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0];
-    res.json({ month, today, currency: u.currency || "ZAR", accessFeeCents: u.access_fee_cents || 0, dueDay: Math.min(28, Math.max(1, intOr((g.pay || {}).dueDay, 1))), students, methods, history: hist,
+    res.json({ month, today, currency: u.currency || "ZAR", accessFeeCents: accessFee(u), dueDay: Math.min(28, Math.max(1, intOr((g.pay || {}).dueDay, 1))), students, methods, history: hist,
       collectedCents: Number(total.c), unmatchedCents: Number(total.unmatched), pendingCents: Number(total.pending) });
   }));
   // Fee reminders by email (WhatsApp reminders are sent from the coach's phone).

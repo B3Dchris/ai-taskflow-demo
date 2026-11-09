@@ -18,6 +18,10 @@ const XSS = `<img src=x onerror="window.__x=1">`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await wait(150); } }
   const b = await chromium.launch();
+  // No text sends people to tabs that no longer exist (Today, Settings, the Coach tab, a Classes tab for bank details).
+  { const fs = require("fs"), src = ["../src/app.html", "../src/accounts.js", "../backend/api.js", "../backend/mail.js"].map((f) => fs.readFileSync(path.resolve(__dirname, f), "utf8")).join("\n");
+    const old = src.split("\n").filter((l) => !/^\s*(\/\/|\/\*)/.test(l)).join("\n").match(/.{0,40}(Today screen|in Settings\.|Settings\.<|Classes tab|Coach tab)/g) || [];
+    ok(!old.length, "no text names the old tabs: " + old.join(" | ")); }
   try {
     // ---- a busy gym
     const g1 = (await pool.query("insert into gyms(name,student_code,coach_code,profile) values($1,'STUDENT1','COACHAA1',$2) returning id",
@@ -44,11 +48,11 @@ const XSS = `<img src=x onerror="window.__x=1">`;
     await pool.query("insert into training_logs(user_id,id,date,data) select $1, 'l'||g, current_date-g, jsonb_build_object('date', (current_date-g)::text, 'type','Class','mins',90,'rolls',5,'worked',$2::text) from generate_series(1,40) g", [studs[0].id, "Worked " + XSS]);
 
     const SCREENS = {
-      anon: ["today", "learn", "flow", "log", "settings"],
-      student: ["today", "learn", "flow", "log", "book", "book:private", "book:comps", "settings"],
-      coach: ["coach-today", "coach-classes", "coach-classes:month", "coach-students", "coach-students:insights", "coach-comps", "coach-money", "coach-money:payments", "coach-money:setup", "coach-gym"],
-      study: ["today", "learn", "flow", "log", "settings"],
-      coach2: ["coach-today", "coach-classes", "coach-students", "coach-students:insights", "coach-comps", "coach-gym"],
+      anon: ["home", "learn", "learn-map", "learn-belt", "journal", "me"],
+      student: ["home", "learn", "learn-map", "learn-belt", "journal", "classes", "classes:private", "classes:comps", "me"],
+      coach: ["coach-home", "coach-schedule", "coach-schedule:month", "coach-members", "coach-members:insights", "coach-comps", "coach-money", "coach-money:payments", "coach-money:setup", "coach-gym"],
+      study: ["home", "learn", "learn-map", "learn-belt", "journal", "me"],
+      coach2: ["coach-home", "coach-schedule", "coach-members", "coach-members:insights", "coach-comps", "coach-gym"],
     };
     const roles = { anon: null, student: studs[0].tok, coach: coach.tok, study: coach.tok, coach2: coach2.tok };
     for (const [sizeName, dev] of SIZES) for (const scheme of ["light", "dark"]) for (const [role, tok] of Object.entries(roles)) {
@@ -56,22 +60,24 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       if (tok) await ctx.addCookies([{ name: "jf_s", value: tok, url: URL }]);
       await ctx.addInitScript((r) => { try { if (r === "study") localStorage.setItem("jf.coachMode", "study"); if (r === "anon") localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); } catch (e) {} }, role);
       const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message)); p.on("dialog", (d) => { errs.push("dialog opened: " + d.message()); d.dismiss(); });
-      await p.goto(URL + "/app/" + (role === "coach" || role === "coach2" ? "#coach-today" : "#today")); await p.waitForTimeout(1600);
+      await p.goto(URL + "/app/" + (role === "coach" || role === "coach2" ? "#coach-home" : "#today")); await p.waitForTimeout(1600);
       await p.evaluate(async () => { if (S.ui.sheet) { if (S.ui.sheet.k === "onboard") { P().settings.onboarded = true; saveProgress(); } hideSheet(); } });
       const tag = `${role} · ${sizeName} · ${scheme}`;
       const navOk = await p.evaluate((r) => { const vis = [...document.querySelectorAll("nav.tabs button")].filter((x) => !x.hidden).map((x) => x.dataset.v || x.dataset.a);
-        if (r === "coach") return vis.join() === "coach-today,coach-classes,coach-students,coach-comps,coach-money,coach-gym";
-        if (r === "coach2") return vis.join() === "coach-today,coach-classes,coach-students,coach-comps,coach-gym";
-        if (r === "student") return vis.join() === "today,learn,flow,log,book,settings";
-        if (r === "study") return vis.join() === "today,learn,flow,log,manage,settings";
-        return vis.join() === "today,learn,flow,log,settings"; }, role);
+        if (r === "coach") return vis.join() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym";
+        if (r === "coach2") return vis.join() === "coach-home,coach-schedule,coach-members,coach-gym";
+        if (r === "student") return vis.join() === "home,classes,learn,journal,me";
+        if (r === "study") return vis.join() === "home,learn,journal,me" && /^Manage /.test(document.querySelector(".managebtn").textContent);
+        return vis.join() === "home,learn,journal,me"; }, role);
       ok(navOk, `${tag}: the bottom bar shows the right tabs`);
+      ok(await p.evaluate(() => { const h = document.querySelector("header.top"), b = h && h.querySelector(".brand"), r = h && h.querySelector(".row"); if (!b || !r) return false; const A = b.getBoundingClientRect(), B = r.getBoundingClientRect();
+        return (A.right <= B.left + 1 || A.bottom <= B.top + 1) && [...document.querySelectorAll("nav.tabs button:not([hidden])")].every((x) => x.scrollWidth <= x.clientWidth + 1); }), `${tag}: header and tab labels fit without overlapping`);
       for (const scr of SCREENS[role]) {
         const [tab, sub] = scr.split(":");
-        const ms = await p.evaluate(async ([tab, sub]) => { hideSheet(); if (sub === "month") calState("coach").mode = "month"; if (tab === "coach-classes" && !sub) calState("coach").mode = "week";
-          if (tab === "coach-students") COACH.stuView = sub === "insights" ? "insights" : "list"; if (tab === "book") S.ui.bookView = sub || "classes"; if (tab === "coach-money") COACH.moneyView = sub || "month";
+        const ms = await p.evaluate(async ([tab, sub]) => { hideSheet(); if (sub === "month") calState("coach").mode = "month"; if (tab === "coach-schedule" && !sub) calState("coach").mode = "week";
+          if (tab === "coach-members") COACH.stuView = sub === "insights" ? "insights" : "list"; if (tab === "classes") S.ui.bookView = sub || "classes"; if (tab === "coach-money") COACH.moneyView = sub || "month";
           const t = performance.now(); go(tab); return performance.now() - t; }, [tab, sub]);
-        await p.waitForTimeout((tab === "coach-students" && sub === "insights") || (tab === "coach-money" && !sub) ? 1100 : 350);
+        await p.waitForTimeout((tab === "coach-members" && sub === "insights") || (tab === "coach-money" && !sub) ? 1100 : 350);
         const r = await p.evaluate(() => ({ w: document.documentElement.scrollWidth, vw: innerWidth, len: document.getElementById("app").innerText.length, loading: /Loading/.test(document.getElementById("app").innerText.slice(0, 400)), x: !!window.__x, raw: /onerror=/.test(document.getElementById("app").innerText) ? 1 : 0 }));
         ok(r.w <= r.vw, `${tag} · ${scr}: nothing wider than the screen (${r.w} > ${r.vw})`);
         ok(r.len > 60 && !r.loading, `${tag} · ${scr}: screen has content (not stuck loading)`);

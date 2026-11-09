@@ -1,6 +1,6 @@
 /* ============ ACCOUNTS, SYNC, CLASSES AND THE COACH DASHBOARD (website only) ============ */
 const API={on:false,me:null,classes:null,classesAt:0,status:{}};
-const COACH={view:"today",roster:null,classes:null,payments:null,loading:false,q:""};
+const COACH={view:"home",roster:null,classes:null,payments:null,loading:false,q:""};
 async function api(method,url,body){
   const h=method==="GET"?{}:{"content-type":"application/json","x-jf":"1"};
   const r=await fetch("/api"+url,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin"});
@@ -26,6 +26,7 @@ async function acctInit(){
     if(API.me)await startSync();else if(lsGet("rtb.owner")){wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
+  S.ui.deep=["signin","start","join","claim","reset"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
   const rt=qs.get("reset");
@@ -40,7 +41,8 @@ async function acctInit(){
     if(bill==="cancel")setTimeout(()=>toast("No card added. You can add one any time under Gym."),400)}
   const q=qs.get("join");
   if(q){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
-    if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();setTimeout(authSheet,50)}
+    if(API.on&&!API.me){S.ui.authMode="register";S.ui.authCode=q.toUpperCase();S.ui.authGym=null;
+      api("GET","/gyms/by-code/"+encodeURIComponent(S.ui.authCode)).then(j=>{S.ui.authGym=j.gym&&j.gym.name}).catch(()=>{}).finally(()=>setTimeout(authSheet,50))}
     else if(API.me&&!API.me.gym){S.ui.joinCode=q.toUpperCase();setTimeout(joinSheet,50)}}
   render();
 }
@@ -67,9 +69,9 @@ async function startSync(opts){
 }
 function apiSaveProgress(){clearTimeout(apTimer);apTimer=setTimeout(async()=>{apTimer=null;try{await api("PUT","/progress",{data:clone(S.progress)});apDirty=false;if(S.syncState==="err")setSync("Saved to your account","db")}catch(e){apDirty=true;setSync("Offline: saved on this device","err")}},700)}
 addEventListener("online",()=>{if(S.mode==="api"&&apDirty)apiSaveProgress()});
-async function signedIn(me,opts){API.me=me;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();if(isCoach())setCoachMode("manage");else maybeOnboardAfterSync();isCoach()?coachGo("today"):go("today");toast(`Signed in as ${me.name}.`)}
+async function signedIn(me,opts){API.me=me;S.ui.fromHow=false;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();if(isCoach())setCoachMode("manage");else maybeOnboardAfterSync();isCoach()?coachGo("home"):go("home");toast(`Signed in as ${me.name}.`)}
 function maybeOnboardAfterSync(){S.ui.obChecked=false;if(!P().settings.onboarded)maybeOnboard()}
-async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;COACH.packs=COACH.payInfo=COACH.pf=COACH.bill=undefined;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("today");toast("Signed out. Your progress is saved in your account, not on this phone.")}
+async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;COACH.packs=COACH.payInfo=COACH.pf=COACH.bill=undefined;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("home");toast("Signed out. Your progress is saved in your account, not on this phone.")}
 
 /* ----- account sheets ----- */
 function authSheet(){
@@ -78,6 +80,7 @@ function authSheet(){
   const tabs=[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
   openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
    <div class="seg3">${tabs.map(([k,l])=>`<button type="button" data-a="authmode" data-v="${k}" aria-pressed="${m===k}">${l}</button>`).join("")}</div>
+   ${m==="register"&&S.ui.authGym&&c?`<p class="panel accent small" id="a-joining">Joining <b>${esc(S.ui.authGym)}</b>.</p>`:""}
    <p class="muted">${m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
    <form id="authform" class="stack" novalidate>
     ${m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label><label class="f">Your gym's website (optional)<input id="a-site" name="site" type="text" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="url" placeholder="yourgym.co.za"><span class="small muted">We'll read your timetable, prices, coaches and logo while you look around.</span></label>`:""}
@@ -86,7 +89,7 @@ function authSheet(){
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
     ${m==="register"?`<label class="f">Gym code (optional)<input id="a-code" name="code" value="${esc(c)}" autocapitalize="characters" placeholder="From your coach"></label><label class="f">WhatsApp number (optional)<input id="a-wa" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="082 123 4567"><span class="small muted">Only your coaches see it.</span></label>`:""}
     ${m==="login"?`<p class="small"><button type="button" class="linkbtn" data-a="authmode" data-v="forgot">Forgot your password?</button></p>`:""}
-    ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Settings.</p>`:""}
+    ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Me.</p>`:""}
    </form></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}</button>`});
 }
 function resetSheet(m){
@@ -148,19 +151,19 @@ function accountSection(){
 
 /* ----- next class (students and coaches) ----- */
 async function loadClasses(force){if(!API.me||!API.me.gym)return;if(!force&&API.classes&&Date.now()-API.classesAt<60000)return;
-  try{const j=await api("GET","/classes");API.classes=j.classes;API.classesAt=Date.now();if((S.ui.tab==="today"||S.ui.tab==="book")&&(!S.ui.sheet||S.ui.sheet.k==="book"))S.ui.sheet&&S.ui.sheet.k==="book"?bookSheet(S.ui.sheet.id):render()}catch(e){}}
+  try{const j=await api("GET","/classes");API.classes=j.classes;API.privAccess=j.privateAccess||null;API.classesAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="classes")&&(!S.ui.sheet||S.ui.sheet.k==="book"))S.ui.sheet&&S.ui.sheet.k==="book"?bookSheet(S.ui.sheet.id):render()}catch(e){}}
 function nextClassCard(){
   if(inClaude()||!API.me||!API.me.gym)return "";
   if(!API.classes){loadClasses();return ""}
   const up=API.classes.filter(c=>clsEnd(c)>Date.now()&&(c.kind!=="private"||c.myGoing||isCoach()));
   if(!up.length){if(!GYM.data)loadGym();const tu=ttUpcoming(3);
-    return `<section class="panel"><h2 class="label">Next class</h2>${tu.length?`<div class="stack">${tu.map(x=>`<div class="ttline"><span class="mono">${x.k===0?"Today":x.k===1?"Tomorrow":TTD[(x.at.getDay()+6)%7]} ${esc(x.r.start)}</span><span>${esc(x.r.title)}${x.r.coach?` <span class="small muted">· ${esc(x.r.coach)}</span>`:""}</span></div>`).join("")}</div><p class="small muted">From ${esc(API.me.gym.name)}'s timetable.${isCoach()?" Add these to Classes from the Coach tab › Gym so students can book.":""}</p>`:`<p class="muted">No classes scheduled yet${isCoach()?". Plan one in the Coach tab.":"."}</p>`}</section>`}
+    return `<section class="panel"><h2 class="label">Next class</h2>${tu.length?`<div class="stack">${tu.map(x=>`<div class="ttline"><span class="mono">${x.k===0?"Today":x.k===1?"Tomorrow":TTD[(x.at.getDay()+6)%7]} ${esc(x.r.start)}</span><span>${esc(x.r.title)}${x.r.coach?` <span class="small muted">· ${esc(x.r.coach)}</span>`:""}</span></div>`).join("")}</div><p class="small muted">From ${esc(API.me.gym.name)}'s timetable.${isCoach()?" Add them to your Schedule from the Gym tab so students can book.":""}</p>`:`<p class="muted">No classes scheduled yet${isCoach()?". Plan one in Schedule.":"."}</p>`}</section>`}
   const c=up.find(x=>x.myGoing||x.myWaitlisted)||up.find(x=>x.kind!=="private")||up[0],p=c.plan||{};
   return `<section class="panel nextclass"><div class="row between"><h2 class="label">${c.myGoing?"Your next class":"Next class"}</h2><span class="small muted mono">${esc(spotsTxt(c))}</span></div>
     <div class="stack" style="gap:6px"><div><h3>${esc(c.title)}</h3><p class="small muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · with "+esc(c.coach):""}</p></div>${whoLine(c,4)}</div>
     ${p.focus||p.ids&&p.ids.length?`<p class="small"><b>Coach's plan${p.focus?": "+esc(p.focus):""}</b>${(p.ids||[]).filter(id=>TM[id]).length?` · <button class="linkbtn small" data-a="bookopen" data-v="${c.id}">${p.ids.filter(id=>TM[id]).length} technique${p.ids.filter(id=>TM[id]).length===1?"":"s"} to study</button>`:""}</p>`:""}
     ${isCoach()?"":`<div class="row">${bookActions(c)}</div>`}
-    ${isCoach()?"":`<button class="linkbtn small" data-a="tab" data-v="book">All classes</button>`}</section>`;
+    ${isCoach()?"":`<button class="linkbtn small" data-a="tab" data-v="classes">All classes</button>`}</section>`;
 }
 function accountNudge(){if(inClaude()||!API.on||API.me)return "";
   return `<section class="panel"><h2 class="label">Keep your progress safe</h2><p class="small">Right now it's only on this phone. Create a free account to save it online and join your gym's classes.</p><div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button></div></section>`}
@@ -178,25 +181,29 @@ async function coachLoad(what,around){
   }catch(e){toast(e.message)}
   COACH.loading=false;if(S.ui.tab==="coach")render();
 }
-/* Coaches get their own app: Today (the gym's day), Classes, Students, Comps, Money and Gym.
-   Belts, Flow map and Log are study tools; a coach can switch to them from the Gym tab ("study mode"). */
-const COACH_VIEWS=["today","classes","students","comps","money","gym"];
+/* Coaches get their own app. Learn and Journal are for training: a coach opens them with "My training" on the Gym tab,
+   and "Manage <gym>" at the top of Home brings them back. */
+// Coach tabs: Home (today), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
+const COACH_VIEWS=["home","schedule","members","comps","money","gym"];
 const coachMode=()=>{try{return localStorage.getItem("jf.coachMode")==="study"?"study":"manage"}catch(e){return "manage"}};
 const managing=()=>isCoach()&&coachMode()!=="study";
 function setCoachMode(m){try{if(m==="study")localStorage.setItem("jf.coachMode","study");else localStorage.removeItem("jf.coachMode")}catch(e){}}
-function coachGo(v){const legacy={roster:["students","list"],insights:["students","insights"],payments:["money"]};const l=legacy[v];
-  if(l){v=l[0];if(l[1])COACH.stuView=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="today";COACH.view=v;go("coach-"+v)}
+function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","list"],insights:["members","insights"],payments:["money"]};const l=legacy[v];
+  if(l){v=l[0];if(l[1])COACH.stuView=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
 function viewCoach(){
-  if(!isCoach())return `${header()}<div class="empty">This part is for coaches. Start a gym in Settings to use it.</div>`;
+  if(!isCoach())return `${header()}<div class="empty">This part is for coaches. Start a gym in Me to use it.</div>`;
   if(!COACH.roster&&!COACH.loading)coachLoad();
   if(!GYM.data)loadGym(); // website timetable, coaches and prices: used by Classes, Money and Today, not just the Gym tab
-  const v=COACH_VIEWS.includes(COACH.view)&&(COACH.view!=="money"||isHead())?COACH.view:"today";
-  const title={today:"Today",classes:"Classes",students:"Students",comps:"Competitions",money:"Money",gym:"Your gym"}[v];
-  const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="classes"?coachClasses():v==="students"?coachStudents():v==="comps"?coachComps():v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
+  const v=COACH_VIEWS.includes(COACH.view)&&(COACH.view!=="money"||isHead())?COACH.view:"home";
+  const title={home:"Home",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Your gym"}[v];
+  const body=!COACH.roster?`<div class="empty">Loading your gym…</div>`:v==="schedule"?coachClasses():v==="members"||v==="comps"?coachMembers(v):v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
   return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}</h1></div></div></section>${body}</div>`;
 }
+// Members: a switch between your members (roster or insights) and the competition team.
+function coachMembers(v){const up=API.comps?upcomingComps().length:0;
+  return `<div class="seg2" role="group" aria-label="Show"><button data-a="coachgo" data-v="members" aria-pressed="${v!=="comps"}">Members</button><button data-a="coachgo" data-v="comps" aria-pressed="${v==="comps"}">Competitions${up?` (${up})`:""}</button></div>${v==="comps"?coachComps():coachStudents()}`}
 function coachStudents(){const sv=COACH.stuView==="insights"?"insights":"list";
-  return `<div class="seg2"><button data-a="stuview" data-v="list" aria-pressed="${sv==="list"}">Roster</button><button data-a="stuview" data-v="insights" aria-pressed="${sv==="insights"}">Insights</button></div>${sv==="insights"?coachInsights():coachRoster()}`}
+  return `<div class="segpills subseg" role="group" aria-label="Members view"><button data-a="stuview" data-v="list" aria-pressed="${sv==="list"}">Roster</button><button data-a="stuview" data-v="insights" aria-pressed="${sv==="insights"}">Insights</button></div>${sv==="insights"?coachInsights():coachRoster()}`}
 /* ----- Money: This month (who owes what, reminders, history) · Payments (to check, record) · Setup (how students pay) ----- */
 function coachMoney(){const v=COACH.moneyView||"month",pend=(COACH.payments||[]).filter(p=>p.status==="pending").length;
   return `<div class="seg3" role="tablist"><button data-a="moneyview" data-v="month" aria-pressed="${v==="month"}">This month</button><button data-a="moneyview" data-v="payments" aria-pressed="${v==="payments"}">Payments${pend?` (${pend})`:""}</button><button data-a="moneyview" data-v="setup" aria-pressed="${v==="setup"}">Setup</button></div>
@@ -210,7 +217,7 @@ function moneyStatus(s,M){const left=s.feeCents-s.paidCents;if(!s.feeCents)retur
 function dueLines(s,cur){if(!s.accessCents&&!s.privatesCents)return [];
   return [s.membershipCents&&`Membership: ${money(s.membershipCents,cur)}`,s.accessCents&&`Access fee: ${money(s.accessCents,cur)}`,...(s.privates||[]).map(o=>`Private lesson, ${new Date(o.startsAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}: ${money(o.priceCents,cur)}`)].filter(Boolean)}
 function remindText(s,M){const b=((COACH.payInfo||{}).pay)||{},left=s.feeCents-s.paidCents,parts=dueLines(s,M.currency);
-  return `Hi ${hiName(s)}, a friendly reminder that ${money(left,M.currency)} is due for ${monthLabel(M.month)}${s.parentName?` for ${first(s.name)}`:""} at ${gymName()}.${parts.length?"\n"+parts.join("\n"):""}${b.account?`\n\nEFT: ${b.bank?b.bank+" ":""}${b.account}${b.branch?`, branch ${b.branch}`:""}${b.holder?` (${b.holder})`:""}`:""}\nReference: ${s.reference}\n\n${s.claimUrl?`Already paid? Join ${gymName()} on JitsFlow and send your proof of payment there: ${s.claimUrl}`:`Already paid? Send your proof of payment in JitsFlow: ${appLink("#book")}`}\nThanks!`}
+  return `Hi ${hiName(s)}, a friendly reminder that ${money(left,M.currency)} is due for ${monthLabel(M.month)}${s.parentName?` for ${first(s.name)}`:""} at ${gymName()}.${parts.length?"\n"+parts.join("\n"):""}${b.account?`\n\nEFT: ${b.bank?b.bank+" ":""}${b.account}${b.branch?`, branch ${b.branch}`:""}${b.holder?` (${b.holder})`:""}`:""}\nReference: ${s.reference}\n\n${s.claimUrl?`Already paid? Join ${gymName()} on JitsFlow and send your proof of payment there: ${s.claimUrl}`:`Already paid? Send your proof of payment in JitsFlow: ${appLink("#classes")}`}\nThanks!`}
 function moneyMonth(){
   const want=COACH.moneyMonth||null,M=COACH.money;
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -418,11 +425,11 @@ async function submitClass(form){
     if(reps>1){const list=[];for(let i=0;i<reps;i++){const d=new Date(when);d.setDate(d.getDate()+7*i);list.push({...body,startsAt:d.toISOString()})}
       const j=await api("POST","/coach/classes/bulk",{classes:list});toast(`Added ${j.added} weekly class${j.added===1?"":"es"}${j.skipped?` (${j.skipped} already there)`:""}.`)}
     else{await api(id?"PUT":"POST",id?`/classes/${id}`:"/classes",body);toast(id?"Class saved.":"Class added. Students can book it now.")}
-    S.ui.cplan=null;hideSheet();const st=calState("coach");st.sel=ymd(when);st.anchor=st.sel;await coachLoad("classes",st.anchor);coachGo("classes")}
+    S.ui.cplan=null;hideSheet();const st=calState("coach");st.sel=ymd(when);st.anchor=st.sel;await coachLoad("classes",st.anchor);coachGo("schedule")}
   catch(e){toast(e.message)}
 }
 async function classSheet(id){
-  S.ui.sheet={k:"class",id};S.ui.stack=[];
+  S.ui.sheet={k:"class",id};S.ui.stack=[];S.ui.addPick=false;S.ui.clsQ="";
   openSheet(`${sheetHead("Class")}<div class="empty">Loading who's coming…</div>`);
   let j;try{j=await api("GET",`/coach/classes/${id}`)}catch(e){toast(e.message);hideSheet();render();return}
   S.ui.classData=j;drawClassSheet();
@@ -451,11 +458,23 @@ function drawClassSheet(keep){
   openSheet(`${sheetHead("Class")}<div class="stack-lg"><div><h1>${esc(c.title)}</h1><p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.shared?"":" · plan hidden from students"}</p></div>
     <section class="stack"><h2 class="label">The plan</h2>${p.focus?`<p><b>${esc(p.focus)}</b></p>`:""}${(p.ids||[]).filter(id=>TM[id]).length?`<div class="list">${p.ids.filter(id=>TM[id]).map(id=>tRow(TM[id])).join("")}</div>`:`<p class="small muted">No techniques picked yet.</p>`}${p.notes?`<p class="small">${esc(p.notes)}</p>`:""}</section>
     ${sug}
-    <section class="stack"><div class="row between"><h2 class="label">Who's coming</h2><span class="small muted mono">${going.length}${c.capacity?"/"+c.capacity:""} going</span></div>${rows||`<div class="empty">Nobody has booked yet. Students book from Classes or their Today screen.</div>`}
+    <section class="stack"><div class="row between"><h2 class="label">Who's coming</h2><span class="small muted mono">${going.length}${c.capacity?"/"+c.capacity:""} going</span></div>${rows||`<div class="empty">Nobody has booked yet. Students book from Classes or their Home screen.</div>`}${addPicker(c,attendees)}
       ${going.some(a=>!a.attended)&&new Date(c.startsAt).getTime()-Date.now()<3*36e5?`<button class="btn" data-a="attendall">Check in everyone booked (${going.filter(a=>!a.attended).length})</button>`:""}</section>
     ${waitlist.length?`<section class="stack"><h2 class="label">Waitlist (${waitlist.length})</h2><div class="list">${waitlist.map((a,i)=>`<div class="attrow"><span><b>${i+1}. ${esc(a.name)}</b> ${beltChip(a.belt,a.stripes)}</span><span class="small muted">gets the next spot</span></div>`).join("")}</div></section>`:""}
   </div>`,keep,{act:`<button class="btn grow" data-a="classedit" data-v="${c.id}">Edit plan</button>`});
 }
+// Coaches put someone on a class or private themselves (students who aren't on the app too, and anyone the gym's rules wouldn't let book).
+function addPicker(c,attendees){const have=new Set(attendees.filter(a=>a.going||a.attended).map(a=>a.id));
+  if(!S.ui.addPick)return `<button class="btn" data-a="clsaddopen">+ Add a student</button>`;
+  if(!COACH.roster)return `<p class="small muted">Loading your students…</p>`;
+  const ppl=students().filter(p=>p.active&&!have.has(p.id)),q=(S.ui.clsQ||"").trim().toLowerCase();
+  return `<div class="panel stack" id="clsadd"><div class="row between"><h2 class="label">Add a student</h2><button class="linkbtn small" data-a="clsaddopen" data-v="0">Done</button></div>
+    <input id="cls-q" type="search" placeholder="Search your students" aria-label="Search your students" autocomplete="off" value="${esc(S.ui.clsQ||"")}">
+    <p class="small muted" style="margin:0">${c.kind==="private"?"They're booked at their private price, like booking it themselves.":"They're booked like they booked it themselves."}${new Date(c.startsAt).getTime()<=Date.now()?" This class has started, so they're marked here.":""}</p>
+    <div class="list addlist">${ppl.map(p=>`<button class="trow" data-a="clsadd" data-v="${p.id}"${q&&!p.name.toLowerCase().includes(q)?" hidden":""} style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.name)}${p.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small" style="color:var(--blue);font-weight:700">Add</span></button>`).join("")||`<p class="small muted">Everyone's already on it.</p>`}</div></div>`}
+async function classAdd(id){const cd=S.ui.classData,c=cd.class,started=new Date(c.startsAt).getTime()<=Date.now(),p=students().find(x=>x.id===id);
+  try{await api("PUT",`/coach/classes/${c.id}/attendance`,{userId:id,attended:started,going:true});
+    S.ui.classData=await api("GET",`/coach/classes/${c.id}`);drawClassSheet(true);COACH.classes=null;coachLoad("classes");toast(`${p?p.name:"They"}${started?" marked here.":" added."}`)}catch(e){toast(e.message)}}
 function coachRoster(){
   const ppl=students(),cur=COACH.roster.currency,q=COACH.q.trim().toLowerCase();
   const due=ppl.filter(p=>p.active&&owesFees(p)&&p.paidThisMonthCents<p.feeCents);
@@ -501,7 +520,7 @@ async function studentSheet(id){
 async function submitStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value;const id=S.ui.sheet.id;
   const fees=isHead()?{feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null}:{};
   try{await api("PATCH",`/coach/students/${id}`,{belt:v("belt"),stripes:Number(v("stripes")),notes:v("notes"),phone:v("phone")||"",parentName:v("parent")||"",active:form.querySelector("[name=active]").checked,...fees});
-    toast("Student saved.");hideSheet();await coachLoad("roster");coachGo("students")}catch(e){toast(e.message)}}
+    toast("Student saved.");hideSheet();await coachLoad("roster");coachGo("members")}catch(e){toast(e.message)}}
 /* ----- money: proof of payment, EFT details, recording ----- */
 const PMETH={eft:"EFT",cash:"Cash",card:"Card",snapscan:"SnapScan",payfast:"PayFast",other:"Other"};
 const coversText=p=>p.months>1?` · covers ${p.months} months`:"";
@@ -558,7 +577,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   return `<section class="stack">
     <details class="more" data-g="m-bank"${pi&&!bank.account&&!bank.link&&og["m-bank"]!==false||og["m-bank"]?" open":""}><summary><span><b>How students pay</b><br><span class="small muted">${bank.account?`${esc(bank.bank||"Bank")} · ${esc(bank.account)}`:bank.link?"Payment link":"Add your bank details"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
-      <p class="small">Students see these details in their Classes tab with their own reference (like JF7KQ3M), so every EFT tells you who paid.</p>
+      <p class="small">Students see these details in the app with their own reference (like JF7KQ3M), so every EFT tells you who paid.</p>
       <form id="bankform" class="stack" novalidate>
         <div class="grid2"><label class="f">Account holder<input name="holder" value="${esc(bank.holder||API.me.gym.name)}"></label><label class="f">Bank<input name="bank" value="${esc(bank.bank||"")}" placeholder="FNB, Capitec…"></label></div>
         <div class="grid2"><label class="f">Account number<input name="account" inputmode="numeric" value="${esc(bank.account||"")}"></label><label class="f">Branch code<input name="branch" inputmode="numeric" value="${esc(bank.branch||"")}"></label></div>
@@ -578,7 +597,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
       <p class="small muted">Keep this address private: anyone who has it can send proofs to your list (you still check each one).</p>`:`<p class="small muted">Loading…</p>`}</div></details>
   </section>`}
 async function saveBank(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
-  try{const j=await api("PATCH","/coach/gym/pay",{holder:v("holder"),bank:v("bank"),account:v("account"),branch:v("branch"),type:v("type"),link:v("link"),note:v("note"),dueDay:Number(v("dueDay")||1)});COACH.money=null;COACH.payInfo={...(COACH.payInfo||{}),pay:j.pay};S.ui.openG={...(S.ui.openG||{}),"m-bank":false};render();toast("Payment details saved. Students see them in their Classes tab.")}catch(e){toast(e.message)}}
+  try{const j=await api("PATCH","/coach/gym/pay",{holder:v("holder"),bank:v("bank"),account:v("account"),branch:v("branch"),type:v("type"),link:v("link"),note:v("note"),dueDay:Number(v("dueDay")||1)});COACH.money=null;COACH.payInfo={...(COACH.payInfo||{}),pay:j.pay};S.ui.openG={...(S.ui.openG||{}),"m-bank":false};render();toast("Payment details saved. Students see them on the Pay sheet (Home or Me › How to pay).")}catch(e){toast(e.message)}}
 async function coachProof(file){toast("Reading the proof…");
   try{const f=await fileToProof(file);const j=await api("POST","/coach/payments/proof",f);await coachLoad("payments");const p=j.payment,who=p.userId&&(students().find(s=>s.id===p.userId)||{}).name;
     popSheet(p.id);toast(p.amountCents?`Read ${money(p.amountCents,p.currency)}${who?` from ${who}`:""}. Check it and confirm.`:"Added. Fill in the amount and confirm.")}catch(e){toast(e.message)}}
@@ -611,20 +630,26 @@ function feesCard(){const p=API.pay;if(!p)return "";const left=Math.max(0,p.dueC
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,left=Math.max(0,p.dueCents-p.paidCents-p.pendingCents),parts=dueLines(p,cur),ks=p.packs||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
+  // Joining a plan to book privates: with one plan to pick, what to pay is its price plus what's due now, and the amounts below say so.
+  const ja=p.privateAccess||API.privAccess,one=ja&&!ja.status&&ja.plans.length===1?ja.plans[0]:null,amt=left+(one?one.priceCents:0);
   openSheet(`${sheetHead("Pay your fees")}<div class="stack-lg">
+    ${ja&&ja.status?`<section class="stack" id="payjoin"><h2 class="label">Restart your membership</h2><p class="small"><b>${esc(ja.message)}</b></p><p class="small">Once it's active again, you can book privates.</p></section>`
+    :ja?`<section class="stack" id="payjoin"><h2 class="label">Join to book privates</h2><p class="small"><b>${esc(ja.message)}</b></p>${ja.plans.length?joinPlans(ja,cur):""}
+      <p class="small">${one?`To join, pay <b>${money(one.priceCents,cur)}</b> for ${esc(one.name)}${left?` plus what's due now (${money(left,cur)}): <b>${money(amt,cur)}</b> in all`:""}, with your reference. The amounts below include it.`
+        :`Pay the price of the plan you pick${left?` plus what's due now (${money(left,cur)})`:""}, with your reference.`} Tell your coach which plan it's for. They put you on the plan, then you can book privates.</p>${joinAsk(ja)}</section>`:""}
     ${parts.length?`<section class="stack"><h2 class="label">This month</h2><div class="panel stack" style="gap:6px">${parts.map(x=>`<span class="small">${esc(x)}</span>`).join("")}<b class="small">Total: ${money(p.dueCents,cur)}</b></div></section>`:""}
     ${!p.card&&b.cardSoon?`<section class="stack"><button class="btn primary" data-a="paysoon">Pay by card or Instant EFT <span class="pill">Coming soon</span></button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast, coming soon. For now, pay by EFT below.</p></section>`:""}
-    ${p.card?`<section class="stack"><h2 class="label">Pay now</h2><label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${left?left/100:p.dueCents?p.dueCents/100:""}"></label>
+    ${p.card?`<section class="stack"><h2 class="label">Pay now</h2><label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:p.dueCents?p.dueCents/100:""}"></label>
       <button class="btn primary" data-a="paycard">Pay by card or Instant EFT</button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast. Your coach sees it straight away.</p></section>`:""}
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
       <div class="kv refrow"><span class="small muted">Reference</span><b class="mono">${esc(p.reference)}</b><button class="linkbtn small" data-a="copy" data-v="${esc(p.reference)}">Copy</button></div></div>
-      <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference. It tells your coach the payment is yours.${left?` Amount: <b>${money(left,cur)}</b>.`:""}</p></section>`:""}
+      <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference. It tells your coach the payment is yours.${amt?` Amount: <b>${money(amt,cur)}</b>${one?` (${esc(one.name)} ${money(one.priceCents,cur)}${left?` + ${money(left,cur)} due now`:""})`:""}.`:""}</p></section>`:""}
     ${b.link?`<a class="btn${b.account?"":" primary"}" href="${esc(b.link)}" target="_blank" rel="noopener">Pay online</a>`:""}
     ${!b.account&&!b.link?`<p class="small">Your coach hasn't added payment details yet. Ask them how to pay, then send your proof of payment here. Your reference is <b class="mono">${esc(p.reference)}</b>.</p>`:""}
     ${b.note?`<p class="small muted">${esc(b.note)}</p>`:""}
     <section class="stack"><h2 class="label">Already paid?</h2><p class="small">Send the proof of payment (the PDF from your bank, or a screenshot). Your coach checks it and marks you as paid.</p>
       ${ks.length?`<label class="f">What's it for?<select id="mypop-pack"><option value="">My fees</option>${ks.map(k=>`<option value="${k.id}" data-price="${k.priceCents}">${esc(k.name)}</option>`).join("")}</select></label>`:""}
-      <label class="f">Amount you paid (${esc(cur)})<input id="mypop-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${left?left/100:""}"></label>
+      <label class="f">Amount you paid (${esc(cur)})<input id="mypop-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${amt?amt/100:""}"></label>
       <label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label><input type="file" id="mypop" accept="image/*,application/pdf" hidden></section>
     ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.lessons} private lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · use within ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span>${p.card?`<button class="btn sm primary" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
       <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p></section>`:""}
@@ -648,7 +673,7 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
   try{await api("POST","/coach/payments",{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100),paidOn:v("date"),method:v("method"),reference:v("ref"),note:v("note"),months:Number(v("months")||1),packId:v("pack")||null});
     toast("Payment recorded.");hideSheet();await coachLoad();coachGo("money")}catch(e){toast(e.message)}}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack">${isHead()?planPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
+  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back here with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox" style="width:auto"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox" style="width:auto"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
@@ -662,12 +687,12 @@ function coachGym(){const g=API.me.gym;
     <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
     <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p>
     ${accountSection()}${appearanceSection()}
-    <section class="panel stack"><h2 class="label">Training yourself?</h2><p class="small">Belts, Flow map and Log are the study side of JitsFlow. Switch to them any time; a Coach button brings you back here.</p><button class="btn" data-a="coachmode" data-v="study">Open study tools</button></section>${gymDelPanel()}</section>`}
+    ${gymDelPanel()}</section>`}
 // Closing the gym (head coach only): deletes it and everything it keeps. People with their own accounts keep them, with no gym.
 function gymDelPanel(){const g=API.me.gym;if(!isHead())return "";
   return `<section class="panel stack" id="gymdel"><h2 class="label">Delete gym</h2>${S.ui.gymDelOpen?`<form id="gymdelform" class="stack"><p class="small">This permanently deletes ${esc(g.name)}: classes and bookings, plans, payments and proofs of payment, competitions, notices, your notes on students, and students you added who aren't on the app. Students and coaches with their own accounts keep them, with no gym. Type your password to confirm.</p><input name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password"><div class="row"><button class="btn danger" type="submit">Delete gym</button><button class="btn" type="button" data-a="gymdelcancel">Keep my gym</button></div></form>`:`<p class="small">Closing your gym? This deletes it and everything it keeps about your students.</p><button class="btn danger" style="justify-self:start" data-a="gymdel">Delete gym</button>`}</section>`}
 async function deleteGym(f){try{const j=await api("DELETE","/coach/gym",{password:f.querySelector("[name=password]").value});API.me=j.me;S.ui.gymDelOpen=false;
-  Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"today"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;setCoachMode("manage");go("today");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
+  Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"home"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;setCoachMode("manage");go("home");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
 // The other coaches in the gym. Removing one ends their coach access straight away and makes a new coach code.
 // The head coach can hand their role to another active coach; nobody can remove the head coach.
 function coachesPanel(){const cs=((COACH.roster||{}).people||[]).filter(p=>p.role==="coach"&&p.id!==API.me.id);if(!cs.length)return "";
@@ -690,7 +715,7 @@ const TTD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],TTDL=["Monday","Tuesday","
 const PERL={month:"/ month",week:"/ week",class:"/ class",year:"/ year",term:"/ term",once:"once-off",other:""};
 const dayNow=()=>(new Date().getDay()+6)%7;
 async function loadGym(force){if(!API.me||!API.me.gym||GYM.loading)return;if(!force&&GYM.data&&Date.now()-GYM.at<300000)return;
-  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["settings","coach","today"].includes(S.ui.tab)&&!S.ui.sheet)render()}
+  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["me","coach","home"].includes(S.ui.tab)&&!S.ui.sheet)render()}
 const gymProfile=()=>(GYM.data&&GYM.data.profile)||{};
 const hasProfile=p=>!!(p&&((p.timetable||[]).length||(p.coaches||[]).length||(p.rates||[]).length||p.address||p.phone||p.email));
 const priceTxt=(r,cur)=>{const c=r.currency||cur||"ZAR";try{return new Intl.NumberFormat("en-ZA",{style:"currency",currency:c,maximumFractionDigits:r.price%1?2:0}).format(r.price)}catch(e){return c+" "+r.price}};
@@ -802,7 +827,7 @@ async function ttToClasses(weeks){
       let dur=60;if(r.end){const [eh,em]=r.end.split(":").map(Number);const x=(eh*60+em)-(h*60+m);if(x>=15)dur=x}
       out.push({title:r.title,startsAt:at.toISOString(),durationMin:dur,shared:true,coach:r.coach||"",level:r.level||"",discipline:r.type||guessType(r.title),plan:{focus:"",notes:"",ids:[]}})})}
   if(!out.length){toast("No upcoming classes in that range.");return}
-  try{const j=await api("POST","/coach/classes/bulk",{classes:out});await coachLoad("classes");coachGo("classes");toast(`Added ${j.added} class${j.added===1?"":"es"}${j.skipped?` (${j.skipped} already there)`:""}.`)}
+  try{const j=await api("POST","/coach/classes/bulk",{classes:out});await coachLoad("classes");coachGo("schedule");toast(`Added ${j.added} class${j.added===1?"":"es"}${j.skipped?` (${j.skipped} already there)`:""}.`)}
   catch(e){toast(e.message)}
 }
 
@@ -818,12 +843,28 @@ const canCheckIn=c=>{const s=new Date(c.startsAt).getTime(),n=Date.now();return 
 const isFull=c=>!!c.capacity&&c.going>=c.capacity;
 async function loadMembership(){if(!API.me||!API.me.gym||isCoach())return;try{API.mem=(await api("GET","/me/membership")).membership}catch(e){}}
 // What a private costs this student: "R900 for you · Full membership", or "Uses 1 of your 3 privates" when a pack covers it.
-function myPriceTxt(c){const m=c.myPrice;if(!m)return "";const cur=(API.me.gym||{}).currency;
-  if(m.pack)return c.myGoing?"Uses 1 of your privates":`Uses 1 of your ${privN(m.left)}`;
-  return m.cents?`${money(m.cents,cur)} for you${m.label?" · "+m.label:""}`:m.label?`Free for you · ${m.label}`:""}
+// The gym's access fee is added once in a month they have a private: "R400 for you + R150 access fee this month".
+const accessTxt=m=>!m||!m.accessCents?"":` + ${money(m.accessCents,(API.me.gym||{}).currency)} access fee ${m.month===todayK().slice(0,7)?"this month":"in "+new Date(m.month+"-01T12:00:00").toLocaleDateString(undefined,{month:"long"})}`;
+function myPriceTxt(c){const m=c.myPrice;if(!m)return "";const cur=(API.me.gym||{}).currency,f=accessTxt(m);
+  if(m.pack)return (c.myGoing?"Uses 1 of your privates":`Uses 1 of your ${privN(m.left)}`)+f;
+  return m.cents?`${money(m.cents,cur)} for you${f}${m.label?" · "+m.label:""}`:m.label?`Free for you${f} · ${m.label}`:f.slice(3)}
+// A slot only members can book: what it costs once they're on a plan ("R200 on Full"), not the price they can't book at.
+function memberPriceTxt(c){const a=API.privAccess,cur=(API.me.gym||{}).currency;if(!a||!a.plans.length)return "Members only";
+  const ps=a.plans.map(p=>({n:p.name,c:p.privateCents??c.priceCents}));
+  return ps.filter(p=>p.c!==null&&p.c!==undefined).map(p=>`${p.c?money(p.c,cur):"Free"} on ${p.n}`).join(" · ")||"Members only"}
 function spotsTxt(c){const pl=!isCoach()&&API.pay&&API.pay.privatesLeft,n=pl&&pl.left;
+  if(c.kind==="private"&&!isCoach()&&API.privAccess&&!c.myGoing&&!c.myAttended)return memberPriceTxt(c);
   if(c.kind==="private"&&myPriceTxt(c))return myPriceTxt(c);
   return c.kind==="private"?[c.priceCents?money(c.priceCents,(API.me.gym||{}).currency):"Private",n&&!c.myGoing?`${privN(n)} left`:""].filter(Boolean).join(" · "):`${c.going}${c.capacity?"/"+c.capacity:""} booked${c.waiting?` · ${c.waiting} waiting`:""}`}
+// "Join the Full membership to book privates", with each plan's price and how to join. a: privateAccess from the server.
+const joinPlans=(a,cur)=>`<div class="list">${a.plans.map(p=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><b>${esc(p.name)}</b><span class="mono small">${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}</span></div>`).join("")}</div>`;
+const joinAsk=a=>waBtn(`Hi coach, I'd like to join the ${a.plans.map(p=>p.name).join(" or ")} membership so I can book private lessons.`,"Ask to join on WhatsApp",{phone:(API.me.gym||{}).waPhone,kind:"private_join"});
+function privJoinCard(){const a=API.privAccess;if(!a||isCoach())return "";const cur=(API.me.gym||{}).currency;
+  if(a.status)return `<section class="panel stack" id="privjoin"><h2 class="label">Your membership is ${esc(a.status)}</h2><p><b>${esc(a.message)}</b></p>
+    <p class="small">Once it's active again, you can book privates here.</p><div class="row">${waBtn(`Hi coach, could you restart my ${a.plans.map(p=>p.name).join(" ")||""} membership? I'd like to book private lessons.`.replace("my  ","my "),"Ask on WhatsApp",{phone:(API.me.gym||{}).waPhone,kind:"private_join"})}</div></section>`;
+  return `<section class="panel stack" id="privjoin"><h2 class="label">Private lessons are for members</h2><p><b>${esc(a.message)}</b></p>${a.plans.length?joinPlans(a,cur):""}
+    <p class="small">Ask your coach to put you on the plan, and pay with your reference. Once you're on it, you can book privates here.</p>
+    <div class="row"><button class="btn primary" data-a="mypay">How to join and pay</button>${joinAsk(a)}</div></section>`}
 function whoLine(c,max){const a=c.attendees;if(!a||!a.length)return "";const n=max||3;
   return `<span class="who-line">${a.slice(0,n).map(x=>`<span class="whochip${x.me?" me":""}"><i style="--bc:${BCOL[x.belt]||"#F4F4F0"}"></i>${esc(x.me?"You":x.name)}</span>`).join("")}${a.length>n?`<span class="small muted">+${a.length-n}</span>`:""}</span>`}
 function bookActions(c,big){
@@ -834,6 +875,8 @@ function bookActions(c,big){
   if(c.myGoing)return `${canCheckIn(c)?b("checkin",c.id,null,"Check in","primary"):`<span class="booked">✓ You're booked</span>`}${c.kind==="private"&&new Date(c.startsAt).getTime()<=Date.now()?"":b("rsvp",c.id,0,"Cancel","ghost")}`;
   if(c.myWaitlisted)return `<span class="booked wait">Waitlist #${c.myPosition||"?"}</span>${b("rsvp",c.id,0,"Leave waitlist","ghost")}`;
   if(isFull(c))return c.kind==="private"?`<span class="small muted">Booked</span>`:b("rsvp",c.id,1,"Join waitlist","");
+  // The gym only lets members on certain plans book privates: show how to join instead of Book.
+  if(c.kind==="private"&&!isCoach()&&API.privAccess)return API.privAccess.status?`<span class="small muted">Membership ${esc(API.privAccess.status)}</span>`:`<span class="small muted">Members only</span>${b("mypay","",null,"How to join","")}`;
   return b("rsvp",c.id,1,c.kind==="private"?"Book this slot":"Book","primary");
 }
 function bookCard(c){
@@ -850,11 +893,11 @@ function membershipCard(){const m=API.mem;if(!m)return "";const p=m.plan;
     <div class="stats"><div class="stat"><b>${m.visitsThisMonth}</b><span>Classes this month</span></div><div class="stat"><b>${m.streak}</b><span>Week streak</span></div><div class="stat"><b>${m.perWeek}</b><span>Per week</span></div></div></section>`}
 const cap1=s=>String(s||"").charAt(0).toUpperCase()+String(s||"").slice(1);
 function viewBook(){
-  if(!API.me||!API.me.gym)return `${header()}<div class="empty">Join your gym (Settings › Your account) to book classes.</div>`;
+  if(!API.me||!API.me.gym)return `${header()}<div class="empty">Join your gym (Me › Your account) to book classes.</div>`;
   if(!API.classes){loadClasses(true);return `${header()}<div class="empty">Loading classes…</div>`}
-  if(API.mem===undefined){API.mem=null;loadMembership().then(()=>{if(S.ui.tab==="book")render()})}
-  if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(["book","today"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
-  if(API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="book"&&!S.ui.sheet)render()})}
+  if(API.mem===undefined){API.mem=null;loadMembership().then(()=>{if(S.ui.tab==="classes")render()})}
+  if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(["classes","home"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
+  if(API.pay===undefined){API.pay=null;loadPay().then(()=>{if(["classes","home","me"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
   const v=S.ui.bookView||"classes",now=Date.now();
   const up=API.classes.filter(c=>clsEnd(c)>now);
   const groups=(list)=>{const g={};list.forEach(c=>{(g[dayKey(c.startsAt)]=g[dayKey(c.startsAt)]||[]).push(c)});return Object.values(g).map(cs=>`<section class="stack"><h2 class="label">${esc(dayLabel(cs[0].startsAt))}</h2>${cs.map(bookCard).join("")}</section>`).join("")};
@@ -863,14 +906,14 @@ function viewBook(){
   const p=gymProfile();
   return `${header()}<div class="stack-lg"><section class="stack"><h1 style="font-size:34px">Classes</h1>
     ${noticesCard()}<div class="seg3"><button data-a="bookview" data-v="classes" aria-pressed="${v==="classes"}">Classes</button><button data-a="bookview" data-v="private" aria-pressed="${v==="private"}">Privates${openP.length?` (${openP.length})`:""}</button><button data-a="bookview" data-v="comps" aria-pressed="${v==="comps"}">Comps${API.comps&&upcomingComps().length?` (${upcomingComps().length})`:""}</button></div></section>
-    ${v==="comps"?compsList(false):v==="classes"?`${membershipCard()}${feesCard()}
+    ${v==="comps"?compsList(false):v==="classes"?`${membershipCard()}
       ${mine.length?`<p class="small"><b>You're booked for ${mine.filter(c=>c.myGoing).length} class${mine.filter(c=>c.myGoing).length===1?"":"es"}</b>${mine.some(c=>c.myWaitlisted)?` and waiting for ${mine.filter(c=>c.myWaitlisted).length}`:""}.</p>`:""}
       ${(()=>{if(!S.ui.bcal){const nx=cls.map(c=>dayKey(c.startsAt)).sort()[0];calState("book");if(nx&&nx>addDays2(weekStart(todayK()),6))S.ui.bcal.anchor=nx}/* nothing left this week (e.g. Sunday night): open on the week of the next class */
         const st=calState("book"),g=byDay(cls),ws=weekStart(st.anchor);
         const shown=st.sel?(g[st.sel]||[]):cls.filter(c=>{const k=dayKey(c.startsAt);return k>=ws&&k<=addDays2(ws,6)});
         return `${calHeader("book",st,g)}${st.sel?`<p class="small muted">Showing ${esc(dayLabel(fromYmd(st.sel).toISOString()))}. <button class="linkbtn small" data-a="calday" data-k="book" data-v="${st.sel}">Show the whole week</button></p>`:""}
-          ${shown.length?groups(shown):`<div class="empty">${cls.length?(st.sel?"No classes that day.":"No classes this week. Try next week."):"No classes on the calendar yet. Your coach adds them in the Coach tab."}</div>`}`})()}`
-    :`${API.pay?privLeftLine(API.pay):""}${mineP.length?`<section class="stack"><h2 class="label">Your private lessons</h2>${mineP.map(bookCard).join("")}</section>`:""}
+          ${shown.length?groups(shown):`<div class="empty">${cls.length?(st.sel?"No classes that day.":"No classes this week. Try next week."):"No classes on the calendar yet. When your coach adds them, they show up here."}</div>`}`})()}`
+    :`${privJoinCard()}${API.pay?privLeftLine(API.pay):""}${mineP.length?`<section class="stack"><h2 class="label">Your private lessons</h2>${mineP.map(bookCard).join("")}</section>`:""}
       ${openP.length?groups(openP):`<div class="empty">No open private lesson slots right now.</div>`}
       <section class="panel stack"><h2 class="label">Want a different time?</h2><p class="small">Message your coach on WhatsApp. The message is written for you: add the day and time that suit you.</p>
         ${waBtn(privAskText(openP.concat(mineP)),"Ask for a time on WhatsApp",{phone:API.me.gym.waPhone,kind:"private_ask"})}
@@ -881,26 +924,28 @@ function bookSheet(id){
   const pl=c.plan||{};const a=c.attendees;
   openSheet(`${sheetHead(c.kind==="private"?"Private lesson":"Class")}<div class="stack-lg"><div><h1>${esc(c.title)}</h1>
     <p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · with "+esc(c.coach):""}${typeTag(c)?" · "+esc(typeTag(c)):""}${c.level?" · "+esc(c.level):""}</p>
-    <p class="mono small">${esc(spotsTxt(c))}</p></div>
+    <p class="mono small">${esc(spotsTxt(c))}</p>${c.kind==="private"&&c.myPrice&&c.myPrice.accessCents&&!c.myGoing&&!API.privAccess?`<p class="small muted">Your gym charges an access fee of ${money(c.myPrice.accessCents,(API.me.gym||{}).currency)} in each month you have a private, if you're not on a membership.</p>`:""}</div>
     ${pl&&(pl.focus||(pl.ids||[]).length||pl.notes)?`<section class="stack"><h2 class="label">Coach's plan</h2>${pl.focus?`<p><b>${esc(pl.focus)}</b></p>`:""}${(pl.ids||[]).filter(i=>TM[i]).length?`<div class="list">${pl.ids.filter(i=>TM[i]).map(i=>tRow(TM[i])).join("")}</div>`:""}${pl.notes?`<p class="small">${esc(pl.notes)}</p>`:""}</section>`:""}
     ${c.kind!=="private"?`<section class="stack"><h2 class="label">Who's booked${c.capacity?` (${c.going}/${c.capacity})`:` (${c.going})`}</h2>
       ${a?(a.length?`<div class="list">${a.map(x=>`<div class="attrow"><span><b>${esc(x.me?"You":x.name)}</b></span>${beltChip(x.belt,x.stripes)}</div>`).join("")}</div>`:`<p class="small muted">Nobody yet. Be the first.</p>`):`<p class="small muted">Your gym keeps the list private.</p>`}
       ${c.waiting?`<p class="small muted">${c.waiting} on the waitlist.</p>`:""}</section>`:""}
-    ${c.myGoing&&c.kind!=="private"&&!inClaude()?waBtn(`I'm going to ${c.title} at ${gymName()}, ${fmtWhen(c.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask a training partner to come",{kind:"class"}):""}
+    ${c.myGoing&&c.kind!=="private"&&!inClaude()?waBtn(`I'm going to ${c.title} at ${gymName()}, ${fmtWhen(c.startsAt)}. Coming? Book here: ${appLink("#classes")}`,"Ask a training partner to come",{kind:"class"}):""}
   </div>`,false,{act:`<div class="row grow" style="flex-wrap:nowrap;gap:8px;justify-content:flex-end">${bookActions(c,true)}</div>`});
 }
 async function doBook(id,going){
   try{const r=await api("PUT",`/classes/${id}/rsvp`,{going});jfTrack(going?"book":"cancel_booking",{waitlisted:!!r.waitlisted});
     toast(going?(r.waitlisted?`It's full, so you're on the waitlist at #${r.position}. We'll email you if a spot opens.`:"Booked. See you on the mat."):"Cancelled.");
     await loadClasses(true);{const c=going&&!r.waitlisted&&(API.classes||[]).find(x=>x.id===id);if(c&&c.kind==="private"&&myPriceTxt(c))toast(`Booked. ${myPriceTxt(c)}.`)}API.mem=undefined;await loadMembership();if(API.pay)await loadPay();afterBook(id)}
-  catch(e){toast(e.message)}}
+  catch(e){toast(e.message);
+    // The gym may have changed who can book privates since the list loaded: reload it, so the "how to join" card and buttons show.
+    const c=going&&e.status===403&&(API.classes||[]).find(x=>x.id===id);if(c&&c.kind==="private"){await loadClasses(true);if(API.pay)await loadPay();afterBook(id)}}}
 async function doCheckin(id){try{await api("POST",`/classes/${id}/checkin`);jfTrack("check_in",{});toast("Checked in. Have a good session.");await loadClasses(true);afterBook(id)}catch(e){toast(e.message)}}
 function afterBook(id){if(S.ui.sheet&&S.ui.sheet.k==="book")bookSheet(id);else render()}
 
 /* ----- coach: insights ----- */
 const SEG={regular:["Regulars","1.5+ classes a week"],occasional:["Occasional","Trains, but less than weekly-plus"],at_risk:["At risk","Stopped or dropped off"],new:["New","Joined in the last 30 days"],inactive:["Not training","Nothing in 60 days"]};
 const DOW=["","Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-async function loadInsights(){try{COACH.insights=await api("GET","/coach/insights")}catch(e){toast(e.message)}if(S.ui.tab==="coach"&&COACH.view==="students"&&COACH.stuView==="insights"&&!S.ui.sheet)render()}
+async function loadInsights(){try{COACH.insights=await api("GET","/coach/insights")}catch(e){toast(e.message)}if(S.ui.tab==="coach"&&COACH.view==="members"&&COACH.stuView==="insights"&&!S.ui.sheet)render()}
 function weekChart(weeks){
   const max=Math.max(1,...weeks.map(w=>w.visits)),W=340,H=150,pad=22,bw=Math.floor((W-8)/weeks.length)-2;
   const bars=weeks.map((w,i)=>{const h=Math.round((H-pad-14)*w.visits/max),x=4+i*(bw+2),y=H-pad-h;const lbl=new Date(w.wk+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"});
@@ -998,13 +1043,26 @@ function packsPanel(){if(COACH.packs===undefined){COACH.packs=null;api("GET","/c
 async function savePack(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";const id=form.dataset.id;
   const body={name:v("name"),lessons:Number(v("lessons")),priceCents:Math.round(Number(v("price"))*100),expiryMonths:v("exp")?Number(v("exp")):null,active:form.querySelector("[name=active]")?form.querySelector("[name=active]").checked:true};
   try{const j=await api(id?"PATCH":"POST",id?`/coach/packs/${id}`:"/coach/packs",body);COACH.packs=(COACH.packs||[]).filter(k=>k.id!==j.pack.id).concat([j.pack]).sort((a,b)=>a.lessons-b.lessons);S.ui.packEdit=null;render();toast(id?"Pack saved.":"Pack added. Students see it on their Pay sheet.")}catch(e){toast(e.message)}}
-// Clients who only take private lessons pay an access fee each month they book one.
-function accessPanel(){const pi=COACH.payInfo;if(!pi)return "";const cur=API.me.gym.currency||"ZAR",c=pi.accessFeeCents||0;
-  return `<form id="accessform" class="stack subpanel" novalidate><h2 class="label">Access fee for private-only clients</h2>
-    <p class="small">${c?`Clients who only take private lessons pay an access fee of <b>${money(c,cur)}</b> per month, in each month they book or attend a private.`:"Charge clients who only take private lessons an access fee, in each month they book or attend a private."} It's for clients with no plan and no monthly fee: anyone paying a plan, their own fee or the gym's standard fee doesn't pay it. To charge it to a private-only client, set their monthly fee override to 0. 0 here switches it off.</p>
-    <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">Access fee per month (${esc(cur)})<input id="acc-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${c/100}"></label><button class="btn" type="submit">Save</button></div></form>`}
-async function saveAccess(form){const c=Math.round(Number(form.querySelector("[name=fee]").value||0)*100);
-  try{const j=await api("PATCH","/coach/gym/access-fee",{accessFeeCents:c});COACH.payInfo={...(COACH.payInfo||{}),accessFeeCents:j.accessFeeCents};COACH.money=null;await coachLoad("roster");toast(j.accessFeeCents?`Access fee saved: ${money(j.accessFeeCents,API.me.gym.currency)} a month.`:"Access fee switched off.")}catch(e){toast(e.message)}}
+// What clients who only take private lessons need: nothing extra, an access fee each month they have a private, or a membership
+// (one of the plans ticked here) to book one. Coaches can still add anyone to a private themselves.
+function accessPanel(){const pi=COACH.payInfo;if(!pi)return "";const cur=API.me.gym.currency||"ZAR",c=pi.accessFeeCents||0,ids=pi.privatePlanIds||[];
+  const m=pi.accessMode==="membership"?"membership":pi.accessMode==="fee"&&c?"fee":"none";
+  const ps=((COACH.roster&&COACH.roster.plans)||[]).filter(p=>p.active||ids.includes(p.id)),on=ps.filter(p=>ids.includes(p.id)).map(p=>p.name);
+  const now=m==="membership"?`Right now they need the <b>${esc(on.join(" or ")||"chosen")}</b> membership to book a private.`:m==="fee"?`Right now they pay an access fee of <b>${money(c,cur)}</b> per month, in each month they book or attend a private.`:"Right now they pay only their private lesson price.";
+  const opt=(v,t,d,more)=>`<label class="row small" style="flex-wrap:nowrap;align-items:flex-start"><input type="radio" name="mode" value="${v}" style="width:auto;flex:none;margin-top:3px"${m===v?" checked":""}><span><b>${t}</b><br><span class="muted">${d}</span></span></label>${more?`<div class="stack" data-acc="${v}" style="padding-left:28px"${m===v?"":" hidden"}>${more}</div>`:""}`;
+  return `<form id="accessform" class="stack subpanel" novalidate><h2 class="label">Clients who only take private lessons…</h2>
+    <p class="small">${now}</p>
+    ${opt("none","Pay nothing extra","Only their private lesson price.")}
+    ${opt("fee",`Pay an access fee${c?` of ${money(c,cur)}`:""} a month`,"In each month they book or attend a private. Only clients with no plan and no monthly fee pay it: anyone paying a plan, their own fee or the gym's standard fee doesn't. To charge it to someone, set their monthly fee override to 0.",`<label class="f">Access fee per month (${esc(cur)})<input id="acc-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${c?c/100:""}"></label>`)}
+    ${opt("membership","Need a membership to book","Only students on a plan you tick can book a private. They see how to join instead. You can still add anyone to a private yourself: open the slot in Schedule and tap Add a student.",ps.length?`<span class="small muted">Plans that allow privates</span>${ps.map(p=>`<label class="row small"><input type="checkbox" name="plan" value="${p.id}" style="width:auto;flex:none"${ids.includes(p.id)?" checked":""}> ${esc(p.name)} <span class="muted">· ${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}</span></label>`).join("")}`:`<p class="small muted">Add a membership plan above first.</p>`)}
+    <div class="row"><button class="btn" type="submit">Save</button></div></form>`}
+function accessModeShow(form){const m=(form.querySelector("[name=mode]:checked")||{}).value;form.querySelectorAll("[data-acc]").forEach(x=>{x.hidden=x.dataset.acc!==m})}
+async function saveAccess(form){const mode=(form.querySelector("[name=mode]:checked")||{}).value||"none",body={mode},cur=API.me.gym.currency;
+  if(mode==="fee")body.accessFeeCents=Math.round(Number(form.querySelector("[name=fee]").value||0)*100);
+  if(mode==="membership")body.planIds=[...form.querySelectorAll("[name=plan]:checked")].map(x=>x.value);
+  try{const j=await api("PATCH","/coach/gym/access-fee",body);COACH.payInfo={...(COACH.payInfo||{}),...j};COACH.money=null;await coachLoad("roster");
+    const names=((COACH.roster&&COACH.roster.plans)||[]).filter(p=>j.privatePlanIds.includes(p.id)).map(p=>p.name).join(" or ");
+    toast(j.accessMode==="membership"?`Saved. Only members on ${names} can book privates.`:j.accessMode==="fee"&&j.accessFeeCents?`Access fee saved: ${money(j.accessFeeCents,cur)} a month.`:"Saved. Private-only clients pay just their private lesson price.")}catch(e){toast(e.message)}}
 /* ----- private lessons: what each client pays (price tiers), the access fee and packs, together in Money > Setup ----- */
 // Prices on the gym's website that look like private lessons, offered as one-tap prices.
 const PLAN_PERIODS=["month","week","year","term","class","once"];
@@ -1015,7 +1073,7 @@ function rateChips(target){const rs=privRates();if(!rs.length)return "";
 function privatesPanel(){const pi=COACH.payInfo,cur=API.me.gym.currency||"ZAR",c=pi?pi.privateCents:null,ps=((COACH.roster&&COACH.roster.plans)||[]).filter(p=>p.active||p.privateCents!=null);
   const line=(a,b)=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span>${a}</span><b class="mono">${b}</b></div>`;
   return `<section class="panel stack" id="privates-panel"><h2 class="label">Private lessons</h2>
-    <p class="small">What a private costs each client. A pack lesson is used first, if they have one. Then members pay their plan's private price, and clients without a membership pay the price below. Without a membership means no plan and no monthly fee, the same clients who pay the access fee. With no price set, it's the slot's price. The price is fixed when they book: changing it later doesn't change privates already booked.</p>
+    <p class="small">What a private costs each client. A pack lesson is used first, if they have one. Then members pay their plan's private price, and clients without a membership pay the price below. Without a membership means no plan and no monthly fee. With no price set, it's the slot's price. The price is fixed when they book: changing it later doesn't change privates already booked.</p>
     ${pi?`<form id="privpriceform" class="stack" novalidate><div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">Clients without a membership (${esc(cur)})<input id="pp-fee" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c!=null?c/100:""}" placeholder="The slot's price"></label><button class="btn" type="submit">Save</button></div>${rateChips("pp-fee")}</form>`:`<p class="small muted">Loading…</p>`}
     <div class="stack" style="gap:0"><span class="small muted">Members, by plan</span>${ps.length?ps.map(p=>line(esc(p.name),p.privateCents!=null?esc(money(p.privateCents,cur)):`<span class="small muted">Slot price</span>`)).join(""):`<p class="small muted">No plans yet. Add one above, with its private lesson price.</p>`}
       ${ps.length?`<p class="small muted" style="margin-top:6px">Set a plan's private price with Edit, under Membership plans.</p>`:""}</div>
@@ -1055,7 +1113,7 @@ async function savePriv(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{
   const classes=[];for(let w=0;w<weeks;w++){const day=addDays2(v("date"),7*w);for(const t of times)classes.push({kind:"private",title:v("title")||"Private lesson",startsAt:new Date(`${day}T${t}`).toISOString(),durationMin:dur,priceCents:v("price")?Math.round(Number(v("price"))*100):null,coach:coachVal(form),capacity:Number(v("cap"))||1})}
   const future=classes.filter(c=>new Date(c.startsAt)>Date.now());if(!future.length){toast("Those times have already passed. Pick a later time or another day.");return}
   lsSet("jf.pvTimes",times);lsSet("jf.pvDur",dur);lsSet("jf.pvPrice",v("price"));
-  try{const j=await api("POST","/coach/classes/bulk",{classes:future});hideSheet();const st=calState("coach");st.sel=v("date");st.anchor=st.sel;await coachLoad("classes",st.anchor);coachGo("classes");toast(`Added ${j.added} private slot${j.added===1?"":"s"}${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
+  try{const j=await api("POST","/coach/classes/bulk",{classes:future});hideSheet();const st=calState("coach");st.sel=v("date");st.anchor=st.sel;await coachLoad("classes",st.anchor);coachGo("schedule");toast(`Added ${j.added} private slot${j.added===1?"":"s"}${j.skipped?` (${j.skipped} already there)`:""}.`)}catch(e){toast(e.message)}}
 
 /* ----- competitions ----- */
 const CSTAT={requested:["Asked to enter","due"],entered:["On the team","ok"],declined:["Not this time",""],withdrawn:["Withdrawn",""]};
@@ -1065,7 +1123,7 @@ const kg=w=>w&&/^\d+([.,]\d+)?$/.test(String(w).trim())?String(w).trim()+" kg":w
 const daysTo=d=>Math.round((fromYmd(d)-fromYmd(todayK()))/864e5);
 const regLine=c=>{if(!c.registerBy)return "";const n=daysTo(c.registerBy);return n<0?`<span class="small muted">Registration closed</span>`:n===0?`<span class="small warn-t">Registration closes today</span>`:`<span class="small${n<=7?" warn-t":" muted"}">Registration closes in ${n} day${n===1?"":"s"}</span>`};
 async function loadComps(force){if(!API.me||!API.me.gym)return;if(!force&&API.comps&&Date.now()-API.compsAt<60000)return;
-  try{API.comps=(await api("GET","/competitions")).competitions;API.compsAt=Date.now();if(["book","coach","today"].includes(S.ui.tab)&&!S.ui.sheet)render();else if(S.ui.sheet&&S.ui.sheet.k==="comp")compSheet(S.ui.sheet.id,true)}catch(e){}}
+  try{API.comps=(await api("GET","/competitions")).competitions;API.compsAt=Date.now();if(["classes","coach","home"].includes(S.ui.tab)&&!S.ui.sheet)render();else if(S.ui.sheet&&S.ui.sheet.k==="comp")compSheet(S.ui.sheet.id,true)}catch(e){}}
 const upcomingComps=()=>(API.comps||[]).filter(c=>(c.endsOn||c.startsOn)>=todayK());
 function teamChips(c,max){const t=(c.team||[]).filter(x=>x.status==="entered");if(!t.length)return "";const n=max||5;
   return `<span class="who-line">${t.slice(0,n).map(x=>`<span class="whochip${x.me?" me":""}"><i style="--bc:${BCOL[x.belt]||"#F4F4F0"}"></i>${esc(x.me?"You":x.name)}</span>`).join("")}${t.length>n?`<span class="small muted">+${t.length-n}</span>`:""}</span>`}
@@ -1169,7 +1227,7 @@ function classLine(c){const left=c.capacity?Math.max(0,c.capacity-c.going):null;
 function classesText(from,days,heading){const list=(isCoach()?COACH.classes:API.classes)||[];const out=[];
   for(let i=0;i<days;i++){const k=addDays2(from,i),cs=list.filter(c=>c.kind!=="private"&&dayKey(c.startsAt)===k&&clsEnd(c)>Date.now()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
     if(cs.length)out.push(`*${fromYmd(k).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"})}*\n${cs.map(c=>"• "+classLine(c)).join("\n")}`)}
-  return out.length?`${heading}\n\n${out.join("\n\n")}\n\nBook your spot in JitsFlow: ${appLink("#book")}`:""}
+  return out.length?`${heading}\n\n${out.join("\n\n")}\n\nBook your spot in JitsFlow: ${appLink("#classes")}`:""}
 const WA_T={
   invite:()=>`Join ${gymName()} on JitsFlow. You can book classes, see who's training, and study every technique between sessions.\n\nTap to join (our gym code is filled in for you):\n${joinURL(API.me.gym.studentCode)}`,
   week:()=>classesText(todayK(),7,`*${gymName()}: classes this week*`)||`No classes on the calendar for the next 7 days yet.`,
@@ -1177,7 +1235,7 @@ const WA_T={
   fees:()=>`Hi everyone, a reminder that ${new Date().toLocaleDateString(undefined,{month:"long"})} fees are due. Please use your name as the payment reference and send your proof of payment to the gym. Thank you!`,
   coach:()=>`You're invited to coach at ${gymName()} on JitsFlow. This link gives coach access (the roster and payments), so please keep it to yourself:\n${joinURL(API.me.gym.coachCode)}`,
   comp:(c)=>{if(!c)return "";const team=(c.team||[]).filter(x=>x.status==="entered");
-    return `*${c.name}*\n${compDates(c)}${c.city?" · "+c.city:""}${c.registerBy?`\nRegistration closes ${fromYmd(c.registerBy).toLocaleDateString(undefined,{day:"numeric",month:"long"})}`:""}${c.fee?`\nEntry: ${c.fee}`:""}${team.length?`\n\nOur team (${team.length}): ${team.map(x=>first(x.name)).join(", ")}`:""}\n\nWant to compete? Ask in JitsFlow: ${appLink("#book")}`},
+    return `*${c.name}*\n${compDates(c)}${c.city?" · "+c.city:""}${c.registerBy?`\nRegistration closes ${fromYmd(c.registerBy).toLocaleDateString(undefined,{day:"numeric",month:"long"})}`:""}${c.fee?`\nEntry: ${c.fee}`:""}${team.length?`\n\nOur team (${team.length}): ${team.map(x=>first(x.name)).join(", ")}`:""}\n\nWant to compete? Ask in JitsFlow: ${appLink("#classes")}`},
 };
 const WA_KINDS=[["invite","Invite students"],["week","This week's classes"],["tomorrow","Tomorrow's classes"],["fees","Fees reminder"],["comp","A competition"],["coach","Invite a coach"]];
 function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomingComps();if(st.kind==="comp"&&!st.comp&&comps[0])st.comp=comps[0].id;
@@ -1191,7 +1249,7 @@ function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomin
     <div class="row"><a id="wa-go" class="btn wa primary-wa" href="${esc(waURL(text))}" target="_blank" rel="noopener noreferrer" data-wa="${st.kind}">${WA_ICON}<span>Open WhatsApp</span></a><button class="btn" data-a="copytext" data-v="wa-text">Copy text</button></div></section>`}
 function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";const g=API.me.gym,next=(API.classes||[]).find(c=>c.myGoing&&clsEnd(c)>Date.now());
   const inv=g.inviteCode?`Come train with me at ${g.name}! I use JitsFlow to book classes and study techniques between sessions. Join here (the gym code is filled in):\n${joinURL(g.inviteCode)}`:`I'm using JitsFlow to study no-gi between classes: every position, attack chain and escape, with videos. ${location.origin}`;
-  return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#book")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
+  return `<section class="stack"><h2 class="label">Share on WhatsApp</h2><div class="quick">${waBtn(inv,g.inviteCode?"Invite a friend to the gym":"Tell a friend about JitsFlow",{kind:"invite_friend"})}${next?waBtn(`I'm going to ${next.title} at ${g.name}, ${fmtWhen(next.startsAt)}. Coming? Book here: ${appLink("#classes")}`,"Ask someone to join my next class",{kind:"class"}):""}</div></section>`}
 
 /* ----- training log that fills itself in from the classes you attended ----- */
 const bySess=(a,b)=>(a.date===b.date?String(b.time||"").localeCompare(String(a.time||"")):a.date<b.date?1:-1);
@@ -1208,7 +1266,7 @@ async function autoLog(force){
     taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id);fresh++}});
     if(await addSession(s))n++}
   if(fresh)saveProgress();
-  if(n){if(["log","today"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
+  if(n){if(["journal","home"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
 }
 /* What to do next, worked out from your last few weeks of training. */
 function nextSteps(){const out=[],seen=new Set();
@@ -1317,18 +1375,18 @@ function impReview(){const j=COACH.imp;if(!j||j.status!=="done")return;const r=j
 /* ============ GETTING STARTED (new coaches) ============ */
 function welcomeSheet(){S.ui.sheet={k:"welcome"};S.ui.stack=[];
   openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><h1>Welcome to JitsFlow</h1><p class="lead">${esc(API.me.gym.name)} is set up. Three things to know:</p>
-    <ol class="steps qrsteps"><li><span><b>Today</b> is your gym's day: classes, who's booked, and what needs you (payments to check, people who haven't paid, requests).</span></li>
-    <li><span><b>Students</b>: add them one by one, from your phone's contacts, or paste a list. They don't need the app for you to track their plan and payments.</span></li>
-    <li><span><b>Getting started</b> on Today walks you through the rest, one tap at a time.</span></li></ol>
-    ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Today when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
+    <ol class="steps qrsteps"><li><span><b>Home</b> is your gym's day: classes, who's booked, and what needs you (payments to check, people who haven't paid, requests).</span></li>
+    <li><span><b>Members</b>: add your students one by one, from your phone's contacts, or paste a list. They don't need the app for you to track their plan and payments.</span></li>
+    <li><span><b>Getting started</b> on Home walks you through the rest, one tap at a time.</span></li></ol>
+    ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Home when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
   api("PATCH","/coach/gym",{setup:{welcomed:true}}).then(j=>{API.me=j.me}).catch(()=>{})}
 function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roster)return "";
   if(COACH.payInfo===undefined&&isHead()){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{})}
   const p=gymProfile()||{},pay=((COACH.payInfo||{}).pay)||{},plans=(COACH.roster.plans||[]).length;
   const items=[["Your gym's details",!!((p.timetable||[]).length||(p.rates||[]).length||API.me.gym.logo),"setupgo","gym","Import your website"],
-    ["Classes on the calendar",(COACH.classes||[]).some(c=>c.kind!=="private"),"setupgo","classes","Add classes"],
+    ["Classes on the calendar",(COACH.classes||[]).some(c=>c.kind!=="private"),"setupgo","schedule","Add classes"],
     ["Plans and bank details",plans>0&&!!(pay.account||pay.link),"setupgo","money","Set up"],
-    ["Your students",students().length>0,"setupgo","students","Add or invite"]].filter(i=>isHead()||i[3]!=="money");
+    ["Your students",students().length>0,"setupgo","members","Add or invite"]].filter(i=>isHead()||i[3]!=="money");
   const done=items.filter(i=>i[1]).length;if(done===items.length)return "";
   return `<section class="panel stack setupcard"><div class="row between"><h2 class="label">Getting started · ${done} of ${items.length}</h2><button class="linkbtn small" data-a="setuphide">Hide</button></div>
     <div class="progress"><i style="width:${Math.round(100*done/items.length)}%"></i></div>
@@ -1403,7 +1461,7 @@ async function bulkAdd(){const b=S.ui.bulk;if(!b)return;const idx=b.people.map((
   const gap=idx.find(i=>!String(b.people[i].name||"").trim());
   if(gap!==undefined){const p=b.people[gap];toast(p.parentName?`Type the kid's name for ${p.parentName==="Parent"?"that parent":p.parentName}, or untick them.`:"One ticked row has no name. Type it, or untick it.");const el=document.querySelector(`[data-bk="name"][data-i="${gap}"]`);if(el)el.focus();return}
   const people=idx.map(i=>{const p=b.people[i];return {name:p.name.trim(),parentName:p.parentName||"",phone:p.phone||"",email:p.email||""}});
-  try{const j=await api("POST","/coach/students/bulk",{people});hideSheet();S.ui.bulk=null;await coachLoad("roster");COACH.money=null;coachGo("students");
+  try{const j=await api("POST","/coach/students/bulk",{people});hideSheet();S.ui.bulk=null;await coachLoad("roster");COACH.money=null;coachGo("members");
     toast(`Added ${j.added} student${j.added===1?"":"s"}${j.skipped?`; ${j.skipped} already on your list`:""}.`);jfTrack("bulk_students",{added:j.added})}catch(e){toast(e.message)}}
 
 /* ============ THE GYM'S LOOK: their logo up top and their colour, still JitsFlow underneath ============ */

@@ -237,6 +237,10 @@ alter table gyms add column if not exists private_price_cents int;
 alter table attendance add column if not exists price_cents int;
 alter table attendance add column if not exists price_from text;
 alter table attendance add column if not exists price_label text;
+-- what clients who only take privates need: 'none' (just the private's price), 'fee' (the access fee above, in months they have a private;
+-- 0 charges nothing) or 'membership' (they can't book a private without an active plan from private_plan_ids). Gyms that were there keep 'fee'.
+alter table gyms add column if not exists access_mode text not null default 'fee';
+alter table gyms add column if not exists private_plan_ids bigint[] not null default '{}';
 `;
 
 // Gyms without an active head coach (gyms from before head coaches, or the head left): the longest-standing active coach takes it.
