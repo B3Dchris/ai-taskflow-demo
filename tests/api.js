@@ -434,9 +434,12 @@ function client(base) {
       r = await tess("GET", "/me/attended"); ok(!r.j.classes.some((c) => c.id === pub), "only your own classes"); }
     // --- PayFast: the gym's plan, card payments, payment notifications
     { const pf = require("../backend/payfast");
-      r = await coach("GET", "/coach/billing"); ok(r.s === 200 && r.j.billing.status === "trial" && r.j.billing.trialEnds === "2027-02-08" && r.j.billing.priceCents === 9900 && r.j.billing.feePct === 2 && r.j.billing.test, "a gym gets three free months, then R99 a month: " + JSON.stringify(r.j.billing));
+      // three months from the day the gym started (or the day paid plans began, if later), on the same day of the month
+      const t0 = [new Date().toISOString().slice(0, 10), "2026-11-08"].sort().pop(), [ty, tm, td] = t0.split("-").map(Number), tlast = new Date(Date.UTC(ty, tm + 3, 0)).getUTCDate();
+      const trialEnds = new Date(Date.UTC(ty, tm + 2, Math.min(td, tlast))).toISOString().slice(0, 10);
+      r = await coach("GET", "/coach/billing"); ok(r.s === 200 && r.j.billing.status === "trial" && r.j.billing.trialEnds === trialEnds && r.j.billing.priceCents === 9900 && r.j.billing.feePct === 2 && r.j.billing.test, "a gym gets three free months, then R99 a month: " + JSON.stringify(r.j.billing));
       r = await coach("POST", "/coach/billing/checkout", {}); const f = r.j.fields;
-      ok(r.s === 200 && /sandbox\.payfast\.co\.za\/eng\/process$/.test(r.j.action) && f.amount === "0.00" && f.billing_date === "2027-02-08" && f.recurring_amount === "99.00" && f.frequency === "3" && f.subscription_type === "1" && f.cycles === "0", "adding a card charges nothing until the free months end, then R99 monthly");
+      ok(r.s === 200 && /sandbox\.payfast\.co\.za\/eng\/process$/.test(r.j.action) && f.amount === "0.00" && f.billing_date === trialEnds && f.recurring_amount === "99.00" && f.frequency === "3" && f.subscription_type === "1" && f.cycles === "0", "adding a card charges nothing until the free months end, then R99 monthly");
       ok(f.signature === pf.sign(f, pf.TEST.pass) && f.notify_url === "https://www.jitsflow.test/api/payfast/notify", "the checkout is signed with the passphrase");
       r = await coach("PUT", "/coach/payfast", { merchantId: "123", merchantKey: "x" }); ok(r.s === 400, "a wrong Merchant ID is refused with how to find it");
       r = await coach("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: "gym secret" }); ok(r.s === 200, "a coach connects their own PayFast account");
@@ -672,6 +675,109 @@ function client(base) {
         r = await pc("PUT", `/classes/${sp}/rsvp`, { going: true }); ok(r.s === 200, "(booking it again is harmless)"); }
       r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: 0 }); r = await pc("GET", "/me/pay"); ok(r.j.pay.accessCents === 0, "an access fee of 0 switches it off");
       await hc("DELETE", "/coach/payfast"); }
+    // --- private-lesson price tiers: no membership R1200, Access R900, Full R900; prices lock in when booked
+    { const xh = { "x-forwarded-for": "198.51.100.40" }, hc = client(base), co = client(base), pl = new Pool({ connectionString: DB }), H = 3600e3;
+      const tg = (await hc("POST", "/auth/start-gym", { gym: "Tier Gym", name: "Tier Head", email: "head@tier.test", password: "tierhead11" }, xh)).j.me.gym;
+      await co("POST", "/auth/register", { code: tg.coachCode, name: "Tier Coach", email: "coach@tier.test", password: "tiercoach1" }, xh);
+      const st = {}; for (const n of ["none", "acc", "full", "trial", "paused", "kid"]) { const c = client(base); c.id = (await c("POST", "/auth/register", { code: tg.studentCode, name: "Tier " + n, email: n + "@tier.test", password: n + "pass1234" }, xh)).j.me.id; st[n] = c; }
+      const ym = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }).slice(0, 7), thisMonth = ym(Date.now());
+      // only the head coach sets prices
+      r = await co("PATCH", "/coach/gym/private-price", { privateCents: 120000 }); ok(r.s === 403, "another coach can't set the private lesson price");
+      r = await co("POST", "/coach/plans", { name: "Sneaky", priceCents: 100, privateCents: 1 }); ok(r.s === 403, "or a plan's private price");
+      r = await hc("PATCH", "/coach/gym/private-price", { privateCents: -5 }); ok(r.s === 400, "a negative price is refused");
+      r = await hc("PATCH", "/coach/gym/private-price", { privateCents: 120000 }); ok(r.s === 200 && r.j.privateCents === 120000 && (await hc("GET", "/coach/gym/pay")).j.privateCents === 120000, "the head coach sets R1200 for clients without a membership");
+      r = await co("GET", "/coach/gym/pay"); ok(r.s === 403, "other coaches don't see it");
+      const acc = (await hc("POST", "/coach/plans", { name: "Access", priceCents: 50000, period: "month", privateCents: 90000 })).j.plan;
+      let full = (await hc("POST", "/coach/plans", { name: "Full membership", priceCents: 120000, period: "month", privateCents: 90000 })).j.plan;
+      const kids = (await hc("POST", "/coach/plans", { name: "Kids", priceCents: 60000, period: "month" })).j.plan;
+      ok(acc.privateCents === 90000 && full.privateCents === 90000 && kids.privateCents === null, "plans carry a private price (or none)");
+      r = await hc("POST", "/coach/plans", { name: "Bad", priceCents: 100, privateCents: "abc" }); ok(r.s === 400, "a plan's private price must be a number");
+      r = await hc("PATCH", `/coach/plans/${full.id}`, { name: "Full membership", priceCents: 120000, period: "month" }); ok(r.j.plan.privateCents === 90000, "editing a plan without its private price keeps it");
+      r = await hc("PATCH", `/coach/plans/${full.id}`, { name: "Full membership", priceCents: 120000, period: "month", privateCents: "" }); ok(r.j.plan.privateCents === null, "an empty private price clears it");
+      full = (await hc("PATCH", `/coach/plans/${full.id}`, { name: "Full membership", priceCents: 120000, period: "month", privateCents: 90000 })).j.plan;
+      r = await hc("GET", "/coach/roster"); ok(r.j.plans.find((p) => p.id === acc.id).privateCents === 90000, "the roster's plans say so too");
+      for (const [n, pid, status] of [["acc", acc.id, "active"], ["full", full.id, "active"], ["trial", full.id, "trial"], ["paused", full.id, "paused"], ["kid", kids.id, "active"]]) await hc("PATCH", `/coach/students/${st[n].id}`, { planId: pid, planStatus: status });
+      const slot = async (h, price = 45000) => (await hc("POST", "/classes", { kind: "private", title: "Private " + h, startsAt: new Date(Date.now() + h * H).toISOString(), durationMin: 60, priceCents: price })).j.class.id;
+      // what each student sees before booking
+      const s1 = await slot(2), seen = async (n, id) => ((await st[n]("GET", "/classes")).j.classes.find((c) => c.id === id) || {}).myPrice;
+      let mp = await seen("none", s1); ok(mp && mp.cents === 120000 && mp.label === "No membership" && !mp.pack, "a student without a membership sees R1200 on an open slot: " + JSON.stringify(mp));
+      mp = await seen("acc", s1); ok(mp.cents === 90000 && mp.label === "Access", "an Access member sees R900");
+      mp = await seen("full", s1); ok(mp.cents === 90000 && mp.label === "Full membership", "a Full member sees R900");
+      mp = await seen("trial", s1); ok(mp.cents === 90000, "a trial counts as a membership");
+      mp = await seen("kid", s1); ok(mp.cents === 45000 && mp.label === "", "a plan with no private price pays the slot's price");
+      r = await hc("GET", "/classes"); ok(r.j.classes.every((c) => c.myPrice === undefined), "coaches don't get a 'my price'");
+      // booking locks the price in
+      const sl = {}; for (const n of ["none", "acc", "full", "trial", "kid"]) { sl[n] = await slot(3 + Object.keys(sl).length); r = await st[n]("PUT", `/classes/${sl[n]}/rsvp`, { going: true }); sl[n + "R"] = r.j.price; }
+      ok(sl.noneR.cents === 120000 && sl.noneR.label === "No membership" && sl.accR.cents === 90000 && sl.fullR.label === "Full membership" && sl.trialR.cents === 90000 && sl.kidR.cents === 45000, "booking says what it costs them: " + JSON.stringify([sl.noneR, sl.accR, sl.fullR, sl.kidR]));
+      { const rows = (await pl.query("select user_id, price_cents, price_from from attendance where class_id = any($1)", [[sl.none, sl.acc, sl.kid]])).rows, by = Object.fromEntries(rows.map((x) => [String(x.user_id), x]));
+        ok(by[st.none.id].price_from === "nonmember" && by[st.acc.id].price_from === "plan" && by[st.kid.id].price_from === "slot", "the booking row keeps the price and where it came from"); }
+      const owes = async (n, id) => ((await st[n]("GET", "/me/pay")).j.pay.privates.find((x) => x.classId === id) || {}).priceCents;
+      const inMonth = ym(Date.now() + 8 * H) === thisMonth;
+      if (inMonth) { ok(await owes("none", sl.none) === 120000 && await owes("acc", sl.acc) === 90000 && await owes("full", sl.full) === 90000 && await owes("kid", sl.kid) === 45000, "each owes their own price on the Pay sheet"); }
+      r = await hc("GET", "/coach/money"); const mn = r.j.students.find((x) => x.id === st.none.id);
+      ok(!inMonth || (mn.privates.find((x) => x.classId === sl.none).priceCents === 120000 && mn.privates.find((x) => x.classId === sl.none).label === "No membership"), "and on the Money page");
+      // the head coach sees per-booking amounts on the private; another coach doesn't
+      r = await hc("GET", `/coach/classes/${sl.none}`); let a0 = r.j.attendees[0]; ok(a0.priceCents === 120000 && a0.priceLabel === "No membership" && a0.pack === false, "the head coach sees what the booking costs");
+      r = await co("GET", `/coach/classes/${sl.none}`); a0 = r.j.attendees[0]; ok(r.s === 200 && a0.priceCents === undefined && a0.priceLabel === undefined && a0.privatesLeft === 0, "another coach sees the booking but not the money");
+      // prices change: bookings already made keep theirs, new ones get the new price
+      await hc("PATCH", "/coach/gym/private-price", { privateCents: 150000 }); await hc("PATCH", `/coach/plans/${acc.id}`, { name: "Access", priceCents: 50000, period: "month", privateCents: 95000 });
+      r = await hc("GET", `/coach/classes/${sl.none}`); ok(r.j.attendees[0].priceCents === 120000, "a price change doesn't change a private already booked");
+      if (inMonth) ok(await owes("none", sl.none) === 120000 && await owes("acc", sl.acc) === 90000, "nor what they owe for it");
+      mp = await seen("acc", sl.acc); ok(mp.cents === 90000, "the student still sees the price they booked at");
+      mp = await seen("none", s1); ok(mp.cents === 150000, "an open slot shows the new price");
+      r = await st.none("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.j.price.cents === 150000, "and a new booking gets it");
+      r = await st.none("PUT", `/classes/${s1}/rsvp`, { going: false }); ok((await pl.query("select price_cents from attendance where class_id=$1 and user_id=$2", [s1, st.none.id])).rows[0].price_cents === null, "cancelling lets the price go");
+      await hc("PATCH", "/coach/gym/private-price", { privateCents: 130000 }); r = await st.none("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.j.price.cents === 130000, "booking again takes today's price"); await st.none("PUT", `/classes/${s1}/rsvp`, { going: false });
+      // a slot at its own price follows the slot when the coach changes it; tier prices don't
+      await hc("PUT", `/classes/${sl.kid}`, { priceCents: 50000 }); await hc("PUT", `/classes/${sl.none}`, { priceCents: 50000 });
+      r = await hc("GET", `/coach/classes/${sl.kid}`); ok(r.j.attendees[0].priceCents === 50000, "a booking at the slot's price follows the slot's new price");
+      r = await hc("GET", `/coach/classes/${sl.none}`); ok(r.j.attendees[0].priceCents === 120000, "a booking at a tier price doesn't");
+      // bookings from before tiers (no price on the row) cost the slot's price, as they did then: tier prices never reprice them
+      await pl.query("update attendance set price_cents=null, price_from=null, price_label=null where class_id=$1", [sl.full]);
+      await hc("PATCH", `/coach/plans/${full.id}`, { name: "Full membership", priceCents: 120000, period: "month", privateCents: 80000 });
+      r = await hc("GET", `/coach/classes/${sl.full}`); ok(r.j.attendees[0].priceCents === 45000 && r.j.attendees[0].priceLabel === "", "an older booking with no price on it costs the slot's price, not today's tier: " + JSON.stringify(r.j.attendees[0]));
+      if (inMonth) ok(await owes("full", sl.full) === 45000, "and that's what they owe for it");
+      await hc("PUT", `/classes/${sl.full}`, { priceCents: 47000 }); r = await hc("GET", `/coach/classes/${sl.full}`); ok(r.j.attendees[0].priceCents === 47000, "it follows the slot's price, as before tiers");
+      { const past = (await hc("POST", "/classes", { kind: "private", title: "Old private", startsAt: new Date(Date.now() - 40 * 24 * H).toISOString(), durationMin: 60, priceCents: 100000 })).j.class.id, lastMonth = ym(Date.now() - 40 * 24 * H);
+        await pl.query("update gyms set privates_from=now() - interval '90 days' where id=(select gym_id from classes where id=$1)", [past]);
+        await pl.query("insert into attendance(class_id,user_id,going,attended) values($1,$2,true,true)", [past, st.none.id]); await pl.query("update users set created_at=now() - interval '90 days' where id=$1", [st.none.id]);
+        const old = async () => (((await hc("GET", `/coach/money?month=${lastMonth}`)).j.students.find((x) => x.id === st.none.id) || { privates: [] }).privates.find((x) => x.classId === past) || {});
+        let o = await old(); ok(o.priceCents === 100000 && o.label === "", "a private from before tiers, last month, is owed at the slot's price: " + JSON.stringify(o));
+        await hc("PATCH", "/coach/gym/private-price", { privateCents: 200000 }); o = await old(); ok(o.priceCents === 100000 && o.label === "", "changing the price for clients without a membership doesn't reprice it: " + JSON.stringify(o));
+        await hc("PATCH", "/coach/gym/private-price", { privateCents: 130000 }); }
+      // a paused member is priced as a client without a membership; the coach adding them locks it in
+      const s2 = await slot(10); r = await hc("PUT", `/coach/classes/${s2}/attendance`, { userIds: [st.paused.id], attended: false });
+      r = await hc("GET", `/coach/classes/${s2}`); ok(r.j.attendees[0].priceCents === 130000 && r.j.attendees[0].priceLabel === "No membership", "a paused member added by the coach pays the price for clients without a membership");
+      await hc("PATCH", "/coach/gym/private-price", { privateCents: 140000 }); await hc("PUT", `/coach/classes/${s2}/attendance`, { userIds: [st.paused.id] });
+      r = await hc("GET", `/coach/classes/${s2}`); ok(r.j.attendees[0].priceCents === 130000, "checking them in later keeps the price they were added at");
+      // a membership is the same thing as on the Money page: a plan, a fee of their own or the gym's standard fee (they don't pay the access fee either)
+      await hc("PATCH", `/coach/students/${st.none.id}`, { feeCents: 50000 }); mp = await seen("none", s1); ok(mp.cents === 45000 && mp.label === "", "someone paying a fee of their own is a member: no 'No membership' price for them: " + JSON.stringify(mp));
+      r = await st.none("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.j.price.cents === 45000 && r.j.price.label === "", "and booking locks in the slot's price for them");
+      await st.none("PUT", `/classes/${s1}/rsvp`, { going: false });
+      await hc("PATCH", "/coach/gym", { monthlyFeeCents: 85000 }); await hc("PATCH", `/coach/students/${st.none.id}`, { feeCents: null }); mp = await seen("none", s1); ok(mp.cents === 45000 && mp.label === "", "nor someone paying the gym's standard fee");
+      r = await st.none("PUT", `/classes/${s1}/rsvp`, { going: true }); ok(r.j.price.cents === 45000 && r.j.price.label === "", "booking as a standard-fee member: the slot's price");
+      if (ym(Date.now() + 2 * H) === thisMonth) { const pay = (await st.none("GET", "/me/pay")).j.pay, x = pay.privates.find((o) => o.classId === s1) || {};
+        ok(pay.membershipCents === 85000 && pay.accessCents === 0 && x.priceCents === 45000 && x.label !== "No membership", "their Pay sheet charges the fee and the slot's price, never the 'No membership' price too: " + JSON.stringify(x)); }
+      await st.none("PUT", `/classes/${s1}/rsvp`, { going: false });
+      await hc("PATCH", "/coach/gym", { monthlyFeeCents: 0 }); mp = await seen("none", s1); ok(mp.cents === 140000 && mp.label === "No membership", "with no fee or plan, they're back to the 'No membership' price");
+      // a group class made into a private: the people already booked get their price locked in, like a booking
+      { const gc = (await hc("POST", "/classes", { kind: "class", title: "Open mat", startsAt: new Date(Date.now() + 12 * H).toISOString(), durationMin: 60 })).j.class.id;
+        r = await st.none("PUT", `/classes/${gc}/rsvp`, { going: true }); ok(r.s === 200, "(a student books a group class)");
+        r = await hc("PUT", `/classes/${gc}`, { kind: "private", priceCents: 100000 }); ok(r.s === 200 && r.j.class.kind === "private", "the coach makes it a private");
+        r = await hc("GET", `/coach/classes/${gc}`); ok(r.j.attendees[0].priceCents === 140000 && r.j.attendees[0].priceLabel === "No membership", "the student already on it gets their price: " + JSON.stringify(r.j.attendees[0]));
+        ok((await pl.query("select price_from from attendance where class_id=$1 and user_id=$2", [gc, st.none.id])).rows[0].price_from === "nonmember", "locked in on the booking");
+        await hc("PATCH", "/coach/gym/private-price", { privateCents: 200000 }); r = await hc("GET", `/coach/classes/${gc}`); ok(r.j.attendees[0].priceCents === 140000, "a later price change doesn't change it");
+        await hc("PATCH", "/coach/gym/private-price", { privateCents: 140000 }); await hc("DELETE", `/classes/${gc}`, { notify: false }); }
+      // a pack covers it before any tier price
+      await hc("POST", "/coach/payments", { userId: st.none.id, amountCents: 300000, paidOn: today, method: "cash", packId: (await hc("POST", "/coach/packs", { name: "3 privates", lessons: 3, priceCents: 300000 })).j.pack.id });
+      mp = await seen("none", s1); ok(mp.pack === true && mp.left === 2 && mp.cents === 140000, "with pack lessons left, an open slot says it uses one: " + JSON.stringify(mp));
+      mp = await seen("none", sl.none); ok(mp.pack === true, "and the booked private is covered by the pack");
+      ok(!(await owes("none", sl.none)), "so it isn't owed");
+      r = await hc("GET", `/coach/classes/${sl.none}`); ok(r.j.attendees[0].pack === true && r.j.attendees[0].privatesLeft === 2, "the head coach sees it's paid from the pack");
+      // a gym that sets none of this: the slot's price, as before
+      r = await hc("PATCH", "/coach/gym/private-price", { privateCents: null }); ok(r.j.privateCents === null && (await hc("GET", "/coach/gym/pay")).j.privateCents === null, "the price for clients without a membership can be cleared");
+      const s3 = await slot(11); mp = await seen("none", s3); ok(mp.cents === 45000 && mp.label === "", "with no price set, they pay the slot's price");
+      await pl.end(); }
     // --- a live server (JitsFlow's own PayFast account set): no test merchant, and limits per address that can't be faked
     { const port2 = port + 100, base2 = `http://127.0.0.1:${port2}/api`, pfm = require("../backend/payfast");
       const srv2 = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...env, PORT: String(port2), PAYFAST_MERCHANT_ID: "12345678", PAYFAST_MERCHANT_KEY: "abcdefghijk12", PAYFAST_PASSPHRASE: "live pass" }, stdio: ["ignore", "ignore", "inherit"] });

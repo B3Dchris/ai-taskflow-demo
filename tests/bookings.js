@@ -168,8 +168,10 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await coach("POST", "/coach/message", { userIds: [999999], subject: "x", text: "y" }); ok(r.s === 400, "can't email people outside the gym");
 
     // ---- plans from imported website rates
-    await pool.query("update gyms set profile=$1 where id=$2", [{ rates: [{ name: "Unlimited", price: 850, period: "month" }, { name: "3 times a week", price: 750, period: "month" }, { name: "Drop-in", price: 150, period: "class" }] }, gym]);
+    await pool.query("update gyms set profile=$1 where id=$2", [{ rates: [{ name: "Unlimited", price: 850, period: "month" }, { name: "3 times a week", price: 750, period: "month" }, { name: "Drop-in", price: 150, period: "class" },
+      { name: "Private lesson per lesson", price: 1200, period: "class" }, { name: "Coaching", price: 900, period: "class", note: "one on one" }, { name: "PT session", price: 700, period: "other" }] }, gym]);
     r = await coach("POST", "/coach/plans/from-rates"); ok(r.j.added === 2 && r.j.plans.find((p) => p.name === "3 times a week").classesPerWeek === 3, "website rates become plans (with weekly limits read from the name)");
+    ok(!r.j.plans.some((p) => /private|coaching|pt session/i.test(p.name)), "private-lesson prices on the website don't become membership plans: " + r.j.plans.map((p) => p.name).join(", "));
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
   srv.kill(); sink.close(); await pool.end();
   console.log(`bookings: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));

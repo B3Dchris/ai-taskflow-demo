@@ -126,6 +126,10 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
       ok(!/info@mysite/.test(t) && /sample content/.test(t), "website-builder sample filler is flagged, not passed off as the gym's"); }
     ok(r.pages.some((x) => /\/team$/.test(x.url)), "the team page is read");
     ok(im.cleanProfile({ phone: "2026-05-13" }).phone === "" && im.cleanProfile({ phone: "123-456-7890" }).phone === "" && im.cleanProfile({ phone: "+27 83 462 9089" }).phone === "+27 83 462 9089", "a date or a template number isn't taken as the phone number");
+    // ---- private-lesson prices are kept (the head coach is offered them as private lesson prices)
+    { const pg = im.parsePage(`<html><body><h2>Privates</h2><p>Private lesson R1200</p><p>1-on-1 coaching: R 900</p><p>PT session R700</p><p>Rashguard R 450</p></body></html>`, "https://x.test/privates");
+      const rs = im.plainRead([pg]).rates, has = (n, c) => rs.some((x) => x.name.includes(n) && x.price === c);
+      ok(has("Private lesson", 1200) && has("1-on-1", 900) && has("PT", 700) && !rs.some((x) => x.price === 450), "private lesson, 1-on-1 and PT prices are read (shop prices still aren't): " + JSON.stringify(rs.map((x) => [x.name, x.price]))); }
     // ---- cleaning what the browser sends back
     const cl = im.cleanProfile({ name: "x".repeat(500), website: "javascript:alert(1)", socials: { instagram: "javascript:alert(1)", facebook: "https://facebook.com/a" }, timetable: [{ day: "Mon", start: "25:00" }, { day: "Tue", start: "7:05", title: "<b>Hi</b>" }], rates: [{ name: "a", price: -5 }, { name: "b", price: "100", period: "weird" }] });
     ok(cl.name.length === 100 && cl.website === "" && !cl.socials.instagram && cl.socials.facebook, "unsafe links are dropped and text is capped");

@@ -229,6 +229,14 @@ alter table gyms add column if not exists access_fee_cents int not null default 
 -- privates from this time on are charged (owed at their price with no lesson left, and counted for the access fee). Gyms that
 -- were there before get the time this column was added, so privates already paid for outside the app aren't owed; new gyms, when they start.
 alter table gyms add column if not exists privates_from timestamptz not null default now();
+-- private-lesson price tiers: a plan's price for a private (null: the slot's price), and the gym's price for clients
+-- without a membership (null: the slot's price). What a booking costs is locked in on its attendance row when it's booked,
+-- so changing prices later never changes privates already booked. price_from: plan, nonmember or slot (slot prices follow the slot).
+alter table plans add column if not exists private_price_cents int;
+alter table gyms add column if not exists private_price_cents int;
+alter table attendance add column if not exists price_cents int;
+alter table attendance add column if not exists price_from text;
+alter table attendance add column if not exists price_label text;
 `;
 
 // Gyms without an active head coach (gyms from before head coaches, or the head left): the longest-standing active coach takes it.

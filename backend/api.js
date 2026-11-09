@@ -69,7 +69,7 @@ function clientIp(req) {
 
 // Who's signed in, with their gym and its head coach (only while that coach is still an active coach there).
 const ME_COLS = `u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup,
-  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, h.id as head_id, h.name as head_name`;
+  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, g.private_price_cents as gym_private_cents, h.id as head_id, h.name as head_name`;
 const ME_JOIN = "left join gyms g on g.id=u.gym_id left join users h on h.id=g.head_coach_id and h.gym_id=g.id and h.role='coach' and h.active";
 
 function makeApi(pool, { secureCookies }) {
@@ -437,6 +437,14 @@ function makeApi(pool, { secureCookies }) {
       for (const x of a.rows) (by[x.class_id] = by[x.class_id] || []).push({ id: String(x.id), name: coach ? x.name : shortName(x.name), belt: x.belt, stripes: x.stripes, me: String(x.id) === String(u.id) });
       out.forEach((c) => { if (ids.includes(Number(c.id)) || ids.includes(c.id)) c.attendees = by[c.id] || []; });
     }
+    // Students see what each private costs them: from a pack, at the price locked in when they booked, or at today's price for them.
+    if (!coach && u.role === "student" && r.rows.some((c) => c.kind === "private")) {
+      const plan = u.plan_id ? (await q("select * from plans where id=$1", [u.plan_id])).rows[0] : null, pv = (await privatesOf(u.gym_id, [u.id], tzOf(u), await todayIn(u)))[u.id];
+      for (const c of out) if (c.kind === "private") {
+        const b = pv.prices[c.id], day = dayIn(c.startsAt, tzOf(u)), now = privatePrice(u, plan, u, c.priceCents);
+        c.myPrice = b ? { cents: b.cents, label: b.label, pack: b.covered, left: pv.left } : { cents: now.cents, label: now.label, pack: pv.left > 0 && (!pv.until || day < pv.until), left: pv.left };
+      }
+    }
     res.json({ classes: out, showAttendees: u.show_attendees !== false });
   }));
 
@@ -476,6 +484,10 @@ function makeApi(pool, { secureCookies }) {
       await db.query("select id from classes where id=$1 for update", [cur.id]);
       row = (await db.query("update classes set title=$1,starts_at=$2,duration_min=$3,plan=$4,shared=$5,kind=$6,capacity=$7,price_cents=$8,coach=$9,level=$10,discipline=$11 where id=$12 returning *",
         [c.title, c.startsAt, c.durationMin, c.plan, c.shared, c.kind, c.capacity, c.priceCents, c.coach, c.level, c.discipline, cur.id])).rows[0];
+      // Bookings priced at the slot's own price (no tier price for them) follow it; tier prices stay as they were booked.
+      if ((row.price_cents || 0) !== (cur.price_cents || 0)) await db.query("update attendance set price_cents=$1 where class_id=$2 and price_from='slot'", [row.price_cents || 0, row.id]);
+      // A group class made into a private: the people already on it get their private price now, locked in like a booking.
+      if (row.kind === "private" && cur.kind !== "private") await lockPrice(db, row, (await db.query("select user_id from attendance where class_id=$1 and (going or attended) and price_from is null", [row.id])).rows.map((x) => x.user_id));
       ids = await promoteWaitlist(db, row); // more spots (or no limit any more): people waiting move in
       await db.query("commit");
     } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
@@ -525,6 +537,7 @@ function makeApi(pool, { secureCookies }) {
     if (free <= 0) return [];
     const r = await db.query(`update attendance set going=true, waitlisted=false, booked_at=clock_timestamp(), updated_at=now()
       where class_id=$1 and user_id in (select user_id from attendance where class_id=$1 and waitlisted order by booked_at limit $2) returning user_id`, [c.id, Math.min(free, 1000)]);
+    await lockPrice(db, c, r.rows.map((x) => x.user_id));
     return r.rows.map((x) => x.user_id);
   }
   async function tellPromoted(ids, c, u) {
@@ -534,7 +547,7 @@ function makeApi(pool, { secureCookies }) {
   }
   // Release someone's future bookings at a gym (they left it or deleted their account) and hand the spots on.
   async function releaseBookings(userId, gymId, u) {
-    const rows = (await q(`update attendance a set going=false, waitlisted=false, updated_at=now() from classes c
+    const rows = (await q(`update attendance a set going=false, waitlisted=false, ${UNPRICE("a")}, updated_at=now() from classes c
       where c.id=a.class_id and a.user_id=$1 and c.gym_id=$2 and c.starts_at > now() and (a.going or a.waitlisted) returning c.id`, [userId, gymId])).rows;
     for (const { id } of rows) {
       const db = await pool.connect();
@@ -587,9 +600,10 @@ function makeApi(pool, { secureCookies }) {
           await db.query(`insert into attendance(class_id,user_id,going,waitlisted,booked_at) values($1,$2,$3,$4,clock_timestamp())
             on conflict(class_id,user_id) do update set going=excluded.going, waitlisted=excluded.waitlisted, booked_at=clock_timestamp(), updated_at=now()`, [c.id, u.id, !full, !!full]);
           out = { going: !full, waitlisted: !!full };
+          if (!full && c.kind === "private") { await lockPrice(db, c, [u.id]); const a = (await db.query("select price_cents, price_label from attendance where class_id=$1 and user_id=$2", [c.id, u.id])).rows[0]; out.price = { cents: a.price_cents, label: a.price_label || "" }; }
         }
       } else {
-        await db.query("update attendance set going=false, waitlisted=false, updated_at=now() where class_id=$1 and user_id=$2", [c.id, u.id]);
+        await db.query(`update attendance set going=false, waitlisted=false, ${UNPRICE()}, updated_at=now() where class_id=$1 and user_id=$2`, [c.id, u.id]);
         out = { going: false, waitlisted: false };
         // A spot opened: give it to whoever has waited longest.
         if (mine && mine.going) { const ids = await promoteWaitlist(db, c); if (ids.length) promoted = { ids, c }; }
@@ -620,6 +634,7 @@ function makeApi(pool, { secureCookies }) {
       }
       await db.query(`insert into attendance(class_id,user_id,going,attended,checked_in_at) values($1,$2,true,true,now())
                on conflict(class_id,user_id) do update set going=true, waitlisted=false, attended=true, checked_in_at=now(), updated_at=now()`, [c.id, u.id]);
+      if (!mine || !mine.going) await lockPrice(db, c, [u.id]);
       await db.query("commit");
     } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
     res.json({ ok: true });
@@ -696,7 +711,9 @@ function makeApi(pool, { secureCookies }) {
   // Paused and cancelled members don't pay fees.
   const feeOff = (status) => status === "paused" || status === "cancelled";
   async function plansOf(gymId) { return (await q("select * from plans where gym_id=$1 order by active desc, price_cents", [gymId])).rows; }
-  const planOut = (p) => ({ id: String(p.id), name: p.name, priceCents: p.price_cents, period: p.period, classesPerWeek: p.classes_per_week, active: p.active, monthlyCents: monthly(p) });
+  const planOut = (p) => ({ id: String(p.id), name: p.name, priceCents: p.price_cents, period: p.period, classesPerWeek: p.classes_per_week, active: p.active, monthlyCents: monthly(p), privateCents: p.private_price_cents ?? null });
+  // A private-lesson price: null or "" for none (the slot's price), else from R0 to R100 000.
+  const readPrivate = (v, msg) => { if (v === null || v === "") return null; const c = intOr(v, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, msg); return c; };
   // Payments for a private-lesson pack buy credits; they don't count toward monthly fees.
   const FEES = "coalesce(pack_lessons,0)=0";
 
@@ -704,15 +721,18 @@ function makeApi(pool, { secureCookies }) {
   // The ledger, worked out from the payments and bookings themselves (so an edited payment or a cancelled booking is never out of step):
   // a confirmed pack payment adds its lessons from the day it was paid (until it expires); a private lesson the student was checked into,
   // or was still booked on when it started, uses one. Privates still to come hold a credit too, so "left" is what's free to book.
-  // Credits closest to expiring go first. A private with no credit for it is owed at the slot's price, in the month it happens,
+  // Credits closest to expiring go first. A private with no credit for it is owed at its price (privatePrice), in the month it happens,
   // if it's from after the gym's privates_from (privates before that were settled outside the app).
   async function privatesOf(gymId, userIds, tz, today) {
-    const out = {}; for (const id of userIds) out[id] = { left: 0, booked: 0, used: 0, expiresOn: null, owed: [], months: new Set(), ledger: [] };
+    const out = {}; for (const id of userIds) out[id] = { left: 0, booked: 0, used: 0, expiresOn: null, until: null, owed: [], months: new Set(), ledger: [], prices: {} };
     if (!userIds.length) return out;
     const pays = (await q(`select p.id, p.user_id, p.paid_on, p.pack_lessons, p.pack_months, coalesce(k.name, p.pack_lessons || ' private lessons') as name
       from payments p left join packs k on k.id=p.pack_id where p.gym_id=$1 and p.user_id = any($2) and p.status='confirmed' and p.pack_lessons > 0 order by p.paid_on, p.id`, [gymId, userIds])).rows;
-    const uses = (await q(`select a.user_id, c.id, c.title, c.starts_at, c.price_cents, a.attended, to_char(c.starts_at at time zone $3,'YYYY-MM-DD') as day, c.starts_at >= g.privates_from as charged
+    const uses = (await q(`select a.user_id, c.id, c.title, c.starts_at, c.price_cents, a.attended, a.price_cents as locked, a.price_label as locked_label, to_char(c.starts_at at time zone $3,'YYYY-MM-DD') as day, c.starts_at >= g.privates_from as charged
       from attendance a join classes c on c.id=a.class_id join gyms g on g.id=c.gym_id where c.gym_id=$1 and a.user_id = any($2) and c.kind='private' and (a.going or a.attended) order by c.starts_at, c.id`, [gymId, userIds, tz])).rows;
+    // What each private costs: the price locked in when it was booked. A booking with no price on it (from before tiers) costs the slot's
+    // price, as it did then, so setting or changing tier prices never reprices privates already booked or paid for.
+    const priceOf = (a) => a.locked !== null ? { cents: a.locked, label: a.locked_label || "" } : { cents: a.price_cents, label: "" };
     const now = Date.now(), batches = {};
     for (const p of pays) {
       const b = { from: p.paid_on, until: p.pack_months ? addMonths(p.paid_on, p.pack_months) : null, n: p.pack_lessons };
@@ -723,12 +743,14 @@ function makeApi(pool, { secureCookies }) {
       const o = out[a.user_id], st = a.attended || new Date(a.starts_at).getTime() <= now ? "used" : "booked";
       if (a.charged) o.months.add(a.day.slice(0, 7)); if (st === "booked") o.booked++; else o.used++;
       const b = (batches[a.user_id] || []).filter((x) => x.n > 0 && x.from <= a.day && (!x.until || a.day < x.until)).sort((x, y) => (x.until || "9999") < (y.until || "9999") ? -1 : (x.until || "9999") > (y.until || "9999") ? 1 : 0)[0];
+      const pr = priceOf(a); o.prices[String(a.id)] = { ...pr, covered: !!b };
       if (b) { b.n--; o.ledger.push({ day: a.day, kind: st, lessons: -1, title: a.title, classId: String(a.id) }); }
-      else if (a.charged) o.owed.push({ classId: String(a.id), title: a.title, startsAt: a.starts_at, day: a.day, month: a.day.slice(0, 7), priceCents: a.price_cents || 0, status: st });
+      else if (a.charged) o.owed.push({ classId: String(a.id), title: a.title, startsAt: a.starts_at, day: a.day, month: a.day.slice(0, 7), priceCents: pr.cents || 0, label: pr.label, status: st });
     }
     for (const [uid, bs] of Object.entries(batches)) {
       const o = out[uid], live = bs.filter((x) => x.n > 0 && (!x.until || today < x.until));
       o.left = live.reduce((t, x) => t + x.n, 0); o.expiresOn = live.map((x) => x.until).filter(Boolean).sort()[0] || null;
+      o.until = live.length && live.every((x) => x.until) ? live.map((x) => x.until).sort().pop() : null; // the last day a lesson left can be used
       for (const x of bs) if (x.n > 0 && x.until && today >= x.until) o.ledger.push({ day: x.until, kind: "expired", lessons: -x.n, title: "Unused lessons expired" });
     }
     for (const o of Object.values(out)) o.ledger.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
@@ -740,14 +762,37 @@ function makeApi(pool, { secureCookies }) {
   // A private-only client pays no membership fee at all (no active plan, and no fee of their own or the gym's standard fee)
   // and booked or attended a private that month. The access fee is added for them; it never replaces a membership fee.
   const realPlan = (p) => !!p && !/^(none|no plan)$/i.test(String(p.name || "").trim());
+  const membershipOf = (x, plan, gym) => feeOff(x.plan_status) ? 0 : x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? gym.gym_fee ?? 0;
+  const memberOf = (x, plan, gym) => (realPlan(plan) && !feeOff(x.plan_status)) || membershipOf(x, plan, gym) > 0;
   function duesFor(x, plan, gym, priv, month) {
-    const membershipCents = feeOff(x.plan_status) ? 0 : x.monthly_fee_cents ?? (plan ? monthly(plan) : null) ?? gym.gym_fee ?? 0;
-    const member = (realPlan(plan) && !feeOff(x.plan_status)) || membershipCents > 0;
+    const membershipCents = membershipOf(x, plan, gym), member = memberOf(x, plan, gym);
     const accessCents = !member && gym.access_fee_cents > 0 && priv && priv.months.has(month) ? gym.access_fee_cents : 0;
-    const privates = priv ? priv.owed.filter((o) => o.month === month && o.priceCents > 0).map((o) => ({ classId: o.classId, title: o.title, startsAt: o.startsAt, priceCents: o.priceCents })) : [];
+    const privates = priv ? priv.owed.filter((o) => o.month === month && o.priceCents > 0).map((o) => ({ classId: o.classId, title: o.title, startsAt: o.startsAt, priceCents: o.priceCents, label: o.label || "" })) : [];
     const privatesCents = privates.reduce((t, o) => t + o.priceCents, 0);
     return { membershipCents, accessCents, privatesCents, privates, dueCents: membershipCents + accessCents + privatesCents };
   }
+  // ---------- private-lesson price tiers ----------
+  // What a private costs someone with no pack lesson for it. Someone on an active (or trial) plan with a private price pays that.
+  // Someone without a membership pays the gym's price for them, if it has one. That's the same test as the access fee (memberOf):
+  // no active plan and no monthly fee (their own or the gym's standard fee). Anyone else pays the slot's own price, as before tiers.
+  // x needs plan_status and monthly_fee_cents; gym needs gym_private_cents and gym_fee.
+  function privatePrice(x, plan, gym, slotCents) {
+    const on = !!plan && !feeOff(x.plan_status);
+    if (on && plan.private_price_cents !== null && plan.private_price_cents !== undefined) return { cents: plan.private_price_cents, from: "plan", label: plan.name };
+    if (gym.gym_private_cents !== null && gym.gym_private_cents !== undefined && !memberOf(x, plan, gym)) return { cents: gym.gym_private_cents, from: "nonmember", label: "No membership" };
+    return { cents: slotCents || 0, from: "slot", label: "" };
+  }
+  // Lock in what a private costs these people, now they have a place on it. Later price changes don't touch it
+  // (except a slot priced at its own price, which follows the slot). Call inside the class's transaction.
+  async function lockPrice(db, c, userIds) {
+    if (c.kind !== "private" || !userIds.length) return;
+    const g = (await db.query("select private_price_cents as gym_private_cents, monthly_fee_cents as gym_fee from gyms where id=$1", [c.gym_id])).rows[0];
+    const xs = (await db.query("select u.id, u.plan_status, u.monthly_fee_cents, to_jsonb(p) as plan from users u left join plans p on p.id=u.plan_id where u.id = any($1)", [userIds])).rows;
+    for (const x of xs) { const p = privatePrice(x, x.plan, g, c.price_cents); await db.query("update attendance set price_cents=$3, price_from=$4, price_label=$5 where class_id=$1 and user_id=$2", [c.id, x.id, p.cents, p.from, p.label]); }
+  }
+  // A cancelled booking lets go of its price (booking again prices it again). One they were checked into keeps it.
+  const UNPRICE = (a = "attendance") => ["price_cents", "price_from", "price_label"].map((k) => `${k}=case when ${a}.attended then ${a}.${k} end`).join(", ");
+  const dayIn = (d, tz) => { try { return new Date(d).toLocaleDateString("en-CA", { timeZone: tz }); } catch (e) { return new Date(d).toISOString().slice(0, 10); } };
   const packOut = (k) => ({ id: String(k.id), name: k.name, lessons: k.lessons, priceCents: k.price_cents, expiryMonths: k.expiry_months, active: k.active });
   async function packIn(gymId, id, activeOnly) {
     const k = (await q(`select * from packs where id=$1 and gym_id=$2${activeOnly ? " and active" : ""}`, [intOr(id, 0), gymId])).rows[0];
@@ -759,7 +804,8 @@ function makeApi(pool, { secureCookies }) {
     const r = await q(`select u.id,u.name,u.belt,u.stripes,a.going,a.attended,a.waitlisted,a.booked_at,a.checked_in_at from attendance a join users u on u.id=a.user_id
       where a.class_id=$1 and (a.going or a.attended or a.waitlisted) order by a.waitlisted, a.booked_at, u.name`, [c.id]);
     const s = await summaries(u.gym_id, r.rows.map((x) => x.id));
-    if (c.kind === "private") { const pv = await privatesOf(u.gym_id, r.rows.map((x) => x.id), tzOf(u), await todayIn(u)); for (const x of r.rows) s[x.id].privatesLeft = pv[x.id].left; }
+    if (c.kind === "private") { const pv = await privatesOf(u.gym_id, r.rows.map((x) => x.id), tzOf(u), await todayIn(u));
+      for (const x of r.rows) { s[x.id].privatesLeft = pv[x.id].left; const b = pv[x.id].prices[c.id]; if (isHead(u) && b) Object.assign(s[x.id], { priceCents: b.cents, priceLabel: b.label, pack: b.covered }); } }
     const att = r.rows.filter((x) => !x.waitlisted);
     res.json({ class: classOut({ ...c, going: att.filter((x) => x.going).length, waiting: r.rows.length - att.length }, true),
       attendees: att.map((x) => ({ ...person(x, s[x.id]), going: x.going, attended: x.attended, bookedAt: x.booked_at, checkedInAt: x.checked_in_at, self: !!x.checked_in_at })),
@@ -770,8 +816,11 @@ function makeApi(pool, { secureCookies }) {
     const ids = (Array.isArray(req.body?.userIds) ? req.body.userIds : [req.body?.userId]).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 300);
     const st = await q("select id from users where id = any($1) and gym_id=$2", [ids, u.gym_id]);
     if (st.rows.length !== ids.length || !ids.length) fail(404, "That student isn't in your gym.");
+    const had = new Set((await q("select user_id from attendance where class_id=$1 and user_id = any($2) and (going or attended)", [c.id, ids])).rows.map((x) => String(x.user_id)));
     for (const sid of ids) await q(`insert into attendance(class_id,user_id,going,attended) values($1,$2,true,$3)
              on conflict(class_id,user_id) do update set attended=excluded.attended, going=attendance.going or excluded.attended, waitlisted=false, updated_at=now()`, [c.id, sid, req.body?.attended !== false]);
+    // Someone the coach adds to a private gets today's price for them, locked in like a booking.
+    await lockPrice(pool, c, ids.filter((x) => !had.has(String(x))));
     res.json({ ok: true, count: ids.length });
   }));
 
@@ -980,22 +1029,27 @@ function makeApi(pool, { secureCookies }) {
 
   // ---------- memberships ----------
   const PERIODS = ["month", "week", "year", "term", "class", "once"];
+  // Website prices for private lessons (same test as the app's private-price chips) aren't membership plans.
+  const PRIV_RATE = /private|\b1[\s-]?on[\s-]?1\b|one[\s-]on[\s-]one|personal train|\bpt\b/i;
   function readPlan(b) {
     const name = clean(b.name, 80); if (!name) fail(400, "Give the plan a name.");
     const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 0 || price > 1e8) fail(400, "Enter the price.");
     const period = PERIODS.includes(b.period) ? b.period : "month";
     const cpw = b.classesPerWeek === null || b.classesPerWeek === undefined || b.classesPerWeek === "" ? null : Math.min(30, Math.max(1, intOr(b.classesPerWeek, 0)));
-    return { name, price, period, cpw, active: b.active !== false };
+    // What a private lesson costs someone on this plan: left out keeps it, null or "" means the slot's price.
+    const priv = b.privateCents === undefined ? undefined : readPrivate(b.privateCents, "Enter the plan's private lesson price, or leave it empty.");
+    return { name, price, period, cpw, active: b.active !== false, priv };
   }
   api.get("/coach/plans", wrap(async (req, res) => { const u = needHead(req); res.json({ plans: (await plansOf(u.gym_id)).map(planOut) }); }));
   api.post("/coach/plans", wrap(async (req, res) => {
     const u = needHead(req), p = readPlan(req.body || {});
-    const r = await q("insert into plans(gym_id,name,price_cents,period,classes_per_week,active) values($1,$2,$3,$4,$5,$6) returning *", [u.gym_id, p.name, p.price, p.period, p.cpw, p.active]);
+    const r = await q("insert into plans(gym_id,name,price_cents,period,classes_per_week,active,private_price_cents) values($1,$2,$3,$4,$5,$6,$7) returning *", [u.gym_id, p.name, p.price, p.period, p.cpw, p.active, p.priv ?? null]);
     res.status(201).json({ plan: planOut(r.rows[0]) });
   }));
   api.patch("/coach/plans/:id", wrap(async (req, res) => {
     const u = needHead(req), p = readPlan(req.body || {});
-    const r = await q("update plans set name=$1,price_cents=$2,period=$3,classes_per_week=$4,active=$5 where id=$6 and gym_id=$7 returning *", [p.name, p.price, p.period, p.cpw, p.active, intOr(req.params.id, 0), u.gym_id]);
+    const r = await q("update plans set name=$1,price_cents=$2,period=$3,classes_per_week=$4,active=$5,private_price_cents=case when $8 then $9::int else private_price_cents end where id=$6 and gym_id=$7 returning *",
+      [p.name, p.price, p.period, p.cpw, p.active, intOr(req.params.id, 0), u.gym_id, p.priv !== undefined, p.priv ?? null]);
     if (!r.rows[0]) fail(404, "That plan doesn't exist.");
     res.json({ plan: planOut(r.rows[0]) });
   }));
@@ -1006,7 +1060,7 @@ function makeApi(pool, { secureCookies }) {
     const have = new Set((await plansOf(u.gym_id)).map((p) => p.name.toLowerCase()));
     let added = 0;
     for (const r of (g.profile && g.profile.rates) || []) {
-      if (!r.name || have.has(r.name.toLowerCase()) || !PERIODS.includes(r.period)) continue;
+      if (!r.name || have.has(r.name.toLowerCase()) || !PERIODS.includes(r.period) || PRIV_RATE.test(`${r.name} ${r.note || ""}`)) continue;
       const cpw = /(\d)\s*(x|times|classes)\s*(a|per)\s*week/i.exec(r.name + " " + (r.note || ""));
       await q("insert into plans(gym_id,name,price_cents,period,classes_per_week) values($1,$2,$3,$4,$5)", [u.gym_id, clean(r.name, 80), Math.round(r.price * 100), r.period, cpw ? Number(cpw[1]) : null]);
       have.add(r.name.toLowerCase()); added++;
@@ -1431,7 +1485,7 @@ function makeApi(pool, { secureCookies }) {
     const u = needHead(req), g = (await q("select pay, pop_token, pop_notice from gyms where id=$1", [u.gym_id])).rows[0];
     let tok = g.pop_token;
     if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
-    res.json({ pay: g.pay || {}, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0 });
+    res.json({ pay: g.pay || {}, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, privateCents: u.gym_private_cents ?? null });
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
     const u = needHead(req), pay = readPaySettings(req.body || {});
@@ -1452,6 +1506,12 @@ function makeApi(pool, { secureCookies }) {
     if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, "Enter the access fee, or 0 to switch it off.");
     await q("update gyms set access_fee_cents=$1 where id=$2", [c, u.gym_id]);
     res.json({ accessFeeCents: c });
+  }));
+  // What a private lesson costs a client without a membership (null: the slot's own price). Bookings already made keep their price.
+  api.patch("/coach/gym/private-price", wrap(async (req, res) => {
+    const u = needHead(req), c = readPrivate(req.body?.privateCents ?? null, "Enter the private lesson price, or leave it empty.");
+    await q("update gyms set private_price_cents=$1 where id=$2", [c, u.gym_id]);
+    res.json({ privateCents: c });
   }));
   // Private-lesson packs: "10 private lessons" for R4500, optionally expiring some months after they're bought.
   function readPack(b) {

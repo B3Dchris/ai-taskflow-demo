@@ -249,6 +249,46 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.selectOption("#s-plan", { label: "2x a week · R 650" }).catch(async () => { const v = await ev(co, () => [...document.querySelectorAll("#s-plan option")].find((o) => /2x a week/.test(o.textContent)).value); await co.selectOption("#s-plan", v); });
     await co.fill("#s-fee", ""); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(800);
     ok(await ev(co, () => /2x a week/.test(document.getElementById("roster-list").innerText)), "coach puts the student on the plan");
+    // ---- private lesson prices by membership (Money > Setup > Private lessons), with the website's private lesson price to tap
+    const webPlans = () => ev(co, () => { const m = /Use my website prices \((\d+)\)/.exec(plansPanel()); return m ? Number(m[1]) : 0; }), web0 = await webPlans();
+    await ev(co, async () => { const p = gymProfile(); await api("PUT", "/coach/gym/profile", { profile: { ...p, rates: (p.rates || []).concat([{ name: "Private lesson (1-on-1)", price: 1200, currency: "ZAR", period: "class", note: "" }]) } }); await loadGym(true); });
+    ok(await webPlans() === web0, "a private lesson price on the website isn't offered as a membership plan");
+    await co.tap('nav.tabs [data-v="coach-money"]'); await co.tap('[data-a="moneyview"][data-v="setup"]'); await co.waitForTimeout(500);
+    ok(await ev(co, () => /Private lessons/.test(document.getElementById("privates-panel").textContent) && !!document.querySelector("#privates-panel #packs-panel") && !!document.querySelector("#privates-panel #accessform")
+      && document.querySelectorAll('#privpriceform [data-a="ratefill"]').length === 1 && /1-on-1/.test(document.querySelector('#privpriceform [data-a="ratefill"]').innerText)), "Money > Setup has a Private lessons section (with the access fee and packs), offering the website's private lesson price");
+    await co.tap('#privpriceform [data-a="ratefill"]'); ok(await ev(co, () => document.getElementById("pp-fee").value === "1200"), "tapping the website's price fills it in");
+    await co.tap('#privpriceform [type=submit]'); await co.waitForTimeout(800);
+    ok(/Saved: R\s?1[\s,]?200 a private for clients without a membership/.test(await toast(co)), "the head coach sets R1200 for clients without a membership: " + (await toast(co)));
+    const plan2 = await ev(co, () => COACH.roster.plans.find((p) => p.name === "2x a week").id);
+    await co.tap(`[data-a="planedit"][data-v="${plan2}"]`);
+    ok(await ev(co, () => !!document.querySelector('#planform [data-a="ratefill"]') && document.getElementById("pl-priv").value === ""), "the plan form has a private lesson price, with the website's price to tap");
+    await co.fill("#pl-priv", "900"); await co.tap('#planform [type=submit]'); await co.waitForTimeout(900);
+    ok(await ev(co, () => /privates R\s?900/.test(document.getElementById("app").innerText) && /2x a week\s*R\s?900/.test(document.getElementById("privates-panel").innerText)), "the plan's private price shows in the plans list and under Private lessons");
+    await wide(co, "private lesson prices");
+    const pv2 = await ev(co, async () => (await api("POST", "/classes", { kind: "private", title: "Private lesson", startsAt: new Date(Date.now() + 2 * 864e5).toISOString(), durationMin: 60, priceCents: 45000 })).class.id);
+    await st.evaluate(() => { API.classes = null; API.pay = undefined; }); await st.tap('nav.tabs [data-v="book"]'); await st.waitForTimeout(600); await st.tap('[data-a="bookview"][data-v="private"]'); await st.waitForTimeout(900);
+    ok(await ev(st, (id) => { const card = document.querySelector(`.bookcard [data-v="${id}"]`).closest(".bookcard"); return /Uses 1 of your 9 privates/.test(card.innerText) && /Uses 1 of your privates/.test(document.querySelector(".bookcard.mine").innerText); }, pv2), "a student with pack lessons sees a private uses one of them");
+    { const { c: c6, p: s6 } = await phone();
+      await s6.goto(invite); await s6.waitForTimeout(900);
+      await s6.fill("#a-name", "Pat Privates"); await s6.fill("#a-email", "pat@example.com"); await s6.fill("#a-pass", "patpass123"); await s6.tap("#sheetbar [type=submit]"); await s6.waitForTimeout(1200);
+      if (await ev(s6, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await s6.tap('#sheetbar [data-a="obdone"]');
+      await ev(s6, () => { hideSheet(); API.classes = null; go("book"); }); await s6.waitForTimeout(900); await s6.tap('[data-a="bookview"][data-v="private"]'); await s6.waitForTimeout(500);
+      ok(await ev(s6, (id) => { const t = document.querySelector(`.bookcard [data-v="${id}"]`).closest(".bookcard").innerText; return /R\s?450 for you/.test(t) && !/No membership/.test(t); }, pv2), "on the gym's standard fee they're a member: the slot's price, not the 'No membership' one");
+      // a private-only client: their monthly fee set to 0 (the same clients who pay the access fee)
+      await ev(co, async (id) => api("PATCH", `/coach/students/${id}`, { feeCents: 0 }), await ev(s6, () => API.me.id));
+      await ev(s6, () => { API.classes = null; go("book"); }); await s6.waitForTimeout(900); await s6.tap('[data-a="bookview"][data-v="private"]'); await s6.waitForTimeout(500);
+      ok(await ev(s6, (id) => /R\s?1[\s,]?200 for you · No membership/.test(document.querySelector(`.bookcard [data-v="${id}"]`).closest(".bookcard").innerText), pv2), "a client without a membership sees R1200 for them on the slot");
+      await ev(s6, (id) => bookSheet(id), pv2); await s6.waitForTimeout(300);
+      ok(await ev(s6, () => /R\s?1[\s,]?200 for you · No membership/.test(document.getElementById("sheet").innerText)), "and when they open it to book");
+      await s6.tap('#sheetbar [data-a="rsvp"]'); await s6.waitForTimeout(1200);
+      ok(/Booked\. R\s?1[\s,]?200 for you · No membership\./.test(await toast(s6)), "booking says what it costs them: " + (await toast(s6)));
+      await wide(s6, "private with my price");
+      await c6.close(); }
+    await ev(co, (id) => classSheet(id), pv2); await co.waitForTimeout(900);
+    ok(await ev(co, () => /R\s?1[\s,]?200 · No membership/.test(document.getElementById("sheet").innerText)), "the head coach sees what the booking costs");
+    await ev(co, (id) => classSheet(id), privId); await co.waitForTimeout(900);
+    ok(await ev(co, () => /From a pack/.test(document.getElementById("sheet").innerText)), "and that a booking is paid from a pack");
+    await ev(co, () => hideSheet());
     await st.evaluate(() => { API.mem = undefined; }); await st.tap('[data-a="bookview"][data-v="classes"]'); await st.waitForTimeout(900);
     ok(await ev(st, () => /2x a week/.test(document.querySelector(".memcard").innerText) && new RegExp((() => { const c = API.classes.find((x) => x.myGoing && x.kind !== "private"); const ws = weekStart(todayK()); const k = dayKey(c.startsAt); return (k >= ws && k <= addDays2(ws, 6) ? 1 : 0) + "\\/2"; })()).test(document.querySelector(".memcard").innerText)), "student sees their plan and bookings used this week");
     await co.tap('nav.tabs [data-v="coach-students"]'); await co.tap('[data-a="stuview"][data-v="insights"]'); await co.waitForTimeout(1200);

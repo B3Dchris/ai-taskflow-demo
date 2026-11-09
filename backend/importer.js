@@ -364,7 +364,7 @@ function plainRates(pages) {
       let period = periodOf(line) || periodOf(next);
       let name = clip(line.replace(m[0], " ").replace(/(?:\bper\s*|\/\s*)(month|week|class|session|year|annum|mo|wk|pm)\b|\bmonthly\b|\bweekly\b/gi, " ").replace(/[|·•:]+/g, " ").replace(/(^|\s)[–—-]+(?=\s|$)/g, " "), 80);
       if (name.length < 3) name = clip(lines[i - 1] || "", 80);
-      if (!period && !/member|fee|price|class|month|adult|kid|junior|student|family|unlimited|session|drop|trial|joining|pass/i.test(ctx + " " + name)) return;
+      if (!period && !/member|fee|price|class|month|adult|kid|junior|student|family|unlimited|session|drop|trial|joining|pass|private|lesson|1[\s-]?on[\s-]?1|one[\s-]on[\s-]one|personal|\bpt\b/i.test(ctx + " " + name)) return;
       const k = name.toLowerCase() + price; if (seen.has(k)) return; seen.add(k);
       out.push({ name: name || "Membership", price, currency: (CUR.find((c) => c[0] === m[1]) || [0, ""])[1], period: period || "other", note: "" });
     });
