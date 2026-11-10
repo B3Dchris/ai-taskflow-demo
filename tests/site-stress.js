@@ -14,7 +14,7 @@ const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s.leng
 
 (async () => {
   const pool = new Pool({ connectionString: DB, max: 10 });
-  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9200 + Math.floor(Math.random() * 90), ORIGIN = `http://127.0.0.1:${port}`, base = ORIGIN + "/api";
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, TRUST_PROXY: "0" }; // the test client talks to the app directly, with no proxy in between delete env.RESEND_API_KEY; delete env.ANTHROPIC_API_KEY; delete env.GA_ID;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });

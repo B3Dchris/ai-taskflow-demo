@@ -212,7 +212,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'log links rear-naked choke to its defense');
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
   // --- name, Belts tab, belt path
-  ok(await ev(()=>document.title==='JitsFlow'&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
+  ok(await ev(()=>/JitsFlow$/.test(document.title)&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
   ok(await ev(()=>document.querySelector('nav.tabs [data-v="learn"]').textContent.trim()==='Learn'),'tab is called Learn');
   for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="learn-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
     ok(await ev(k=>location.hash==='#learn-belt'&&document.querySelector(`.beltchips [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
@@ -260,6 +260,31 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     await p.tap('#sheetbar .back');
   }
   await ev(()=>{if(window.__savedVid)VIDS.knee_cut=window.__savedVid;else delete VIDS.knee_cut});
+  // --- screens and sheets for screen readers: <main>, a title per tab, a Home heading; a sheet is a named dialog that takes focus and gives it back
+  await p.tap('nav.tabs [data-v="learn"]');ok(await ev(()=>document.querySelector('main#app')&&document.title==='Learn · JitsFlow'),'the screen is a <main> and the title says which tab: '+await ev(()=>document.title));
+  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>document.title==='Home · JitsFlow'&&!!document.querySelector('#app h1.vh')&&document.querySelector('#app h1.vh').getBoundingClientRect().width<=1),'Home has a heading for screen readers, not shown on screen');
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp:not([open]) summary').first().tap();
+  {const tid=await ev(()=>document.querySelector('#learn-groups .trow[data-a="open"]').dataset.v);await p.locator(`#learn-groups .trow[data-a="open"][data-v="${tid}"]`).first().focus();await p.keyboard.press('Enter');await p.waitForTimeout(150);
+   ok(await ev(()=>{const sh=document.getElementById('sheet'),t=document.getElementById(sh.getAttribute('aria-labelledby'));return sh.getAttribute('role')==='dialog'&&sh.getAttribute('aria-modal')==='true'&&t&&t.tagName==='H1'&&document.activeElement===t}),'a sheet is a dialog named by its title, and focus moves to the title');
+   await ev(id=>techSheet(id,true),tid);ok(await ev(()=>document.activeElement===document.getElementById('sheet-t')&&document.activeElement.tagName==='H1'),"a sheet that draws itself again (like a student's once their details load) keeps focus on its title");
+   await p.keyboard.press('Escape');await p.waitForTimeout(150);
+   ok(await ev(id=>document.activeElement&&document.activeElement.dataset.v===id&&!document.getElementById('sheet').getAttribute('role'),tid),'closing the sheet puts focus back on the row that opened it')}
+  ok(await ev(()=>{const g=document.querySelector('.learnseg');return g.getAttribute('role')==='group'&&g.getAttribute('aria-label')==='Learn'&&[...g.querySelectorAll('button')].every(b=>b.hasAttribute('aria-pressed'))}),'switches are a labelled group of pressed buttons');
+  // --- toasts: a polite live region that's always there; Undo stays 10s and waits while it's touched
+  ok(await ev(()=>{const t=document.getElementById('toast');return t.getAttribute('role')==='status'&&t.getAttribute('aria-live')==='polite'&&!t.hidden}),'the toast is a polite live region that is always present');
+  await ev(()=>toast('Saved.',{label:'Undo',fn:()=>{window.__undone=1}}));ok(await ev(()=>toast._ms===10000&&/Saved\./.test(document.getElementById('toast').textContent)),'a toast with Undo stays up for 10s');
+  await ev(()=>{const t=document.getElementById('toast');t.dispatchEvent(new PointerEvent('pointerenter'));toast._ms=50;});await p.waitForTimeout(120);
+  ok(await ev(()=>document.getElementById('toast').classList.contains('on')),'and stays while a finger or the keyboard is on it');
+  await ev(()=>document.getElementById('toast').dispatchEvent(new PointerEvent('pointerleave')));await p.waitForTimeout(120);ok(await ev(()=>!document.getElementById('toast').classList.contains('on')&&document.getElementById('toast').textContent===''),'then goes');
+  await ev(()=>{toast('Cancelled.');toast('Cancelled.')});ok(await ev(()=>document.getElementById('toast').textContent===''),'the same message twice is cleared first, so it is read again');await p.waitForTimeout(120);ok(await ev(()=>document.getElementById('toast').textContent==='Cancelled.'),'and then shown');
+  // --- settings checkboxes keep their size; Prev says what it shows
+  await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));
+  ok(await ev(()=>{const r=document.getElementById('set-quiz').getBoundingClientRect();return r.width>=20&&r.height>=20}),'the Quiz mode checkbox is a full-size box, not a sliver');
+  ok(await ev(()=>/aria-label="Prev">‹ Prev/.test(prevNext('qr',{i:1}))),'the quiz Prev button is called Prev, as shown');
+  // --- pasted kid and parent lines
+  ok(await ev(()=>{const r=parseList(["Ayanda Dlamini (mom Thandi Dlamini) 072 500 1000","Lwazi, parent: Nomsa Khumalo, 082 111 2222","Kea Mokoena – Zanele Mokoena 083 222 3333","Thandi Dube - Sipho's dad 084 555 6666","Thabo Mokoena - 082 123 4567"].join("\n"));
+    return JSON.stringify(r.map(x=>[x.name,x.parentName||""]))===JSON.stringify([["Ayanda Dlamini","Thandi Dlamini"],["Lwazi","Nomsa Khumalo"],["Kea Mokoena","Zanele Mokoena"],["Sipho","Thandi Dube"],["Thabo Mokoena",""]])&&r[0].phone==="072 500 1000"}),'pasted lines like "Kid (mom X)", "parent: X", "Kid – Parent" and "X - Kid\'s dad" become kids with their parent');
+  ok(await ev(()=>hiName({name:"Ayanda Dlamini",parentName:"Thandi Dlamini"})==="Thandi"),'the parent is greeted by their own first name');
   ok(errs.length===0,'page errors: '+errs.join(' | '));
   console.log(`${MODE} on ${DEV}: ${pass} passed, ${fail} failed`);fails.forEach(f=>console.log('  FAIL',f));
   await b.close();fs.unlinkSync(PAGE);process.exit(fail?1:0);

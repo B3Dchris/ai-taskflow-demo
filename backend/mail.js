@@ -111,6 +111,12 @@ const templates = {
     paras: [`Hi ${coach},`, `${student} paid ${amount} by card or Instant EFT through PayFast${what ? ` for ${what}` : ""}.`,
       short ? `That's less than ${short.name} costs (${short.price}), so it's recorded as an ordinary payment and no private lessons were added. If that's right, open the payment and pick the pack.` : "It's marked as paid already. There's nothing to check."],
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
+  // To a coach: a private booked or cancelled, or a member left. Fixed subjects; the line says who and when.
+  coachNews: (kind, name, line) => { const t = { booked: "A private lesson was booked", cancelled: "A private lesson was cancelled", left: "A member left your gym" }[kind];
+    return { subject: t, title: t, paras: [`Hi ${name},`, line], button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
+  privateBooked: (name, gym, when) => ({ subject: "Your private lesson is booked", title: "Private lesson booked",
+    paras: [`Hi ${name},`, `You're booked for a private lesson at ${gym}: ${when}.`, "It's free to cancel in the app until it starts."],
+    button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
   headCoach: (name, gym, by) => ({ subject: "You're now the head coach", title: "You're the head coach",
     paras: [`Hi ${name},`, `${by} made you the head coach of ${gym} on JitsFlow.`, "You now see the Money tab: fees, payments, bank details and PayFast. Payment emails come to you."],
     button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }),

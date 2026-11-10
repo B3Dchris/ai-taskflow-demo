@@ -66,6 +66,26 @@ const files = new Map();
   }
 })(ROOT);
 
+// The app's build id (build.py puts it in the page). /api/status reports it, so an app left open can tell it's out of date.
+const BUILD = ((files.get("/app/index.html") || {}).body || "").toString().match(/window\.JF_BUILD="(\w+)"/)?.[1] || null;
+
+// API answers go gzipped when the browser takes it: a big gym's roster is 400 KB as JSON and about 25 KB gzipped, which matters on 3G.
+function gzipJson(req, res, next) {
+  if (!/\bgzip\b/.test(req.headers["accept-encoding"] || "")) return next();
+  const json = res.json.bind(res);
+  res.json = (obj) => {
+    const body = Buffer.from(JSON.stringify(obj === undefined ? null : obj));
+    if (body.length < 1400) return json(obj);
+    zlib.gzip(body, { level: 6 }, (err, gz) => {
+      if (err || res.headersSent) return err ? json(obj) : undefined;
+      res.set({ "Content-Type": "application/json; charset=utf-8", "Content-Encoding": "gzip", "Content-Length": gz.length, Vary: "Accept-Encoding" });
+      res.end(gz);
+    });
+    return res;
+  };
+  next();
+}
+
 function cacheFor(rel) {
   if (rel.endsWith("/index.html") || rel === "/sw.js" || rel === "/manifest.webmanifest") return "no-cache";
   if (rel.startsWith("/img/") || rel.startsWith("/og/")) return "public, max-age=86400";
@@ -126,7 +146,7 @@ async function main() {
   if (pool) {
     await migrate(pool);
     setInterval(() => purgeRejected(pool).catch((e) => console.warn("purge:", e.message)), 864e5).unref(); // daily, between restarts
-    app.use("/api", makeApi(pool, { secureCookies: process.env.NODE_ENV === "production" }));
+    app.use("/api", gzipJson, makeApi(pool, { secureCookies: process.env.NODE_ENV === "production", build: BUILD }));
     console.log("Accounts API on (database connected)");
   } else {
     app.use("/api", (req, res) => res.status(503).set("Cache-Control", "no-store").json({ error: "Accounts aren't switched on for this site yet." }));

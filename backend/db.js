@@ -241,6 +241,25 @@ alter table attendance add column if not exists price_label text;
 -- 0 charges nothing) or 'membership' (they can't book a private without an active plan from private_plan_ids). Gyms that were there keep 'fee'.
 alter table gyms add column if not exists access_mode text not null default 'fee';
 alter table gyms add column if not exists private_plan_ids bigint[] not null default '{}';
+-- a coach took the register for this class (ticked or unticked someone who'd booked): from then on a booking only counts as a visit
+-- if they ticked it. Self check-ins and walk-ins a coach adds don't take the register, so they never undo other people's bookings.
+alter table classes add column if not exists register_at timestamptz;
+alter table classes add column if not exists register_by bigint references users(id) on delete set null;
+-- someone who left the gym still owing: kept for that month's Money list ("Left · owes R1 200")
+create table if not exists left_owing(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint references users(id) on delete set null,
+  name text not null,
+  phone text not null default '',
+  email text,
+  month text not null,
+  owed_cents int not null,
+  left_at timestamptz not null default now()
+);
+create index if not exists left_owing_gym on left_owing(gym_id, month);
+-- who last moved a class to another time: a coach saving an edit made before that is told who moved it
+alter table classes add column if not exists moved_by bigint references users(id) on delete set null;
 `;
 
 // Gyms without an active head coach (gyms from before head coaches, or the head left): the longest-standing active coach takes it.

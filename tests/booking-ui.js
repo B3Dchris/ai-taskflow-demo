@@ -7,7 +7,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink(), site = await startGymSite();
   const port = 9400 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
@@ -351,6 +351,219 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(co, () => classForm((COACH.classes || []).find((c) => c.title === "Raf's no-gi"))); await co.waitForTimeout(300);
     ok(await ev(co, () => document.getElementById("c-coach").value === "Guest Prof"), "a guest coach stays selected when the class is edited again");
     await ev(co, () => hideSheet()); await c2.close();
+    // --- money: Check & edit saves, a year plan's months, Record a payment fills in, one-tap Paid, Confirm N ready, leaving owing, a kid's invite link
+    { const b64 = png.toString("base64"), upload = async () => { await co.setInputFiles("#pop-up", { name: "pop.png", mimeType: "image/png", buffer: png }); await co.waitForTimeout(1500); };
+      await ev(co, async () => { hideSheet(); await coachLoad(); COACH.moneyView = "payments"; coachGo("money"); }); await co.waitForTimeout(600);
+      await upload(); ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "pop"), "uploading a proof opens Check payment");
+      const benId = await ev(co, () => students().find((s) => s.name === "Ben Cole").id);
+      await co.selectOption("#pop-user", benId); await co.fill("#pop-amt", "500"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+      ok(!/[?&]amount=/.test(co.url()) && /Payment confirmed/.test(await toast(co)) && await ev(co, (id) => COACH.payments.some((p) => p.userId === id && p.amountCents === 50000 && p.status === "confirmed"), benId),
+        "Check & edit: picking the student, typing the amount and tapping Confirm payment saves it: " + co.url());
+      const catId = await ev(co, async () => { const pl = (await api("POST", "/coach/plans", { name: "Year up front", priceCents: 600000, period: "year" })).plan, c = students().find((s) => s.name === "Cat Diaz");
+        await api("PATCH", "/coach/students/" + c.id, { planId: pl.id }); await coachLoad(); return c.id; });
+      await upload(); await co.selectOption("#pop-user", catId); await co.fill("#pop-amt", "6000"); await co.waitForTimeout(200);
+      ok(await ev(co, () => !document.getElementById("pop-covers").hidden && /Covers 12 months/.test(document.getElementById("pop-cov-txt").innerText)), "for someone on a year plan, the Check sheet says it covers 12 months");
+      await co.tap('[data-a="popcov"]'); ok(await ev(co, () => !document.getElementById("pop-cov-pick").hidden && document.getElementById("pop-months").value === "12"), "with a Change link that shows the months");
+      await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+      ok(await ev(co, (id) => COACH.payments.some((p) => p.userId === id && p.amountCents === 600000 && p.months === 12 && p.status === "confirmed"), catId), "confirmed, the year's payment covers 12 months");
+      // Record a payment: picking the student fills in what they owe, and the method used last time is remembered
+      await co.tap('[data-a="paynew"]'); await co.waitForTimeout(300); await co.selectOption("#p-user", catId); await co.waitForTimeout(100);
+      ok(await ev(co, () => document.getElementById("p-amt").value === "6000" && document.getElementById("p-months").value === "12"), "picking a student on a year plan fills in the year's price and 12 months");
+      await co.selectOption("#p-user", benId); await co.waitForTimeout(100);
+      ok(await ev(co, () => document.getElementById("p-amt").value === "500" && document.getElementById("p-months").value === "1"), "picking a monthly student fills in their fee");
+      await co.selectOption("#p-method", "cash"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+      await co.tap('[data-a="paynew"]'); await co.waitForTimeout(300); ok(await ev(co, () => document.getElementById("p-method").value === "cash"), "the next payment starts on the method used last time"); await ev(co, () => hideSheet());
+      // One tap on Paid next to someone who owes
+      await ev(co, () => { COACH.moneyView = "month"; COACH.moneyFilter = "owing"; COACH.money = null; render(); }); await co.waitForTimeout(1500);
+      const lee = await ev(co, () => students().find((s) => s.name === "Lee Jones").id);
+      ok(await ev(co, (id) => !!document.querySelector(`[data-a="paidnow"][data-v="${id}"]`) && !!document.querySelector('[data-a="paidhow"][data-v="cash"][aria-pressed="true"]'), lee), "owing rows have a Paid button (cash, the last method used)");
+      await co.tap('[data-a="paidhow"][data-v="eft"]'); await co.waitForTimeout(200);
+      await co.route("**/api/coach/payments", async (r) => { await wait(600); r.continue(); }); // a slow line, tapped twice
+      await ev(co, (id) => { const b = document.querySelector(`[data-a="paidnow"][data-v="${id}"]`); b.click(); setTimeout(() => b.click(), 150); }, lee); await co.waitForTimeout(2200); await co.unroute("**/api/coach/payments");
+      ok(await ev(co, (id) => COACH.payments.filter((p) => p.userId === id).length === 1, lee), "a double tap on Paid records it once");
+      ok(/Recorded R\s?500 \(EFT\) for Lee Jones/.test(await toast(co)) && await ev(co, (id) => COACH.payments.some((p) => p.userId === id && p.amountCents === 50000 && p.method === "eft"), lee), "Paid records the full amount today by EFT: " + (await toast(co)));
+      ok(await ev(co, (id) => !document.querySelector(`[data-a="paidnow"][data-v="${id}"]`), lee), "and they leave the owing list");
+      await co.tap('#toast [data-a="toastact"]'); await co.waitForTimeout(1800);
+      ok(await ev(co, (id) => !COACH.payments.some((p) => p.userId === id && p.amountCents === 50000), lee) && /Undone/.test(await toast(co)), "Undo takes it off again");
+      // Confirm N ready: proofs with the student and amount filled in and nothing flagged
+      for (const p of [s1, s2]) await ev(p, (d) => api("POST", "/me/pay/proof", { name: "pop.png", data: d, amountCents: 47000 }), b64); // not 50000: Ben paid that today, so it would look like a duplicate
+      await co.waitForTimeout(800); await ev(co, async () => { await coachLoad(); COACH.moneyView = "payments"; render(); }); await co.waitForTimeout(500);
+      ok(await ev(co, () => /Confirm 2 ready/.test((document.querySelector('[data-a="popall"]') || {}).innerText || "")), "two proofs ready to confirm: one button for both");
+      await co.tap('[data-a="popall"]'); await co.waitForTimeout(2000);
+      ok(/Confirmed 2 payments/.test(await toast(co)) && await ev(co, () => !COACH.payments.some((p) => p.status === "pending")), "one tap confirms both");
+      await co.tap('#toast [data-a="toastact"]'); await co.waitForTimeout(2000);
+      ok(await ev(co, () => COACH.payments.filter((p) => p.status === "pending").length === 2), "Undo puts them back under To check");
+      // Leaving the gym while owing: it says how much, with Pay now or Leave anyway; the coach still sees it
+      const s4 = await phone("s4"); await signup(s4, "/app/?join=" + code, { "#a-name": "Dee Owes", "#a-email": "dee@race.test", "#a-pass": "deepass111" });
+      await ev(s4, () => { hideSheet(); go("settings"); }); await s4.waitForTimeout(300); await s4.tap('[data-a="leavegym"]'); await s4.waitForTimeout(800);
+      ok(await ev(s4, () => /You still owe R\s?500 to Race Gym/.test(document.getElementById("sheet").innerText) && !!document.querySelector('#sheetbar [data-a="mypay"]') && /Leave anyway/.test(document.getElementById("sheetbar").innerText)), "leaving while owing says how much, with Pay now and Leave anyway");
+      await s4.tap('#sheetbar [data-a="mypay"]'); await s4.waitForTimeout(400); ok(await ev(s4, () => S.ui.sheet.k === "mypay"), "Pay now opens the Pay sheet");
+      await ev(s4, () => leaveSheet()); await s4.waitForTimeout(500); await s4.tap('#sheetbar [data-a="leavegymyes"]'); await s4.waitForTimeout(1200);
+      ok(await ev(s4, () => API.me && !API.me.gym), "Leave anyway leaves");
+      await ev(co, () => { COACH.moneyView = "month"; COACH.money = null; render(); }); await co.waitForTimeout(1500);
+      ok(await ev(co, () => /Dee Owes[\s\S]*Left · owes R\s?500/.test(document.getElementById("app").innerText)), "the coach's Money still shows them: Left · owes R500");
+      await ev(co, async () => { API.notices = undefined; coachGo("home"); }); await co.waitForTimeout(1200);
+      ok(await ev(co, () => /Dee Owes left Race Gym owing R\s?500/.test(document.getElementById("app").innerText)), "and the head coach sees it on Home");
+      await s4.context().close();
+      // A kid's own invite link: the parent signs up for them
+      const claim = await ev(co, async () => { const id = (await api("POST", "/coach/students", { name: "Lerato Kid", parentName: "Thandi", phone: "072 333 5555" })).id; return (await api("POST", `/coach/students/${id}/claim-link`)).url; });
+      const k5 = await phone("kid"); await k5.goto(claim.replace(/^https?:\/\/[^/]+/, URL)); await k5.waitForTimeout(1500);
+      ok(await ev(k5, () => /Signing up for\s+Lerato Kid/.test(document.getElementById("a-joining").innerText) && /Your name \(parent\)/.test(document.getElementById("sheet").innerText)), "a kid's invite link says who it's for and asks for the parent's name");
+      await k5.context().close(); await ev(co, () => coachGo("money")); }
+    // --- screen readers, small screens and finding people (review 2)
+    { const at = (min) => new Date(Date.now() + min * 60e3).toISOString();
+      const ids = await ev(co, async (at) => { const mk = async (b) => (await api("POST", "/classes", b)).class.id;
+        const ppl = (await api("GET", "/coach/roster")).people, id = (n) => ppl.find((x) => x.name === n).id;
+        const past = await mk({ title: "Regulars roll", startsAt: new Date(new Date(at.reg).getTime() - 7 * 864e5).toISOString() });
+        await api("PUT", `/coach/classes/${past}/attendance`, { userIds: [id("Ana Lima"), id("Ben Cole")], attended: true });
+        return { reg: await mk({ title: "Regulars roll", startsAt: at.reg }), mt: await mk({ title: "Muay Thai", discipline: "Muay Thai", startsAt: at.mt }), kids: await mk({ title: "Kids BJJ", level: "Kids", startsAt: at.kids }),
+          ane: (await api("POST", "/coach/students", { name: "Ané-Marié Botha", phone: "082 001 0001" })).id, sib: (await api("POST", "/coach/students", { name: "Sìbọ̀nìsọ̀ Zulu", parentName: "Zodwa Zulu", phone: "071 222 3333" })).id,
+          long: (await api("POST", "/coach/students", { name: "Q".repeat(60), phone: "071 222 4444" })).id, emo: (await api("POST", "/coach/students", { name: "E".repeat(79) + "😀", phone: "071 222 5555" })).id }; }, { reg: at(30), mt: at(45), kids: at(50) });
+      // the regulars of this weekday and time come first, with one button to mark them here
+      await ev(co, async (id) => { hideSheet(); await coachLoad("roster"); await classSheet(id); }, ids.reg); await co.waitForTimeout(600);
+      ok(await ev(co, () => /Mark the usual 2 here/.test((document.querySelector('[data-a="clsusual"]') || {}).innerText || "")), "a class shows Mark the usual 2 here (the two who came last week at this time)");
+      await co.tap('[data-a="clsaddopen"]'); await co.waitForTimeout(300);
+      ok(await ev(co, () => { const l = document.querySelector("#clsadd .addlist"), h = l.querySelectorAll("h3"), rows = [...l.querySelectorAll(".trow")].map((b) => b.querySelector(".nm").textContent);
+        return h[0] && h[0].textContent === "Usually here" && ["Ana Lima", "Ben Cole"].every((n) => rows.slice(0, 2).some((r) => r.startsWith(n))); }), "the add list starts with Usually here");
+      await co.tap('#clsadd [data-a="clsusual"]'); await co.waitForTimeout(1200);
+      ok(await ev(co, () => S.ui.classData.attendees.filter((a) => a.attended).length === 2 && /Marked 2 here/.test(document.getElementById("toast").textContent)), "one tap marks both here, to untick anyone who isn't");
+      // search: no accents needed, parents' names and phone numbers work
+      await ev(co, () => { hideSheet(); COACH.stuView = "list"; coachGo("members"); }); await co.waitForTimeout(500);
+      const shown = (q) => co.fill("#r-q", q).then(() => ev(co, () => [...document.querySelectorAll("#roster-list .trow:not([hidden]) .nm")].map((x) => x.textContent)));
+      ok((await shown("ane")).some((n) => /Ané-Marié/.test(n)), "searching ane finds Ané-Marié");
+      ok((await shown("sibonis")).some((n) => /Sìbọ̀nìsọ̀/.test(n)) && (await shown("zodwa")).some((n) => /Sìbọ̀nìsọ̀/.test(n)), "accents don't matter, and a parent's name finds the kid");
+      ok((await shown("082 001 0001")).some((n) => /Ané-Marié/.test(n)) && (await shown("0010001")).length === 1, "a phone number finds them");
+      await co.fill("#r-q", ""); await ev(co, () => { COACH.q = ""; render(); });
+      ok(await ev(co, () => document.documentElement.scrollWidth <= 390), "a 60-letter name with no spaces wraps instead of pushing the page sideways");
+      ok(await ev(co, (id) => { const p = students().find((x) => x.id === id); return p.name === "E".repeat(79) + "😀"; }, ids.emo), "an 80-character name ending in an emoji keeps the whole emoji");
+      // Muay Thai gets no BJJ advice; BJJ still does
+      await ev(co, (id) => api("PUT", `/coach/classes/${id}/attendance`, { userId: students().find((x) => x.name === "Ana Lima").id, going: true, attended: false }), ids.mt);
+      await ev(co, (id) => classSheet(id), ids.mt); await co.waitForTimeout(700);
+      ok(await ev(co, () => { const t = document.getElementById("sheet").innerText; return /Ana Lima/.test(t) && !/Suggested focus/.test(t) && !/ready for/.test(t); }), "a Muay Thai class shows no BJJ suggestions or belt readiness");
+      await ev(co, (id) => classSheet(id), soonId); await co.waitForTimeout(700);
+      ok(await ev(co, () => /ready for/.test(document.getElementById("sheet").innerText)), "a BJJ class still does");
+      // the notes box: tapping its label goes to the box, which is named
+      await ev(co, () => { hideSheet(); classForm(); }); await co.waitForTimeout(300);
+      await co.evaluate(() => { const d = document.querySelector("#c-notes").closest("details"); if (d) d.open = true; });
+      await co.locator('label[for="c-notes"]').tap(); await co.waitForTimeout(100);
+      ok(await ev(co, () => document.activeElement && document.activeElement.id === "c-notes" && document.getElementById("c-notes").labels[0].textContent === "Notes"), "tapping Notes goes to the notes box, not the mic, and the box is called Notes");
+      ok(await ev(co, () => document.querySelector(".planbox summary").getBoundingClientRect().height >= 36), "Lesson plan (optional) is easy to tap");
+      // Money's switch is a labelled group; settings checkboxes are full size; the WhatsApp button is readable
+      await ev(co, () => { hideSheet(); COACH.moneyView = "month"; coachGo("money"); }); await co.waitForTimeout(400);
+      ok(await ev(co, () => !document.querySelector('[role="tablist"]') && document.querySelector('[role="group"][aria-label="Money view"] [data-v="payments"][aria-pressed]')), "Money's switch is a group of pressed buttons, not a broken tablist");
+      await ev(co, () => coachGo("gym")); await co.waitForTimeout(400);
+      ok(await ev(co, () => ["g-show", "g-invite"].every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.width >= 20 && r.height >= 20; })), "the Bookings checkboxes are full size");
+      ok(await ev(co, () => getComputedStyle(document.getElementById("wa-go")).backgroundColor === "rgb(29, 119, 72)"), "the Open WhatsApp button uses the darker, readable green");
+      // students: buttons say which class; days say what they are; the avatar's name starts with what it shows
+      await ev(s1, async () => { hideSheet(); await loadClasses(true); S.ui.bcal = null; S.ui.bookView = "classes"; go("book"); }); await s1.waitForTimeout(700);
+      ok(await ev(s1, () => [...document.querySelectorAll('.bookcard [data-a="rsvp"], .bookcard [data-a="checkin"]')].every((b) => { const c = API.classes.find((x) => x.id === b.dataset.v); return b.getAttribute("aria-label").startsWith(b.textContent.trim() + " " + c.title + ", "); })), "Book and Cancel buttons say which class and when");
+      ok(await ev(s1, () => { const t = document.querySelector('.wday[aria-current="date"]'), l = t && t.getAttribute("aria-label"); return t && new RegExp("^" + new Date().getDate() + " \\w+day \\w+, \\d+ class").test(l); }), "today is marked as today, and its label starts with the date shown");
+      await s1.locator(".wday").nth(3).tap(); await s1.waitForTimeout(200);
+      ok(await ev(s1, () => document.querySelectorAll('.wday[aria-pressed="true"]').length === 1 && document.querySelectorAll(".wday")[3].getAttribute("aria-pressed") === "true"), "the picked day is pressed");
+      ok(await ev(s1, () => document.querySelector(".avatar").getAttribute("aria-label") === "AL: your account and settings"), "the avatar's name starts with its initials");
+      // an adult's Next class isn't the kids class; booking a kids class asks first
+      ok(await ev(s1, (at) => { const was = API.classes; API.classes = [{ id: "k", title: "Kids BJJ", level: "Kids", startsAt: at[0], durationMin: 60, going: 0, capacity: 2 }, { id: "a", title: "Adult Fundamentals", startsAt: at[1], durationMin: 60, going: 0 }];
+        const adult = nextClassCard(); API.me.kid = true; const kid = nextClassCard(); delete API.me.kid; API.classes = was; return /Adult Fundamentals/.test(adult) && !/Kids BJJ/.test(adult) && /Kids BJJ/.test(kid); }, [at(60), at(120)]), "an adult's Next class is the adults' class, a kid's is the kids class");
+      await ev(s3, async () => { hideSheet(); await loadClasses(true); }); await ev(s3, (id) => doBook(id, true), ids.kids); await s3.waitForTimeout(300);
+      ok(await ev(s3, () => S.ui.sheet && S.ui.sheet.k === "kidsask" && /This is a kids class/.test(document.getElementById("sheet").innerText)), "booking a kids class asks first");
+      await s3.tap('#sheetbar [data-a="rsvpsure"]'); await s3.waitForTimeout(1200);
+      ok(await ev(s3, (id) => API.classes.find((c) => c.id === id).myGoing, ids.kids), "Book anyway books it");
+      // signed out: Sign in and Forgot your password are big enough to tap
+      const out = await phone("out"); await out.goto(URL + "/app/"); await out.waitForTimeout(900); await ev(out, () => { if (S.ui.sheet) hideSheet(); render(); });
+      ok(await ev(out, () => { const b = document.querySelector('.top [data-a="auth"]'); return b && b.getBoundingClientRect().height >= 34; }), "the header Sign in is a proper tap target (it was 25px)");
+      await ev(out, () => { S.ui.authMode = "login"; authSheet(); }); await out.waitForTimeout(300);
+      ok(await ev(out, () => document.querySelector('[data-v="forgot"]').getBoundingClientRect().height >= 40), "Forgot your password? is a proper tap target");
+      // a member opens another gym's invite link: Move or Stay, in one tap
+      await out.goto(URL + "/app/?start=1"); await out.waitForTimeout(900); for (const [k, v] of [["#a-gym", "Other Gym"], ["#a-name", "Coach Oz"], ["#a-email", "oz@other.test"], ["#a-pass", "ozpass1234"]]) await out.fill(k, v);
+      await out.tap("#sheetbar [type=submit]"); await out.waitForTimeout(1500); const code2 = await ev(out, () => API.me.gym.studentCode); await out.context().close();
+      await s2.goto(URL + "/app/?join=" + code2); await s2.waitForTimeout(1500);
+      ok(await ev(s2, () => /Move from Race Gym to Other Gym\?/.test(document.getElementById("sheet").innerText) && /Stay/.test(document.getElementById("sheetbar").innerText)), "opening another gym's invite link asks: Move from Race Gym to Other Gym?");
+      await s2.tap('#sheetbar [data-a="joingym"]'); await s2.waitForTimeout(1200);
+      ok(await ev(s2, () => API.me.gym.name === "Other Gym" && /joined Other Gym/.test(document.getElementById("toast").textContent)), "Move moves them there in one tap");
+    }
+    // --- bad signal, double taps, signed out mid-form, the Back button, new versions, Home on slow 3G
+    {
+      const logs = async () => (await pool.query("select id, data from training_logs where user_id=(select id from users where email='ana@race.test')")).rows;
+      const stu = await phone("stu"); await stu.goto(URL + "/app/?signin=1"); await stu.waitForTimeout(900);
+      await stu.fill("#a-email", "ana@race.test"); await stu.fill("#a-pass", "anapass11"); await stu.tap("#sheetbar [type=submit]"); await stu.waitForTimeout(1500);
+      await ev(stu, () => { if (S.ui.sheet) hideSheet(); go("journal"); });
+      const logIt = async (p, worked) => { await ev(p, (w) => { S.ui.form = newForm(); S.ui.form.worked = w; logSheet(); }, worked); await p.waitForTimeout(200); await p.tap("#sheetbar [type=submit]"); await p.waitForTimeout(700); };
+      // No signal: the session is kept on the phone and sent later; the note says so too.
+      const n0 = (await logs()).length;
+      await stu.context().setOffline(true); await logIt(stu, "Underhook worked");
+      ok(/Saved on this phone/.test(await toast(stu)) && (await ev(stu, () => S.sessions.some((s) => s.worked === "Underhook worked") && JSON.parse(localStorage.getItem("rtb.pending")).length === 1)), "a session logged without signal is kept on the phone, waiting to sync: " + (await toast(stu)));
+      const sid = await ev(stu, () => S.sessions.find((s) => s.worked === "Underhook worked").id);
+      await ev(stu, (id) => tagSheet(id, "note"), sid); await stu.fill("#tag-note", "Ask coach about the underhook"); await stu.waitForTimeout(1200);
+      ok(await ev(stu, () => /sync when you're back online/.test(document.getElementById("tag-st").textContent) && JSON.parse(localStorage.getItem("rtb.sessions")).some((s) => s.worked === "Ask coach about the underhook")), "a note typed without signal is on the phone, and the sheet doesn't claim it's saved");
+      await stu.context().setOffline(false); await stu.reload(); await stu.waitForTimeout(1800);
+      ok((await logs()).length === n0 + 1 && (await logs()).some((r) => r.id === sid && r.data.worked === "Ask coach about the underhook") && (await ev(stu, () => !JSON.parse(localStorage.getItem("rtb.pending") || "[]").length)), "opening the app with signal sends them to the account");
+      await ev(stu, () => { if (S.ui.sheet) hideSheet(); });
+      await stu.context().setOffline(true); await logIt(stu, "Offline again"); await stu.context().setOffline(false); await stu.waitForTimeout(1500);
+      ok((await logs()).some((r) => r.data.worked === "Offline again"), "and when signal comes back while it's open, they go by themselves");
+      // A double tap on Save with a slow line logs one session (the button is off while saving).
+      const n1 = (await logs()).length;
+      await stu.route("**/api/logs/**", async (r) => { await wait(600); await r.continue(); });
+      await ev(stu, () => { S.ui.form = newForm(); logSheet(); }); await stu.waitForTimeout(200);
+      const mid = await ev(stu, async () => { const b = document.querySelector("#sheetbar [type=submit]"); b.click(); await new Promise((r) => setTimeout(r, 120)); const st = b.disabled && b.textContent === "Saving…"; b.click(); return st; });
+      await stu.waitForTimeout(1500); await stu.unroute("**/api/logs/**");
+      ok(mid && (await logs()).length === n1 + 1, "Save tapped twice logs one session, and says Saving… meanwhile");
+      // Signed out while filling in a form: sign in on top, the form comes back, and the save goes through.
+      { const tok = (await stu.context().cookies()).find((c) => c.name === "jf_s").value; await pool.query("update sessions set expires_at=now()-interval '1 second' where token_hash=$1", [require("crypto").createHash("sha256").update(tok).digest("hex")]); }
+      await ev(stu, () => { S.ui.form = newForm(); S.ui.form.worked = "Kept text"; logSheet(); }); await stu.waitForTimeout(200); await stu.tap("#sheetbar [type=submit]"); await stu.waitForTimeout(800);
+      ok(await ev(stu, () => /Sign in again/.test(document.getElementById("sheet").innerText) && document.getElementById("a-email").value === "ana@race.test"), "signed out mid-save: the sign-in sheet opens on top, with the email filled in");
+      await stu.tap('#sheetbar [data-a="back"]'); await stu.waitForTimeout(300);
+      ok(await ev(stu, () => S.ui.sheet.k === "log" && document.getElementById("f-worked").value === "Kept text" && !document.querySelector("#sheetbar [type=submit]").disabled), "Cancel brings the form back as it was");
+      await stu.tap("#sheetbar [type=submit]"); await stu.waitForTimeout(800); await stu.fill("#a-pass", "anapass11"); await stu.tap("#sheetbar [type=submit]"); await stu.waitForTimeout(1500);
+      ok((await logs()).some((r) => r.data.worked === "Kept text") && /Session saved/.test(await toast(stu)) && (await ev(stu, () => !S.ui.sheet && API.me.email === "ana@race.test")), "after signing in, what they were saving is saved: " + (await toast(stu)));
+      await stu.context().close();
+      // The phone's Back button: back through the tabs, a sheet closes, and only then out of the app.
+      const nav = await phone("nav"); await nav.goto(URL + "/"); await nav.goto(URL + "/app/"); await nav.waitForTimeout(900); await ev(nav, () => { if (S.ui.sheet) hideSheet(); render(); });
+      for (const t of ["learn", "journal", "me"]) { await nav.tap(`nav.tabs [data-v="${t}"]`); await nav.waitForTimeout(150); }
+      const back = async () => { await nav.goBack().catch(() => {}); await nav.waitForTimeout(300); return nav.evaluate(() => location.pathname === "/app/" ? S.ui.tab + (S.ui.sheet ? "+sheet" : "") : location.pathname).catch(() => "?"); };
+      const t1 = await back(), t2 = await back();
+      await ev(nav, () => techSheet(TECH[0].id)); await nav.waitForTimeout(200); await ev(nav, () => techSheet(TECH[1].id)); await nav.waitForTimeout(200);
+      const t3 = await back(), t4 = await back(), t5 = await back(), t6 = await back();
+      ok([t1, t2, t3, t4, t5, t6].join() === "journal,learn,learn+sheet,learn,home,/", "Back goes to the previous tab, closes sheets one step at a time, then leaves: " + [t1, t2, t3, t4, t5, t6].join());
+      // An app left open gets a new version: quietly, and not while a sheet is open.
+      await nav.goto(URL + "/app/"); await nav.waitForTimeout(900); await ev(nav, () => { if (S.ui.sheet) hideSheet(); render(); });
+      await ev(nav, () => { window.__still = 1; verAt = 0; document.dispatchEvent(new Event("visibilitychange")); }); await nav.waitForTimeout(600);
+      ok(await ev(nav, () => window.__still === 1 && !API.stale), "the same version: nothing happens");
+      await ev(nav, () => { window.JF_BUILD = "old-build"; verAt = 0; techSheet(TECH[0].id); document.dispatchEvent(new Event("visibilitychange")); }); await nav.waitForTimeout(600);
+      ok(await ev(nav, () => window.__still === 1 && API.stale === true), "a new version waits while a sheet is open");
+      await nav.tap('#sheetbar [data-a="back"]'); await nav.waitForTimeout(1500);
+      ok(await ev(nav, () => window.__still === undefined && /^\w+$/.test(window.JF_BUILD) && window.JF_BUILD !== "old-build"), "and the app reloads to it once the sheet is closed");
+      await nav.context().close();
+      // Two coaches, one class: an edit sends only what changed; a move made meanwhile isn't undone.
+      const cls = await ev(co, async () => (await api("POST", "/classes", { title: "Edit me", startsAt: new Date(Date.now() + 5 * 864e5).toISOString(), capacity: 8, plan: { focus: "Guard" } })).class);
+      await ev(co, (c) => { hideSheet(); S.ui.cplan = null; classForm(c); }, cls); await co.waitForTimeout(300);
+      let sentBody = null; const onReq = (q) => { if (q.method() === "PUT" && /\/api\/classes\/\d+$/.test(q.url())) sentBody = q.postDataJSON(); }; co.on("request", onReq);
+      await co.fill("#c-cap", "9"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200); co.off("request", onReq);
+      ok(sentBody && Object.keys(sentBody).sort().join() === "capacity,wasStartsAt" && sentBody.capacity === 9, "an edit sends only what changed: " + JSON.stringify(sentBody));
+      const fresh = await ev(co, async (id) => (await api("GET", `/coach/classes/${id}`)).class, cls.id);
+      await ev(co, (c) => { hideSheet(); S.ui.cplan = null; classForm(c); }, fresh); await co.waitForTimeout(300);
+      const later = new Date(new Date(fresh.startsAt).getTime() + 3600e3);
+      await pool.query("update classes set starts_at=$1 where id=$2", [later, cls.id]);
+      await co.fill("#c-cap", "11"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+      ok(/moved this class to .+ while you had it open/.test(await toast(co)) && (await ev(co, (t) => S.ui.sheet.k === "classform" && document.getElementById("c-cap").value === "11" && document.getElementById("c-time").value === fmtHM(t), later.toISOString())), "moved meanwhile: the coach is told, and the form shows the new time with their change kept: " + (await toast(co)));
+      await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+      { const row = (await pool.query("select capacity, starts_at, plan from classes where id=$1", [cls.id])).rows[0]; ok(row.capacity === 11 && row.starts_at.getTime() === later.getTime() && row.plan.focus === "Guard", "saving again keeps the new time"); }
+      // Record payment tapped twice on a slow line: one payment.
+      const p0 = Number((await pool.query("select count(*) from payments")).rows[0].count);
+      await co.route("**/api/coach/payments", async (r) => { if (r.request().method() === "POST") await wait(600); await r.continue(); });
+      await ev(co, () => { hideSheet(); paySheet(null); }); await co.waitForTimeout(300); await co.fill("#p-amt", "750");
+      await ev(co, async () => { const b = document.querySelector("#sheetbar [type=submit]"); b.click(); await new Promise((r) => setTimeout(r, 120)); b.click(); });
+      await co.waitForTimeout(2000); await co.unroute("**/api/coach/payments");
+      ok(Number((await pool.query("select count(*) from payments")).rows[0].count) === p0 + 1, "Record payment tapped twice records one payment");
+      // Home on a slow line: everything loads at once, and today's classes show before the roster arrives.
+      await ev(co, () => { hideSheet(); coachGo("home"); });
+      const starts = {}; const onStart = (q) => { const m = q.url().match(/\/api\/(coach\/roster|classes\?|coach\/payments|coach\/packs)/); if (m && !starts[m[1]]) starts[m[1]] = Date.now(); }; co.on("request", onStart);
+      await co.route("**/api/coach/roster", async (r) => { await wait(2500); await r.continue(); });
+      await co.reload(); await co.waitForTimeout(1500);
+      ok(await ev(co, () => !COACH.roster && !!COACH.classes && !/Loading your gym/.test(document.getElementById("app").innerText) && /Needs you/i.test(document.getElementById("app").innerText) && /Loading…/.test(document.getElementById("app").innerText)), "Home draws with today's classes while the roster is still on its way");
+      await co.waitForTimeout(2500); await co.unroute("**/api/coach/roster"); co.off("request", onStart);
+      const spread = Math.max(...Object.values(starts)) - Math.min(...Object.values(starts));
+      ok(Object.keys(starts).length === 4 && spread < 1000 && (await ev(co, () => !!COACH.roster && !/Loading…/.test(document.getElementById("app").innerText))), `roster, classes, payments and packs load together (${spread} ms apart), then Home fills in`);
+    }
     // --- the gym's colour
     const before = await ev(co, () => getComputedStyle(document.documentElement).getPropertyValue("--blue").trim());
     await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);

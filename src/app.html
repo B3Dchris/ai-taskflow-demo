@@ -46,6 +46,8 @@ p{margin:0}
 .stack{display:flex;flex-direction:column;gap:12px}
 .stack-lg{display:flex;flex-direction:column;gap:26px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row>input[type=checkbox]{flex:none;width:22px;height:22px;margin:0;accent-color:var(--blue)}
+.vh{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;padding:0}
 .between{justify-content:space-between}
 
 /* header */
@@ -99,13 +101,14 @@ a.btn{color:var(--ink);text-decoration:none}
 .btn.danger{color:var(--bad);border-color:var(--bad)}
 .btn.full{width:100%}
 .linkbtn{border:0;background:none;padding:0;color:var(--blue);font-weight:600;text-align:left}
-.linkbtn.small{min-height:44px;display:inline-flex;align-items:center;padding-inline:4px}
+.linkbtn.small{min-height:44px;display:inline-flex;align-items:center;padding-inline:4px}.linkbtn.tap{padding:6px 2px}
 
 /* technique rows */
 .list{display:flex;flex-direction:column}
 .trow{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:11px 2px}
 .list .trow:first-child{border-top:0}
 .trow .nm{font-weight:600;display:block}
+.nm,.whochip,.attrow b,.bookcard b{overflow-wrap:anywhere;min-width:0}
 .ferr{color:var(--bad);font-weight:600;margin:0}
 .addlist{max-height:44vh;overflow-y:auto;overscroll-behavior:contain}
 .addlist .trow{padding:10px 2px}
@@ -240,14 +243,14 @@ details.grp .body{padding:0 14px 8px}
 .mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.mdow{text-align:center;font-size:11px;font-weight:700;color:var(--ink-2);padding-bottom:2px}
 .mcell{display:grid;justify-items:center;align-content:center;gap:2px;min-height:46px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:inherit;padding:2px 0}
 .mcell span{font-size:15px;font-weight:600}.mcell i{font-style:normal;font-size:10px;font-weight:700;background:var(--blue-soft);color:var(--blue);border-radius:999px;padding:0 6px}
-.mcell.sel i{background:var(--on-blue);color:var(--blue)}.mcell.out{opacity:.45}.mcell.today{border-color:var(--blue)}
+.mcell.sel i{background:var(--on-blue);color:var(--blue)}.mcell.out{color:var(--ink-2);background:transparent}.mcell.today{border-color:var(--blue)}
 .calrows{display:grid;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
 .calrow{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 14px;color:inherit;font:inherit;min-height:60px}
 .calrow:first-child{border-top:0}.calrow.past{opacity:.6}.calrow.priv{background:var(--surface-2)}
 .cr-time{font-size:16px;font-weight:700;display:grid;white-space:nowrap}.cr-time .ap,.bc-time .ap{font-size:11px;font-weight:600;margin-left:2px;color:var(--ink-2)}.bc-time{white-space:nowrap}.cr-time small{font-size:11px;font-weight:500;color:var(--ink-2)}
 .cr-body{display:grid;gap:2px;min-width:0}.cr-body b{font-size:16px;line-height:1.25}.cr-body small{font-size:13px;color:var(--ink-2)}.cr-body small.ok{color:var(--good);font-weight:600}
 .cr-cap{display:grid;justify-items:end;gap:2px;min-width:56px}.cr-cap b{font-size:16px}.cr-cap b small{font-size:12px;color:var(--ink-2);font-weight:500}.cr-cap>small{font-size:11px;color:var(--ink-2)}.cr-cap .cap{width:52px;height:4px}.cr-cap small.w{color:var(--warn)}
-.planbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.planbox summary{font-weight:700;cursor:pointer;min-height:28px}
+.planbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.planbox summary{font-weight:700;cursor:pointer;min-height:28px;padding-block:8px}
 .btn.sm{min-height:36px;padding:0 12px;font-size:14px}
 .segrow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px;padding:2px}.segrow::-webkit-scrollbar{display:none}
 .segrow button{flex:1 0 auto;min-height:46px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:600;font-size:14px;padding:0 14px;white-space:nowrap}
@@ -268,7 +271,7 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .swipetip{font-size:13px;color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){.swipe>.sw-front{transition:none}}
 .btn.wa{gap:8px;border-color:#25D366;text-decoration:none;color:var(--ink)}.btn.wa .waico{width:20px;height:20px;fill:none;stroke:#1FAF54;stroke-width:1.8;stroke-linejoin:round;flex:none}
-.btn.wa.primary-wa{background:#1FAF54;border-color:#1FAF54;color:#fff}.btn.wa.primary-wa .waico{stroke:#fff}
+.btn.wa.primary-wa{background:#1D7748;border-color:#1D7748;color:#fff}.btn.wa.primary-wa .waico{stroke:#fff}
 #wa-panel textarea{font-size:16px}
 .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick .btn{min-height:52px}
 .bookcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);display:grid}.bookcard.mine{border-color:var(--good);box-shadow:inset 3px 0 0 var(--good)}
@@ -289,7 +292,7 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .meter{display:grid;gap:6px}.meter .cap{height:10px;border-radius:5px}.meter .cap i{border-radius:5px}
 .memcard .stats{margin-top:4px}
 .codebox{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:13px;word-break:break-all}
-.sync.who{background:var(--blue-soft);color:var(--blue);border-color:transparent;font-weight:700;cursor:pointer}
+.sync.who{background:var(--blue-soft);color:var(--blue);border-color:transparent;font-weight:700;cursor:pointer;padding:10px 14px}
 #sync:not([data-s="err"]){display:none}
 .avatar{width:44px;height:44px;border-radius:50%;border:0;background:var(--blue);color:var(--on-blue);font-weight:700;font-size:16px;letter-spacing:.02em;display:grid;place-items:center;flex:none;padding:0}
 .top .row{flex-wrap:nowrap;margin-left:auto}
@@ -352,7 +355,7 @@ ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .warnbox{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px}
 
 /* forms */
-label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2);min-width:0}
+label.f,div.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2);min-width:0}
 input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;min-width:0}
 /* iOS draws date/time inputs at their own width and ignores width:100%: make them behave like the other fields */
 input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-height:46px;text-align:left}
@@ -481,6 +484,7 @@ textarea{min-height:76px;resize:vertical}
 .area .mono{text-align:right;font-size:13px;color:var(--ink-2)}
 .toastbtn{margin-left:10px;background:none;border:0;color:var(--blue-soft);font:inherit;font-weight:800;text-decoration:underline;min-height:32px;padding:0 4px;cursor:pointer}
 .sheet-open .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+.toast:not(.on){opacity:0;pointer-events:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;max-width:calc(100% - 32px)}
 .empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--ink-2);font-size:15px}
 .revealcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -493,7 +497,7 @@ textarea{min-height:76px;resize:vertical}
 @media (prefers-reduced-motion: no-preference){.panel,.trow{transition:background-color .15s}}
 </style>
 
-<div class="wrap app" id="app"></div>
+<main class="wrap app" id="app"></main>
 <nav class="tabs" aria-label="Sections"><div class="wrap">
   <button data-a="tab" data-v="home"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5h-6v5H4z"/></svg>Home</button>
   <button data-a="tab" data-v="classes" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg>Classes</button>
@@ -508,7 +512,7 @@ textarea{min-height:76px;resize:vertical}
 </div></nav>
 <div class="sheet" id="sheet" hidden></div>
 <div class="sheetbar" id="sheetbar" hidden></div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="termcard" id="termcard" hidden role="dialog" aria-live="polite"></div>
 
 <script>
@@ -1636,9 +1640,15 @@ async function flushProgress(){
   pWriting=false;
   if(pDirty){pDirty=false;flushProgress()}
 }
+/* With an account, a session is saved on the phone first and then sent. Without signal it waits in "rtb.pending" and goes
+   when the phone is back online or the app opens (flushLogs). Returns true when it reached the account, "later" when it's waiting. */
+const pendingLogs=()=>new Set(lsGet("rtb.pending")||[]);
+function setPending(id,on){const p=pendingLogs();if(on)p.add(id);else p.delete(id);lsSet("rtb.pending",[...p])}
 async function addSession(s){
-  if(S.mode==="api"){try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s})}catch(e){toast("Couldn't save the session to your account: "+e.message);return false}
-    S.sessions=[s,...S.sessions.filter(x=>x.id!==s.id)];lsSet("rtb.sessions",S.sessions);return true}
+  if(S.mode==="api"){const was=S.sessions;S.sessions=[s,...S.sessions.filter(x=>x.id!==s.id)];lsSet("rtb.sessions",S.sessions);setPending(s.id,true);
+    try{await api("PUT","/logs/"+encodeURIComponent(s.id),{data:s});setPending(s.id,false);return true}
+    catch(e){if(e.offline||e.status>=500){setSync("Offline: saved on this device","err");return "later"}
+      S.sessions=was;lsSet("rtb.sessions",was);setPending(s.id,false);toast("Couldn't save the session: "+e.message);return false}}
   if(S.mode==="db"){
     try{await sessCol.doc(s.id).set(s)}catch(e){
       if(e&&e.code==="quota_exceeded")toast("Your log is full. Delete old sessions to add new ones.");
@@ -1647,10 +1657,11 @@ async function addSession(s){
   return true;
 }
 async function deleteSession(id){
-  if(S.mode==="api"){try{await api("DELETE","/logs/"+encodeURIComponent(id))}catch(e){toast("Couldn't delete: "+e.message);return}S.sessions=S.sessions.filter(x=>x.id!==id);lsSet("rtb.sessions",S.sessions);render();return}
+  if(S.mode==="api"){try{await api("DELETE","/logs/"+encodeURIComponent(id))}catch(e){toast("Couldn't delete: "+e.message);return}setPending(id,false);S.sessions=S.sessions.filter(x=>x.id!==id);lsSet("rtb.sessions",S.sessions);render();return}
   if(S.mode==="db"){try{await sessCol.doc(id).delete()}catch(e){toast("Couldn't delete. Try again.")}}
   else{S.sessions=S.sessions.filter(x=>x.id!==id);lsSet("rtb.sessions",S.sessions);render()}
 }
+const SAVED_LATER="Saved on this phone. It will sync when you're back online.";
 function setSync(t,st){S.sync=t;S.syncState=st;const el=document.getElementById("sync");if(el){el.textContent=t;el.dataset.s=st}}
 
 async function connect(){
@@ -1762,12 +1773,22 @@ function beltSVG(pct){
   let st="";for(let i=0;i<4;i++)st+=`<rect class="${i<n?"on":"off"}" x="${250+i*13}" y="10" width="7" height="26"/>`;
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
-function toast(msg,act){const t=document.getElementById("toast");t.textContent=msg;toast._act=act?act.fn:null;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`);t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;toast._act=null},act?5000:2800)}
+/* #toast is a polite live region that's always there: hiding it only fades it out. The same message again is cleared first, so a screen reader reads it again.
+   A toast with Undo stays 10s, and waits while a finger or the keyboard is on it. */
+function toast(msg,act){const t=document.getElementById("toast"),put=()=>{t.textContent=msg;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`)};
+  clearTimeout(toast._s);toast._act=act?act.fn:null;toast._ms=act?10000:2800;
+  if(t.classList.contains("on")&&toast._msg===msg){t.textContent="";toast._s=setTimeout(put,60)}else put();toast._msg=msg;t.classList.add("on");toastWait()}
+function toastWait(){clearTimeout(toast._t);toast._t=setTimeout(toastHide,toast._ms)}
+function toastHide(){const t=document.getElementById("toast");clearTimeout(toast._t);t.classList.remove("on");t.textContent="";toast._act=null;toast._msg=null}
+{const t=document.getElementById("toast");t.addEventListener("pointerenter",()=>clearTimeout(toast._t));t.addEventListener("focusin",()=>clearTimeout(toast._t));
+  t.addEventListener("pointerleave",()=>{if(t.classList.contains("on"))toastWait()});t.addEventListener("focusout",()=>{if(t.classList.contains("on"))toastWait()})}
+// A segmented switch: one labelled group of buttons, the chosen one pressed. Every switch in the app is built with this. items: [[value,label],…]
+const seg=(label,a,items,cur,cls="seg3",attrs="")=>`<div class="${cls}" role="group" aria-label="${label}">${items.map(([v,l])=>`<button type="button" data-a="${a}"${attrs} data-v="${v}" aria-pressed="${v===cur}">${l}</button>`).join("")}</div>`;
 const initials=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);return w.length?(w[0][0]+(w.length>1?w[w.length-1][0]:"")).toUpperCase():"?"};
 // Gym logo and name on the left; on the right a round initials button (Me for students, Gym for coaches). The save status only shows when something isn't saved.
 function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
-  const who=API.me?`<button class="avatar" data-a="me" aria-label="${isCoach()?"Your gym and account":"Me: your account and settings"} (${esc(API.me.name)})" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
+  const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
   return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${tipBar()}`}
 /* First-visit tips: one line at the top of a tab saying what it's for. Shown on the first 3 visits (per person, on this phone) or until closed. */
 const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
@@ -1809,7 +1830,7 @@ function viewToday(){
   const inGym=!!(API.me&&API.me.gym);
   if(inGym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="home"&&!S.ui.sheet)render()})}
   const owes=API.pay&&API.pay.dueCents>API.pay.paidCents;
-  return `${header()}<div class="stack-lg">
+  return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
   ${isCoach()?`<button class="btn primary managebtn" data-a="coachmode" data-v="manage">Manage ${esc(API.me.gym.name)}</button>`:""}
   ${typeof noticesCard==="function"?noticesCard():""}${nextClassCard()}${owes?feesCard():""}${lastClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
@@ -1833,7 +1854,7 @@ function viewToday(){
 
 /* Learn: Moves (every technique, by belt), Map (the flow map) and Belt (your progress and each belt's curriculum), behind one switch. */
 function viewLearnTab(){const lv=LEARNV.includes(S.ui.learnView)?S.ui.learnView:"moves";
-  return `${header()}<div class="stack-lg"><div class="seg3 learnseg" role="group" aria-label="Learn">${[["moves","Moves"],["map","Map"],["belt","Belt"]].map(([k,l])=>`<button data-a="tab" data-v="learn-${k}" aria-pressed="${lv===k}">${l}</button>`).join("")}</div>
+  return `${header()}<div class="stack-lg">${seg("Learn","tab",[["learn-moves","Moves"],["learn-map","Map"],["learn-belt","Belt"]],"learn-"+lv,"seg3 learnseg")}
   ${lv==="map"?viewFlow():lv==="belt"?viewBelt():viewMoves()}</div>`}
 function viewMoves(){
   const u=S.ui,bk=u.belt||goal();
@@ -2068,18 +2089,27 @@ function fmtDate(s){try{return parseD(s).toLocaleDateString(undefined,{weekday:"
 
 /* ============ SHEETS ============ */
 /* bar: {top: html row above, act: html beside Back} — Back sits on the thumb side */
-function openSheet(html,keepScroll,bar){const sh=document.getElementById("sheet"),app=document.getElementById("app"),sb=document.getElementById("sheetbar");if(sh.hidden){S.ui.backY=window.scrollY||0}
+/* A sheet is a dialog named by its title. Opening one moves focus to the title (or keeps it on the same button when the sheet redraws); closing returns it to what opened it. */
+function openSheet(html,keepScroll,bar){const sh=document.getElementById("sheet"),app=document.getElementById("app"),sb=document.getElementById("sheetbar"),fresh=sh.hidden,fe=document.activeElement;if(fresh){S.ui.backY=window.scrollY||0;S.ui.opener=fe&&fe!==document.body?{el:fe,a:fe.dataset&&fe.dataset.a,v:fe.dataset&&fe.dataset.v}:null}
+  const was=!fresh&&fe&&(sh.contains(fe)||sb.contains(fe))?(fe.id?"#"+CSS.escape(fe.id):fe.dataset.a?`[data-a="${fe.dataset.a}"]${fe.dataset.v!=null?`[data-v="${CSS.escape(fe.dataset.v)}"]`:""}`:null):null;
+  if(fresh&&!inClaude())try{history.pushState({sheet:1},"")}catch(e){} // a step for the phone's Back button to close it
   sh.innerHTML=`<div class="wrap">${html}</div>`;app.hidden=true;sh.hidden=false;document.querySelector("nav.tabs").hidden=true;
   bar=bar||{};const backL=bar.back||((S.ui.stack||[]).length>1?"‹ Back":"Close");
   sb.innerHTML=`<div class="wrap">${bar.top||""}<div class="main"><button class="btn back" data-a="back">${backL}</button>${bar.act||'<span class="grow"></span>'}</div></div>`;sb.hidden=false;document.documentElement.classList.add("sheet-open");
-  if(!keepScroll){window.scrollTo(0,0);try{sh.scrollIntoView({block:"start"})}catch(e){}}}
+  const t=sh.querySelector("h1")||sh.querySelector(".sheettitle");if(t){t.id="sheet-t";t.tabIndex=-1} // focusable, also when a redraw puts focus back on it
+  sh.setAttribute("role","dialog");sh.setAttribute("aria-modal","true");sh.setAttribute("aria-owns","sheetbar toast");if(t)sh.setAttribute("aria-labelledby","sheet-t");else sh.removeAttribute("aria-labelledby");
+  if(!keepScroll){window.scrollTo(0,0);try{sh.scrollIntoView({block:"start"})}catch(e){}}
+  const again=was&&(sh.querySelector(was)||sb.querySelector(was));
+  if(again)again.focus({preventScroll:true});else if(t&&(fresh||!sh.contains(document.activeElement)&&!sb.contains(document.activeElement)))t.focus({preventScroll:true})}
 function hideTerm(){const c=document.getElementById("termcard");if(c&&!c.hidden){c.hidden=true;c.innerHTML="";if(TERMCTL)TERMCTL.abort()}}
-function hideSheet(){hideTerm();const sh=document.getElementById("sheet");sh.hidden=true;sh.innerHTML="";const sb=document.getElementById("sheetbar");sb.hidden=true;sb.innerHTML="";document.querySelector("nav.tabs").hidden=false;document.documentElement.classList.remove("sheet-open");document.getElementById("app").hidden=false;S.ui.sheet=null;S.ui.stack=[]}
+function hideSheet(){hideTerm();const sh=document.getElementById("sheet");sh.hidden=true;sh.innerHTML="";["role","aria-modal","aria-owns","aria-labelledby"].forEach(a=>sh.removeAttribute(a));const sb=document.getElementById("sheetbar");sb.hidden=true;sb.innerHTML="";document.querySelector("nav.tabs").hidden=false;document.documentElement.classList.remove("sheet-open");document.getElementById("app").hidden=false;S.ui.sheet=null;S.ui.stack=[]}
 function goBack(){const k=S.ui.sheet&&S.ui.sheet.k;
+  if(k==="auth"&&REAUTH)return reauthDone(false);
   if(k==="onboard"||(k==="how"&&S.ui.sheet.step==="pick")){S.ui.fromHow=false;P().settings.onboarded=true;saveProgress();closeSheet();return}
   if(k==="how"||(k==="auth"&&S.ui.fromHow&&!API.me))return howSheet(k==="auth"&&S.ui.authMode==="register"?"gym":"pick");
 const st=S.ui.stack||[];if(S.ui.sheet&&S.ui.sheet.k==="tech"&&st.length>1){st.pop();techSheet(st[st.length-1],true)}else closeSheet()}
-function closeSheet(){hideSheet();render();const y=S.ui.backY||0;window.scrollTo(0,y);if(!y){try{document.getElementById("app").scrollIntoView({block:"start"})}catch(e){}}}
+function closeSheet(){const o=S.ui.opener;S.ui.opener=null;hideSheet();render();if(API.stale)reloadIfIdle();const y=S.ui.backY||0;window.scrollTo(0,y);if(!y){try{document.getElementById("app").scrollIntoView({block:"start"})}catch(e){}}
+  const el=o&&(o.el.isConnected&&!o.el.closest("[hidden]")?o.el:o.a&&document.querySelector(`#app [data-a="${o.a}"]${o.v!=null?`[data-v="${CSS.escape(o.v)}"]`:""}`));if(el)el.focus({preventScroll:true})}
 const sheetHead=(t)=>`<div class="sheettitle small muted">${t}</div>`;
 
 function techSheet(id,fromBack){
@@ -2115,7 +2145,7 @@ function techSheet(id,fromBack){
   </div>`,false,{act:!ASSETS?"":(P().videos||{})[t.id]?`<button class="btn grow" data-a="playvid">▶ Play video</button>`:`<label class="btn grow" for="vid-${t.id}" style="cursor:pointer">Add a video</label>`});
 }
 /* ‹ Prev / Next › for review cards and Rate what you know (Next skips without rating). */
-function prevNext(k,r,short){return `<button class="btn" data-a="${k}prev"${r.i?"":" disabled"} aria-label="Previous">‹${short?"":" Prev"}</button><button class="btn${short?"":" grow"}" data-a="${k}next" aria-label="Next, skip for now">${short?"›":"Next ›"}</button>`}
+function prevNext(k,r,short){return `<button class="btn" data-a="${k}prev"${r.i?"":" disabled"} aria-label="Prev">‹${short?"":" Prev"}</button><button class="btn${short?"":" grow"}" data-a="${k}next" aria-label="Next, skip for now">${short?"›":"Next ›"}</button>`}
 function reviewSheet(){
   const r=S.ui.review;if(!r||r.i>=r.q.length){const n=r?r.q.length:0;S.ui.review=null;S.ui.stack=[];closeSheet();render();if(n)toast(`${n} reviewed. Each comes back when it's due.`);return}
   const t=TM[r.q[r.i]];S.ui.sheet={k:"review"};S.ui.stack=[];if(!P().settings.quiz)r.shown=true;
@@ -2133,7 +2163,7 @@ function qrSheet(){
   <p class="small"><b>Key detail:</b> ${gl(t.d[0])}</p></div>
   </div>`,false,{top:`<div class="levels qrlevels">${LEVELS.map((L,i)=>`<button data-a="qrset" data-v="${i}" aria-pressed="${t.id in P().mastery&&lv(t.id)===i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>`,act:prevNext("qr",r)});
 }
-function newForm(){return {date:today(),type:"Class",mins:P().settings.sessionMins||90,taught:[],rolls:5,hits:[],tapped:[],stuck:[],worked:"",fix:"",feel:3}}
+function newForm(){return {id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:today(),type:"Class",mins:P().settings.sessionMins||90,taught:[],rolls:5,hits:[],tapped:[],stuck:[],worked:"",fix:"",feel:3}}
 function techOptions(filter){return ORDER.map(p=>{const ts=TECH.filter(t=>t.f===p&&(!filter||filter(t)));return ts.length?`<optgroup label="${esc(POS[p].L)}">${ts.map(t=>`<option value="${t.id}">${esc(t.n)}</option>`).join("")}</optgroup>`:""}).join("")}
 function logSheet(keep){
   const f=S.ui.form;S.ui.sheet={k:"log"};S.ui.stack=[];
@@ -2152,7 +2182,7 @@ function logSheet(keep){
   </form>`,keep,{act:`<button class="btn primary grow" type="submit" form="logform">${f.editId?"Save changes":"Save session"}</button>`});
 }
 function settingsSheet(){render()}
-function appearanceSection(){return `<section class="stack"><h2 class="label">Appearance</h2><div class="seg3">${[["system","Match phone"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-a="theme" data-v="${k}" aria-pressed="${themeNow()===k}">${l}</button>`).join("")}</div></section>`}
+function appearanceSection(){return `<section class="stack"><h2 class="label">Appearance</h2>${seg("Appearance","theme",[["system","Match phone"],["light","Light"],["dark","Dark"]],themeNow())}</section>`}
 function themeNow(){try{const t=localStorage.getItem("jf.theme");return t==="light"||t==="dark"?t:"system"}catch(e){return "system"}}
 function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");else localStorage.setItem("jf.theme",t)}catch(e){}
   if(t==="system")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t);
@@ -2170,8 +2200,8 @@ function viewMe(){
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on Home follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Home, ratings and focus blocks aim at.</p>
-  <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox" style="width:auto"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps, so I test myself first (one extra tap per move, better for remembering)</label></section>
-  <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2><div class="seg"><button data-a="hand" data-v="left" aria-pressed="${hand==="left"}">Left hand</button><button data-a="hand" data-v="right" aria-pressed="${hand==="right"}">Right hand</button></div><p class="small muted">Back, Close and the Log button sit on this side so your thumb reaches them. Swipe right on any open page to go back.</p></section>
+  <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps, so I test myself first (one extra tap per move, better for remembering)</label></section>
+  <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2>${seg("Phone hand","hand",[["left","Left hand"],["right","Right hand"]],hand,"seg")}<p class="small muted">Back, Close and the Log button sit on this side so your thumb reaches them. Swipe right on any open page to go back.</p></section>
   <details class="more" data-g="set-hours"${(S.ui.openG||{})["set-hours"]?" open":""}><summary>Hours, targets and focus block</summary><div class="stack" style="padding-top:12px">
   <div class="grid2"><label class="f">Sessions per week<input id="s-pw" type="number" min="1" max="14" data-s="perWeek" value="${st.perWeek}"></label>
   <label class="f">Usual session (min)<input id="s-sm" type="number" min="30" max="300" data-s="sessionMins" value="${st.sessionMins}"></label>
@@ -2206,22 +2236,31 @@ function render(){
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches training themselves) the study tabs.
   const mg=managing();
-  if(mg&&S.ui.tab!=="coach")return go("coach-"+(COACH.view||"home"));
-  if(!mg&&S.ui.tab==="coach"){if(isCoach()){setCoachMode("manage");return render()}return go("home")} // a coach page opened in training mode: back to managing
+  if(mg&&S.ui.tab!=="coach")return go("coach-"+(COACH.view||"home"),true);
+  if(!mg&&S.ui.tab==="coach"){if(isCoach()){setCoachMode("manage");return render()}return go("home",true)} // a coach page opened in training mode: back to managing
   if(mg&&!COACH_VIEWS.includes(COACH.view)||(COACH.view==="money"&&mg&&!isHead())){COACH.view="home";try{history.replaceState(null,"","#coach-home")}catch(e){}} // Money is the head coach's only
   const v=S.ui.tab,inGym=!!(API.me&&API.me.gym&&!isCoach());
   const show={home:!mg,classes:!mg&&inGym,learn:!mg,journal:!mg,me:!mg,"coach-home":mg,"coach-schedule":mg,"coach-members":mg,"coach-money":mg&&isHead(),"coach-gym":mg};
   const cur=v==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):v;
   document.querySelectorAll("nav.tabs [data-v]").forEach(b=>{b.hidden=!show[b.dataset.v];b.setAttribute("aria-current",b.dataset.v===cur?"page":"false")});
+  {const b=document.querySelector(`nav.tabs [data-v="${cur}"]`);document.title=(b?b.textContent.trim()+" · ":"")+"JitsFlow"} // the screen reader and the phone's app switcher say which screen this is
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
   const fab=v==="home"?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   app.innerHTML=(v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday())+fab;
   if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
 }
-function go(tab){hideTerm();const r=route(tab)||{tab:"home"};
+// Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
+function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
   const was=tabHash(),wasTab=tipKey();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
-  const h=tabHash();if(location.hash!=="#"+h){try{history.replaceState(null,"","#"+h)}catch(e){location.hash=h}}
-  if(wasTab!==tipKey())tipVisit();render();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage()}
+  const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
+  if(wasTab!==tipKey())tipVisit();render();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()}
+// The phone's Back button closes the open sheet, else goes back to the previous tab. A step left by a sheet that was closed in the app
+// changes nothing on screen, so it's skipped: every press of Back does something, and Back from the first screen leaves the app.
+window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.getElementById("sheet");
+  if(!sh.hidden){goBack();if(!sh.hidden)try{history.pushState({sheet:1},"")}catch(e){}return}
+  const h=location.hash.slice(1),r=h?route(h):{tab:"home"};if(!r)return;
+  if((h||"home")===tabHash()){history.back();return}
+  go(r.tab==="learn"&&!r.lv?"learn-moves":h||"home",true)});
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
 window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;const wk=tipKey();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}if(wk!==tipKey())tipVisit();render()});
@@ -2250,6 +2289,7 @@ document.addEventListener("click",e=>{
     case "delacct": S.ui.delOpen=true;render();break;
     case "delcancel": S.ui.delOpen=false;render();break;
     case "rsvp": doBook(v,el.dataset.going==="1");break;
+    case "rsvpsure": closeSheet();doBook(v,true,true);break;
     case "checkin": doCheckin(v);break;
     case "bookopen": bookSheet(v);break;
     case "bookview": S.ui.bookView=v;render();break;
@@ -2293,6 +2333,7 @@ document.addEventListener("click",e=>{
     case "classdelyes": api("DELETE",`/classes/${v}`).then(async()=>{S.ui.cplan=null;hideSheet();toast("Class deleted.");await coachLoad("classes");coachGo("schedule")}).catch(e=>toast(e.message));break;
     case "cplanrm": { S.ui.cplan.ids=S.ui.cplan.ids.filter(x=>x!==v);const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");break }
     case "attend": { const cd=S.ui.classData,a=cd.attendees.find(x=>x.id===v);if(!a)break;const nv=!a.attended;api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userId:v,attended:nv}).then(()=>{a.attended=nv;drawClassSheet(true)}).catch(e=>toast(e.message));break }
+    case "clsusual": classUsual();break;
     case "clsaddopen": S.ui.addPick=v!=="0";if(S.ui.addPick&&!COACH.roster)coachLoad("roster").then(()=>{if(S.ui.sheet&&S.ui.sheet.k==="class")drawClassSheet(true)});drawClassSheet(true);if(S.ui.addPick){const q=document.getElementById("cls-q");if(q)q.focus()}break;
     case "clsadd": classAdd(v);break;
     case "addtoplan": { const c=S.ui.classData.class,ids=[...new Set([...(c.plan&&c.plan.ids||[]),v])];api("PUT",`/classes/${c.id}`,{title:c.title,startsAt:c.startsAt,durationMin:c.durationMin,shared:c.shared,plan:{...(c.plan||{}),ids}}).then(()=>{c.plan={...(c.plan||{}),ids};drawClassSheet(true);toast("Added to the plan.");COACH.classes=null;coachLoad("classes")}).catch(e=>toast(e.message));break }
@@ -2329,6 +2370,10 @@ document.addEventListener("click",e=>{
     case "pvclear": document.querySelectorAll('#pv-grid .tchip').forEach(b=>b.setAttribute("aria-pressed","false"));pvSum();break;
     case "popcheck": popSheet(v);break;
     case "popok": popQuick(v,"confirmed");break;
+    case "popall": popAll();break;
+    case "popcov": { const pk=document.getElementById("pop-cov-pick");if(pk){pk.hidden=false;el.hidden=true;const m=document.getElementById("pop-months");if(m)m.focus()}break }
+    case "paidnow": paidNow(v);break;
+    case "paidhow": lsSet("jf.payMethod",v);render();break;
     case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
@@ -2342,7 +2387,7 @@ document.addEventListener("click",e=>{
     case "moneycsv": moneyCSV();break;
     case "addstu": addStudentSheet();break;
     case "studelask": { const p=((COACH.roster||{}).people||[]).find(x=>x.id===v); confirmSheet("Remove this student?",p&&!p.offline?`${esc(first(p.name))} leaves your gym but keeps their JitsFlow account. Their bookings, plan, fee and your notes on them are cleared. Payments you recorded stay.`:"They're taken off your list. Payments you recorded stay, marked as not matched.",["studelyes",v],"Remove");break }
-    case "leavegym": confirmSheet("Leave your gym?",`You keep your account, technique library and training log. You stop being a member of ${esc((API.me.gym||{}).name||"your gym")}: your bookings are cancelled, and its coaches no longer see you. You can join a gym again with a gym code.`,["leavegymyes",""],"Leave gym");break;
+    case "leavegym": leaveSheet();break;
     case "leavegymyes": api("POST","/me/leave",{}).then(j=>{API.me=j.me;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;hideSheet();render();toast("You've left your gym.")}).catch(e=>toast(e.message));break;
     case "gymdel": S.ui.gymDelOpen=true;render();break;
     case "gymdelcancel": S.ui.gymDelOpen=false;render();break;
@@ -2419,7 +2464,7 @@ document.addEventListener("click",e=>{
       // a class that logged itself stays deleted (it isn't added back from your bookings)
       if(old.classId){const sk=P().logSkip||(P().logSkip=[]);if(!sk.includes(old.classId))sk.push(old.classId);saveProgress()}
       deleteSession(v).then(()=>toast("Session deleted.",{label:"Undo",fn:async()=>{if(old.classId){P().logSkip=(P().logSkip||[]).filter(x=>x!==old.classId);saveProgress()}const ok=await addSession(old);if(ok){render();toast("Session restored.")}}}));break }
-    case "toastact": { const f=toast._act;toast._act=null;document.getElementById("toast").hidden=true;if(f)f();break }
+    case "toastact": { const f=toast._act;toastHide();if(f)f();break }
     case "delno": S.ui.confirmDel=null; render(); break;
     case "delyes": S.ui.confirmDel=null; deleteSession(v); break;
     case "settings": S.ui.importOpen=false;S.ui.confirmReset=false; go("me"); break;
@@ -2448,8 +2493,9 @@ document.addEventListener("input",e=>{
   if(e.target.dataset&&e.target.dataset.bk){const b=S.ui.bulk,p=b&&b.people[+e.target.dataset.i];if(p)p[e.target.dataset.bk]=e.target.value;return}
   const t=e.target;
   if(t.id==="wa-text"){const a=document.getElementById("wa-go");if(a)a.href=waURL(t.value);return}
-  if(t.id==="cls-q"){S.ui.clsQ=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#clsadd .trow").forEach(b=>b.hidden=!!q&&!b.querySelector(".nm").textContent.toLowerCase().includes(q));return}
-  if(t.id==="r-q"){COACH.q=t.value;const q=t.value.trim().toLowerCase();document.querySelectorAll("#roster-list .trow").forEach(b=>b.hidden=!!q&&!b.textContent.toLowerCase().includes(q));return}
+  if(t.id==="p-amt"||t.id==="pop-amt"){if(!(document.getElementById(t.id==="p-amt"?"p-pack":"pop-pack")||{}).value)syncCovers(t.id.split("-")[0]);return}
+  if(t.id==="cls-q"||t.id==="r-q"){if(t.id==="cls-q")S.ui.clsQ=t.value;else COACH.q=t.value;const ps={};students().forEach(p=>ps[p.id]=p);
+    document.querySelectorAll(t.id==="cls-q"?"#clsadd .trow":"#roster-list .trow").forEach(b=>b.hidden=!personMatch(ps[b.dataset.v],t.value));return}
   if(t.id==="q"){S.ui.q=t.value;const sg=document.getElementById("qsugg");if(sg)sg.innerHTML=suggestHTML(t.value);clearTimeout(qTimer);qTimer=setTimeout(()=>{const g=document.getElementById("learn-groups");if(g)g.innerHTML=learnGroups()},150);return}
   if(t.dataset.note){P().notes[t.dataset.note]=t.value;saveProgress();return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value;return}
@@ -2465,7 +2511,10 @@ document.addEventListener("change",e=>{
   if(e.target.id==="p-pack"||e.target.id==="mypop-pack"){const o=e.target.selectedOptions[0],amt=document.getElementById(e.target.id==="p-pack"?"p-amt":"mypop-amt"),cv=document.getElementById("p-covers");
     if(o&&o.dataset.price&&amt)amt.value=Number(o.dataset.price)/100;if(cv)cv.hidden=!!e.target.value;return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
-  if(e.target.id==="p-user"){const m=document.getElementById("p-months");if(m)m.value=String(planMonths(e.target.value));return}
+  if(e.target.id==="p-user"){const a=document.getElementById("p-amt"),pk=document.getElementById("p-pack"),c=owedFor(e.target.value);if(a&&!(pk&&pk.value)&&c)a.value=c/100;syncCovers("p");return}
+  if(e.target.id==="pop-user"){syncCovers("pop");return}
+  if(e.target.id==="pop-pack"){const cv=document.getElementById("pop-covers");if(e.target.value){if(cv)cv.hidden=true}else syncCovers("pop");return}
+  if(e.target.id==="p-months"||e.target.id==="pop-months"){e.target.dataset.set="1";const t=document.getElementById("pop-cov-txt");if(e.target.id==="pop-months"&&t)t.querySelector("b").textContent=e.target.selectedOptions[0].textContent;return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
   const t=e.target;
   if(t.dataset.photo&&t.files&&t.files[0]){uploadPhoto(t.dataset.photo,t.files[0]);return}
@@ -2485,50 +2534,60 @@ document.addEventListener("change",e=>{
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
+const FORMS=["authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform"];
 document.addEventListener("submit",async e=>{
-  const fid=e.target.id;
-  if(["authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform"].includes(fid)){e.preventDefault();const f=e.target;
-    if(fid==="authform")return submitAuth(f);
-    if(fid==="howcode")return howCode(f.querySelector("[name=code]").value.trim().toUpperCase());
-    if(fid==="classform")return submitClass(f);
-    if(fid==="studentform")return submitStudent(f);
-    if(fid==="payform")return submitPay(f);
-    if(fid==="gymimpform")return gymImport(f);
-    if(fid==="inviteform")return sendInvites(f);
-    if(fid==="msgform")return sendMsg(f);
-    if(fid==="planform")return savePlan(f);
-    if(fid==="privform")return savePriv(f);
-    if(fid==="bankform")return saveBank(f);
-    if(fid==="addstuform")return submitAddStudent(f);
-    if(fid==="pfform")return savePf(f);
-    if(fid==="packform")return savePack(f);
-    if(fid==="accessform")return saveAccess(f);
-    if(fid==="privpriceform")return savePrivPrice(f);
-    if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
-    if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
-    if(fid==="popform")return savePop(f);
-    if(fid==="compform")return saveComp(f);
-    if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
-    if(fid==="compimpform")return compImport(f);
-    if(fid==="compreqform")return sendCompReq(f);
-    if(fid==="compentryform")return saveCompEntry(f);
-    if(fid==="gymeditform")return gymSave(f);
-    if(fid==="gymform"){try{const fee=f.querySelector("[name=fee]"),j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,...(fee?{monthlyFeeCents:Math.round(Number(fee.value||0)*100)}:{})});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
-    if(fid==="gymdelform")return deleteGym(f);
-    if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
-    if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("home");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
-  }
+  const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
-  if(e.target.id!=="logform")return;e.preventDefault();
-  const f=S.ui.form;if(!f.date){toast("Pick a date for the session.");return}
-  const s={id:f.editId||("s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),date:f.date,type:f.type,mins:Number(f.mins)||0,rolls:Number(f.rolls)||0,taught:f.taught,hits:f.hits,tapped:f.tapped,stuck:f.stuck,worked:String(f.worked||"").slice(0,1000),fix:String(f.fix||"").slice(0,1000),created:f.created||Date.now()};
+  if(!FORMS.includes(fid))return;e.preventDefault();
+  if(fid==="authform"||fid==="astform")return submitForm(fid,f); // these handle their own button
+  // One save at a time: the button is off (and says so) until this one is done, so a double tap doesn't add it twice.
+  if(f.dataset.busy)return;f.dataset.busy="1";
+  const btn=e.submitter||document.querySelector(`#sheetbar [type=submit][form="${fid}"]`)||f.querySelector("[type=submit]"),label=btn&&btn.innerHTML;
+  if(btn){btn.disabled=true;btn.textContent="Saving…"}
+  try{await submitForm(fid,f)}finally{delete f.dataset.busy;if(btn){btn.disabled=false;btn.innerHTML=label}}
+});
+async function submitForm(fid,f){
+  if(fid==="logform")return submitLog();
+  if(fid==="authform")return submitAuth(f);
+  if(fid==="howcode")return howCode(f.querySelector("[name=code]").value.trim().toUpperCase());
+  if(fid==="classform")return submitClass(f);
+  if(fid==="studentform")return submitStudent(f);
+  if(fid==="payform")return submitPay(f);
+  if(fid==="gymimpform")return gymImport(f);
+  if(fid==="inviteform")return sendInvites(f);
+  if(fid==="msgform")return sendMsg(f);
+  if(fid==="planform")return savePlan(f);
+  if(fid==="privform")return savePriv(f);
+  if(fid==="bankform")return saveBank(f);
+  if(fid==="addstuform")return submitAddStudent(f);
+  if(fid==="pfform")return savePf(f);
+  if(fid==="packform")return savePack(f);
+  if(fid==="accessform")return saveAccess(f);
+  if(fid==="privpriceform")return savePrivPrice(f);
+  if(fid==="astform"){const i=document.getElementById("ast-in");const t=i?i.value:"";if(i)i.value="";return astSend(t)}
+  if(fid==="gwaform"){try{const j=await api("PATCH","/coach/gym",{waPhone:f.querySelector("[name=wa]").value});API.me=j.me;render();toast(j.me.gym.waPhoneSet?"Saved. Lesson requests come to this number.":"Number removed.")}catch(err){toast(err.message)}return}
+  if(fid==="popform")return savePop(f);
+  if(fid==="compform")return saveComp(f);
+  if(fid==="phoneform"){try{const j=await api("PATCH","/me",{phone:f.querySelector("[name=phone]").value});API.me=j.me;toast(j.me.phone?"WhatsApp number saved.":"WhatsApp number removed.")}catch(err){toast(err.message)}return}
+  if(fid==="compimpform")return compImport(f);
+  if(fid==="compreqform")return sendCompReq(f);
+  if(fid==="compentryform")return saveCompEntry(f);
+  if(fid==="gymeditform")return gymSave(f);
+  if(fid==="gymform"){try{const fee=f.querySelector("[name=fee]"),j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,...(fee?{monthlyFeeCents:Math.round(Number(fee.value||0)*100)}:{})});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
+  if(fid==="gymdelform")return deleteGym(f);
+  if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
+  if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("home");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
+}
+async function submitLog(){
+  const f=S.ui.form;if(!f)return;if(!f.date){toast("Pick a date for the session.");return}
+  const s={id:f.editId||f.id,date:f.date,type:f.type,mins:Number(f.mins)||0,rolls:Number(f.rolls)||0,taught:f.taught,hits:f.hits,tapped:f.tapped,stuck:f.stuck,worked:String(f.worked||"").slice(0,1000),fix:String(f.fix||"").slice(0,1000),created:f.created||Date.now()};
   if(s.mins<0||s.mins>600){toast("Minutes should be between 0 and 600.");return}
   f.taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id)}});
   f.hits.forEach(id=>{if(lv(id)<4){P().mastery[id]=4;ensureCard(id)}});
   saveProgress();
   const ok=await addSession(s);if(ok&&!f.editId)jfTrack("log_session",{mins:s.mins,rolls:s.rolls});
-  if(ok){toast(f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("journal")}
-});
+  if(ok){toast(ok==="later"?SAVED_LATER:f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("journal")}
+}
 
 /*@@ACCOUNTS@@*/
 /* ============ FIRST-RUN SETUP ============ */

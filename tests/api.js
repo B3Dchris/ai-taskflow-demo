@@ -18,7 +18,7 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
@@ -31,7 +31,7 @@ function client(base) {
     const coach = client(base), stu = client(base), stu2 = client(base), other = client(base), anon = client(base);
     // --- accounts
     let r = await anon("GET", "/me"); ok(r.s === 200 && r.j.me === null, "anonymous /me is null");
-    r = await anon("GET", "/progress"); ok(r.s === 401, "progress needs sign-in");
+    r = await anon("GET", "/progress"); ok(r.s === 401 && r.j.signedOut === true, "progress needs sign-in (and says nobody is signed in)");
     r = await coach("POST", "/auth/start-gym", { gym: "JPB Martial Arts Academy", name: "Coach JP", email: "Coach@Example.com", password: "s3cret-pass" });
     ok(r.s === 201 && r.j.me.role === "coach" && r.j.me.gym.studentCode && r.j.me.gym.coachCode && r.j.me.email === "coach@example.com", "coach starts a gym and gets invite codes");
     const sc = r.j.me.gym.studentCode, cc = r.j.me.gym.coachCode;
@@ -103,7 +103,7 @@ function client(base) {
     r = await client(base)("POST", "/auth/register", { code: cc, name: "Assistant", email: "asst@example.com", password: "password4" }); ok(r.s === 201 && r.j.me.role === "coach", "coach code makes a coach");
     // --- account changes + deletion
     r = await stu("PATCH", "/me", { name: "Chris B" }); ok(r.j.me.name === "Chris B", "rename");
-    r = await stu("DELETE", "/me", { password: "nope" }); ok(r.s === 401, "deleting needs the password");
+    r = await stu("DELETE", "/me", { password: "nope" }); ok(r.s === 401 && !r.j.signedOut, "deleting needs the password (a wrong one isn't \"signed out\")");
     r = await stu("DELETE", "/me", { password: "password1" }); ok(r.s === 200, "student deletes their account");
     { const tmp = client(base); await tmp("POST", "/auth/start-gym", { gym: "Solo gym", name: "Solo", email: "solo@example.com", password: "solopass1" });
       const pl = new Pool({ connectionString: DB }); const before = Number((await pl.query("select count(*) from gyms where name='Solo gym'")).rows[0].count);
@@ -859,6 +859,107 @@ function client(base) {
       r = await st.solo("PUT", `/classes/${await slot(32)}/rsvp`, { going: true }); ok(r.s === 200, "and anyone can book again");
       r = await hc("PATCH", "/coach/gym/access-fee", { accessFeeCents: 0 }); ok(r.j.accessMode === "fee" && r.j.accessFeeCents === 0, "the old call (just a fee) still works");
       await pl.end(); }
+    // --- money and attendance fixes: visits, kids' sign-ups, packs, leaving owing, private notices, month edges, year plans
+    { const xh = { "x-forwarded-for": "198.51.100.52" }, hc = client(base), c2 = client(base), pl = new Pool({ connectionString: DB }), H = 3600e3;
+      const fg = (await hc("POST", "/auth/start-gym", { gym: "Fix Gym", name: "Fix Head", email: "head@fix.test", password: "fixhead11" }, xh)).j.me.gym;
+      await c2("POST", "/auth/register", { code: fg.coachCode, name: "Coach Two", email: "two@fix.test", password: "coachtwo11" }, xh);
+      const st = {}; for (const n of ["ann", "ben", "cat", "dan"]) { const c = client(base); c.id = (await c("POST", "/auth/register", { code: fg.studentCode, name: "Fix " + n, email: n + "@fix.test", password: n + "pass1234" }, xh)).j.me.id; st[n] = c; }
+      const ym = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }).slice(0, 7), day = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }), thisMonth = ym(Date.now());
+      // One student checking in (or a walk-in) doesn't erase everyone else's booking; a coach taking the register does decide.
+      const past = (await hc("POST", "/classes", { title: "All levels", startsAt: new Date(Date.now() - 5 * H).toISOString(), durationMin: 60 })).j.class.id;
+      await hc("PUT", `/coach/classes/${past}/attendance`, { userIds: [st.ann.id, st.ben.id, st.cat.id], attended: false, going: true });
+      await pl.query("update attendance set attended=true, checked_in_at=now() where class_id=$1 and user_id=$2", [past, st.ann.id]); // Ann checked herself in
+      await hc("PUT", `/coach/classes/${past}/attendance`, { userId: st.dan.id, attended: true, going: true }); // Dan walked in
+      const seen = async (c) => (await c("GET", "/me/attended")).j.classes.some((x) => x.id === past);
+      const v28 = async () => Object.fromEntries((await hc("GET", "/coach/roster")).j.people.filter((p) => p.role === "student").map((p) => [p.name, p.visits.d28]));
+      let vv = await v28();
+      ok(vv["Fix ann"] === 1 && vv["Fix ben"] === 1 && vv["Fix cat"] === 1 && vv["Fix dan"] === 1, "a self check-in and a walk-in add visits; the others who booked keep theirs: " + JSON.stringify(vv));
+      ok((await st.ben("GET", "/me/membership")).j.membership.total180 === 1 && await seen(st.ben), "Ben's membership card and journal count the class he booked");
+      await hc("PUT", `/coach/classes/${past}/attendance`, { userId: st.cat.id, attended: true }); // the coach ticks Cat on the register
+      vv = await v28();
+      ok(vv["Fix ben"] === 0 && vv["Fix cat"] === 1 && vv["Fix ann"] === 1 && vv["Fix dan"] === 1, "once the coach takes the register, a booking nobody ticked is a no-show: " + JSON.stringify(vv));
+      ok(!(await seen(st.ben)) && await seen(st.cat) && (await st.ben("GET", "/me/membership")).j.membership.total180 === 0, "and the no-show's journal doesn't log it as training");
+      // A parent linking to their kid's record keeps the kid's name (theirs goes in as the parent).
+      const ayanda = (await hc("POST", "/coach/students", { name: "Ayanda Khumalo", parentName: "Bongi", phone: "072 333 4444" })).j.id, bongi = client(base);
+      r = await bongi("POST", "/auth/register", { code: fg.studentCode, name: "Bongi Khumalo", email: "bongi@fix.test", password: "bongipass1", phone: "072 333 4444" }, xh);
+      ok(r.j.ask && r.j.ask.id === ayanda && r.j.ask.kid, "a parent signing up with the kid's number is asked 'Signing up for Ayanda?'");
+      r = await bongi("POST", "/auth/register", { code: fg.studentCode, name: "Bongi Khumalo", email: "bongi@fix.test", password: "bongipass1", phone: "072 333 4444", link: ayanda }, xh);
+      let kid = (await hc("GET", "/coach/roster")).j.people.find((p) => p.id === ayanda);
+      ok(r.s === 201 && kid.name === "Ayanda Khumalo" && kid.parentName === "Bongi Khumalo", "linking keeps the kid's name and saves the parent's: " + JSON.stringify([kid.name, kid.parentName]));
+      const lerato = (await hc("POST", "/coach/students", { name: "Lerato Dlamini", parentName: "Thandi", phone: "072 333 5555" })).j.id;
+      const cu = new URL((await hc("POST", `/coach/students/${lerato}/claim-link`)).j.url), tok = cu.searchParams.get("claim");
+      r = await client(base)("GET", `/gyms/by-code/${fg.studentCode}?claim=${tok}`); ok(r.j.gym.kid === "Lerato Dlamini", "a kid's own invite link says who it's for");
+      r = await client(base)("GET", `/gyms/by-code/${fg.studentCode}?claim=nope`); ok(r.j.gym && !r.j.gym.kid, "a made-up link doesn't");
+      r = await client(base)("POST", "/auth/register", { code: fg.studentCode, claim: tok, name: "Thandi Dlamini", email: "thandi@fix.test", password: "thandipass1" }, xh);
+      kid = (await hc("GET", "/coach/roster")).j.people.find((p) => p.id === lerato);
+      ok(r.s === 201 && kid.name === "Lerato Dlamini" && kid.parentName === "Thandi Dlamini", "signing up through it keeps the kid's name too: " + JSON.stringify([kid.name, kid.parentName]));
+      // 'membership' mode: unused pack lessons always let someone book; people who can't book aren't offered packs.
+      const club = (await hc("POST", "/coach/plans", { name: "Privates club", priceCents: 90000, period: "month" })).j.plan;
+      const k5 = (await hc("POST", "/coach/packs", { name: "5 private lessons", lessons: 5, priceCents: 250000 })).j.pack;
+      await hc("PATCH", "/coach/gym/access-fee", { mode: "membership", planIds: [club.id] });
+      const slot = async (h, coach) => (await hc("POST", "/classes", { kind: "private", title: "Private", startsAt: new Date(Date.now() + h * H).toISOString(), durationMin: 60, priceCents: 60000, coach: coach || "" })).j.class.id;
+      r = await st.ben("GET", "/me/pay"); ok(r.j.pay.privateAccess && r.j.pay.packs.length === 0, "someone the rule blocks isn't offered packs they couldn't use");
+      await hc("POST", "/coach/payments", { userId: st.ann.id, amountCents: 250000, paidOn: day(Date.now()), method: "eft", packId: k5.id });
+      r = await st.ann("GET", "/me/pay"); ok(!r.j.pay.privateAccess && r.j.pay.packs.length === 1 && r.j.pay.privatesLeft.left === 5, "someone with pack lessons left isn't blocked, and sees the packs");
+      const sA = await slot(50); r = await st.ann("PUT", `/classes/${sA}/rsvp`, { going: true }); ok(r.s === 200 && r.j.going, "they book a private with a pack lesson");
+      ok((await st.ann("GET", "/me/pay")).j.pay.privatesLeft.left === 4, "which uses one lesson");
+      ok((await st.ben("PUT", `/classes/${await slot(51)}/rsvp`, { going: true })).s === 403, "someone with no pack and no membership still can't");
+      await st.ann("PUT", `/classes/${sA}/rsvp`, { going: false });
+      // A pack bought later doesn't use a lesson on a private already paid for in cash.
+      await hc("PATCH", "/coach/gym/access-fee", { mode: "fee", accessFeeCents: 15000 });
+      if (ym(Date.now() + 3 * H) === thisMonth) { const sP = await slot(1), pday = day(Date.now() + H); await st.cat("PUT", `/classes/${sP}/rsvp`, { going: true });
+      r = await st.cat("GET", "/me/pay"); const owedCat = r.j.pay.dueCents;
+      await hc("POST", "/coach/payments", { userId: st.cat.id, amountCents: owedCat, paidOn: pday, method: "cash" });
+      await hc("POST", "/coach/payments", { userId: st.cat.id, amountCents: 250000, paidOn: day(Date.now()), method: "eft", packId: k5.id });
+      r = await st.cat("GET", `/me/pay`); let P = r.j.pay;
+      ok(owedCat === 75000 && P.privatesLeft.left === 5 && P.dueCents === owedCat && P.paidCents === owedCat, "a private paid in cash keeps its payment: the pack bought after it still has all 5 lessons: " + JSON.stringify([owedCat, P.privatesLeft, P.dueCents, P.paidCents]));
+      const sQ = await slot(2); await st.cat("PUT", `/classes/${sQ}/rsvp`, { going: true });
+      ok((await st.cat("GET", "/me/pay")).j.pay.privatesLeft.left === 4, "a private with nothing paid on it does use a pack lesson"); } else ok(true, "skipped the cash-paid private check (a private now would fall in next month)");
+      // Booking or cancelling a private tells its coach (or the head coach) by email and in the app, and confirms to the student.
+      let m0 = sink.mails.length; const sB = await slot(30, "Coach Two");
+      r = await st.dan("PUT", `/classes/${sB}/rsvp`, { going: true }); await new Promise((res) => setTimeout(res, 400));
+      let mm = sink.mails.slice(m0);
+      ok(mm.some((m) => m.to[0] === "two@fix.test" && /private lesson was booked/.test(m.subject) && /Fix dan booked a private lesson/.test(m.html)) && !mm.some((m) => m.to[0] === "head@fix.test"), "booking a private emails the slot's coach (not the head coach)");
+      ok(mm.some((m) => m.to[0] === "dan@fix.test" && /Your private lesson is booked/.test(m.subject) && /free to cancel/i.test(m.html)), "and confirms it to the student");
+      ok((await c2("GET", "/me/notices")).j.notices.some((n) => n.kind === "booked" && /Fix dan booked/.test(n.body)), "the coach sees it in the app too");
+      m0 = sink.mails.length; await st.dan("PUT", `/classes/${sB}/rsvp`, { going: false }); await new Promise((res) => setTimeout(res, 400));
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "two@fix.test" && /cancelled/.test(m.subject) && /slot is free again/.test(m.html)) && (await c2("GET", "/me/notices")).j.notices.some((n) => n.kind === "cancelled"), "cancelling tells them the slot is free again");
+      m0 = sink.mails.length; await st.dan("PUT", `/classes/${await slot(31)}/rsvp`, { going: true }); await new Promise((res) => setTimeout(res, 400));
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "head@fix.test" && /private lesson was booked/.test(m.subject)), "a slot with no coach on it goes to the head coach");
+      const gc = (await hc("POST", "/classes", { title: "Gone class", startsAt: new Date(Date.now() + 40 * H).toISOString(), durationMin: 60 })).j.class.id; await hc("DELETE", `/classes/${gc}`);
+      ok((await st.dan("GET", "/me/notices")).j.notices.some((n) => /Gone class/.test(n.title)) && !(await hc("GET", "/me/notices")).j.notices.some((n) => /Gone class/.test(n.title)), "coaches only get the notices meant for them, not the gym-wide ones");
+      // Leaving the gym owing: the head coach hears, and it stays on that month's Money list.
+      const mon = (await hc("POST", "/coach/plans", { name: "Adult monthly", priceCents: 80000, period: "month" })).j.plan;
+      await hc("PATCH", `/coach/students/${st.ben.id}`, { planId: mon.id });
+      const sL = await slot(3); await hc("PUT", `/coach/classes/${sL}/attendance`, { userId: st.ben.id, attended: false, going: true });
+      const benOwes = (await st.ben("GET", "/me/pay")).j.pay.dueCents; m0 = sink.mails.length;
+      r = await st.ben("POST", "/me/leave"); await new Promise((res) => setTimeout(res, 400));
+      ok(r.s === 200 && !r.j.me.gym && benOwes >= 80000, "a member who owes can still leave");
+      const lm = (await hc("GET", "/coach/money")).j;
+      ok(!lm.students.some((s) => s.id === st.ben.id) && lm.left.some((x) => x.name === "Fix ben" && x.owedCents === benOwes), "they stay on this month's Money as left, owing: " + JSON.stringify(lm.left));
+      const ln = (await hc("GET", "/me/notices")).j.notices.find((n) => n.kind === "left");
+      ok(ln && /Fix ben left Fix Gym owing R/.test(ln.body) && /Free again: the private on/.test(ln.body), "the head coach sees who left, what they owe and which private is free: " + (ln && ln.body));
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "head@fix.test" && /member left/.test(m.subject)), "and gets an email");
+      // Month edges use the gym's clock: someone added at 00:30 on the 1st (22:30 UTC the day before) joined this month.
+      const late = (await hc("POST", "/coach/students", { name: "First Minute", phone: "072 333 6666" })).j.id, first1 = thisMonth + "-01";
+      await pl.query("update users set created_at=($1::date + time '00:30') at time zone 'Africa/Johannesburg' where id=$2", [first1, late]);
+      const prevM = new Date(Date.UTC(+thisMonth.slice(0, 4), +thisMonth.slice(5, 7) - 2, 1)).toISOString().slice(0, 7);
+      ok(!(await hc("GET", "/coach/money?month=" + prevM)).j.students.some((s) => s.id === late) && (await hc("GET", "/coach/money")).j.students.some((s) => s.id === late), "they're not billed for the month before they joined");
+      // A year plan: confirming a proof works out the months it covers; reminders and the Pay sheet give the real price.
+      const yr = (await hc("POST", "/coach/plans", { name: "Adult annual", priceCents: 850000, period: "year" })).j.plan;
+      await hc("PATCH", `/coach/students/${st.dan.id}`, { planId: yr.id });
+      r = await st.dan("GET", "/me/pay"); ok(r.j.pay.term && r.j.pay.term.priceCents === 850000 && r.j.pay.term.months === 12 && !r.j.pay.term.renews, "an annual member's Pay sheet has the plan's real price: " + JSON.stringify(r.j.pay.term));
+      m0 = sink.mails.length; r = await hc("POST", "/coach/money/remind", { userIds: [st.dan.id] }); await new Promise((res) => setTimeout(res, 400));
+      const ym2 = sink.mails.slice(m0).find((m) => m.to[0] === "dan@fix.test");
+      ok(r.j.sent === 1 && ym2 && /8[\s ]?500/.test(ym2.html) && /the year from/.test(ym2.html) && !/708/.test(ym2.html), "their reminder asks for R8 500 for the year, not R708,33");
+      r = await st.dan("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 850000 }); const pop1 = r.j.payment.id;
+      r = await hc("PATCH", `/coach/payments/${pop1}`, { status: "confirmed" }); ok(r.s === 200 && r.j.payment.months === 12, "confirming R8 500 for someone on R8 500 a year covers 12 months");
+      const nextYear = new Date(Date.UTC(+thisMonth.slice(0, 4), +thisMonth.slice(5, 7) - 1 + 11, 1)).toISOString().slice(0, 7);
+      ok((await hc("GET", "/coach/money?month=" + nextYear)).j.students.find((s) => s.id === st.dan.id).paidCents > 0, "so they're paid up 11 months from now too");
+      r = await st.dan("GET", "/me/pay"); ok(r.j.pay.term.renews && r.j.pay.term.renews > day(Date.now() + 300 * 864e5), "and their Pay sheet says when it renews: " + r.j.pay.term.renews);
+      r = await hc("POST", "/coach/payments", { userId: st.dan.id, amountCents: 425000, paidOn: day(Date.now()), method: "cash" }); ok(r.j.payment.months === 6, "half the year's price covers 6 months");
+      r = await hc("POST", "/coach/payments", { userId: st.dan.id, amountCents: 425000, paidOn: day(Date.now()), method: "cash", months: 2 }); ok(r.j.payment.months === 2, "unless the coach says otherwise");
+      await pl.end(); }
     // --- a live server (JitsFlow's own PayFast account set): no test merchant, and limits per address that can't be faked
     { const port2 = port + 100, base2 = `http://127.0.0.1:${port2}/api`, pfm = require("../backend/payfast");
       const srv2 = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...env, PORT: String(port2), PAYFAST_MERCHANT_ID: "12345678", PAYFAST_MERCHANT_KEY: "abcdefghijk12", PAYFAST_PASSPHRASE: "live pass" }, stdio: ["ignore", "ignore", "inherit"] });
@@ -907,6 +1008,45 @@ function client(base) {
         codes = []; for (let i = 0; i < 12; i++) codes.push((await client(base2)("POST", "/auth/login", { email: "live@example.com", password: "livepass1" }, ipx)).s);
         ok(codes.every((c) => c === 200), "signing in correctly doesn't count towards the limit");
       } finally { srv2.kill(); } }
+    // --- staying signed in, double taps, two coaches on one class, gzip, build id
+    { const pl = new Pool({ connectionString: DB }), asst = client(base);
+      try {
+        r = await asst("POST", "/auth/login", { email: "asst@example.com", password: "password4" }); ok(r.s === 200, "the second coach signs in");
+        // Sessions roll: a session that's been used keeps going for 60 days from its last use.
+        await pl.query("update sessions set expires_at=now()+interval '2 days' where user_id=(select id from users where email='asst@example.com')");
+        r = await asst("GET", "/me"); await new Promise((res) => setTimeout(res, 150));
+        const left = (await pl.query("select max(expires_at - now()) as d from sessions where user_id=(select id from users where email='asst@example.com')")).rows[0].d;
+        ok(r.j.me && left.days >= 59 && /jf_s=[0-9a-f]{64}.*Max-Age=5184000/i.test(r.h.get("set-cookie") || ""), "using the app pushes the session (and the cookie) out to 60 days: " + JSON.stringify(left));
+        r = await asst("GET", "/me"); ok(!r.h.get("set-cookie"), "and only once an hour, not on every call");
+        // The same form sent twice (same key) adds one thing, even when both arrive at once.
+        const key = { "x-jf-key": "form-abc123" }, cid = (await coach("GET", "/coach/roster")).j.people.find((p) => p.role === "student").id;
+        const n0 = (await coach("GET", "/coach/payments")).j.payments.length;
+        const [p1, p2] = await Promise.all([1, 2].map(() => coach("POST", "/coach/payments", { userId: cid, amountCents: 75000, paidOn: today, method: "cash" }, key)));
+        const n1 = (await coach("GET", "/coach/payments")).j.payments.length;
+        ok(p1.s === 201 && p2.s === 201 && p1.j.payment.id === p2.j.payment.id && n1 === n0 + 1, `a payment double-tapped is recorded once (${n0} -> ${n1})`);
+        r = await coach("POST", "/coach/payments", { userId: cid, amountCents: 75000, paidOn: today, method: "cash" }, { "x-jf-key": "form-other1" });
+        ok(r.s === 201 && r.j.payment.id !== p1.j.payment.id, "the same amount from another form (a sibling's fees) is its own payment");
+        const at = new Date(Date.now() + 3 * 864e5); at.setUTCHours(16, 0, 0, 0);
+        const [c1, c2] = await Promise.all([1, 2].map(() => coach("POST", "/classes", { title: "Fundamentals", startsAt: at.toISOString(), capacity: 10, discipline: "BJJ", plan: { focus: "Guard" } }, { "x-jf-key": "form-cls1" })));
+        ok(c1.s === 201 && c1.j.class.id === c2.j.class.id, "a class double-tapped is added once");
+        const [a1, a2] = await Promise.all([1, 2].map(() => coach("POST", "/coach/students", { name: "Lerato Mokoena", phone: "082 555 0101" }, { "x-jf-key": "form-stu1" })));
+        ok(a1.s === 201 && a1.j.id === a2.j.id && (await pl.query("select count(*) from users where name='Lerato Mokoena'")).rows[0].count === "1", "a student double-tapped is added once");
+        r = await coach("POST", "/coach/students", { name: "" }, { "x-jf-key": "form-stu2" }); ok(r.s === 400, "a form that fails can be fixed and sent again");
+        r = await coach("POST", "/coach/students", { name: "Thandi Nkosi", phone: "082 555 0102" }, { "x-jf-key": "form-stu2" }); ok(r.s === 201, "with the same key");
+        // Two coaches with the same class open: the second one's save doesn't undo the first one's move.
+        const id = c1.j.class.id, opened = c1.j.class.startsAt, later = new Date(at.getTime() + 3600e3).toISOString();
+        r = await coach("PUT", `/classes/${id}`, { startsAt: later, plan: { focus: "Leg locks" }, wasStartsAt: opened }); ok(r.s === 200, "the head coach moves the class and sets a focus");
+        r = await asst("PUT", `/classes/${id}`, { capacity: 12, wasStartsAt: opened });
+        ok(r.s === 409 && /^Coach moved this class to .+ while you had it open/.test(r.j.error) && new Date(r.j.class.startsAt).toISOString() === later && r.j.class.plan.focus === "Leg locks", "the other coach is told who moved it, with the class as it is now: " + (r.j && r.j.error));
+        r = await asst("PUT", `/classes/${id}`, { capacity: 12, wasStartsAt: later });
+        ok(r.s === 200 && r.j.class.capacity === 12 && new Date(r.j.class.startsAt).toISOString() === later && r.j.class.plan.focus === "Leg locks" && r.j.class.discipline === "BJJ" && r.j.told === 0, "sending only what changed keeps the other coach's time and focus (and the style), and tells nobody it moved");
+        // Big answers are gzipped for slow phones.
+        r = await coach("GET", "/coach/roster"); ok(r.h.get("content-encoding") === "gzip" && Array.isArray(r.j.people), "API answers are gzipped");
+        r = await coach("GET", "/coach/roster", undefined, { "accept-encoding": "identity" }); ok(!r.h.get("content-encoding") && Array.isArray(r.j.people), "and plain for a client that doesn't take gzip");
+        // The server says which build of the app it has.
+        const page = require("fs").readFileSync(path.resolve(__dirname, "../web/app/index.html"), "utf8").match(/window\.JF_BUILD="(\w+)"/);
+        r = await anon("GET", "/status"); ok(page && r.j.build === page[1], "/api/status gives the app's build id");
+      } finally { await pl.end(); } }
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");

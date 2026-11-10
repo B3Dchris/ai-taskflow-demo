@@ -5,7 +5,7 @@ const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.erro
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
@@ -31,7 +31,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(await ev(co, () => /Getting started · \d of 4/i.test(document.getElementById("app").innerText)), "Today shows the Getting started checklist");
     ok(await ev(co, () => document.querySelector("#app h1").textContent === "Home"), "the coach's Home is called Home, like its tab");
     ok(await ev(co, () => isCoach() && location.hash === "#coach-home" && !document.querySelector('nav.tabs [data-v="coach-schedule"]').hidden && document.querySelector('nav.tabs [data-v="learn"]').hidden && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.textContent.trim()).join() === "Home,Schedule,Members,Money,Gym"), "coach lands on their gym's Home; the bar shows Home, Schedule, Members, Money, Gym");
-    ok(await ev(co, () => { const a = document.querySelector("header .avatar"); return a && a.textContent === "CJ" && /Coach JP/.test(a.getAttribute("aria-label")) && !document.querySelector('[data-a="auth"][data-v="login"].who'); }), "header shows a round initials button for who's signed in, not Sign in");
+    ok(await ev(co, () => { const a = document.querySelector("header .avatar"); return a && a.textContent === "CJ" && a.getAttribute("aria-label") === "CJ: your gym and account" && /Coach JP/.test(a.title) && !document.querySelector('[data-a="auth"][data-v="login"].who'); }), "header shows a round initials button for who's signed in, not Sign in");
     ok(await ev(co, () => getComputedStyle(document.getElementById("sync")).display === "none" && !/Saved to your account/.test(document.querySelector("header").innerText)), "no always-on 'Saved' badge in the header");
     await co.tap("header .avatar"); ok(await ev(co, () => COACH.view === "gym" && location.hash === "#coach-gym"), "a coach's initials button opens Gym");
     await ev(co, () => coachGo("comps")); ok(await ev(co, () => document.querySelector('nav.tabs [data-v="coach-members"]').getAttribute("aria-current") === "page" && document.querySelector('[data-a="coachgo"][data-v="comps"]').getAttribute("aria-pressed") === "true" && !!document.getElementById("compimpform")), "Competitions sit inside Members");

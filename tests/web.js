@@ -49,7 +49,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'landing has no sideways scroll on a phone');
     const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing screenshots load');
     await p.locator('.hero .cta a.btn.primary').tap();await p.waitForTimeout(800);
-    ok(await p.evaluate(()=>location.pathname==='/app/'&&document.title==='JitsFlow'&&!window.claude),'"Open JitsFlow" opens the app');
+    ok(await p.evaluate(()=>location.pathname==='/app/'&&/JitsFlow$/.test(document.title)&&!window.claude),'"Open JitsFlow" opens the app');
     // with accounts on (a database), a new visitor first picks how they use JitsFlow; without, the study setup shows straight away
     ok(await p.evaluate(()=>S.ui.sheet&&(API.on?S.ui.sheet.k==='how'&&document.querySelectorAll('#sheet .howbtn').length===3:S.ui.sheet.k==='onboard')),'website shows the first screen');
     if(await p.evaluate(()=>S.ui.sheet.k==='how'))await p.tap('#sheet [data-a="how"][data-v="solo"]');
