@@ -29,12 +29,12 @@ const kb = (f) => Math.round(fs.statSync(f).size / 1024) + " KB";
 const SCREEN = "crop=604:1362:238:418";
 const CLIPS = [
   { reel: "r05-moves-and-map", out: "moves-and-map", end: 25.6, crf: 29 }, // the navy map screens need a little more squeeze to stay under 1.5 MB
-  { reel: "r01-website-to-ready-gym", out: "website-to-gym", end: 22.1, poster: 13 },
+  { reel: "r01-website-to-ready-gym", out: "website-to-gym", end: 21.9, poster: 13 },
   { reel: "r03-record-a-payment", out: "record-a-payment", end: 16.65 },
   { reel: "r04-book-a-class", out: "book-a-class", end: 18.3 },
 ];
 const STILLS = [ // coach screens from the reels: [reel, second, name]
-  ["r01-website-to-ready-gym", 8.8, "website-read"], ["r01-website-to-ready-gym", 21.3, "schedule"],
+  ["r01-website-to-ready-gym", 9.6, "website-read"], ["r01-website-to-ready-gym", 21.3, "schedule"],
   ["r03-record-a-payment", 0.5, "money"], ["r03-record-a-payment", 3.5, "reminders"],
 ];
 
