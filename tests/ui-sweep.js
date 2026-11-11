@@ -12,7 +12,7 @@ const XSS = `<img src=x onerror="window.__x=1">`;
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9100 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB }; delete env.RESEND_API_KEY; delete env.ANTHROPIC_API_KEY; delete env.GA_ID;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });

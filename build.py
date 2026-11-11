@@ -148,12 +148,14 @@ def page_ld(page, url):
 
 def build_web(app):
     # Everything before the app's own markup (title, meta, font links, styles) goes in <head>.
-    cut = app.index('<div class="wrap app"')
+    cut = app.index('<main class="wrap app"')
     head_bits, body = app[:cut], app[cut:]
     head_bits = re.sub(r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', "", head_bits)
     img = images(app)
     jfi = json.dumps({"pos": img["pos"], "belts": img["belts"], "hero": img["hero"], "tech": img["tech"]})
-    html = HEAD + "<script>window.JF_IMG=%s;</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
+    html = HEAD + "<script>window.JF_IMG=%s;window.JF_BUILD=\"@BUILD@\";</script>\n" % jfi + head_bits + "</head>\n<body>\n" + body + "\n" + SW_REGISTER + "\n</body>\n</html>\n"
+    # The app's build id: an app left open asks the server for it (/api/status) and reloads when it has changed.
+    html = html.replace("@BUILD@", hashlib.sha256(html.encode()).hexdigest()[:10])
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
     landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))

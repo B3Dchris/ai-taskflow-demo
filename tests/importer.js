@@ -125,6 +125,9 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     { const t = im.parsePage(`<html><body><h3>Basic Membership</h3><p>R 45 every month</p><p>info@mysite.com</p><p>123-456-7890</p></body></html>`, "https://x.test/pricing-plans/list").text;
       ok(!/info@mysite/.test(t) && /sample content/.test(t), "website-builder sample filler is flagged, not passed off as the gym's"); }
     ok(r.pages.some((x) => /\/team$/.test(x.url)), "the team page is read");
+    { const t = im.cleanProfile({ timetable: [{ day: "Mon", start: "18:00", title: "A", id: "ab12cd34ef", cap: 12, from: "2026-11-16", off: true }, { day: "Tue", start: "18:00", title: "B", id: "<x>", cap: 0, from: "2026-02-31", off: "yes" }] }).timetable;
+      ok(t[0].id === "ab12cd34ef" && t[0].cap === 12 && t[0].from === "2026-11-16" && t[0].off === true, "a timetable row keeps what the calendar needs: its id, spots, start day and off");
+      ok(!("id" in t[1]) && !("cap" in t[1]) && !("from" in t[1]) && !("off" in t[1]), "bad ids, spots, dates and flags are dropped"); }
     ok(im.cleanProfile({ phone: "2026-05-13" }).phone === "" && im.cleanProfile({ phone: "123-456-7890" }).phone === "" && im.cleanProfile({ phone: "+27 83 462 9089" }).phone === "+27 83 462 9089", "a date or a template number isn't taken as the phone number");
     // ---- private-lesson prices are kept (the head coach is offered them as private lesson prices)
     { const pg = im.parsePage(`<html><body><h2>Privates</h2><p>Private lesson R1200</p><p>1-on-1 coaching: R 900</p><p>PT session R700</p><p>Rashguard R 450</p></body></html>`, "https://x.test/privates");

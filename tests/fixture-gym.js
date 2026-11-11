@@ -51,14 +51,16 @@ function startGymSite() {
 }
 module.exports = { startGymSite };
 // A stand-in for Resend's email API: collects what the app would have sent.
+// fail: addresses the sink turns away with a 429 (the mail service's rate limit), to test what happens when a send fails.
 function startMailSink() {
-  const mails = [];
+  const mails = [], fail = new Set();
   const srv = http.createServer((req, res) => {
     let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => {
       if (req.headers.authorization !== "Bearer test-key") { res.writeHead(401); return res.end("{}"); }
-      const m = JSON.parse(b); mails.push(m); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ id: "m" + mails.length }));
+      const m = JSON.parse(b); if (fail.has((m.to || [])[0])) { res.writeHead(429, { "content-type": "application/json" }); return res.end('{"message":"Too many requests"}'); }
+      mails.push(m); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ id: "m" + mails.length }));
     });
   });
-  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ url: `http://127.0.0.1:${srv.address().port}/emails`, mails, close: () => srv.close() })));
+  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ url: `http://127.0.0.1:${srv.address().port}/emails`, mails, fail, close: () => srv.close() })));
 }
 module.exports.startMailSink = startMailSink;

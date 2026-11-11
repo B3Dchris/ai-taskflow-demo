@@ -587,10 +587,19 @@ const hhmm = (t) => { const m = String(t || "").match(/^(\d{1,2}):(\d{2})$/); if
 const httpUrl = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href.slice(0, 300) : ""; } catch (e) { return ""; } };
 // "2026-05-13" or "123-456-7890" isn't the gym's phone number.
 const looksLikePhone = (v) => { const t = String(v || "").trim(), d = t.replace(/\D/g, ""); return d.length >= 9 && d.length <= 15 && !/^\d{4}-\d{2}-\d{2}$/.test(t) && !/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(t) && !/123-?456-?7890/.test(t); };
+// What the calendar keeps for a timetable row, only when set: its id, spots, the day it starts from, and off (not put on the calendar).
+const ttExtra = (r) => {
+  const o = {}, cap = Math.round(Number(r.cap));
+  if (/^[a-z0-9]{4,16}$/i.test(String(r.id || ""))) o.id = String(r.id);
+  if (r.cap !== null && r.cap !== undefined && r.cap !== "" && cap >= 1 && cap <= 500) o.cap = cap;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(r.from || "")) && !isNaN(new Date(r.from + "T00:00:00Z")) && new Date(r.from + "T00:00:00Z").toISOString().slice(0, 10) === r.from) o.from = r.from;
+  if (r.off === true) o.off = true;
+  return o;
+};
 function cleanProfile(p) {
   p = p && typeof p === "object" ? p : {};
   const soc = p.socials && typeof p.socials === "object" ? p.socials : {};
-  const tt = (Array.isArray(p.timetable) ? p.timetable : []).map((r) => r && typeof r === "object" ? ({ day: DAYS.includes(r.day) ? r.day : "", start: hhmm(r.start), end: hhmm(r.end), title: clip(r.title, 80) || "Class", type: clip(r.type, 40), coach: clip(r.coach, 60), level: clip(r.level, 40) }) : null)
+  const tt = (Array.isArray(p.timetable) ? p.timetable : []).map((r) => r && typeof r === "object" ? ({ day: DAYS.includes(r.day) ? r.day : "", start: hhmm(r.start), end: hhmm(r.end), title: clip(r.title, 80) || "Class", type: clip(r.type, 40), coach: clip(r.coach, 60), level: clip(r.level, 40), ...ttExtra(r) }) : null)
     .filter((r) => r && r.day && r.start).slice(0, 120);
   tt.sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
   return {

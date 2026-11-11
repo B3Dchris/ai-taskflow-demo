@@ -17,7 +17,7 @@ function client(base) {
 const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink();
   const port = 9600 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" };
@@ -155,7 +155,8 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const tue = I.slots.find((s) => s.title === "Tuesday Advanced"), thu = I.slots.find((s) => s.title === "Thursday Fundamentals");
     ok(tue && tue.fill >= 60 && thu && thu.avg === 1 && thu.fill === 5, "class slots show how full they run: " + JSON.stringify([tue, thu]));
     ok(I.students.find((s) => s.name === "Chris Buys").streak >= 8 && I.students.find((s) => s.name === "Chris Buys").d28 >= 8, "streaks and visits per 4 weeks");
-    ok(I.revenue.expected >= 85000 + 65000 && I.revenue.unpaid.some((u) => u.name === "Chris Buys"), "revenue: expected from plans, and who hasn't paid");
+    // (Ana was paused and made active again straight away: undoing it costs nothing, so she's expected to pay this month like Chris.)
+    ok(I.revenue.expected === 150000 && ["Chris Buys", "Ana Silva"].every((n) => I.revenue.unpaid.some((u) => u.name === n && u.months.length === 1)), "revenue: expected from plans, and who hasn't paid: " + JSON.stringify(I.revenue));
     ok(I.plans.find((p) => p.name === "Unlimited").members === 1, "membership mix by plan");
     r = await chris("GET", "/coach/insights"); ok(r.s === 403, "students can't see insights");
 
@@ -170,7 +171,8 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // ---- plans from imported website rates
     await pool.query("update gyms set profile=$1 where id=$2", [{ rates: [{ name: "Unlimited", price: 850, period: "month" }, { name: "3 times a week", price: 750, period: "month" }, { name: "Drop-in", price: 150, period: "class" },
       { name: "Private lesson per lesson", price: 1200, period: "class" }, { name: "Coaching", price: 900, period: "class", note: "one on one" }, { name: "PT session", price: 700, period: "other" }] }, gym]);
-    r = await coach("POST", "/coach/plans/from-rates"); ok(r.j.added === 2 && r.j.plans.find((p) => p.name === "3 times a week").classesPerWeek === 3, "website rates become plans (with weekly limits read from the name)");
+    r = await coach("POST", "/coach/plans/from-rates"); ok(r.j.added === 1 && r.j.plans.find((p) => p.name === "3 times a week").classesPerWeek === 3, "website rates become plans (with weekly limits read from the name): " + r.j.added);
+    ok(!r.j.plans.some((p) => p.name === "Drop-in"), "a per-class drop-in price isn't a membership plan");
     ok(!r.j.plans.some((p) => /private|coaching|pt session/i.test(p.name)), "private-lesson prices on the website don't become membership plans: " + r.j.plans.map((p) => p.name).join(", "));
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
   srv.kill(); sink.close(); await pool.end();

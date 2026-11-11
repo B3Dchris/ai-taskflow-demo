@@ -1,7 +1,7 @@
 // JitsFlow web server: the website in web/ plus the accounts API under /api (when DATABASE_URL is set).
 "use strict";
 const express = require("express");
-const { makePool, migrate, purgeRejected } = require("./backend/db");
+const { makePool, migrate, purgeRejected, tick, rollAll } = require("./backend/db");
 const { makeApi } = require("./backend/api");
 const fs = require("fs");
 const path = require("path");
@@ -146,7 +146,16 @@ async function main() {
   if (pool) {
     await migrate(pool);
     setInterval(() => purgeRejected(pool).catch((e) => console.warn("purge:", e.message)), 864e5).unref(); // daily, between restarts
-    app.use("/api", gzipJson, makeApi(pool, { secureCookies: process.env.NODE_ENV === "production", build: BUILD }));
+    // Hourly: pauses that ran out end by themselves (safe on several servers at once; see tick in backend/db.js).
+    setInterval(() => tick(pool).catch((e) => console.warn("tick:", e.message)), 3600e3).unref();
+    // The weekly timetable keeps about 8 weeks of classes on the calendar: each gym once a day (checked hourly, and now).
+    const roll = () => rollAll(pool).catch((e) => console.warn("timetable:", e.message));
+    roll(); setInterval(roll, 3600e3).unref();
+    const api = makeApi(pool, { secureCookies: process.env.NODE_ENV === "production", build: BUILD });
+    app.use("/api", gzipJson, api);
+    // Every 15 minutes: automatic fee reminders (on each gym's due day and 7 days later) and "we miss you" notes. Safe on several servers.
+    const jobs = () => api.jobs.run().catch((e) => console.warn("jobs:", e.message));
+    jobs(); setInterval(jobs, 15 * 60e3).unref();
     console.log("Accounts API on (database connected)");
   } else {
     app.use("/api", (req, res) => res.status(503).set("Cache-Control", "no-store").json({ error: "Accounts aren't switched on for this site yet." }));

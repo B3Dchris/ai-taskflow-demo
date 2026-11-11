@@ -129,6 +129,7 @@ a.btn{color:var(--ink);text-decoration:none}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:34px}
 .chip[aria-pressed="true"]{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
 .chip .x{font-weight:700;opacity:.7}
+.forwho{margin:-6px 0 12px}.forwho .chip{min-height:44px;max-width:100%}.forwho .chip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 
 /* tabs */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -1789,7 +1790,7 @@ const initials=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);ret
 function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
   const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
-  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${tipBar()}`}
+  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${famBar()}${tipBar()}`}
 /* First-visit tips: one line at the top of a tab saying what it's for. Shown on the first 3 visits (per person, on this phone) or until closed. */
 const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
   learn:"Every move, the flow map and your belt goals. Switch between them at the top.",journal:"Your training journal. Log each session and JitsFlow works out what to study next.",
@@ -1829,7 +1830,7 @@ function viewToday(){
   const solo=P().solo.date===today()?P().solo.done:[];
   const inGym=!!(API.me&&API.me.gym);
   if(inGym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="home"&&!S.ui.sheet)render()})}
-  const owes=API.pay&&API.pay.dueCents>API.pay.paidCents;
+  const owes=API.pay&&(myOwed(API.pay)>0||API.pay.dueCents>API.pay.paidCents||(!API.pay.plan&&(API.pay.plans||[]).length));
   return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
   ${isCoach()?`<button class="btn primary managebtn" data-a="coachmode" data-v="manage">Manage ${esc(API.me.gym.name)}</button>`:""}
   ${typeof noticesCard==="function"?noticesCard():""}${nextClassCard()}${owes?feesCard():""}${lastClassCard()}${compTodayCard()}
@@ -2284,6 +2285,10 @@ document.addEventListener("click",e=>{
     case "auth": S.ui.authMode=v;authSheet();break;
     case "authmode": S.ui.authMode=v;S.ui.resetSent=null;authSheet();break;
     case "authlink": authLink(v);break;
+    case "authkids": authKids(v);break;
+    case "famopen": famSheet();break;
+    case "famswitch": famSwitch(v);break;
+    case "kidclaim": kidClaim(el);break;
     case "joingym": joinGym(v);break;
     case "signout": signOut();break;
     case "delacct": S.ui.delOpen=true;render();break;
@@ -2311,9 +2316,17 @@ document.addEventListener("click",e=>{
     case "copyweek": el.disabled=true;copyWeek();break;
     case "classeditid": { const c=(COACH.classes||[]).find(x=>x.id===v);if(c){S.ui.cplan=null;classForm(c)}break }
     case "classdelask": { const c=(COACH.classes||[]).find(x=>x.id===v);if(!c)break;const n=c.going+(c.waiting||0);
-      confirmSheet("Delete this class?",`<b>${esc(c.title)}</b>, ${esc(fmtWhen(c.startsAt))}. ${n&&clsEnd(c)>Date.now()?`${n} ${n===1?"person has":"people have"} booked or are waiting; they'll get an email saying it's cancelled.`:"Nobody is booked."}`,["classdelyes",v],"Delete class");break }
-    case "paydelask": { const p=(COACH.payments||[]).find(x=>x.id===v);if(!p)break;confirmSheet("Delete this payment?",`${esc(money(p.amountCents,p.currency))} paid ${esc(fmtDate(p.paidOn))}${p.reference?" ("+esc(p.reference)+")":""}. The student will show as unpaid again if this was their payment for the month.`,["paydelyes",v],"Delete payment");break }
-    case "paydelyes": api("DELETE",`/coach/payments/${v}`).then(async()=>{hideSheet();await coachLoad();render();toast("Payment deleted.")}).catch(e=>toast(e.message));break;
+      confirmSheet("Delete this class?",`<b>${esc(c.title)}</b>, ${esc(fmtWhen(c.startsAt))}. ${n&&clsEnd(c)>Date.now()?`${n} ${n===1?"person has":"people have"} booked or are waiting; they'll get an email saying it's cancelled.`:"Nobody is booked."}${c.weekly?" Only this week: it stays on your weekly timetable.":""}`,["classdelyes",v],"Delete class");break }
+    case "paydelask": { const p=(COACH.payments||[]).find(x=>x.id===v);if(!p)break;
+      // A family payment: deleting it takes the brothers' and sisters' shares too; deleting a share gives it back to the payment it came from.
+      const ps=COACH.payments||[],nm=x=>first((((COACH.roster||{}).people||[]).find(y=>y.id===x.userId)||{}).name||"a student"),cur=p.currency,orig=p.family&&p.family.of!==p.id?ps.find(x=>x.id===p.family.of):null;
+      const shares=p.family&&p.family.of===p.id?ps.filter(x=>x.family&&x.family.of===p.id&&x.id!==p.id):[];
+      confirmSheet(orig?`Take ${nm(p)}'s share off?`:"Delete this payment?",orig?`${esc(money(p.amountCents,cur))} of a family payment of ${esc(money(p.family.totalCents,cur))}. It goes back on ${esc(nm(orig))}'s payment (the money did come in), and ${esc(nm(p))} shows as owing again.`
+        :`${esc(money(p.family?p.family.totalCents:p.amountCents,cur))} paid ${esc(fmtDate(p.paidOn))}${p.reference?" ("+esc(p.reference)+")":""}. ${shares.length?`This deletes the whole family payment, with ${esc(shares.map(x=>`${nm(x)}'s ${money(x.amountCents,cur)}`).join(" and "))}. `:""}The student will show as unpaid again if this was their payment for the month.`,["paydelyes",v],orig?"Take it off":"Delete payment");break }
+    case "paydelyes": api("DELETE",`/coach/payments/${v}`).then(async j=>{hideSheet();await coachLoad();render();toast(j.backTo?"Taken off. It's back on the family payment.":"Payment deleted.")}).catch(e=>toast(e.message));break;
+    case "payunsplit": api("POST",`/coach/payments/${v}/unsplit`,{}).then(async()=>{await coachLoad();render();toast("Undone. It's all on one kid again.")}).catch(e=>toast(e.message));break;
+    case "unlinkask": { const c=((COACH.roster||{}).people||[]).find(p=>p.id===v)||{};confirmSheet(`Unlink ${first(c.name||"")}?`,`${esc(first(c.name||"They"))} comes off ${esc(c.parentAccount||"that")}'s login and shows as not on the app. Their classes and payments stay. Send their parent the invite link to put them back on the right login.`,["unlinkyes",v],"Unlink");break }
+    case "unlinkyes": api("POST",`/coach/students/${v}/unlink`,{}).then(async()=>{hideSheet();await coachLoad("roster");render();toast("Unlinked. Send their invite link to the right parent.");studentSheet(v)}).catch(e=>toast(e.message));break;
     case "compdelask": { const c=(API.comps||[]).find(x=>x.id===v);if(!c)break;confirmSheet("Delete this competition?",`<b>${esc(c.name)}</b> and its team list (${c.entered} entered, ${c.requested} asking). Students won't be emailed.`,["compdelyes",v],"Delete competition");break }
     case "compnew": S.ui.compImp=null;compForm(null,null);break;
     case "compopen": loadComps();compSheet(v);if(isCoach()&&(!COACH.roster||Date.now()-(COACH.rosterAt||0)>60000))coachLoad("roster").then(()=>{if(S.ui.sheet&&S.ui.sheet.k==="comp"&&S.ui.sheet.id===v)compSheet(v,true)});break;
@@ -2330,7 +2343,7 @@ document.addEventListener("click",e=>{
     case "classopen": classSheet(v);break;
     case "classedit": S.ui.cplan=null;classForm(S.ui.classData.class);break;
     case "classdel": { el.outerHTML=`<div class="row"><span class="small">Delete this class for everyone?</span><button class="btn danger" type="button" data-a="classdelyes" data-v="${v}">Delete</button></div>`;break }
-    case "classdelyes": api("DELETE",`/classes/${v}`).then(async()=>{S.ui.cplan=null;hideSheet();toast("Class deleted.");await coachLoad("classes");coachGo("schedule")}).catch(e=>toast(e.message));break;
+    case "classdelyes": api("DELETE",`/classes/${v}`).then(async(j)=>{S.ui.cplan=null;hideSheet();toast("Class deleted.",j.undo?{label:"Undo",fn:()=>classRestore(j.undo)}:undefined);await coachLoad("classes");coachGo("schedule")}).catch(e=>toast(e.message));break;
     case "cplanrm": { S.ui.cplan.ids=S.ui.cplan.ids.filter(x=>x!==v);const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");break }
     case "attend": { const cd=S.ui.classData,a=cd.attendees.find(x=>x.id===v);if(!a)break;const nv=!a.attended;api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userId:v,attended:nv}).then(()=>{a.attended=nv;drawClassSheet(true)}).catch(e=>toast(e.message));break }
     case "clsusual": classUsual();break;
@@ -2346,7 +2359,8 @@ document.addEventListener("click",e=>{
     case "gymedit": gymEditOpen();break;
     case "germ": gimpChange(el.dataset.k,Number(v));break;
     case "geadd": gimpChange(v,null);break;
-    case "ttclasses": { const w=Number((document.getElementById("tt-weeks")||{}).value)||2;el.disabled=true;ttToClasses(w).finally(()=>{el.disabled=false});break }
+    case "ttapply": ttApply(el);break;
+    case "bookusual": bookUsual(el);break;
     case "rotate": api("POST","/coach/codes/rotate",{which:v}).then(j=>{API.me=j.me;render();toast("New code made. The old link no longer works.")}).catch(e=>toast(e.message));break;
     case "ytplay": { const box=el.closest(".ytbox");if(box){const t=el.getAttribute("aria-label")||"Video";box.querySelector(".ytface").outerHTML=`<div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v)}?autoplay=1&rel=0&playsinline=1" title="${esc(t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`}break }
     case "coachok": { const c=P().checked||(P().checked={});if(c[v])delete c[v];else c[v]=true;saveProgress();const y=window.scrollY;techSheet(v,true);window.scrollTo(0,y);toast(c[v]?"Marked as checked with your coach.":"Coach check removed.");break }
@@ -2373,6 +2387,12 @@ document.addEventListener("click",e=>{
     case "popall": popAll();break;
     case "popcov": { const pk=document.getElementById("pop-cov-pick");if(pk){pk.hidden=false;el.hidden=true;const m=document.getElementById("pop-months");if(m)m.focus()}break }
     case "paidnow": paidNow(v);break;
+    case "cardok": cardSettle(v,true);break;
+    case "cardnot": cardSettle(v,false);break;
+    case "trialset": trialSet(v);break;
+    case "pickplan": pickPlan(v);break;
+    case "planpick": planPickSheet();break;
+    case "bulkplan": {const b=S.ui.bulk;if(b){b.planOpen=!b.planOpen;bulkSheet()}break}
     case "paidhow": lsSet("jf.payMethod",v);render();break;
     case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
@@ -2382,8 +2402,13 @@ document.addEventListener("click",e=>{
     case "moneyfilter": COACH.moneyFilter=v;render();break;
     case "moneymonth": if(COACH.money){COACH.moneyMonth=monthShift(COACH.money.month,Number(v));render()}break;
     case "moneyjump": COACH.moneyMonth=v;render();break;
-    case "remindall": {const M=COACH.money;if(!M)break;const n=M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0])&&s.email).length;confirmSheet(`Email ${n} reminder${n>1?"s":""}?`,`Everyone who still owes for ${esc(monthLabel(M.month))} and has an email gets a friendly reminder with the amount, your bank details and their reference.`,["remindyes",""],"Send reminders");break}
-    case "remindyes": remindAll();break;
+    case "remindall": remindAsk();break;
+    case "remindyes": remindAll(v==="auto"?true:v==="once"?false:undefined);break;
+    case "idlepause": idleAct("pause");break;
+    case "idlekeep": idleAct("keep");break;
+    case "idleundo": idleUndo(COACH.idleUndo||[]);break;
+    case "remindsee": remindSheet();break;
+    case "remindmoney": hideSheet();COACH.moneyView="month";COACH.moneyFilter="owing";if(COACH.moneyMonth){COACH.moneyMonth=null;COACH.money=null}coachGo("money");break;
     case "moneycsv": moneyCSV();break;
     case "addstu": addStudentSheet();break;
     case "studelask": { const p=((COACH.roster||{}).people||[]).find(x=>x.id===v); confirmSheet("Remove this student?",p&&!p.offline?`${esc(first(p.name))} leaves your gym but keeps their JitsFlow account. Their bookings, plan, fee and your notes on them are cleared. Payments you recorded stay.`:"They're taken off your list. Payments you recorded stay, marked as not matched.",["studelyes",v],"Remove");break }
@@ -2415,6 +2440,8 @@ document.addEventListener("click",e=>{
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
     case "paycard": payByCard(); break;
+    case "autoon": autoOn(); break;
+    case "autostop": autoStop(); break;
     case "packcard": payByCard(v); break;
     case "packedit": S.ui.packEdit=v||null;render();break;
     case "ratefill": { const t=document.getElementById(el.dataset.for);if(t){t.value=v;el.parentNode.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed",String(b===el)))}break }
@@ -2509,12 +2536,15 @@ document.addEventListener("change",e=>{
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   // A pack picked on a payment: its price is the amount, and it doesn't cover months of fees.
   if(e.target.id==="p-pack"||e.target.id==="mypop-pack"){const o=e.target.selectedOptions[0],amt=document.getElementById(e.target.id==="p-pack"?"p-amt":"mypop-amt"),cv=document.getElementById("p-covers");
-    if(o&&o.dataset.price&&amt)amt.value=Number(o.dataset.price)/100;if(cv)cv.hidden=!!e.target.value;return}
+    if(o&&o.dataset.price&&amt)amt.value=Number(o.dataset.price)/100;if(cv)cv.hidden=!!e.target.value;if(e.target.id==="p-pack")syncFor();return}
   if(e.target.id==="pop-up"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";coachProof(f);return}
-  if(e.target.id==="p-user"){const a=document.getElementById("p-amt"),pk=document.getElementById("p-pack"),c=owedFor(e.target.value);if(a&&!(pk&&pk.value)&&c)a.value=c/100;syncCovers("p");return}
+  if(e.target.id==="p-user"){const a=document.getElementById("p-amt"),pk=document.getElementById("p-pack"),c=owedFor(e.target.value);if(a&&!(pk&&pk.value)&&c)a.value=c/100;syncCovers("p");syncFor();return}
+  if(e.target.id==="p-amt"||e.target.id==="p-date"||e.target.id==="p-for"){syncFor();return}
+  if(e.target.id==="s-status"){const b=document.getElementById("s-pause");if(b)b.hidden=e.target.value!=="paused";return}
+  if(e.target.id==="bulk-pa"||e.target.id==="bulk-pk"){const b=S.ui.bulk;if(b)b[e.target.id==="bulk-pa"?"planId":"kidsPlanId"]=e.target.value||null;return}
   if(e.target.id==="pop-user"){syncCovers("pop");return}
   if(e.target.id==="pop-pack"){const cv=document.getElementById("pop-covers");if(e.target.value){if(cv)cv.hidden=true}else syncCovers("pop");return}
-  if(e.target.id==="p-months"||e.target.id==="pop-months"){e.target.dataset.set="1";const t=document.getElementById("pop-cov-txt");if(e.target.id==="pop-months"&&t)t.querySelector("b").textContent=e.target.selectedOptions[0].textContent;return}
+  if(e.target.id==="p-months"||e.target.id==="pop-months"){e.target.dataset.set="1";if(e.target.id==="p-months")syncFor();const t=document.getElementById("pop-cov-txt");if(e.target.id==="pop-months"&&t)t.querySelector("b").textContent=e.target.selectedOptions[0].textContent;return}
   if(e.target.id==="mypop"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";sendMyProof(f);return}
   const t=e.target;
   if(t.dataset.photo&&t.files&&t.files[0]){uploadPhoto(t.dataset.photo,t.files[0]);return}
@@ -2525,16 +2555,19 @@ document.addEventListener("change",e=>{
   if(t.dataset.cplan&&t.value){S.ui.cplan=S.ui.cplan||{ids:[]};if(!S.ui.cplan.ids.includes(t.value))S.ui.cplan.ids.push(t.value);t.value="";const box=document.getElementById("cplan-chips");if(box)box.innerHTML=S.ui.cplan.ids.filter(id=>TM[id]).map(id=>`<button type="button" class="chip" data-a="cplanrm" data-v="${id}">${esc(TM[id].n)} <span class="x">×</span></button>`).join("");return}
   if(t.id==="c-title"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classAutofill(t.value);return}
   if(t.dataset&&t.dataset.coachpick){const o=document.getElementById(t.id+"-other");if(o){o.hidden=t.value!=="__other";if(!o.hidden)o.focus()}return}
+  if(t.id==="c-repeat"){t.dataset.set="1";return}
+  if(t.id==="c-date"&&S.ui.sheet&&S.ui.sheet.k==="classform"&&!S.ui.sheet.id){classRepeatFor(t.value);return}
   if(t.id==="c-kind"){const w=document.getElementById("c-price-wrap");if(w)w.hidden=t.value!=="private";return}
   if(t.id==="wa-comp"){S.ui.wa={kind:"comp",comp:t.value};render();return}
   if(t.id==="g-invite"){api("PATCH","/coach/gym",{studentsInvite:t.checked}).then(j=>{API.me=j.me;toast(t.checked?"Students can invite friends.":"Only coaches can send invites now.")}).catch(e=>toast(e.message));return}
+  if(t.id==="m-auto"){const on=t.checked;api("PUT","/coach/money/auto",{on}).then(j=>{if(COACH.payInfo)COACH.payInfo.autoRemind=j.autoRemind;if(COACH.money)COACH.money.autoRemind=j.autoRemind;toast(on?"Reminders now go by themselves on the due day and 7 days later.":"Automatic reminders are off. You can still send them from This month.")}).catch(x=>{t.checked=!on;toast(x.message)});return}
   if(t.id==="g-show"){api("PATCH","/coach/gym",{showAttendees:t.checked}).then(j=>{API.me=j.me;API.classes=null;toast(t.checked?"Students can see who's booked.":"Booking lists are now private.")}).catch(e=>toast(e.message));return}
   if(t.dataset.assign&&t.value){api("PATCH",`/coach/payments/${t.dataset.assign}`,{userId:t.value}).then(async()=>{toast("Payment assigned.");await coachLoad()}).catch(e=>toast(e.message));return}
   if(t.dataset.ob&&S.ui.ob){S.ui.ob[t.dataset.ob]=t.value;return}
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
-const FORMS=["authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform"];
+const FORMS=["authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform","kidform"];
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
@@ -2548,6 +2581,7 @@ document.addEventListener("submit",async e=>{
 });
 async function submitForm(fid,f){
   if(fid==="logform")return submitLog();
+  if(fid==="kidform")return addKid(f);
   if(fid==="authform")return submitAuth(f);
   if(fid==="howcode")return howCode(f.querySelector("[name=code]").value.trim().toUpperCase());
   if(fid==="classform")return submitClass(f);

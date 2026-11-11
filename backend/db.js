@@ -260,7 +260,173 @@ create table if not exists left_owing(
 create index if not exists left_owing_gym on left_owing(gym_id, month);
 -- who last moved a class to another time: a coach saving an edit made before that is told who moved it
 alter table classes add column if not exists moved_by bigint references users(id) on delete set null;
+-- which months a fee payment pays for, decided once when it's saved (so a fee paid early on the 28th counts for next month,
+-- and later payments never move it). for_month is the first month; alloc splits it over several months ({"2026-10": 85000, ...}).
+-- Neither set (payments from before this, and packs): the month it was paid in, for months months.
+alter table payments add column if not exists for_month date;
+alter table payments add column if not exists alloc jsonb;
+-- a proof sent "for" a plan (a new member joining it): confirming it puts them on the plan
+alter table payments add column if not exists plan_id bigint references plans(id) on delete set null;
+-- months before this never count toward what someone owes: members added in bulk start on their next due date
+alter table users add column if not exists bill_from date;
+alter table users add column if not exists trial_ends date;
+-- free stretches of someone's membership, in whole months: a pause, a trial, or a cancelled plan. from_month to until_month
+-- (the first days of those months; no until_month: open-ended). Months before and after stay owed, so pausing never wipes a debt
+-- and coming back never bills the paused months. ended_at: when it was ended (by hand or when it ran out).
+create table if not exists plan_breaks(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  kind text not null check (kind in ('pause','trial','cancel')),
+  from_month date not null,
+  until_month date,
+  ended_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists plan_breaks_user on plan_breaks(user_id);
+-- money paid ahead for months a pause then made free, moved to the months after it ([{id, was, now}]: each payment's months before and after),
+-- so it can be put back if the pause is undone
+alter table plan_breaks add column if not exists moved jsonb;
+-- the month a gym started keeping its fees in the app: months before it never show as owed
+alter table gyms add column if not exists bill_start date;
+-- The weekly timetable (gyms.profile.timetable, each row with an id) keeps about 8 weeks of classes on the calendar by itself.
+-- A class made from a row keeps the row's id and the Monday of its week, so one row never makes two classes in a week,
+-- even after that class is moved. timetable_rolled: the day the calendar was last filled (once a day per gym).
+alter table classes add column if not exists slot_id text;
+alter table classes add column if not exists slot_week date;
+create unique index if not exists classes_slot_week on classes(gym_id, slot_id, slot_week) where slot_id is not null;
+alter table gyms add column if not exists timetable_rolled date;
+-- A class from the timetable a coach deleted (a public holiday, a seminar): it isn't put back.
+create table if not exists class_skips(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  slot_id text,
+  week date,
+  starts_at timestamptz not null,
+  title text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists class_skips_gym on class_skips(gym_id, starts_at);
+-- Fee reminders by email: null until the head coach is asked once (the first time they email reminders), then on (true) or off.
+alter table gyms add column if not exists auto_remind boolean;
+-- The last day the automatic reminders ran for a gym and what they did ({day, sent, noEmail}): it's claimed first, so one run a day, on one server.
+alter table gyms add column if not exists remind_log jsonb;
+-- When someone was last sent a fee reminder (by the coach or automatically): nobody is reminded twice within 6 days.
+alter table users add column if not exists reminded_at timestamptz;
+-- "Keep" on Home's "haven't trained in 60 days" card: they're left off that card until this day.
+alter table users add column if not exists idle_kept_until date;
+-- Why a pause was made: 'idle' when the head coach paused people who stopped coming (booking or checking in again ends it by itself).
+-- told_at: when they were sent the "we miss you" message (a few minutes later, so Undo can still stop it).
+alter table plan_breaks add column if not exists reason text;
+alter table plan_breaks add column if not exists told_at timestamptz;
+-- Families: one parent login, several kids. A kid's record linked to the account that signs in for them (parent_id: that login).
+-- The kid has no email or password of their own. Linking a second kid to a parent never needs a second email.
+alter table users add column if not exists parent_id bigint references users(id) on delete set null;
+create index if not exists users_parent on users(parent_id) where parent_id is not null;
+-- Who a parent's session is booking for ("Booking for: Lerato"): one of their kids, or null for the login itself.
+alter table sessions add column if not exists as_user bigint references users(id) on delete set null;
+-- A family payment confirmed for one kid that was more than that kid owed: the rest went to their brothers and sisters,
+-- as payments of their own (split_of: the payment it came from). Deleting that payment, or Undo, takes them away again.
+alter table payments add column if not exists split_of bigint references payments(id) on delete cascade;
+create index if not exists payments_split on payments(split_of) where split_of is not null;
+-- Card autopay: a member's card saved with PayFast (on the gym's own account), charged what they owe on each due day.
+-- One row per member it pays for (a parent's card can pay for each of their kids). token: sealed, like the gym's keys; token_hash finds
+-- it from a PayFast notification. from_month: months from this one are paid automatically (older ones stay for the member to pay).
+-- stopped_at: the member tapped Stop. Undo works for a few minutes; then the card is cancelled with PayFast and the row goes.
+create table if not exists autopay(
+  user_id bigint primary key references users(id) on delete cascade,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  payer_id bigint references users(id) on delete cascade,
+  token text not null,
+  token_hash text not null,
+  merchant_id text not null,
+  from_month text not null,
+  stopped_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists autopay_token on autopay(token_hash);
+create index if not exists autopay_gym on autopay(gym_id);
+-- Each automatic charge, one per member per month (claimed before PayFast is asked, so two servers never charge twice).
+-- status: charging (asking PayFast), sent (PayFast took it; its notification records the payment), paid, failed (the card was
+-- declined: the member and the head coach are told once, told_at), unsure (no answer from PayFast in a day: the head coach is told).
+create table if not exists autopay_charges(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  month text not null,
+  amount_cents int not null,
+  status text not null default 'charging',
+  error text not null default '',
+  payment_id bigint references payments(id) on delete set null,
+  told_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, month)
+);
+create index if not exists autopay_charges_open on autopay_charges(status) where status in ('charging','sent');
+-- alloc: the months a charge is for and how much of each ({"2026-10": 85000, "2026-11": 85000}), so it pays those, not older ones.
+-- More statuses: left (PayFast confirmed it after the member left: recorded, and the head coach told).
+alter table autopay_charges add column if not exists alloc jsonb;
+-- the last day the autopay job ran for a gym (once a day each)
+alter table gyms add column if not exists autopay_day text;
 `;
+
+// Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.
+// Rows marked off (the coach unticked "put on the calendar") and days before a row's "from" day are left out;
+// two identical rows count once.
+const OCC = `o as (
+  select distinct on (d.day, r->>'start', lower(r->>'title')) g.id as gym_id, r->>'id' as slot, d.day, date_trunc('week', d.day)::date as week,
+    (d.day + (r->>'start')::time) at time zone g.timezone as starts_at, coalesce(nullif(r->>'title',''), 'Class') as title,
+    case when coalesce(r->>'end','') !~ '^\\d{2}:\\d{2}$' then 60 when (r->>'end')::time - (r->>'start')::time >= interval '15 minutes'
+      then (extract(epoch from (r->>'end')::time - (r->>'start')::time) / 60)::int else 60 end as dur,
+    coalesce(r->>'coach','') as coach, coalesce(r->>'level','') as level, coalesce(r->>'type','') as discipline,
+    case when coalesce(r->>'cap','') ~ '^\\d{1,3}$' then least(500, greatest(1, (r->>'cap')::int)) end as cap
+  from gyms g cross join lateral jsonb_array_elements(case when jsonb_typeof(g.profile->'timetable')='array' then g.profile->'timetable' else '[]'::jsonb end) r
+  cross join lateral (select x::date as day from generate_series((now() at time zone g.timezone)::date, (now() at time zone g.timezone)::date + 55, interval '1 day') x) d
+  where g.id=$1 and coalesce(r->>'id','') <> '' and coalesce(r->>'start','') ~ '^\\d{2}:\\d{2}$' and coalesce(r->>'off','') <> 'true'
+    and extract(isodow from d.day) = array_position(array['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], r->>'day')
+    and case when coalesce(r->>'from','') ~ '^\\d{4}-\\d{2}-\\d{2}$' then d.day >= (r->>'from')::date else true end
+  order by d.day, r->>'start', lower(r->>'title'), r->>'id')`;
+// Timetable rows from before rows had ids get one.
+const TT_IDS = `update gyms g set profile = jsonb_set(g.profile, '{timetable}', (select jsonb_agg(case when coalesce(r->>'id','') <> '' then r
+    else r || jsonb_build_object('id', substr(md5(random()::text || g.id::text || n::text), 1, 10)) end order by n) from jsonb_array_elements(g.profile->'timetable') with ordinality t(r, n)))
+  where jsonb_typeof(g.profile->'timetable')='array' and exists (select 1 from jsonb_array_elements(g.profile->'timetable') r where coalesce(r->>'id','') = '')`;
+
+// A class is the row's class when its name is the row's name, or the name with its level as the class form suggests it ("Kids BJJ (Beginners)").
+const SAME = (t) => `lower(${t}) in (lower(o.title), lower(o.title || ' (' || o.level || ')'))`;
+// Fill one gym's calendar from its timetable: classes already there at a row's time (added by hand before) are linked to the row,
+// then each row gets its class in each of the next 8 weeks, unless that week has one from the row already or the coach deleted it.
+// Safe to run any number of times and on several servers at once (a lock per gym, and one class per row per week in the database).
+// Returns how many classes it added.
+async function rollTimetable(pool, gymId) {
+  const db = await pool.connect();
+  try {
+    await db.query("begin");
+    await db.query("select pg_advisory_xact_lock(4711003, $1::int)", [gymId]);
+    await db.query(`with ${OCC}, p as (select distinct on (o.slot, o.week) o.slot, o.week, c.id from o
+        join classes c on c.gym_id=o.gym_id and c.starts_at=o.starts_at and ${SAME("c.title")} and c.slot_id is null and c.kind<>'private'
+        where not exists (select 1 from classes x where x.gym_id=o.gym_id and x.slot_id=o.slot and x.slot_week=o.week) order by o.slot, o.week, c.id)
+      update classes c set slot_id=p.slot, slot_week=p.week from p where c.id=p.id`, [gymId]);
+    const r = await db.query(`with ${OCC} insert into classes(gym_id,title,starts_at,duration_min,coach,level,discipline,capacity,slot_id,slot_week)
+      select o.gym_id, o.title, o.starts_at, o.dur, o.coach, o.level, o.discipline, o.cap, o.slot, o.week from o where o.starts_at > now()
+        and not exists (select 1 from classes x where x.gym_id=o.gym_id and ((x.slot_id=o.slot and x.slot_week=o.week) or (x.starts_at=o.starts_at and ${SAME("x.title")})))
+        and not exists (select 1 from class_skips s where s.gym_id=o.gym_id and ((s.slot_id=o.slot and s.week=o.week) or (s.starts_at=o.starts_at and ${SAME("s.title")})))
+      on conflict do nothing`, [gymId]);
+    await db.query("update gyms set timetable_rolled=current_date where id=$1", [gymId]);
+    await db.query("commit");
+    return r.rowCount;
+  } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
+}
+// Every gym whose calendar wasn't filled today. Runs at startup and every hour, so each gym is done about once a day.
+async function rollAll(pool) {
+  await pool.query(TT_IDS);
+  await pool.query("delete from class_skips where starts_at < now() - interval '14 days'");
+  const gyms = (await pool.query(`select id from gyms where timetable_rolled is distinct from current_date and jsonb_typeof(profile->'timetable')='array'
+    and jsonb_array_length(profile->'timetable') > 0`)).rows;
+  let added = 0;
+  for (const g of gyms) { try { added += await rollTimetable(pool, g.id); } catch (e) { console.warn("timetable:", g.id, e.message); } }
+  return added;
+}
 
 // Gyms without an active head coach (gyms from before head coaches, or the head left): the longest-standing active coach takes it.
 // When a coach joined is gym_joined_at if they moved in with a code, or when their account was made if they signed up into the gym
@@ -273,6 +439,30 @@ const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not e
 
 // Proofs a coach marked "not a payment" leave the coach's list after 30 days. Delete them then (their files go with them).
 const purgeRejected = (pool) => pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
+
+// Pauses that have run out end on their own: the member is active again and the head coach (and they) get a note on Home.
+// Safe to run any number of times, on any number of servers at once: one statement ends each pause once, and only the
+// server that ended it writes the notes. Runs at startup and every hour.
+async function tick(pool) {
+  const db = await pool.connect();
+  try {
+    await db.query("begin");
+    if ((await db.query("select pg_try_advisory_xact_lock(4711001) as ok")).rows[0].ok) {
+      await db.query(`with done as (
+          update plan_breaks b set ended_at=now() from users u join gyms g on g.id=u.gym_id
+          where b.user_id=u.id and b.gym_id=u.gym_id and b.kind='pause' and b.ended_at is null and b.until_month is not null
+            and b.until_month < date_trunc('month', now() at time zone g.timezone)::date
+          returning b.user_id, b.gym_id, b.until_month),
+        back as (update users u set plan_status='active' from done where u.id=done.user_id and u.plan_status='paused'
+          returning u.id, u.name, u.gym_id, to_char(done.until_month + interval '1 month', 'FMDD FMMonth') as from_day),
+        coach as (insert into notices(gym_id,user_id,kind,title,body) select b.gym_id, g.head_coach_id, 'resumed', 'Back from a pause',
+            split_part(b.name,' ',1) || '''s pause ended, so they''re active again. Their fees start again from ' || b.from_day || '.'
+          from back b join gyms g on g.id=b.gym_id where g.head_coach_id is not null)
+        insert into notices(gym_id,user_id,kind,title,body) select gym_id, id, 'resumed', 'Welcome back', 'Your pause is over and your membership is active again. You can book classes.' from back`);
+    }
+    await db.query("commit");
+  } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
+}
 
 function makePool() {
   if (!process.env.DATABASE_URL) return null;
@@ -288,8 +478,22 @@ async function migrate(pool) {
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
   await purgeRejected(pool);
+  // Gyms from before running balances start owing from the month this went live, whatever they recorded before: until now Money only
+  // looked at the current month, so fees paid in cash and never recorded must not turn into months of arrears. Older months still
+  // show when paging back. New gyms start the month they're made.
+  await pool.query("update gyms g set bill_start = date_trunc('month', now() at time zone coalesce(g.timezone, 'Africa/Johannesburg'))::date where bill_start is null");
+  await pool.query("alter table gyms alter column bill_start set default date_trunc('month', now() at time zone 'Africa/Johannesburg')::date");
+  // Members paused, on trial or cancelled before breaks had dates: free from the month they started, as they were.
+  // A trial from then runs 14 days from when its plan started (so an old one shows as ended on Home straight away).
+  await pool.query(`insert into plan_breaks(gym_id,user_id,kind,from_month) select u.gym_id, u.id, case u.plan_status when 'paused' then 'pause' when 'trial' then 'trial' else 'cancel' end,
+      date_trunc('month', least(coalesce(u.plan_started, u.created_at::date), u.created_at::date))::date
+    from users u where u.gym_id is not null and u.plan_status in ('paused','trial','cancelled')
+      and not exists (select 1 from plan_breaks b where b.user_id=u.id and b.ended_at is null)`);
+  await pool.query("update users set trial_ends = coalesce(plan_started, created_at::date) + 14 where plan_status='trial' and trial_ends is null");
+  await tick(pool);
+  await pool.query(TT_IDS);
   // One-off tidy-up: empty test gyms left by deploy checks (named "… (delete me)", nobody in them).
   await pool.query("delete from gyms g where g.name like '%(delete me)' and not exists (select 1 from users u where u.gym_id=g.id)");
 }
 
-module.exports = { makePool, migrate, purgeRejected, LONGEST };
+module.exports = { makePool, migrate, purgeRejected, tick, rollTimetable, rollAll, LONGEST };

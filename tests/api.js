@@ -18,7 +18,7 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
@@ -387,7 +387,7 @@ function client(base) {
     ok(M.methods.some((m) => m.method === "cash") && M.collectedCents > 0, "money collected by method");
     r = await coach("GET", "/coach/money?month=2020-01"); ok(r.j.month === "2020-01" && r.j.collectedCents === 0 && r.j.students.length === 0, "an earlier month before anyone joined is empty");
     const mails1 = sink.mails.length;
-    r = await coach("POST", "/coach/money/remind", { userIds: [sam.id, nomsa, pieter] }); ok(r.s === 200 && r.j.sent === 2 && r.j.paid.includes("Nomsa Dube"), "email reminders go to people who still owe, not to people who've paid");
+    r = await coach("POST", "/coach/money/remind", { userIds: [sam.id, nomsa, pieter] }); ok(r.s === 200 && r.j.sent === 2 && r.j.paid.includes("Nomsa Dube"), "email reminders go to people who still owe, not to people who've paid: " + JSON.stringify(r.j));
     await new Promise((res) => setTimeout(res, 400));
     const rem = sink.mails.slice(mails1).find((m) => m.to[0] === "sam@example.com");
     ok(rem && /fees for/i.test(rem.subject) && rem.html.includes(mSam.reference) && /62123 456 789|62123456789/.test(rem.html), "a reminder has the amount, the bank details and their reference");
@@ -399,26 +399,34 @@ function client(base) {
       ok(om && om.html.includes(mo.claimUrl.replace(/&/g, "&amp;")) || (om && om.html.includes(mo.claimUrl)), "their email reminder links to it too");
       const olga = client(base); r = await olga("POST", "/auth/register", { code: new URL(mo.claimUrl).searchParams.get("join"), claim: new URL(mo.claimUrl).searchParams.get("claim"), name: "Olga O", email: "olga@example.com", password: "olgapass11" }, { "x-forwarded-for": "198.51.100.41" });
       ok(r.s === 201 && r.j.me.id === off, "and the link signs them into their record"); }
-    // --- paused and cancelled members don't owe fees
+    // --- paused and cancelled members don't owe fees, from next month (this month is still owed: they've trained in it)
     { r = await coach("POST", "/coach/plans", { name: "Monthly R800", priceCents: 80000, period: "month" }); const p800 = r.j.plan.id;
-      await coach("PATCH", `/coach/students/${pieter}`, { planId: p800, planStatus: "paused" });
+      await coach("PATCH", `/coach/students/${pieter}`, { planId: p800 }); r = await coach("GET", "/coach/money");
+      const month = r.j.month, early = +r.j.today.slice(8, 10) <= 5, nx = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 1)).toISOString().slice(0, 7);
+      await coach("PATCH", `/coach/students/${pieter}`, { planStatus: "paused" });
       r = await coach("GET", "/coach/money"); const mp = r.j.students.find((s) => s.id === pieter);
-      ok(mp && mp.feeCents === 0 && mp.planStatus === "paused", "a paused member owes nothing on the money page: " + JSON.stringify(mp));
+      ok(mp && mp.planStatus === "paused" && mp.pause.from === (early ? month : nx) && mp.feeCents === (early ? 0 : 80000), "a paused member's fees stop next month (this month is still owed): " + JSON.stringify(mp));
+      r = await coach("GET", "/coach/money?month=" + nx); ok(r.j.students.find((s) => s.id === pieter).feeCents === 0, "a paused member owes nothing on the money page while paused");
+      if (mp.owedCents) await coach("POST", "/coach/payments", { userId: pieter, amountCents: mp.owedCents, paidOn: r.j.today, method: "cash" });
       const m2 = sink.mails.length; r = await coach("POST", "/coach/money/remind", { userIds: [pieter] }); await new Promise((res) => setTimeout(res, 400));
-      ok(r.j.sent === 0 && !sink.mails.slice(m2).some((m) => m.to[0] === "pieter@example.com"), "and gets no fee reminder");
-      r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.dueCents === 0, "and sees no fee due");
-      await coach("PATCH", `/coach/students/${pieter}`, { planStatus: "cancelled" }); r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.dueCents === 0, "nor does a cancelled member");
-      await coach("PATCH", `/coach/students/${pieter}`, { planStatus: "active" }); r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.dueCents === 80000, "back to active, the fee is due again"); }
+      ok(r.j.sent === 0 && !sink.mails.slice(m2).some((m) => m.to[0] === "pieter@example.com"), "and once this month is paid, gets no fee reminder");
+      r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.owedCents === 0, "and sees no fee due");
+      await coach("PATCH", `/coach/students/${pieter}`, { planStatus: "cancelled" }); r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.owedCents === 0 && r.j.pay.planStatus === "cancelled", "nor does a cancelled member");
+      r = await coach("GET", "/coach/money?month=" + nx); ok(r.j.students.find((s) => s.id === pieter).feeCents === 0, "who owes nothing next month");
+      await coach("PATCH", `/coach/students/${pieter}`, { planStatus: "active" }); r = await pieterApp("GET", "/me/pay"); ok(r.j.pay.owedCents === 0, "back to active, nothing more is owed now");
+      r = await coach("GET", "/coach/money?month=" + nx); ok(r.j.students.find((s) => s.id === pieter).feeCents === 80000, "and the fee is due again from next month"); }
     // --- a payment counts toward every month it covers: a year paid up front isn't owing next month
     { r = await coach("POST", "/coach/plans", { name: "Yearly", priceCents: 600000, period: "year" }); const py = r.j.plan.id;
       r = await coach("POST", "/coach/students", { name: "Yara Year", email: "yara@example.com", planId: py }); const yara = r.j.id;
       const mon = (await coach("GET", "/coach/money")).j.month, mAdd = (n, day) => new Date(Date.UTC(+mon.slice(0, 4), +mon.slice(5, 7) - 1 + n, day || 1)).toISOString().slice(0, 10);
       r = await coach("POST", "/coach/payments", { userId: yara, amountCents: 600000, paidOn: mAdd(-1, 15), method: "eft", months: 12 }); ok(r.s === 201 && r.j.payment.months === 12, "a payment can cover 12 months");
+      // Paid before they joined (last month), it starts at their first month: this one.
+      ok(r.j.payment.forMonths[0] === mon && r.j.payment.forMonths.length === 12, "a year paid before they joined starts in their first month: " + JSON.stringify(r.j.payment.forMonths));
       r = await coach("GET", "/coach/money"); const my = r.j.students.find((s) => s.id === yara);
       ok(my && my.feeCents === 50000 && my.paidCents === 50000, "a year paid last month counts toward this month's fee: " + JSON.stringify(my));
       r = await coach("POST", "/coach/money/remind", { userIds: [yara] }); ok(r.j.sent === 0 && r.j.paid.includes("Yara Year"), "so they get no reminder");
-      r = await coach("GET", "/coach/money?month=" + mAdd(10).slice(0, 7)); ok(r.j.students.find((s) => s.id === yara).paidCents === 50000, "it still counts in its last month");
-      r = await coach("GET", "/coach/money?month=" + mAdd(11).slice(0, 7)); ok(r.j.students.find((s) => s.id === yara).paidCents === 0, "and stops after 12 months");
+      r = await coach("GET", "/coach/money?month=" + mAdd(11).slice(0, 7)); ok(r.j.students.find((s) => s.id === yara).paidCents === 50000, "it still counts in its last month");
+      r = await coach("GET", "/coach/money?month=" + mAdd(12).slice(0, 7)); ok(r.j.students.find((s) => s.id === yara).paidCents === 0, "and stops after 12 months");
       r = await coach("POST", "/coach/payments", { userId: yara, amountCents: 50000, paidOn: mAdd(0, 2) }); ok(r.j.payment.months === 1, "a payment covers one month unless the coach says more"); }
     // --- classes you attended (the training log fills itself in from these)
     { const past = new Date(Date.now() - 5 * 3600e3).toISOString();
@@ -461,6 +469,7 @@ function client(base) {
       await post(itn(pay, "gym secret")); await new Promise((s) => setTimeout(s, 400));
       r = await stu2("GET", "/me/pay"); const got = r.j.pay.payments.find((x) => x.method === "payfast");
       ok((await countPf()) === 1 && got && got.amountCents === 65000 && got.status === "confirmed", "a confirmed card payment is marked paid by itself");
+      ok(got && Array.isArray(got.forMonths) && got.forMonths.length >= 1, "and it says which month it pays for: " + JSON.stringify(got && got.forMonths));
       ok(pfSrv.last && /pf_payment_id=1089250/.test(pfSrv.last) && !/signature=/.test(pfSrv.last), "every notification is checked with PayFast first");
       await post(itn(pay, "gym secret")); await new Promise((s) => setTimeout(s, 400)); ok((await countPf()) === 1, "the same notification twice is recorded once");
       pfDelay = 200; await Promise.all([1, 2, 3].map(() => post(itn({ ...pay, pf_payment_id: "1089260" }, "gym secret")))); await new Promise((s) => setTimeout(s, 900)); pfDelay = 0;
@@ -609,8 +618,9 @@ function client(base) {
       await hc("PATCH", `/coach/students/${pid}`, { feeCents: null }); await hc("PATCH", "/coach/gym", { monthlyFeeCents: 0 });
       const plan = (await hc("POST", "/coach/plans", { name: "Unlimited", priceCents: 80000, period: "month" })).j.plan;
       await hc("PATCH", `/coach/students/${mid}`, { planId: plan.id }); const mp = await mk(Date.now() + 30 * H, "Member private"); await mem("PUT", `/classes/${mp}/rsvp`, { going: true });
-      r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === 0 && r.j.pay.membershipCents === 80000, "a member with an active plan doesn't pay it");
-      await hc("PATCH", `/coach/students/${mid}`, { planStatus: "paused" }); r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === (ym(Date.now() + 30 * H) === thisMonth ? 15000 : 0) && r.j.pay.membershipCents === 0, "a paused member taking privates does");
+      r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === 0 && r.j.pay.membershipCents === 80000, "a member with an active plan doesn't pay it: " + JSON.stringify([r.j.pay.accessCents, r.j.pay.membershipCents, r.j.pay.planStatus]));
+      await hc("PATCH", `/coach/students/${mid}`, { planStatus: "paused" }); { const pl = new Pool({ connectionString: DB }); await pl.query("update plan_breaks set from_month=date_trunc('month', now() at time zone 'Africa/Johannesburg')::date where user_id=$1 and ended_at is null", [mid]); await pl.end(); } // paused from this month
+      r = await mem("GET", "/me/pay"); ok(r.j.pay.accessCents === (ym(Date.now() + 30 * H) === thisMonth ? 15000 : 0) && r.j.pay.membershipCents === 0, "a paused member taking privates does");
       await hc("PATCH", `/coach/students/${mid}`, { planStatus: "active" }); await mem("PUT", `/classes/${mp}/rsvp`, { going: false });
       r = await hc("GET", "/coach/money"); const mPriya = r.j.students.find((x) => x.id === pid);
       ok(r.j.accessFeeCents === 15000 && mPriya.accessCents === 15000 && mPriya.feeCents === 15000 + mPriya.privatesCents && mPriya.privates.length === owedNow.length, "the Money page adds the access fee and owed privates to what they owe");
@@ -1047,6 +1057,194 @@ function client(base) {
         const page = require("fs").readFileSync(path.resolve(__dirname, "../web/app/index.html"), "utf8").match(/window\.JF_BUILD="(\w+)"/);
         r = await anon("GET", "/status"); ok(page && r.j.build === page[1], "/api/status gives the app's build id");
       } finally { await pl.end(); } }
+    // --- running balances, the month a payment is for, pauses with dates, free trials, bulk-add defaults, members picking a plan
+    { const xh = { "x-forwarded-for": "198.51.100.61" }, hc = client(base), c2 = client(base), pl = new Pool({ connectionString: DB }), wait = () => new Promise((res) => setTimeout(res, 400));
+      const bg = (await hc("POST", "/auth/start-gym", { gym: "Balance Gym", name: "Bal Head", email: "head@bal.test", password: "balhead11" }, xh)).j.me.gym;
+      await c2("POST", "/auth/register", { code: bg.coachCode, name: "Bal Two", email: "two@bal.test", password: "baltwo111" }, xh);
+      const zday = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }), today = zday(Date.now()), M0 = today.slice(0, 7);
+      const mA = (n) => new Date(Date.UTC(+M0.slice(0, 4), +M0.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7), M1 = mA(-1), M2 = mA(-2), N1 = mA(1), N2 = mA(2), N3 = mA(3);
+      const adult = (await hc("POST", "/coach/plans", { name: "Adult", priceCents: 85000, period: "month" })).j.plan, kids = (await hc("POST", "/coach/plans", { name: "Kids", priceCents: 60000, period: "month" })).j.plan;
+      const add = async (name, monthsAgo, extra = {}) => { const id = (await hc("POST", "/coach/students", { name, phone: "082 600 " + String(1000 + Math.floor(Math.random() * 8999)), email: name.toLowerCase().replace(/\W/g, "") + "@bal.test", planId: adult.id, ...extra })).j.id;
+        await pl.query("update users set created_at=now() - ($2 || ' months')::interval - interval '2 days' where id=$1", [id, String(monthsAgo)]); return id; };
+      await pl.query("update gyms set bill_start=$2 where id=$1", [bg.id, M2 + "-01"]);
+      const johan = await add("Johan Arrears", 6), lwazi = await add("Lwazi Paid", 1), pete = await add("Pete Payday", 1), sbu = await add("Sbu Pause", 1), tom = await add("Tom Paid", 1), thabo = await add("Thabo Trial", 0), mia = await add("Mia Trial", 1);
+      const money = async (m) => Object.fromEntries((await hc("GET", "/coach/money" + (m ? "?month=" + m : ""))).j.students.map((x) => [x.id, x]));
+      const pay = async (userId, amountCents, paidOn, extra = {}) => (await hc("POST", "/coach/payments", { userId, amountCents, paidOn: paidOn || today, method: "cash", ...extra })).j.payment;
+      // 2. Unpaid past months stay visible, from when billing started (not before it, and not before they joined).
+      let mo = await money(), j = mo[johan];
+      ok(j.owedCents === 255000 && j.owedMonths.map((o) => o.month).join() === [M2, M1, M0].join(), "a member who hasn't paid shows every month owed since billing started (not the months before): " + JSON.stringify(j.owedMonths));
+      ok(mo[lwazi].owedMonths.map((o) => o.month).join() === [M1, M0].join(), "someone who joined last month owes from then");
+      r = await hc("GET", "/coach/roster"); const rj = r.j.people.find((p) => p.id === johan); ok(rj.owedCents === 255000 && rj.owedMonths.length === 3, "the roster (and Home) count the running balance too");
+      r = await c2("GET", "/coach/roster"); ok(r.j.people.every((p) => p.owedCents === undefined && p.owedMonths === undefined && p.trialEnds === undefined), "other coaches don't see what anyone owes");
+      // 1. The month a payment is for: this month if it's owed, then older months, then the months ahead; history never moves.
+      let p = await pay(lwazi, 85000); ok(p.forMonths.join() === M0, "a payment pays this month first when it's owed");
+      mo = await money(); ok(mo[lwazi].owedMonths.map((o) => o.month).join() === M1 && mo[lwazi].paidCents === 85000, "an unpaid month before stays owed after paying this one: " + JSON.stringify(mo[lwazi].owedMonths));
+      p = await pay(lwazi, 85000); ok(p.forMonths.join() === M1, "with this month paid, the next payment pays the older month still owed");
+      mo = await money(); ok(mo[lwazi].owedCents === 0, "and then nothing is owed");
+      const p1 = await pay(pete, 85000, M1 + "-03"); ok(p1.forMonths.join() === M1, "paid on the 3rd: that month");
+      const p2 = await pay(pete, 85000, M1 + "-28"); ok(p2.forMonths.join() === M0, "paid again on the 28th (payday), with that month paid: it counts for the next month");
+      mo = await money(); ok(mo[pete].paidCents === 85000 && mo[pete].owedCents === 0, "so this month shows as paid");
+      const p3 = await pay(pete, 85000); ok(p3.forMonths.join() === N1, "and one more now pays next month");
+      r = await hc("GET", "/coach/payments"); ok(r.j.payments.find((x) => x.id === p1.id).forMonths.join() === M1 && r.j.payments.find((x) => x.id === p2.id).forMonths.join() === M0, "later payments never move the months earlier ones pay");
+      p = await pay(johan, 255000); ok(p.forMonths.join() === [M2, M1, M0].join(), "one payment for everything owed pays all those months: " + JSON.stringify(p.forMonths));
+      mo = await money(); ok(mo[johan].owedCents === 0, "and clears the balance");
+      p = await pay(johan, 100000); ok(p.forMonths.join() === [N1, N2].join(), "extra money carries forward into the months ahead: " + JSON.stringify(p.forMonths));
+      p = await pay(tom, 85000, today, { forMonth: M1 }); ok(p.forMonths.join() === M1, "the coach can say which month it's for");
+      r = await hc("PATCH", `/coach/payments/${p.id}`, { forMonth: M0 }); ok(r.s === 200 && r.j.payment.forMonths.join() === M0, "and change it later");
+      // Reminders ask for the running balance and name the months.
+      { const nm = (m) => new Date(m + "-15T12:00:00Z").toLocaleDateString("en-ZA", { month: "long", timeZone: "UTC" });
+        await pl.query("update users set email='sbu@bal.test' where id=$1", [sbu]); const m0 = sink.mails.length;
+        r = await hc("POST", "/coach/money/remind", { userIds: [sbu] }); await wait(); const mail = sink.mails.slice(m0).find((m) => m.to[0] === "sbu@bal.test");
+        ok(r.j.sent === 1 && mail && mail.subject.includes(nm(M1)) && mail.subject.includes(nm(M0)) && /R\s?1\s?700/.test(mail.html || mail.text || ""), "an email reminder asks for every month owed, by name: " + (mail && mail.subject)); }
+      // 3. Pauses have dates, and start next month: this month is still owed (they've trained in it), unless it's one of the first
+      // 5 days and nothing's paid toward it. 1 month runs to the end of next month; months before stay owed.
+      const early = +today.slice(8, 10) <= 5, P0 = early ? M0 : N1, owedSbu = (await money())[sbu].owedCents;
+      r = await hc("PATCH", `/coach/students/${sbu}`, { planStatus: "paused" }); ok(r.s === 200, "the head coach pauses a member");
+      mo = await money(); ok(mo[sbu].owedMonths.map((o) => o.month).join() === (early ? [M1] : [M1, M0]).join() && mo[sbu].pause.from === P0 && mo[sbu].pause.until === N1, "a pause starts next month: what they owe, this month too, stays owed: " + JSON.stringify([mo[sbu].owedMonths, mo[sbu].pause]));
+      ok((await money(N1))[sbu].feeCents === 0 && (await money(N2))[sbu].feeCents === 85000, "1 month: free to the end of next month, then billed again");
+      r = await hc("PATCH", `/coach/students/${sbu}`, { planStatus: "active" }); mo = await money();
+      ok(mo[sbu].owedCents === owedSbu && !mo[sbu].pause && (await money(N1))[sbu].feeCents === 85000, "paused by mistake and made active again the same day: nothing they owe changes: " + JSON.stringify([mo[sbu].owedCents, owedSbu]));
+      // A pause that's been running for a while: coming back early never bills the months it freed.
+      r = await hc("PATCH", `/coach/students/${sbu}`, { planStatus: "paused" }); await pl.query("update plan_breaks set from_month=$2, created_at=now() - interval '20 days' where user_id=$1 and ended_at is null", [sbu, M0 + "-01"]);
+      r = await hc("PATCH", `/coach/students/${sbu}`, { planStatus: "active" }); mo = await money();
+      ok(mo[sbu].feeCents === 0 && mo[sbu].owedMonths.map((o) => o.month).join() === M1 && (await money(N1))[sbu].feeCents === 85000, "coming back early never bills the month they were paused, and next month is billed");
+      r = await hc("PATCH", `/coach/students/${tom}`, { planStatus: "paused", pauseMonths: 2 }); mo = await money();
+      ok(mo[tom].paidCents === 85000 && mo[tom].pause.from === N1 && mo[tom].pause.until === N2 && (await money(N2))[tom].feeCents === 0 && (await money(N3))[tom].feeCents === 85000, "paid this month: 2 months starts next month: " + JSON.stringify(mo[tom].pause));
+      r = await hc("PATCH", `/coach/students/${tom}`, { planStatus: "paused", pauseMonths: 0 }); mo = await money(); ok(mo[tom].pause.until === null && (await money(mA(8)))[tom].feeCents === 0, "until I say: no end");
+      r = await c2("PATCH", `/coach/students/${tom}`, { planStatus: "paused", pauseMonths: 1 }); ok(r.s === 403, "only the head coach can pause someone's fees");
+      // The pause runs out: they're active again by themselves, with a note on Home (once, however often the job runs).
+      { await pl.query("update plan_breaks set from_month=$2, until_month=$3 where user_id=$1 and ended_at is null", [tom, M2 + "-01", M1 + "-01"]);
+        const { tick } = require("../backend/db"), n0 = Number((await pl.query("select count(*) from notices where gym_id=$1 and kind='resumed'", [bg.id])).rows[0].count);
+        await Promise.all([tick(pl), tick(pl)]); await tick(pl);
+        const ns = (await pl.query("select user_id, title, body from notices where gym_id=$1 and kind='resumed'", [bg.id])).rows;
+        r = await hc("GET", "/coach/roster"); const t = r.j.people.find((x) => x.id === tom);
+        ok(t.planStatus === "active" && !t.pause && ns.length === n0 + 2 && ns.some((n) => /Tom's pause ended/.test(n.body)), "a pause that ran out ends by itself, with a note for the coach and the member (once): " + JSON.stringify(ns));
+        r = await hc("GET", "/me/notices"); ok(r.j.notices.some((n) => n.kind === "resumed" && /Tom/.test(n.body)), "the note is on the head coach's Home"); }
+      // 4. Trials are free, and end on the first confirmed payment.
+      r = await hc("PATCH", `/coach/students/${thabo}`, { planStatus: "trial" }); mo = await money();
+      const tEnd = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10) + 14)).toISOString().slice(0, 10);
+      ok(mo[thabo].feeCents === 0 && mo[thabo].owedCents === 0 && mo[thabo].trialEnds === tEnd, "a trial is free, for 14 days: " + JSON.stringify([mo[thabo].feeCents, mo[thabo].trialEnds]));
+      await pl.query("update users set email='thabo@bal.test' where id=$1", [thabo]);
+      r = await hc("POST", "/coach/money/remind", { userIds: [thabo] }); ok(r.j.sent === 0 && !r.j.paid.includes("Thabo Trial"), "and gets no reminder");
+      p = await pay(thabo, 85000); r = await hc("GET", "/coach/roster"); const th = r.j.people.find((x) => x.id === thabo);
+      ok(th.planStatus === "active" && !th.trialEnds && p.forMonths.join() === M0 && th.owedCents === 0, "the first payment ends the trial: active, and it pays this month: " + JSON.stringify([th.planStatus, p.forMonths]));
+      r = await hc("PATCH", `/coach/students/${mia}`, { planStatus: "trial" }); await pl.query("update plan_breaks set from_month=$2 where user_id=$1 and kind='trial'", [mia, M1 + "-01"]);
+      await pl.query("update users set trial_ends=$2 where id=$1", [mia, M1 + "-20"]);
+      r = await hc("GET", "/coach/roster"); ok(r.j.people.find((x) => x.id === mia).trialEnds === M1 + "-20", "a trial that's run out says when it ended (Home asks: make active or cancel)");
+      r = await hc("PATCH", `/coach/students/${mia}`, { planStatus: "active" }); mo = await money();
+      ok(mo[mia].owedMonths.map((o) => o.month).join() === M0 && (await money(M1))[mia].feeCents === 0, "made active: the trial months stay free and this month is owed");
+      r = await hc("PATCH", `/coach/students/${thabo}`, { planStatus: "cancelled" }); mo = await money(); ok(mo[thabo].owedCents === 0 && (await money(N1))[thabo].feeCents === 0, "cancelled: nothing more is owed");
+      // 5. Members added in bulk: billing starts on the next due date, on the gym's usual plans (kids on the kids plan).
+      r = await hc("GET", "/coach/roster"); ok(r.j.defaultPlans.adultPlanId === adult.id && r.j.defaultPlans.kidsPlanId === kids.id, "the usual plans: the one most members are on, and a plan called Kids for kids");
+      r = await hc("POST", "/coach/students/bulk", { people: [{ name: "Bulk Adult", phone: "082 700 0001" }, { name: "Bulk Kid", parentName: "Bulk Mom", phone: "082 700 0002" }] });
+      ok(r.s === 201 && r.j.added === 2 && r.j.billFrom === N1 + "-01" && r.j.billPrev === M0 + "-01", "bulk add says when billing starts: " + JSON.stringify(r.j));
+      const [ba, bk] = r.j.ids; mo = await money();
+      ok(mo[ba].feeCents === 0 && mo[ba].owedCents === 0 && mo[ba].billFrom === N1 && mo[ba].plan === "Adult" && mo[bk].plan === "Kids", "they owe nothing this month (they paid it outside the app), on the right plans: " + JSON.stringify([mo[ba].billFrom, mo[ba].plan, mo[bk].plan]));
+      ok((await money(N1))[bk].feeCents === 60000, "and are billed from next month");
+      r = await hc("POST", "/coach/students/bill-from", { userIds: [ba, bk], from: M0 + "-01" }); mo = await money(); ok(r.j.updated === 2 && mo[ba].owedCents === 85000 && mo[bk].owedCents === 60000, "one tap bills this month too");
+      r = await c2("POST", "/coach/students/bill-from", { userIds: [ba], from: null }); ok(r.s === 403, "only the head coach can change when billing starts");
+      r = await c2("POST", "/coach/students/bulk", { people: [{ name: "Bulk Three", phone: "082 700 0003" }], planId: kids.id }); ok(r.s === 403, "other coaches can't pick plans for a bulk add");
+      r = await c2("POST", "/coach/students/bulk", { people: [{ name: "Bulk Three", phone: "082 700 0003" }] }); mo = await money(); ok(r.s === 201 && mo[r.j.ids[0]].plan === "Adult", "but what they add goes on the usual plan");
+      r = await hc("POST", "/coach/students/bulk", { people: [{ name: "Bulk Four", phone: "082 700 0004" }], planId: null }); mo = await money(); ok(mo[r.j.ids[0]].plan === null, "the head coach can add people with no plan");
+      // 6. New members pick their plan: a trial until the coach confirms their first payment; plans are in "What's it for?".
+      const nia = client(base); r = await nia("POST", "/auth/register", { code: bg.studentCode, name: "Nia New", email: "nia@bal.test", password: "niapass11" }, xh);
+      r = await nia("GET", "/me/membership"); ok(r.j.membership.plan === null && r.j.membership.plans.map((x) => x.name).join() === "Kids,Adult", "a new member is offered the gym's plans: " + JSON.stringify(r.j.membership.plans.map((x) => x.name)));
+      r = await nia("POST", "/me/plan", { planId: adult.id }); ok(r.s === 200 && r.j.plan.name === "Adult", "and picks one");
+      r = await nia("GET", "/me/pay"); ok(r.j.pay.planStatus === "trial" && r.j.pay.dueCents === 0 && r.j.pay.plans.length === 2, "it starts as a free trial, and they can still change it: " + JSON.stringify([r.j.pay.planStatus, r.j.pay.dueCents]));
+      r = await hc("GET", "/me/notices"); ok(r.j.notices.some((n) => n.kind === "joined" && /Nia New picked the Adult plan/.test(n.body)), "the head coach hears about it");
+      r = await nia("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 0, planId: kids.id }); const pr = r.j.payment;
+      ok(r.s === 201 && pr.planId === kids.id && pr.amountCents === 60000, "a proof can be for a plan (its price filled in): " + JSON.stringify([pr.planId, pr.amountCents]));
+      r = await hc("PATCH", `/coach/payments/${pr.id}`, { status: "confirmed" }); const npm = (await nia("GET", "/me/pay")).j.pay;
+      ok(r.s === 200 && npm.planStatus === "active" && npm.plan.name === "Kids" && npm.owedCents === 0 && r.j.payment.forMonths.join() === M0 && !npm.plans.length, "confirming it puts them on that plan, active, with this month paid: " + JSON.stringify([npm.planStatus, npm.plan && npm.plan.name, npm.owedCents]));
+      r = await nia("POST", "/me/plan", { planId: adult.id }); ok(r.s === 400, "after that, plan changes go through the coach");
+      // Leaving with months owed: the whole balance stays on Money.
+      const leo = client(base); const leoId = (await leo("POST", "/auth/register", { code: bg.studentCode, name: "Leo Leaver", email: "leo@bal.test", password: "leopass11" }, xh)).j.me.id;
+      await hc("PATCH", `/coach/students/${leoId}`, { planId: adult.id }); await pl.query("update users set created_at=now() - interval '1 month 2 days' where id=$1", [leoId]);
+      r = await leo("POST", "/me/leave", {}); r = await hc("GET", "/coach/money"); ok(r.j.left.some((x) => x.name === "Leo Leaver" && x.owedCents === 170000), "someone leaving owes every month still owed: " + JSON.stringify(r.j.left));
+      await pl.end(); }
+    // --- money that stays right: old gyms don't wake up owing, plan picking, merges, pauses and money paid ahead, bulk-added payers, For
+    { const xh = { "x-forwarded-for": "198.51.100.62" }, hc = client(base), pl = new Pool({ connectionString: DB });
+      const fg = (await hc("POST", "/auth/start-gym", { gym: "Ledger Gym", name: "Ledger Head", email: "head@ledger.test", password: "ledgerhead1" }, xh)).j.me.gym;
+      const zday = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }), today = zday(Date.now()), M0 = today.slice(0, 7), early = +today.slice(8, 10) <= 5;
+      const mA = (n) => new Date(Date.UTC(+M0.slice(0, 4), +M0.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7), M1 = mA(-1), M2 = mA(-2), N1 = mA(1), N2 = mA(2);
+      const adult = (await hc("POST", "/coach/plans", { name: "Adult", priceCents: 85000, period: "month" })).j.plan, yearP = (await hc("POST", "/coach/plans", { name: "Adult year", priceCents: 850000, period: "year" })).j.plan;
+      let n = 0; const add = async (name, monthsAgo, extra = {}) => { const id = (await hc("POST", "/coach/students", { name, phone: "083 600 " + String(1000 + ++n), planId: adult.id, ...extra })).j.id;
+        if (monthsAgo) await pl.query("update users set created_at=now() - ($2 || ' months')::interval - interval '2 days' where id=$1", [id, String(monthsAgo)]); return id; };
+      const money = async (m) => Object.fromEntries((await hc("GET", "/coach/money" + (m ? "?month=" + m : ""))).j.students.map((x) => [x.id, x]));
+      const pay = async (userId, amountCents, paidOn, extra = {}) => (await hc("POST", "/coach/payments", { userId, amountCents, paidOn: paidOn || today, method: "cash", ...extra })).j.payment;
+      const payment = async (id) => (await hc("GET", "/coach/payments")).j.payments.find((x) => x.id === id);
+      const ms = (o) => (o.owedMonths || []).map((x) => x.month).join();
+      const signUp = async (name) => { const c = client(base); c.id = (await c("POST", "/auth/register", { code: fg.studentCode, link: "no", name, email: name.split(" ")[0].toLowerCase() + "@ledger.test", password: "fixpass111" }, xh)).j.me.id; return c; };
+      // 1. A gym from before running balances starts them the month this goes live: a fee recorded long ago doesn't make the months since owed.
+      { await pl.query("update gyms set bill_start=null where id=$1", [fg.id]);
+        const kagiso = await add("Kagiso Cash", 9), p0 = await pay(kagiso, 85000, mA(-8) + "-10");
+        await pl.query("update gyms set bill_start=null where id=$1", [fg.id]); await require("../backend/db").migrate(pl); await require("../backend/db").migrate(pl);
+        const bs = (await pl.query("select to_char(bill_start,'YYYY-MM') as m from gyms where id=$1", [fg.id])).rows[0].m, mo = await money();
+        ok(p0.forMonths.join() === mA(-8) && bs === M0 && mo[kagiso].owedCents === 85000 && ms(mo[kagiso]) === M0, "an existing gym's balances start the month this goes live: an early stray payment doesn't create arrears: " + JSON.stringify([bs, ms(mo[kagiso])]));
+        ok((await money(mA(-3)))[kagiso].feeCents === 0 && (await money(mA(-8)))[kagiso].paidCents === 85000, "paging back, older months show no fee owed, and what was paid then still shows");
+        await pl.query("update gyms set bill_start=$2 where id=$1", [fg.id, M2 + "-01"]); }
+      // 2. Only someone new, who owes nothing and has never paid, picks their own plan. A member owing fees can't turn them into a free trial.
+      { await hc("PATCH", "/coach/gym", { monthlyFeeCents: 80000 });
+        const bongi = await signUp("Bongi NoPlan"); await pl.query("update users set created_at=now() - interval '1 month 2 days' where id=$1", [bongi.id]);
+        let mo = await money(); const was = mo[bongi.id].owedCents;
+        let r = await bongi("GET", "/me/membership"), r2 = await bongi("GET", "/me/pay");
+        ok(was === 160000 && !r.j.membership.plans.length && !r2.j.pay.plans.length, "a member who's been here a while (owing " + was + ") isn't offered plans to pick");
+        r = await bongi("POST", "/me/plan", { planId: adult.id }); r2 = await bongi("POST", "/me/pay/proof", { name: "pop.png", data: png, planId: adult.id }); mo = await money();
+        ok(r.s === 400 && r2.s === 404 && mo[bongi.id].owedCents === was && mo[bongi.id].planStatus === "active" && !mo[bongi.id].trialEnds, "picking a plan never lowers what they owe: " + JSON.stringify([r.s, r2.s, mo[bongi.id].owedCents, mo[bongi.id].planStatus]));
+        const nn = await signUp("Nandi Owes"); r = await nn("GET", "/me/membership"); ok(!r.j.membership.plans.length, "someone new who already owes the gym's standard fee isn't offered a free trial either");
+        r = await bongi("GET", "/coach/payments/months?userId=" + bongi.id + "&amountCents=85000"); ok(r.s === 403, "students can't ask which months a payment would pay");
+        await hc("PATCH", "/coach/gym", { monthlyFeeCents: 0 }); }
+      // 3. Merging a coach-added member into their sign-up keeps the coach's plan, status and what they owe (the sign-up's own trial goes).
+      { let r = await hc("POST", "/coach/students/bulk", { people: [{ name: "Thabo Merge", phone: "083 711 0001" }], planId: adult.id }); const off = r.j.ids[0];
+        await pl.query("update users set created_at=now() - interval '1 month 2 days' where id=$1", [off]); await hc("POST", "/coach/students/bill-from", { userIds: [off], from: M1 + "-01" });
+        const th = await signUp("Thabo Merge"); r = await th("POST", "/me/plan", { planId: adult.id }); ok(r.s === 200 && (await money())[th.id].planStatus === "trial", "the sign-up picked a plan: a trial");
+        r = await hc("POST", `/coach/students/${off}/merge`, { into: th.id }); const mo = await money();
+        ok(r.s === 200 && mo[th.id].planStatus === "active" && !mo[th.id].trialEnds && mo[th.id].owedCents === 170000 && ms(mo[th.id]) === [M1, M0].join(), "merged: still active, owing every month they owed: " + JSON.stringify([mo[th.id].planStatus, ms(mo[th.id])]));
+        ok((await money(N1))[th.id].feeCents === 85000, "and billed from next month as usual"); }
+      // 4. Pausing by mistake and making them active again costs nothing; a pause late in the month leaves this month owed.
+      { const alice = await add("Alice Pause", 1), was = (await money())[alice];
+        await hc("PATCH", `/coach/students/${alice}`, { planStatus: "paused", pauseMonths: 1 }); let mo = await money();
+        ok(mo[alice].pause.from === (early ? M0 : N1) && mo[alice].pause.until === N1 && (early || mo[alice].owedCents === was.owedCents), "1 month means to the end of next month, and it starts " + (early ? "now (first days, nothing paid)" : "next month: this month is still owed"));
+        await hc("PATCH", `/coach/students/${alice}`, { planStatus: "active" }); mo = await money();
+        ok(mo[alice].owedCents === was.owedCents && ms(mo[alice]) === ms(was) && !mo[alice].pause && (await money(N1))[alice].feeCents === 85000, "pause then active in the same month: what they owe is unchanged: " + JSON.stringify([mo[alice].owedCents, was.owedCents]));
+        await hc("PATCH", `/coach/students/${alice}`, { planStatus: "cancelled" }); mo = await money(); ok(early || mo[alice].owedCents === was.owedCents, "cancelling late in the month leaves this month owed too");
+        await hc("PATCH", `/coach/students/${alice}`, { planStatus: "active" }); }
+      // 5. Money paid ahead for a month that's then paused moves to the first month after the pause (and back if it's undone).
+      { const dumi = await add("Dumi Ahead", 0), p = await pay(dumi, 170000); ok(p.forMonths.join() === [M0, N1].join(), "R1 700 pays this month and next");
+        const was = (await money())[dumi], sum = (o) => o.owedCents + o.creditCents;
+        await hc("PATCH", `/coach/students/${dumi}`, { planStatus: "paused", pauseMonths: 1 }); let mo = await money(), pd = await payment(p.id);
+        ok(mo[dumi].pause.from === N1 && pd.forMonths.join() === [M0, N2].join() && (await money(N2))[dumi].paidCents === 85000 && (await money(N1))[dumi].paidCents === 0 && sum(mo[dumi]) === sum(was) && mo[dumi].creditCents === 0, "next month paused: what was paid for it now pays the month after the pause: " + JSON.stringify(pd.forMonths));
+        await hc("PATCH", `/coach/students/${dumi}`, { planStatus: "active" }); pd = await payment(p.id); mo = await money();
+        ok(pd.forMonths.join() === [M0, N1].join() && sum(mo[dumi]) === sum(was), "undoing the pause puts it back: " + JSON.stringify(pd.forMonths));
+        // a year paid up front runs on for as long as the pause
+        const ciaran = await add("Ciaran Year", 0, { planId: yearP.id }), py = await pay(ciaran, 850000); ok(py.forMonths.length === 12 && py.forMonths[0] === M0 && py.forMonths[11] === mA(11), "a year's plan paid up front: 12 months");
+        await hc("PATCH", `/coach/students/${ciaran}`, { planStatus: "paused", pauseMonths: 2 }); const pc = await payment(py.id); mo = await money();
+        ok(pc.forMonths.join() === [M0, ...[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(mA)].join() && mo[ciaran].owedCents === 0 && mo[ciaran].creditCents === 0 && (await money(mA(13)))[ciaran].paidCents > 0, "paused 2 months: the year now ends 2 months later: " + JSON.stringify(pc.forMonths));
+        // paused until they're back, paying ahead: what isn't owed shows as paid ahead, and counts once they're back
+        const zola = await add("Zola Until", 0); await hc("PATCH", `/coach/students/${zola}`, { planStatus: "paused", pauseMonths: 0 }); const pz = await pay(zola, 170000); mo = await money();
+        ok(mo[zola].creditCents === (early ? 170000 : 85000) && mo[zola].owedCents === 0, "paused until they're back and paying ahead: it shows as paid ahead: " + JSON.stringify([mo[zola].creditCents, (await payment(pz.id)).forMonths]));
+        await pl.query("update plan_breaks set created_at=now() - interval '20 days' where user_id=$1", [zola]); await hc("PATCH", `/coach/students/${zola}`, { planStatus: "active" }); mo = await money();
+        ok(mo[zola].creditCents === 0 && mo[zola].owedCents === 0 && (await money(N1))[zola].paidCents === 85000, "back again: it pays the months after the pause: " + JSON.stringify((await payment(pz.id)).forMonths)); }
+      // 6 + 7. Added in bulk, with fees due on the 25th: billing starts next month (nobody owes on day one), and a payment dated this
+      // month pays this month (it's billed now), not next month.
+      { await hc("PATCH", "/coach/gym/pay", { dueDay: 25 });
+        let r = await hc("POST", "/coach/students/bulk", { people: [{ name: "Elias Bulk", phone: "083 712 0001" }, { name: "Neo Bulk", phone: "083 712 0002" }] }); const [elias, neo] = r.j.ids; let mo = await money();
+        ok(r.j.billFrom === N1 + "-01" && r.j.billPrev === M0 + "-01" && mo[neo].owedCents === 0 && mo[neo].billFrom === N1 && mo[elias].owedCents === 0, "due on the 25th: billing still starts next month, and this month is the one offered: " + JSON.stringify([r.j.billFrom, r.j.billPrev]));
+        const pe = await pay(elias, 85000); mo = await money();
+        ok(pe.forMonths.join() === M0 && mo[elias].paidCents === 85000 && mo[elias].owedCents === 0 && (await money(N1))[elias].paidCents === 0 && (await money(N1))[elias].feeCents === 85000, "a bulk-added member's payment dated this month pays this month; next month is still owed: " + JSON.stringify(pe.forMonths));
+        await pl.query("update gyms set bill_start=$2 where id=$1", [fg.id, N1 + "-01"]);
+        r = await hc("POST", "/coach/students/bulk", { people: [{ name: "Late Bulk", phone: "083 712 0003" }] }); ok(r.j.billPrev === null, "a month before the gym's billing started isn't offered");
+        await pl.query("update gyms set bill_start=$2 where id=$1", [fg.id, M2 + "-01"]); await hc("PATCH", "/coach/gym/pay", { dueDay: 1 }); }
+      // 8 + 9. For is the first month: R1 700 "for" last month pays it and this one. The sheet's months come from the server, from the date paid.
+      { const johan = await add("Johan For", 1), thandi = await add("Thandi Date", 1), sipho = await add("Sipho Ahead", 0);
+        const p = await pay(johan, 170000, today, { forMonth: M1 }); let mo = await money();
+        ok(p.forMonths.join() === [M1, M0].join() && mo[johan].owedCents === 0, "For last month with two months' money clears both: " + JSON.stringify(p.forMonths));
+        const ask = async (id, cents, on, extra = "") => (await hc("GET", `/coach/payments/months?userId=${id}&amountCents=${cents}&paidOn=${on}${extra}`)).j.forMonths.join();
+        const a1 = await ask(thandi, 85000, M1 + "-28"), a2 = await ask(thandi, 85000, today), a3 = await ask(sipho, 255000, today), a4 = await ask(thandi, 170000, today, "&forMonth=" + M1);
+        ok(a1 === M1 && a2 === M0 && a3 === [M0, N1, N2].join() && a4 === [M1, M0].join(), "which months a payment would pay, from its date and amount: " + JSON.stringify([a1, a2, a3, a4]));
+        const s1 = await pay(thandi, 85000, M1 + "-28"), s3 = await pay(sipho, 255000);
+        ok(s1.forMonths.join() === a1 && s3.forMonths.join() === a3, "and that's what's saved"); }
+      await pl.end(); }
     // --- rate limit
     let last; for (let i = 0; i < 11; i++) last = await anon("POST", "/auth/login", { email: "sam@example.com", password: "bad" });
     ok(last.s === 429, "repeated wrong passwords are slowed down");

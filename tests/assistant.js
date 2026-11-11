@@ -22,7 +22,7 @@ function client(base) { let cookie = ""; return async (method, url, body) => { c
   let j = null; try { j = await r.json(); } catch (e) {} return { s: r.status, j }; }; }
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, notices, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, notices, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const ai = await fakeClaude(), site = await startGymSite();
   const port = 9600 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, ANTHROPIC_API_KEY: "test-key", ANTHROPIC_BASE_URL: ai.url, JF_IMPORT_ALLOW_LOOPBACK: "1", JF_ASSISTANT: "1", RESEND_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });

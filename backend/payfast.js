@@ -69,5 +69,43 @@ const keyBytes = () => crypto.createHash("sha256").update("jf-payfast:" + (proce
 function seal(text) { if (!text) return ""; const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", keyBytes(), iv); const out = Buffer.concat([c.update(String(text), "utf8"), c.final()]); return [iv, c.getAuthTag(), out].map((b) => b.toString("base64")).join("."); }
 function open(blob) { if (!blob) return ""; try { const [iv, tag, data] = blob.split(".").map((x) => Buffer.from(x, "base64")); const d = crypto.createDecipheriv("aes-256-gcm", keyBytes(), iv); d.setAuthTag(tag); return Buffer.concat([d.update(data), d.final()]).toString("utf8"); } catch (e) { return ""; } }
 
+// ---- saved cards (tokenization): charging a member's saved card, and cancelling it ----
+// Card autopay is only offered once JitsFlow and the gym are both on live PayFast. PAYFAST_AUTOPAY_TEST=1 opens it on the sandbox
+// (for testing only; never set it on the live site).
+const autopayTest = () => process.env.PAYFAST_AUTOPAY_TEST === "1";
+const apiBase = () => (process.env.PAYFAST_API_URL || "https://api.payfast.co.za").replace(/\/+$/, "");
+// PayFast's API signature: every header and body field and the passphrase, sorted by name, URL-encoded, joined with &, then MD5.
+function apiSign(fields, pass) {
+  const all = { ...fields, ...(pass ? { passphrase: pass } : {}) };
+  return md5(Object.keys(all).sort().filter((k) => all[k] !== "" && all[k] !== undefined && all[k] !== null).map((k) => `${k}=${enc(all[k])}`).join("&"));
+}
+// One call to PayFast's API with a gym's keys ({id, pass, sandbox}). Returns {status, json}. Throws on no answer (timeout, network).
+async function apiCall(method, path, m, body) {
+  const headers = { "merchant-id": String(m.id), version: "v1", timestamp: new Date().toISOString().slice(0, 19) + "+00:00" };
+  headers.signature = apiSign({ ...headers, ...(body || {}) }, m.pass);
+  const r = await fetch(`${apiBase()}${path}${m.sandbox ? "?testing=true" : ""}`, { method, headers: { ...headers, ...(body ? { "content-type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
+  let json = null; try { json = await r.json(); } catch (e) {}
+  return { status: r.status, json };
+}
+// Charges a saved card once (PayFast's "ad hoc" tokenization charge). amount is in cents. split: JitsFlow's share, as on a checkout.
+// {ok: true} when PayFast took it (its notification follows), {ok: false, reason} when it said no. Throws when there was no answer,
+// so the caller can't tell whether the card was charged.
+async function chargeToken(m, token, { cents, item, mPaymentId, split }) {
+  const body = { amount: Math.round(cents), item_name: String(item || "Fees").slice(0, 100), m_payment_id: mPaymentId };
+  if (split) body.setup = JSON.stringify({ split_payment: split });
+  const { status, json } = await apiCall("POST", `/subscriptions/${encodeURIComponent(token)}/adhoc`, m, body);
+  if (status >= 500) throw new Error("PayFast " + status);
+  const d = (json && json.data) || {};
+  if (status < 300 && json && json.status === "success" && (d.response === true || d.response === "true")) return { ok: true, id: d.pf_payment_id ? String(d.pf_payment_id) : "" };
+  return { ok: false, reason: String(d.message || d.response || (json && json.status) || "declined").slice(0, 200) };
+}
+// Stops a saved card for good. Best effort: false if PayFast didn't confirm.
+async function cancelToken(m, token) {
+  try { const { status, json } = await apiCall("PUT", `/subscriptions/${encodeURIComponent(token)}/cancel`, m); return status < 300 && !!json && json.status === "success"; }
+  catch (e) { return false; }
+}
+
 const money = (cents) => (Math.round(cents) / 100).toFixed(2);
-module.exports = { PRICE_CENTS, FEE_PCT, TRIAL_MONTHS, TEST, platform, host, sign, paramString, checkout, parseItn, itnSignatureOk, payfastIps, confirmWithPayfast, seal, open, money, ORDER };
+module.exports = { PRICE_CENTS, FEE_PCT, TRIAL_MONTHS, TEST, platform, host, sign, paramString, checkout, parseItn, itnSignatureOk, payfastIps, confirmWithPayfast, seal, open, money, ORDER,
+  autopayTest, apiSign, chargeToken, cancelToken };

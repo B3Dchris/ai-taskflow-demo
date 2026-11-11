@@ -7,7 +7,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink(), site = await startGymSite();
   const port = 9400 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
@@ -15,6 +15,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const b = await chromium.launch(); const errs = [];
   const phone = async (name) => { const c = await b.newContext({ ...devices["iPhone 13"] }); await c.addInitScript(() => { if (!localStorage.getItem("rtb.progress")) localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(name + ": " + e.message)); return p; };
   const ev = (p, f, a) => p.evaluate(f, a), toast = (p) => ev(p, () => document.getElementById("toast").textContent);
+  const wide2 = async (p, label) => ok(await ev(p, () => document.documentElement.scrollWidth <= 390), label + ": no sideways scroll");
   const signup = async (p, path, fields) => { await p.goto(URL + path); await p.waitForTimeout(900); for (const [k, v] of Object.entries(fields)) await p.fill(k, v); await p.tap("#sheetbar [type=submit]"); await p.waitForTimeout(1300); if (await ev(p, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await p.tap('#sheetbar [data-a="obdone"]'); if (await ev(p, () => S.ui.sheet && S.ui.sheet.k === "welcome")) { await p.tap('#sheetbar [data-a="back"]'); await p.waitForTimeout(200); } };
   try {
     const co = await phone("coach");
@@ -74,7 +75,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     } else ok(true, "skipped plan-limit check (classes fell in different weeks)");
     // check-in opens shortly before class
     await ev(co, async () => { await api("POST", "/classes", { title: "Starting soon", startsAt: new Date(Date.now() + 20 * 60e3).toISOString(), capacity: 10 }); });
-    await ev(s2, async () => { await loadClasses(true); S.ui.bcal = { mode: "week", sel: todayK(), anchor: todayK() }; render(); }); await s2.waitForTimeout(600);
+    await ev(s2, async () => { await loadClasses(true); const k = dayKey(new Date(Date.now() + 20 * 60e3).toISOString()); S.ui.bcal = { mode: "week", sel: k, anchor: k }; render(); }); await s2.waitForTimeout(600);
     await s2.locator('.bookcard:has-text("Starting soon") [data-a="rsvp"]').tap(); await s2.waitForTimeout(900);
     ok(await ev(s2, () => [...document.querySelectorAll(".bookcard")].some((c) => /Starting soon/.test(c.innerText) && c.querySelector('[data-a="checkin"]'))), "a booked class starting soon shows Check in");
     await s2.locator('.bookcard:has-text("Starting soon") [data-a="checkin"]').tap(); await s2.waitForTimeout(900);
@@ -374,8 +375,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       await co.selectOption("#p-method", "cash"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
       await co.tap('[data-a="paynew"]'); await co.waitForTimeout(300); ok(await ev(co, () => document.getElementById("p-method").value === "cash"), "the next payment starts on the method used last time"); await ev(co, () => hideSheet());
       // One tap on Paid next to someone who owes
-      await ev(co, () => { COACH.moneyView = "month"; COACH.moneyFilter = "owing"; COACH.money = null; render(); }); await co.waitForTimeout(1500);
+      // (Lee was added in bulk, so their fees start next month, on the gym's usual plan: the coach bills this month too, as the toast
+      // offers, and takes them off the plan so they pay the gym's standard fee.)
       const lee = await ev(co, () => students().find((s) => s.name === "Lee Jones").id);
+      await ev(co, (id) => api("POST", "/coach/students/bill-from", { userIds: [id], from: todayK().slice(0, 7) + "-01" }).then(() => api("PATCH", `/coach/students/${id}`, { planId: null })), lee);
+      await ev(co, () => { COACH.moneyView = "month"; COACH.moneyFilter = "owing"; COACH.money = null; render(); }); await co.waitForTimeout(1500);
       ok(await ev(co, (id) => !!document.querySelector(`[data-a="paidnow"][data-v="${id}"]`) && !!document.querySelector('[data-a="paidhow"][data-v="cash"][aria-pressed="true"]'), lee), "owing rows have a Paid button (cash, the last method used)");
       await co.tap('[data-a="paidhow"][data-v="eft"]'); await co.waitForTimeout(200);
       await co.route("**/api/coach/payments", async (r) => { await wait(600); r.continue(); }); // a slow line, tapped twice
@@ -564,6 +568,44 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const spread = Math.max(...Object.values(starts)) - Math.min(...Object.values(starts));
       ok(Object.keys(starts).length === 4 && spread < 1000 && (await ev(co, () => !!COACH.roster && !/Loading…/.test(document.getElementById("app").innerText))), `roster, classes, payments and packs load together (${spread} ms apart), then Home fills in`);
     }
+    // --- the weekly timetable: Every week is the default, and a booked class keeps its time until the coach moves it (one tap, everyone told)
+    await ev(co, () => { hideSheet(); coachGo("schedule"); }); await co.waitForTimeout(300);
+    await co.tap('[data-a="classnew"]'); await co.waitForTimeout(300); await co.fill("#c-title", "Weekly drills"); await co.fill("#c-time", "18:00");
+    await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+    ok(/on the calendar every \w+, 8 weeks ahead/.test(await toast(co)) && Number((await pool.query("select count(*) from classes where title='Weekly drills'")).rows[0].count) >= 7, "a new class repeats every week by default, 8 weeks ahead: " + (await toast(co)));
+    const wFirst = (await pool.query("select id from classes where title='Weekly drills' order by starts_at limit 1")).rows[0].id, s1id = await ev(s1, () => API.me.id);
+    await pool.query("insert into attendance(class_id,user_id,going) values($1,$2,true) on conflict do nothing", [wFirst, s1id]);
+    await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="gymedit"]'); await co.waitForTimeout(300);
+    const wRow = await ev(co, () => [...document.querySelectorAll('#gymeditform [name^="tt-title"]')].findIndex((x) => x.value === "Weekly drills"));
+    ok(wRow >= 0, "the weekly class is on the gym's timetable in Gym details");
+    const n1 = sink.mails.length, gymTime = "to_char(starts_at at time zone (select timezone from gyms where id=gym_id),'HH24:MI')";
+    await co.fill(`[name="tt-start-${wRow}"]`, "19:15"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+    ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "ttheld" && /1 booking at the old time/.test(document.getElementById("sheet").innerText) && /at \d\d:\d\d → \w+days at 19:15/.test(document.getElementById("sheet").innerText)
+      && /Move 1 booking and tell them/.test(document.querySelector('#sheetbar [data-a="ttapply"]').innerText)), "changing the time: the booked class waits, with 'Move 1 booking and tell them'");
+    ok(Number((await pool.query(`select count(*) from classes where title='Weekly drills' and starts_at > now() and ${gymTime}='19:15'`)).rows[0].count) >= 6, "the classes nobody booked moved straight away");
+    await wide2(co, "booked classes sheet");
+    await co.tap('#sheetbar [data-a="ttapply"]'); await co.waitForTimeout(1200);
+    ok(/Moved 1 class\. 1 person told\./.test(await toast(co)) && (await pool.query(`select ${gymTime} as t from classes where id=$1`, [wFirst])).rows[0].t === "19:15", "one tap moves it: " + (await toast(co)));
+    await wait(300); ok(sink.mails.slice(n1).some((m) => /Changed: Weekly drills/.test(m.subject)), "and the person booked gets an email");
+    ok(Number((await pool.query("select count(*) from attendance where class_id=$1 and user_id=$2 and going", [wFirst, s1id])).rows[0].count) === 1, "they're still booked");
+    // --- Book my usual: last week's classes again, one tap (a student added straight to the database: this test has used up the sign-ups for one address)
+    const gymId = await ev(co, () => API.me.gym.id), tok = require("crypto").randomBytes(32).toString("hex");
+    const s4id = String((await pool.query("insert into users(gym_id,role,name,email,pass_hash) values($1,'student','Dee Usual','dee.usual@race.test','x') returning id", [gymId])).rows[0].id);
+    await pool.query("insert into sessions(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 day')", [require("crypto").createHash("sha256").update(tok).digest("hex"), s4id]);
+    const s4 = await phone("s4"); await s4.context().addCookies([{ name: "jf_s", value: tok, url: URL }]); await s4.goto(URL + "/app/"); await s4.waitForTimeout(1200);
+    ok(await ev(s4, () => !!API.me && API.me.name === "Dee Usual"), "Dee is signed in");
+    const hr = Math.floor(Date.now() / 36e5) * 36e5, mk = async (t, h) => (await pool.query("insert into classes(gym_id,title,starts_at,duration_min) values($1,$2,$3,60) returning id", [gymId, t, new Date(hr + h * 36e5)])).rows[0].id;
+    const u1 = await mk("Usual roll", 26 - 168), u2 = await mk("Usual roll", 26), u3 = await mk("Usual roll", 27);
+    await pool.query("insert into attendance(class_id,user_id,going,attended) values($1,$2,true,true)", [u1, s4id]);
+    await ev(s4, async () => { hideSheet(); API.classes = null; go("book"); }); await s4.waitForTimeout(1200);
+    ok(await ev(s4, () => /Book my usual \(1\)/.test(document.querySelector('[data-a="bookusual"]')?.innerText || "")), "a student who trained last week sees Book my usual (1)");
+    await wide2(s4, "book my usual");
+    await s4.tap('[data-a="bookusual"]'); await s4.waitForTimeout(1200);
+    ok(/^Booked 1 class\. Undo$/.test(await toast(s4)) && !(await ev(s4, () => !!document.querySelector('[data-a="bookusual"]'))), "one tap books it, with one toast (with Undo), and the button goes: " + (await toast(s4)));
+    ok(Number((await pool.query("select count(*) from attendance where user_id=$1 and going and class_id=$2", [s4id, u2])).rows[0].count) === 1 && !Number((await pool.query("select count(*) from attendance where user_id=$1 and class_id=$2", [s4id, u3])).rows[0].count), "the class at the same day and time, not the one an hour later");
+    await s4.tap("#toast .toastbtn"); await s4.waitForTimeout(1200);
+    ok(/Undone/.test(await toast(s4)) && !Number((await pool.query("select count(*) from attendance where user_id=$1 and going and class_id=$2", [s4id, u2])).rows[0].count), "Undo cancels the booking it made: " + (await toast(s4)));
+    ok(!(await ev(s4, () => !!document.querySelector('[data-a="bookusual"]'))), "and a cancelled class isn't offered again as 'usual'");
     // --- the gym's colour
     const before = await ev(co, () => getComputedStyle(document.documentElement).getPropertyValue("--blue").trim());
     await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);

@@ -5,7 +5,7 @@ const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.erro
 let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
+  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
   const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
@@ -150,23 +150,39 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(await ev(co, () => /We read/.test(document.querySelector(".impban").innerText) && /\d+ classes/.test(document.querySelector(".impban").innerText) && /\d+ coaches/.test(document.querySelector(".impban").innerText) && !/coachs/.test(document.querySelector(".impban").innerText)), "when it's done, the banner says what was found: " + (await ev(co, () => document.querySelector(".impban").innerText)));
     await co.tap('.impban [data-a="impreview"]');
     await co.waitForSelector("#gymeditform", { timeout: 20000 });
-    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 10 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 10 && document.querySelectorAll(".logoopt img").length >= 1 && /Read 10 pages of your site/.test(document.getElementById("sheet").innerText)), "import preview shows the class times, logo and pages read");
+    ok(await ev(co, () => [...document.querySelectorAll('#gymeditform .edrow.tt')].some((r) => r.querySelector('[name^="tt-title"]').value === "No-gi: half guard" && /Not on your website: keep it\?/.test(r.innerText))), "the weekly class added in the app stays in the list, marked as not on the website");
     await wide(co, "import preview");
-    await co.locator('#gymeditform [data-a="germ"][data-k="timetable"]').last().tap(); await co.waitForTimeout(200);
-    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 8 && !/Competition Training/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");
+    const ctRow = await ev(co, () => [...document.querySelectorAll('#gymeditform .edrow.tt')].findIndex((r) => /Competition Training/.test(r.querySelector('[name^="tt-title"]').value)));
+    await co.locator('#gymeditform [data-a="germ"][data-k="timetable"]').nth(ctRow).tap(); await co.waitForTimeout(200);
+    ok(await ev(co, () => document.querySelectorAll("#gymeditform .edrow.tt").length === 9 && !/Competition Training/.test([...document.querySelectorAll('#gymeditform [name^="tt-title"]')].map((x) => x.value).join())), "coach removes a class time");
+    ok(await ev(co, () => { const t = document.getElementById("ge-does").innerText; return /Save will/i.test(t) && document.querySelector("#ge-does [type=checkbox][disabled]").checked
+      && document.querySelector('[name="ge-plans"]').checked && /Create 2 membership plans \(Adult unlimited, Kids/.test(t)
+      && document.querySelector('[name="ge-cal"]').checked && /Put your 8 new weekly classes on the calendar \(kept 8 weeks ahead\)/.test(t)
+      && /Drop-in class, Joining fee once-off stay as prices/.test(t); }), "the import review says what Save will do, all ticked: details, 2 plans (not the joining fee or drop-in) and the 8 new weekly classes: " + (await ev(co, () => document.getElementById("ge-does").innerText)));
     await co.fill('#gymeditform [name="name"]', "JPB Martial Arts Academy");
     await co.locator('[data-a="geadd"][data-v="coaches"]').tap(); await co.waitForTimeout(200); await co.fill('#gymeditform [name="co-name-2"]', "JP Buys"); await co.fill('#gymeditform [name="co-rank-2"]', "Black belt, head coach");
     await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
     ok(await ev(co, () => /Standard fee set to/.test(document.getElementById("toast").textContent)), "monthly rate becomes the standard fee: " + (await toast(co)));
-    ok(await ev(co, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 8 && /JP Buys/.test(g.innerText) && /Witkoppen/.test(g.innerText) && !!g.querySelector("img.gymlogo") && g.querySelector("img.gymlogo").naturalWidth > 0; }), "gym card shows the saved timetable, coaches, address and logo");
+    ok(/2 membership plans added\. \d+ classes on the calendar\./.test(await toast(co)) && await ev(co, () => ["Adult unlimited", "Kids (6-12)"].every((n) => COACH.roster.plans.some((p) => p.name === n)) && !COACH.roster.plans.some((p) => /Joining|Drop-in/.test(p.name))), "Save finishes setup: the plans are made and the classes are on the calendar: " + (await toast(co)));
+    ok(await ev(co, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 9 && /JP Buys/.test(g.innerText) && /Witkoppen/.test(g.innerText) && !!g.querySelector("img.gymlogo") && g.querySelector("img.gymlogo").naturalWidth > 0; }), "gym card shows the saved timetable, coaches, address and logo");
     ok(await ev(co, () => /JPB Martial Arts Academy/.test(document.querySelector(".gymhead").innerText) && !document.querySelector(".gymhead img.gymlogo.sm") && document.querySelectorAll("img.gbl").length === 1 && /Powered by JitsFlow\.com/.test(document.querySelector(".gymbrand").innerText)), "coach header keeps the edited name, one logo, Powered by JitsFlow.com");
+    ok(await ev(co, () => { const tt = gymProfile().timetable, r = tt.find((x) => tt.filter((y) => y.day === x.day && y.title === x.title).length === 1);
+      const out = impTimetable([{ day: r.day, start: r.start === "05:00" ? "05:30" : "05:00", end: "", title: r.title }]), m = out.filter((x) => x.id === r.id);
+      return m.length === 1 && m[0]._was === r.start && out.length === tt.length && out.filter((x) => x._kept).length === tt.length - 1; }), "a re-import where the website moved a class on its day is that class at a new time, not a second one");
     await wide(co, "coach gym profile");
-    const nBefore = await ev(co, () => (COACH.classes || []).length);
-    await co.selectOption("#tt-weeks", "1"); await co.tap('[data-a="ttclasses"]'); await co.waitForTimeout(1500);
-    const nAfter = await ev(co, () => (COACH.classes || []).length);
-    ok(nAfter >= nBefore + 5 && /Added \d+ class/.test(await toast(co)), `timetable is added to Classes (${nBefore} → ${nAfter})`);
-    await co.tap('nav.tabs [data-v="coach-gym"]'); await co.selectOption("#tt-weeks", "1"); await co.tap('[data-a="ttclasses"]'); await co.waitForTimeout(1500);
-    ok(/already there/.test(await toast(co)) && (await ev(co, () => (COACH.classes || []).length)) === nAfter, "adding again skips classes already there");
+    const nWeekly = await ev(co, () => (COACH.classes || []).filter((c) => c.weekly).length);
+    ok(nWeekly >= 8 && await ev(co, () => !document.getElementById("tt-weeks") && !/Put the timetable in the calendar/.test(document.getElementById("app").innerText)), `the timetable is on the calendar by itself, and the 'Add classes' chore is gone (${nWeekly} loaded)`);
+    // moving a class time in Gym details moves its classes (nobody has booked them), with no duplicates
+    await co.tap('[data-a="gymedit"]'); await co.waitForTimeout(300);
+    const ttRow = await ev(co, () => { const t = [...document.querySelectorAll('#gymeditform [name^="tt-title"]')].findIndex((x) => /Muay Thai/i.test(x.value)); return t >= 0 ? t : 0; });
+    const ttWas = await ev(co, (i) => ({ title: document.querySelector(`[name="tt-title-${i}"]`).value, start: document.querySelector(`[name="tt-start-${i}"]`).value }), ttRow);
+    await co.fill(`[name="tt-start-${ttRow}"]`, "05:45"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
+    ok(/\d+ classes? moved/.test(await toast(co)) && await ev(co, async (w) => { const tz = API.me.gym.timezone || "Africa/Johannesburg", f = (c, o) => new Date(c.startsAt).toLocaleString("en-GB", { timeZone: tz, ...o });
+      const cs = (await api("GET", `/classes?to=${new Date(Date.now() + 60 * 864e5).toISOString()}`)).classes.filter((c) => c.title === w.title && new Date(c.startsAt) > new Date());
+      const moved = cs.filter((c) => f(c, { hour: "2-digit", minute: "2-digit" }) === "05:45"), day = moved[0] && f(moved[0], { weekday: "short" });
+      return moved.length >= 7 && !cs.some((c) => f(c, { weekday: "short" }) === day && f(c, { hour: "2-digit", minute: "2-digit" }) === w.start); }, ttWas), "changing a class time in Gym details moves its classes: " + (await toast(co)));
+    await co.tap('[data-a="gymedit"]'); await co.waitForTimeout(300); await co.fill(`[name="tt-start-${ttRow}"]`, ttWas.start); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1500);
     // ---- reopening the app (no #) lands on Today, and the website's coaches are there without visiting the Gym tab
     await co.goto(URL + "/app/"); await co.waitForTimeout(1500);
     ok(await ev(co, () => location.hash === "#coach-home" && COACH.view === "home"), "a coach reopening the app lands on Home: " + (await ev(co, () => location.hash)));
@@ -176,7 +192,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await ev(co, () => hideSheet());
     // ---- the student sees their gym's details
     await st.tap('nav.tabs [data-v="me"]'); await st.waitForTimeout(1000);
-    ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 8 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
+    ok(await ev(st, () => { const g = document.querySelector(".gymcard"); return g && g.querySelectorAll(".ttline").length === 9 && /R\s?850/.test(g.innerText) && !!g.querySelector('a[href^="tel:"]') && !!g.querySelector('a[href*="wa.me"]') && !document.querySelector('[data-a="gymedit"]'); }), "student sees the timetable, rates and contact buttons (and can't edit)");
     await wide(st, "student gym card");
     // ---- student signs out
     await st.tap('nav.tabs [data-v="me"]'); await st.tap('[data-a="signout"]'); await st.waitForTimeout(500);
@@ -222,15 +238,20 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     ok(await ev(co, (k) => document.getElementById("c-date").value === k, dayK), "+ Add on a day fills in that date");
     await co.fill("#c-title", "No-gi: half guard"); await co.locator("#c-title").dispatchEvent("change"); await co.waitForTimeout(200);
     ok(await ev(co, () => { const c = COACH.classes.find((x) => x.title === "No-gi: half guard"); return document.getElementById("c-dur").value === String(c.durationMin) && document.getElementById("c-time").value === fmtHM(c.startsAt) && document.getElementById("c-coach").value === c.coach; }), "choosing a class run before fills in its length, time and coach");
-    await co.selectOption("#c-repeat", "4"); await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
-    ok(/Added 4 weekly classes/.test(await toast(co)) && await ev(co, (k) => calState("coach").sel === k && document.querySelectorAll(".calrow").length >= 1, dayK), "repeat weekly adds 4 classes and jumps to the day: " + (await toast(co)));
+    ok(await ev(co, () => document.getElementById("c-repeat").value === "weekly" && [...document.getElementById("c-repeat").options].map((o) => o.text).join("|") === "Every week|Just this once"), "Repeat starts on Every week (or Just this once)");
+    const yK = await ev(co, () => ymd(new Date(Date.now() - 864e5)));
+    await co.fill("#c-date", yK); await co.locator("#c-date").dispatchEvent("change");
+    ok(await ev(co, () => document.getElementById("c-repeat").value === "0"), "a day already gone switches Repeat to Just this once");
+    await co.fill("#c-date", dayK); await co.locator("#c-date").dispatchEvent("change");
+    ok(await ev(co, () => document.getElementById("c-repeat").value === "weekly"), "and a day ahead back to Every week");
+    await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1200);
+    ok(await ev(co, () => document.querySelector("#toast .toastbtn")?.textContent === "Undo"), "the 'Added' toast has Undo");
+    ok(/on the calendar every \w+, 8 weeks ahead/.test(await toast(co)) && await ev(co, (k) => calState("coach").sel === k && document.querySelectorAll(".calrow").length >= 1 && (gymProfile().timetable || []).some((r) => r.title === "No-gi: half guard"), dayK), "an every-week class goes on the weekly timetable and jumps to the day: " + (await toast(co)));
     await co.tap('[data-a="calmode"][data-v="month"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => document.querySelectorAll(".mcell").length >= 28 && [...document.querySelectorAll(".mcell i")].length >= 2), "month view shows a grid with class counts");
     await wide(co, "month calendar");
     await co.tap('[data-a="calmode"][data-v="week"]'); await co.waitForTimeout(200);
-    const before2 = await ev(co, () => COACH.classes.length);
-    await co.tap('[data-a="copyweek"]'); await co.waitForTimeout(1500);
-    ok(/already there|Copied/.test(await toast(co)) && (await ev(co, () => COACH.classes.length)) >= before2, "copy this week to next week: " + (await toast(co)));
+    ok(await ev(co, () => !document.querySelector('[data-a="copyweek"]')), "with a weekly timetable there's no 'copy this week' chore");
     await wide(co, "week calendar");
     // ---- bookings, private lessons, memberships, insights
     await co.tap('nav.tabs [data-v="coach-schedule"]'); await co.tap('[data-a="privnew"]');
@@ -482,6 +503,122 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
       ok(/Coach removed/.test(await toast(co)) && await ev(co, (c) => API.me.gym.coachCode !== c && !document.getElementById("coach-list") && document.body.innerText.includes(API.me.gym.coachCode), cc0), "they're removed and the coach code shown is the new one");
       const me2 = await (await fetch(URL + "/api/me", { headers: { cookie: leaveCookie } })).json();
       ok(me2.me === null, "the removed coach is signed out"); }
+    // ---- money that adds up: running balances, the months a payment is for, trials that end, pauses with dates, bulk-add defaults, picking a plan
+    { const { p: hb } = await phone(), pl = new Pool({ connectionString: DB });
+      await hb.goto(URL + "/app/"); await hb.waitForTimeout(500);
+      await ev(hb, () => api("POST", "/auth/start-gym", { gym: "Owe Gym", name: "Owe Head", email: "head@owe.test", password: "owehead11" }));
+      await hb.reload(); await hb.waitForTimeout(900); await ev(hb, () => hideSheet());
+      const g = await ev(hb, () => API.me.gym), zday = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }), M0 = zday(Date.now()).slice(0, 7);
+      const mA = (n) => new Date(Date.UTC(+M0.slice(0, 4), +M0.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7), M1 = mA(-1);
+      const mon = (m) => new Date(m + "-15T12:00:00Z").toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+      const adult = (await ev(hb, () => api("POST", "/coach/plans", { name: "Adult", priceCents: 85000, period: "month" }))).plan;
+      await ev(hb, () => api("POST", "/coach/plans", { name: "Kids", priceCents: 60000, period: "month" }));
+      const add = (name) => ev(hb, (a) => api("POST", "/coach/students", { name: a[0], phone: "082 610 " + a[2], planId: a[1] }).then((j) => j.id), [name, adult.id, String(1000 + Math.floor(Math.random() * 8999))]);
+      const johan = await add("Johan Arrears"), thabo = await add("Thabo Trial"), sbu = await add("Sbu Pause");
+      await pl.query("update gyms set bill_start=$2 where id=$1", [g.id, M1 + "-01"]); await pl.query("update users set created_at=now() - interval '1 month 2 days' where gym_id=$1 and role='student'", [g.id]);
+      await ev(hb, () => coachLoad()); await hb.waitForTimeout(800);
+      ok(await ev(hb, () => /3\s*owe fees · R\s?5\s?100/.test(document.getElementById("app").innerText)), "Home counts everyone who owes, from any month: " + await ev(hb, () => (document.getElementById("app").innerText.match(/.*owe fees.*/) || [""])[0]));
+      await ev(hb, () => { COACH.money = null; coachGo("money"); }); await hb.waitForTimeout(1200);
+      const row = await ev(hb, (id) => { const b = document.querySelector(`.mrow [data-a="student"][data-v="${id}"]`); return b ? b.closest(".mrow").innerText : ""; }, johan);
+      ok(/Owes R\s?1\s?700 · \w+ \+ \w+/.test(row) && /Overdue/.test(row), "a Money row shows the running balance and the months: " + row.replace(/\n/g, " "));
+      ok(await ev(hb, (a) => remindText(COACH.money.students.find((s) => s.id === a[0]), COACH.money).includes(`is due for ${a[1]} and ${a[2]}`), [johan, mon(M1), mon(M0)]), "the WhatsApp reminder asks for both months, by name");
+      // Record a payment: the months it will pay come from the server, from the date paid and the amount, and For is where they start
+      { const forTxt = () => ev(hb, () => document.getElementById("p-for").options[0].textContent), hint = () => ev(hb, () => document.getElementById("p-for-hint").textContent), mt = (ms) => ev(hb, (a) => monthsTxt(a), ms);
+        await ev(hb, (id) => paySheet(id), johan); await hb.waitForTimeout(900);
+        ok(await forTxt() === `${await mt([M1, M0])} (worked out for you)`, "the sheet names both months R1 700 pays: " + await forTxt());
+        await hb.fill("#p-amt", "850"); await hb.dispatchEvent("#p-amt", "change"); await hb.fill("#p-date", M1 + "-28"); await hb.dispatchEvent("#p-date", "change"); await hb.waitForTimeout(700);
+        ok(await forTxt() === `${await mt([M1])} (worked out for you)`, "dated last month, R850 pays last month: " + await forTxt());
+        await hb.fill("#p-date", await ev(hb, () => today())); await hb.dispatchEvent("#p-date", "change"); await hb.waitForTimeout(700);
+        ok(await forTxt() === `${await mt([M0])} (worked out for you)`, "dated today, it pays this month: " + await forTxt());
+        await hb.fill("#p-amt", "1700"); await hb.dispatchEvent("#p-amt", "change"); await hb.selectOption("#p-for", M1); await hb.waitForTimeout(700);
+        ok(await hint() === `Pays ${await mt([M1, M0])}.`, "For last month with R1 700: it says it pays last month and this one: " + await hint());
+        await ev(hb, () => hideSheet()); await hb.waitForTimeout(300); }
+      await hb.tap(`[data-a="paidnow"][data-v="${johan}"]`); await hb.waitForTimeout(1200);
+      ok(/Recorded R\s?1\s?700/.test(await toast(hb)) && await ev(hb, (id) => COACH.payments.some((p) => p.userId === id && p.forMonths && p.forMonths.length === 2), johan), "one tap on Paid records everything owed, for both months");
+      // a trial that's run out: Make active from Home
+      await ev(hb, (id) => api("PATCH", `/coach/students/${id}`, { planStatus: "trial" }), thabo); await pl.query("update users set trial_ends=current_date - 1 where id=$1", [thabo]);
+      await ev(hb, () => coachGo("home")); await ev(hb, () => coachLoad("roster")); await hb.waitForTimeout(700);
+      ok(await ev(hb, () => /Thabo's\s*trial ended/.test(document.getElementById("app").innerText)), "Home says when a trial has ended");
+      await hb.tap(`[data-a="trialset"][data-v="${thabo}:active"]`); await hb.waitForTimeout(900);
+      ok(/Thabo is active/.test(await toast(hb)) && await ev(hb, (id) => COACH.roster.people.find((p) => p.id === id).planStatus === "active", thabo), "one tap makes them active");
+      // pausing from the student sheet: how long, and back to the same search on the roster after saving
+      await ev(hb, () => { coachGo("members"); COACH.q = "Sbu"; render(); }); await hb.waitForTimeout(400);
+      await hb.locator(`#roster-list [data-a="student"][data-v="${sbu}"]`).tap(); await hb.waitForTimeout(900);
+      ok(await ev(hb, () => document.getElementById("s-pause").hidden), "the pause length only shows when pausing");
+      await hb.selectOption("#s-status", "paused"); await hb.waitForTimeout(150);
+      ok(await ev(hb, () => !document.getElementById("s-pause").hidden && document.querySelector('[name=pmonths]:checked').value === "1"), "pausing offers 1 month (the default), 2 months or until I say");
+      await hb.check('[name=pmonths][value="2"]'); await hb.tap("#sheetbar [type=submit]"); await hb.waitForTimeout(1200);
+      ok(/Paused\. Fees start again in/.test(await toast(hb)) && await ev(hb, (a) => { const p = COACH.roster.people.find((x) => x.id === a[0]); return p.planStatus === "paused" && p.pause && p.pause.until === a[1]; }, [sbu, mA(2)]), "saved: paused for 2 months, and it says when fees start again");
+      ok(await ev(hb, () => !S.ui.sheet && COACH.view === "members" && document.getElementById("r-q").value === "Sbu" && document.querySelectorAll("#roster-list [data-a=student]").length === 1), "after saving, the roster is where it was, with the same search");
+      // bulk add: one plan line, and billing from the next due date with a one-tap "bill this month too"
+      await ev(hb, () => bulkSheet(intake([{ name: "Bulk Adult", phone: "082 611 0001" }, { name: "Bulk Kid", parentName: "Bulk Mom", phone: "082 611 0002" }]))); await hb.waitForTimeout(400);
+      ok(await ev(hb, () => /Plan: Adult \(kids: Kids\) · change/.test(document.getElementById("bulk-plan").innerText)), "bulk add has one line for the plans: " + await ev(hb, () => document.getElementById("bulk-plan").innerText.split("\n")[0]));
+      await hb.tap("#sheetbar [data-a=bulkadd]"); await hb.waitForTimeout(1500);
+      ok(await ev(hb, (m) => /Billing starts/.test(document.getElementById("toast").innerText) && document.querySelector("#toast .toastbtn").textContent === `Bill ${m} too`, mon(M0)), "the toast says when billing starts, with Bill this month too: " + await toast(hb));
+      await hb.tap("#toast .toastbtn"); await hb.waitForTimeout(1200);
+      ok(new RegExp(`${mon(M0)} is billed too`).test(await toast(hb)) && await ev(hb, () => { const p = COACH.roster.people.find((x) => x.name === "Bulk Adult"), k = COACH.roster.people.find((x) => x.name === "Bulk Kid"); return p.planName === "Adult" && k.planName === "Kids" && p.owedCents === 85000 && k.owedCents === 60000; }), "one tap bills this month too, on the right plans");
+      // a new member picks their plan
+      const { p: nm } = await phone(); await nm.goto(URL + "/app/"); await nm.waitForTimeout(500);
+      await ev(nm, (c) => api("POST", "/auth/register", { code: c, name: "Nia New", email: "nia@owe.test", password: "niapass11" }), g.studentCode || (await ev(hb, () => API.me.gym.studentCode)));
+      await nm.reload(); await nm.waitForTimeout(900); await ev(nm, () => { hideSheet(); go("classes"); }); await nm.waitForTimeout(1200);
+      ok(await ev(nm, () => /Pick your plan/.test(document.getElementById("pickplan").innerText) && /Adult/.test(document.getElementById("pickplan").innerText)), "a new member's membership card offers the gym's plans");
+      await nm.tap(`#pickplan [data-a="pickplan"][data-v="${adult.id}"]`); await nm.waitForTimeout(1200);
+      ok(/You picked Adult/.test(await toast(nm)) && await ev(nm, () => API.mem.status === "trial" && /Free trial/.test(document.getElementById("app").innerText)), "picking one starts a free trial");
+      await ev(nm, () => myPaySheet()); await nm.waitForTimeout(300);
+      ok(await ev(nm, () => [...document.querySelectorAll("#mypop-pack option")].some((o) => /^Joining: Adult/.test(o.textContent) && o.selected) && document.getElementById("mypop-amt").value === "850"), "the proof form's What's it for? has the plan, with its price");
+      await nm.context().close(); await hb.context().close(); await pl.end(); }
+    // ---- less admin: reminders that send themselves, and members who stopped coming
+    { const { p: ha } = await phone(), pl = new Pool({ connectionString: DB });
+      await ha.goto(URL + "/app/"); await ha.waitForTimeout(500);
+      await ev(ha, () => api("POST", "/auth/start-gym", { gym: "Auto Gym", name: "Auto Head", email: "head@auto.test", password: "autohead11" }));
+      await ha.reload(); await ha.waitForTimeout(900); await ev(ha, () => hideSheet());
+      const g = await ev(ha, () => API.me.gym), plan = (await ev(ha, () => api("POST", "/coach/plans", { name: "Adult", priceCents: 85000, period: "month" }))).plan;
+      const ids = []; for (const [i, n] of ["Gone Gina", "Gone Gus", "Here Hana", "Here Hugo", "Here Hlubi"].entries())
+        ids.push(await ev(ha, (a) => api("POST", "/coach/students", { name: a[0], email: `s${a[2]}@auto.test`, planId: a[1] }).then((j) => j.id), [n, plan.id, i]));
+      // someone added with only a WhatsApp number
+      const gp = await ev(ha, (a) => api("POST", "/coach/students", { name: "Gone Phila", phone: "082 444 0101", planId: a }).then((j) => j.id), plan.id);
+      const cls = (await ev(ha, () => api("POST", "/classes", { title: "Fundamentals", startsAt: new Date(Date.now() - 4 * 864e5).toISOString() }))).class.id;
+      for (const id of ids.slice(2)) await ev(ha, (a) => api("PUT", `/coach/classes/${a[0]}/attendance`, { userId: a[1], attended: true }), [cls, id]);
+      await pl.query("update users set created_at=now() - interval '90 days' where id = any($1)", [[...ids.slice(0, 2), gp].map(Number)]);
+      await ev(ha, () => { coachGo("home"); return coachLoad(); }); await ha.waitForTimeout(900);
+      ok(await ev(ha, () => /3\s*haven't trained in 60 days\.\s*Gone Gina, Gone Gus, Gone Phila/.test(document.getElementById("app").innerText) && !!document.querySelector('[data-a="idlepause"]') && !!document.querySelector('[data-a="idlekeep"]')), "Home: 3 haven't trained in 60 days, with Pause their fees and Keep");
+      // a double tap (the second lands while the first is still going) pauses them once
+      await ev(ha, () => { const b = document.querySelector('[data-a="idlepause"]'); b.click(); b.click(); }); await ha.waitForTimeout(1500);
+      const gone = [...ids.slice(0, 2), gp];
+      ok(await ev(ha, (a) => a.every((id) => COACH.roster.people.find((p) => p.id === id).planStatus === "paused") && !document.querySelector('#app [data-a="idlepause"]'), gone) && (await pl.query("select count(*)::int as n from plan_breaks where user_id = any($1) and reason='idle'", [gone.map(Number)])).rows[0].n === 3, "one tap pauses all three (a double tap, once each), and the card goes");
+      ok(await ev(ha, () => { const t = document.getElementById("sheet").innerText, a = document.querySelector('#sheet a[data-wa="miss_you"]');
+        return /Paused 3/.test(t) && /2 will get a friendly .we miss you. email\. 1 has no email: send them a WhatsApp/.test(t) && /Gone Phila/.test(t) && !!a && /wa\.me\/27824440101/.test(a.href) && /we miss you/.test(decodeURIComponent(a.href)); }), "Gone Phila has no email: the sheet says so and has a WhatsApp \"we miss you\" ready to send");
+      await ha.tap('#sheetbar [data-a="idleundo"]'); await ha.waitForTimeout(1200);
+      ok(/Undone/.test(await toast(ha)) && await ev(ha, (a) => a.every((id) => COACH.roster.people.find((p) => p.id === id).planStatus === "active") && !!document.querySelector('[data-a="idlepause"]'), gone), "Undo puts them back, and the card with them");
+      await ha.tap('[data-a="idlekeep"]'); await ha.waitForTimeout(1000);
+      ok(/30 days/.test(await toast(ha)) && await ev(ha, () => !document.querySelector('[data-a="idlepause"]')), "Keep hides the card");
+      // The first "Email reminders" asks once whether to send them by themselves.
+      await ev(ha, () => { COACH.money = null; coachGo("money"); }); await ha.waitForTimeout(1200);
+      await ha.tap('[data-a="remindall"]'); await ha.waitForTimeout(300);
+      ok(await ev(ha, () => /Send these automatically\?/.test(document.getElementById("sheet").innerText) && /7 days later/.test(document.getElementById("sheet").innerText) && !!document.querySelector('#sheetbar [data-a="remindyes"][data-v="auto"]') && !!document.querySelector('#sheetbar [data-a="remindyes"][data-v="once"]')), "the first time, it asks: Yes, automatically or Just this once");
+      await ha.tap('#sheetbar [data-a="remindyes"][data-v="auto"]'); await ha.waitForTimeout(1200);
+      ok(/Sent 5 reminders\. From now on they go by themselves/.test(await toast(ha)) && (await pl.query("select auto_remind from gyms where id=$1", [g.id])).rows[0].auto_remind === true, "Yes sends them now and switches it on: " + await toast(ha));
+      await ha.waitForTimeout(600);
+      ok(await ev(ha, () => (document.getElementById("app").innerText.match(/reminded today/g) || []).length === 5 && !document.querySelector('[data-a="remindall"]') && /Everyone with an email was reminded this week/.test(document.getElementById("app").innerText)), "Money then says who was reminded today, and there's no button to email them again");
+      await pl.query("update users set reminded_at=now() - interval '7 days' where gym_id=$1", [g.id]); await ev(ha, () => loadMoney()); await ha.waitForTimeout(800);
+      await ha.tap('[data-a="remindall"]'); await ha.waitForTimeout(300);
+      ok(await ev(ha, () => /Email 5 reminders\?/.test(document.getElementById("sheet").innerText) && !/automatically\?/.test(document.getElementById("sheet").innerText)), "it isn't asked again");
+      await ev(ha, () => hideSheet()); await ha.tap('[data-a="moneyview"][data-v="setup"]'); await ha.waitForTimeout(900);
+      ok(await ev(ha, () => document.getElementById("m-auto") && document.getElementById("m-auto").checked), "Money › Setup shows them switched on");
+      await ha.uncheck("#m-auto"); await ha.waitForTimeout(900);
+      ok(/off/.test(await toast(ha)) && (await pl.query("select auto_remind from gyms where id=$1", [g.id])).rows[0].auto_remind === false, "and one tap switches them off");
+      // What the job did today shows on Home.
+      await pl.query(`update gyms set remind_log=jsonb_build_object('day', to_char(now() at time zone 'Africa/Johannesburg','YYYY-MM-DD'), 'sent', 4, 'to', '["Here Hana","Here Hugo","Here Hlubi","Gone Gus"]'::jsonb,
+        'failed', '["Gone Gina"]'::jsonb, 'noEmail', '["Gone Phila"]'::jsonb, 'done', true) where id=$1`, [g.id]);
+      await ev(ha, () => { coachGo("home"); return coachLoad("roster"); }); await ha.waitForTimeout(800);
+      ok(await ev(ha, () => /Reminders sent to\s*4\s*today · 1 couldn't be sent · 1 with no email/.test(document.getElementById("app").innerText)), "Home: Reminders sent to 4 today, 1 couldn't be sent, 1 with no email");
+      await ha.tap('[data-a="remindsee"]'); await ha.waitForTimeout(400);
+      ok(await ev(ha, () => { const t = document.getElementById("sheet").innerText; return /Emailed \(4\)/i.test(t) && /Here Hana/.test(t) && /Gone Gus/.test(t) && /Couldn't be sent \(1\)\s*We'll try these again/i.test(t) && /Gone Gina/.test(t) && /No email \(1\)/i.test(t) && /Gone Phila/.test(t); }), "See who lists who was emailed, who couldn't be, and who has no email: " + await ev(ha, () => document.getElementById("sheet").innerText));
+      await ha.tap('#sheetbar [data-a="remindmoney"]'); await ha.waitForTimeout(900);
+      ok(await ev(ha, () => !!document.getElementById("sheet").hidden && COACH.view === "money"), "and Open Money goes to the owing list");
+      await ev(ha, () => coachGo("home")); await ha.waitForTimeout(500);
+      await wide(ha, "coach home with the automation cards");
+      await ha.context().close(); await pl.end(); }
     // ---- a coach removes a student who has their own account
     { const lz = await ev(co, () => COACH.roster.people.find((p) => p.name === "Lindi Z").id);
       await ev(co, (id) => studentSheet(id), lz); await co.waitForTimeout(900);

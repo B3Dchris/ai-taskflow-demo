@@ -104,8 +104,10 @@ async function run({ u, q, msgs, helpers: H }) {
       const st = await H.ownStudent(u, i.student_id), amt = cents(i.amount);
       if (!(amt > 0) || amt > 1e8) throw new Error("I need the amount they paid.");
       const day = H.isDay(i.date) ? i.date : today, method = H.METHODS.includes(i.method) ? i.method : "";
-      await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,submitted_by) values($1,$2,$3,$4,$5,$6,'','assistant',$7,$8)`,
-        [u.gym_id, st.id, amt, cur, day, H.clean(i.reference, 140), method, u.id]);
+      // Like a payment the coach records: a first one ends a trial, and it pays the months it's for (worked out now).
+      await H.feeIn(u, st.id); const fm = await H.feeMonths(u, st.id, amt, day);
+      await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,submitted_by,months,for_month,alloc) values($1,$2,$3,$4,$5,$6,'','assistant',$7,$8,$9,$10,$11)`,
+        [u.gym_id, st.id, amt, cur, day, H.clean(i.reference, 140), method, u.id, fm.months, fm.for_month, fm.alloc]);
       did(`Recorded ${money(amt, cur)} from ${st.name.split(" ")[0]}`, "payments");
       return { recorded: { student: st.name, amount: amt / 100, date: day, method } };
     },
