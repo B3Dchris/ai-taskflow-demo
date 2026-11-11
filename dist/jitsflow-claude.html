@@ -415,6 +415,14 @@ textarea{min-height:76px;resize:vertical}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 
+/* Original compact, no-horizontal-scroll map, with paths drawn above every node. */
+.jf-classic-map{width:100%;max-width:100%;overflow:hidden}
+.jf-classic-map .flowsvg{width:100%;max-width:100%;height:auto;display:block}
+.jf-classic-map .flowsvg .edges{pointer-events:none}
+.jf-classic-map .flowsvg .edge-halo{fill:none;stroke:var(--surface);stroke-linecap:round;stroke-linejoin:round;opacity:.88}
+.jf-classic-map .flowsvg .edge{stroke-linecap:round;stroke-linejoin:round;opacity:1;filter:drop-shadow(0 0 1px var(--surface))}
+.jf-classic-map .flowsvg .node.sel rect{filter:none}
+
 /* flow */
 .flowsvg{width:100%;height:auto;display:block;max-width:100%}
 .flowsvg .node rect{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
@@ -3951,7 +3959,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 function blankProgress(){return {v:1,mastery:{},notes:{},srs:{},settings:{perWeek:2,priorHours:100,targetHours:300,sessionMins:90,cycleStart:today(),hand:"left"},solo:{date:"",done:[]},photos:{},videos:{},comp:{}}}
-const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",learnView:"moves",flowSel:"hg_bot",flowMode:"overview",mapLayout:"hub",filterP:"all",filterM:"all",kind:"all",q:""}};
+const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",learnView:"moves",flowSel:"hg_bot",filterP:"all",filterM:"all",kind:"all",q:""}};
 const P=()=>S.progress;
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
@@ -4398,42 +4406,31 @@ function flowMapLayouts(sel){
   </div>${mapAtlas(sel)}<section class="jf-map-route" aria-live="polite">${mode==="lanes"?mapLanes(sel):mapHub(sel)}</section>`;
 }
 function flowSVG(sel){
-  // Readable landscape map: keep nodes at a real touch size and let small screens pan, rather than squeezing 4 columns into 360px.
-  const W=740,NW=156,NH=61,G=15,top=18,RH=112,mx=flowMax(),pos={};
-  ROWS.forEach((row,ri)=>{const tw=row.length*NW+(row.length-1)*G,x0=(W-tw)/2;
-    row.forEach((p,i)=>pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH+33})});
-  pos.sub={x:(W-174)/2,y:top+33,w:174};
-  const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};
-  gs.forEach(g=>cnt[g.d]=g.ts.length);
-  const s=pos[sel],scx=s.x+NW/2,wOf=p=>pos[p].w||NW,showLines=S.ui.mapLines!==false;
-  const sources={top:[],bot:[]};
-  gs.forEach(g=>{const e=pos[g.d];(e.y>s.y?sources.bot:sources.top).push(g)});
-  const sx={};
-  for(const k of ["top","bot"]){const L=sources[k].sort((a,b)=>(pos[a.d].x+wOf(a.d)/2)-(pos[b.d].x+wOf(b.d)/2));
-    const step=Math.min(18,(NW-32)/Math.max(1,L.length-1));
-    L.forEach((g,i)=>sx[g.d]=scx+(i-(L.length-1)/2)*step)}
-  const edges=showLines?gs.map((g,i)=>{const e=pos[g.d],ecx=e.x+wOf(g.d)/2,x1=sx[g.d],sw=2.7;let d;
-    if(e.y<s.y){const y1=s.y-2,y2=e.y+NH+4,k=Math.min(66,(y1-y2)/2);d=`M${x1},${y1} C${x1},${y1-k} ${ecx},${y2+k} ${ecx},${y2}`}
-    else if(e.y>s.y){const y1=s.y+NH+2,y2=e.y-4,k=Math.min(66,(y2-y1)/2);d=`M${x1},${y1} C${x1},${y1+k} ${ecx},${y2-k} ${ecx},${y2}`}
-    else{const y=s.y,lift=29;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-4}`}
-    return `<path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#jf-arrow-${g.dir})"/>`}).join(""):"";
-  const marks=["fin","up","side","down"].map(k=>`<marker id="jf-arrow-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
-  const bandNames=["FINISH",...TIERS],H=top+7*RH+18;
-  const bands=bandNames.map((name,i)=>{const y=top+i*RH;
-    return `<g class="jf-mapband jf-band-${i}"><rect x="8" y="${y}" width="${W-16}" height="102" rx="15"/><text x="28" y="${y+23}">${esc(name)}</text><line x1="28" y1="${y+29}" x2="${W-28}" y2="${y+29}"/></g>`}).join("");
-  let nodes="";
-  Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p],x=c.x,y=c.y;
-    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":gs.length?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submission finishes${n?", "+n+" technique options":""}"><rect x="${x}" y="${y}" width="${w}" height="${NH}" rx="13"/><text x="${x+w/2}" y="${y+36}" text-anchor="middle">SUBMISSION</text></g>`;return}
-    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(gs.length)cls.push("dim");
-    const k=posKnown(p,mx),known=k===null?"":Math.round(k*100)+"% learned";
-    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${p===sel?", selected":n?", "+n+" possible transitions":""}${known?", "+known:""}">
-      <rect class="jf-card" x="${x}" y="${y}" width="${w}" height="${NH}" rx="12"/>
-      <rect class="jf-accent" x="${x+2}" y="${y+13}" width="3" height="28" rx="1.5"/>
-      <text class="jf-cardlabel" x="${x+15}" y="${y+25}">${esc(POS[p].l)}</text>
-      <text class="jf-cardmeta" x="${x+15}" y="${y+44}">${p===sel?"SELECTED":n?n+" CONNECTION"+(n>1?"S":""):known||"TAP TO EXPLORE"}</text>
-      ${k!==null?`<rect class="jf-progressbg" x="${x+12}" y="${y+54}" width="${w-24}" height="2" rx="1"/><rect class="jf-progress" x="${x+12}" y="${y+54}" width="${(w-24)*k}" height="2" rx="1"/>`:""}
-    </g>`});
-  return `<svg class="flowsvg jf-fullsvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="BJJ position map. Scroll horizontally to see all positions and tap one to explore."><defs>${marks}</defs><g class="jf-bands">${bands}</g><g class="edges">${edges}</g><g class="jf-nodes">${nodes}</g></svg>`;
+  // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
+  const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
+  ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH}})});
+  const FW=150;pos.sub={x:(W-FW)/2,y:top,w:FW};
+  const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};gs.forEach(g=>cnt[g.d]=g.ts.length);
+  const s=pos[sel],scx=s.x+NW/2,wOf=p=>pos[p].w||NW;
+  // spread the arrow starts along the edge they leave from, in the order of where they land, so they don't cross at the start
+  const leave={top:[],bot:[]};gs.forEach(g=>{const e=pos[g.d];(e.y>s.y?leave.bot:leave.top).push(g)});
+  const sx={};for(const k of ["top","bot"]){const L=leave[k].sort((a,b)=>(pos[a.d].x+wOf(a.d)/2)-(pos[b.d].x+wOf(b.d)/2)),step=Math.min(14,(NW-24)/Math.max(1,L.length-1));L.forEach((g,i)=>sx[g.d]=scx+(i-(L.length-1)/2)*step)}
+  const edges=gs.map((g,i)=>{const e=pos[g.d],ecx=e.x+wOf(g.d)/2,n=g.ts.length,sw=(1.6+Math.min(5,n)*.75).toFixed(1),x1=sx[g.d];let d;
+    if(e.y<s.y){const y1=s.y,y2=e.y+NH+3,k=Math.min(46,(y1-y2)/2);d=`M${x1},${y1} C${x1},${y1-k} ${ecx},${y2+k} ${ecx},${y2}`}
+    else if(e.y>s.y){const y1=s.y+NH,y2=e.y-3,k=Math.min(46,(y2-y1)/2);d=`M${x1},${y1} C${x1},${y1+k} ${ecx},${y2-k} ${ecx},${y2}`}
+    else{const y=s.y,lift=26;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-3}`}
+    return `<path class="edge-halo" d="${d}" stroke-width="${(+sw+3).toFixed(1)}"/><path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#ah-${g.dir})"/>`}).join("");
+  const marks=["fin","up","side","down"].map(k=>`<marker id="ah-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
+  const labels=["Finish",...TIERS].map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
+  const any=gs.length>0;let nodes="";
+  Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p];
+    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":any?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submissions${n?`: ${n} from ${esc(POS[sel].l)}`:""}"><rect x="${c.x}" y="${c.y}" width="${w}" height="${NH}" rx="19"/><text x="${c.x+w/2}" y="${c.y+NH/2+4}" text-anchor="middle">Submission</text></g>`;return}
+    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(any)cls.push("dim");
+    const k=posKnown(p,mx);
+    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${n?`, ${n} move${n>1?"s":""} from ${esc(POS[sel].l)}`:""}${k!==null?`, you know ${Math.round(k*100)}% of its moves`:""}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="7"/>
+      <text x="${c.x+NW/2}" y="${c.y+NH/2+2}" text-anchor="middle">${esc(POS[p].l)}</text>
+      ${k!==null?`<rect class="kbar-bg" x="${c.x+10}" y="${c.y+NH-8}" width="${NW-20}" height="3.5" rx="1.75"/><rect class="kbar" x="${c.x+10}" y="${c.y+NH-8}" width="${Math.max(0,(NW-20)*k)}" height="3.5" rx="1.75"/>`:""}</g>`});
+  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+6*RH+NH+8}" role="group" aria-label="Position map"><defs>${marks}</defs>${labels}${nodes}<g class="edges" pointer-events="none">${edges}</g></svg>`;
 }
 /* "From here": a transit-map view. Coloured lines leave the position and run down a gutter to each destination, which lists the moves that get you there. */
 function flowFrom(sel){const mx=flowMax(),gs=flowGroups(sel,mx),p=POS[sel];
@@ -4474,12 +4471,9 @@ function routeBlock(sel){const mx=flowMax(),to=S.ui.routeTo&&POS[S.ui.routeTo]&&
 function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),outs=fromPos(sel,mx),ins=intoPos(sel,mx);
   return `
-  <section class="jf-intro"><span class="jf-eyebrow">LEARN / THE MAP</span><h1>Find your next move.</h1><p class="muted small">Explore techniques from your position, or see the complete positional map.</p></section>
-  <div class="jf-modebar" role="group" aria-label="Flow map view">
-    <button type="button" data-a="flowmode" data-v="guide" aria-pressed="${(S.ui.flowMode||"guide")==="guide"}">Explore</button>
-    <button type="button" data-a="flowmode" data-v="overview" aria-pressed="${S.ui.flowMode==="overview"}">Full map</button>
-  </div>
-  ${S.ui.flowMode==="overview"?flowMapLayouts(sel) : flowGuide(sel)}
+  <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions from best (top) to worst (bottom). Tap a position to see its connections.</p>
+  <div class="jf-classic-map">${flowSVG(sel)}</div>
+  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>`})()}</section>
   <section class="stack" id="flow-from"><div class="row between"><h2 class="label">From ${esc(p.l.toLowerCase())}</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
   <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
   ${flowFrom(sel)}
