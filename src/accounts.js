@@ -12,6 +12,9 @@ async function api(method,url,body,key){
   if(!r.ok){const err=new Error(j.error||"Something went wrong. Try again.");err.status=r.status;err.data=j;throw err}
   return j;
 }
+// Where they first came from (utm tags, a Google Ads click, the site that linked here): the website saves it in this browser
+// (server.js, SRC_TAG) and it goes with their sign-up only, so JitsFlow can see which ads and links bring people.
+const signupSrc=()=>{try{const s=JSON.parse(localStorage.getItem("jf.src")||"null");return s&&typeof s==="object"&&Date.now()-s.t<30*864e5?s:undefined}catch(e){return undefined}};
 const formKey=f=>f.dataset.key||(f.dataset.key=Date.now().toString(36)+Math.random().toString(36).slice(2,8));
 /* Signed out while using the app (the session ended, or they signed out on another device): the sign-in sheet opens on top of
    whatever was open. Once they're back in, the form comes back as it was and what they were saving is sent again. */
@@ -160,8 +163,8 @@ async function submitAuth(form){
   try{
     const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();
     const claiming=m==="gym"&&S.ui.claimGym;
-    const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password"),timezone:tz,...(claiming?{prospect:S.ui.claimGym}:{})})
-      :m==="register"?await api("POST","/auth/register",S.ui.regBody={name:v("name"),email:v("email"),password:v("password"),code:v("code"),phone:v("phone"),claim:S.ui.claim||undefined})
+    const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password"),timezone:tz,source:signupSrc(),...(claiming?{prospect:S.ui.claimGym}:{})})
+      :m==="register"?await api("POST","/auth/register",S.ui.regBody={name:v("name"),email:v("email"),password:v("password"),code:v("code"),phone:v("phone"),claim:S.ui.claim||undefined,source:signupSrc()})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
     if(j.ask)return askSheet(j.ask);
     if(REAUTH){if(m==="login"&&String(j.me.id)===String(API.me.id)){API.me=j.me;reauthDone(true);return}reauthDone(false)} // someone else signed in: they get their own account
@@ -254,7 +257,7 @@ function accountSection(){
       :g&&API.me.role!=="coach"?`<details class="more"><summary>Add your kids</summary><div style="padding-top:8px">${kidForm()}</div></details>`:""}
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":fam?`${esc(first(API.me.name))} trains at`:"Training at"} <b>${esc(g.name)}</b>${API.me.role==="coach"?"":` · <button type="button" class="linkbtn small" data-a="leavegym">Leave gym</button>`}</p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
     <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
-    ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>${outPanel()}`;
+    ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>${dashPanel()}${outPanel()}`;
 }
 
 /* ----- next class (students and coaches) ----- */
@@ -2048,6 +2051,92 @@ async function outAct(a){const p=OUT.cur&&OUT.cur.prospect;if(!p)return;
   if(a==="outcopy-html"||a==="outcopy-text"){const e=OUT.cur.email;if(e)copyText(a==="outcopy-html"?e.html:`Subject: ${e.subject}\n\n${e.text}`);return}
   if(a==="outre"){try{await api("POST",`/admin/prospects/${p.id}/reimport`,{});toast("Reading their website again.");await outLoad();await outPro(p.id,true)}catch(e){toast(e.message)}return}
   if(a==="outdel"){if(OUT.delAsk!==p.id){OUT.delAsk=p.id;outPro(p.id,true);return}OUT.delAsk=null;try{await api("DELETE","/admin/prospects/"+p.id);OUT.list=(OUT.list||[]).filter(x=>x.id!==p.id);toast("Deleted.");outreachSheet()}catch(e){toast(e.message)}}}
+
+/* ============ DASHBOARD (JitsFlow's own team: JF_ADMIN_EMAILS) ============ */
+/* Visitors (counted on our server without cookies), sign-ups and where they came from, who's using the app, every gym, outreach.
+   In Me, next to Outreach, for admins only; the server refuses everyone else (GET /api/admin/overview). */
+const DASH={days:30,data:null,q:"",sort:"members",at:0};
+function dashPanel(){if(!API.me||!API.me.admin)return "";
+  return `<section class="panel stack" id="dashpanel"><h2 class="label">Dashboard · JitsFlow team</h2><p class="small">Visitors, sign-ups, gyms and who's using the app, in one place.</p><button class="btn primary" style="justify-self:start" data-a="dashopen">Open dashboard</button></section>`}
+const nf=n=>Number(n||0).toLocaleString("en-ZA");
+const dShort=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString(undefined,{day:"numeric",month:"short"})}catch(e){return d}};
+const dWeek=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}catch(e){return d}};
+const dAgo=iso=>{if(!iso)return "never";const m=Math.round((Date.now()-new Date(iso))/60000);if(m<2)return "just now";if(m<60)return `${m} min ago`;const h=Math.round(m/60);if(h<24)return `${h} hour${h===1?"":"s"} ago`;const d=Math.round(h/24);return d===1?"yesterday":d<14?`${d} days ago`:outDay(iso)};
+async function dashLoad(days){if(days)DASH.days=days;const want=DASH.days;DASH.busy=true;
+  try{const j=await api("GET","/admin/overview?days="+want);if(want!==DASH.days)return;DASH.data=j;DASH.at=Date.now()}catch(e){toast(e.message)}
+  DASH.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="dash")dashSheet(true)}
+function dashOpen(){if(!DASH.data||Date.now()-DASH.at>60000)dashLoad();dashSheet()}
+// Bars per day. keys: [[field, colour, label]] stacked bottom-up. Tap a bar for its numbers (like the coach's visits chart).
+function dashChart(series,keys,what){
+  const W=340,H=140,pad=20,n=series.length,slot=(W-8)/n,bw=Math.max(1.5,slot*(n>40?.7:.78)),tot=s=>keys.reduce((a,k)=>a+(s[k[0]]||0),0),max=Math.max(1,...series.map(tot));
+  const bars=series.map((s,i)=>{const x=4+i*slot+(slot-bw)/2,lbl=`${dWeek(s.day)}: ${keys.map(k=>`${nf(s[k[0]])} ${k[2]}`).join(", ")}`;let y=H-pad,parts="";
+    for(const k of keys){const h=(H-pad-14)*(s[k[0]]||0)/max;if(h>0){y-=h;parts+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${bw>=8?2:0}" style="fill:${k[1]}"/>`}}
+    return `<g class="bar" aria-label="${esc(lbl)}"><rect class="hit" x="${(4+i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H-pad}" fill="transparent"/>${parts}<title>${esc(lbl)}</title></g>`}).join("");
+  const any=series.some(s=>tot(s));
+  // The labels are outside the drawing, so they stay the same size when the chart is stretched across a wide screen.
+  return `<figure class="chart dchart"><span class="dax">${any?`${nf(max)} a day at most`:"Nothing yet in these days"}</span><svg viewBox="0 0 ${W} ${H-pad}" preserveAspectRatio="none" role="img" aria-label="${esc(what)} per day, ${esc(dShort(series[0].day))} to ${esc(dShort(series[n-1].day))}"><line x1="0" x2="${W}" y1="${H-pad}" y2="${H-pad}" stroke="var(--line)" vector-effect="non-scaling-stroke"/>
+    <line x1="0" x2="${W}" y1="${((H-pad+14)/2).toFixed(1)}" y2="${((H-pad+14)/2).toFixed(1)}" stroke="var(--line)" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"/>${bars}</svg>
+    <span class="dax row between"><span>${esc(dShort(series[0].day))}</span><span>Today</span></span>
+    ${keys.length>1?`<figcaption class="small muted dlegend">${keys.map(k=>`<span><i style="background:${k[1]}"></i>${esc(cap1(k[2]))}</span>`).join("")}</figcaption>`:""}
+    <details class="small"><summary>Show as a table</summary><table class="tbl"><tr><th>Day</th>${keys.map(k=>`<th>${esc(cap1(k[2]))}</th>`).join("")}</tr>${series.slice().reverse().map(s=>`<tr><td>${esc(dWeek(s.day))}</td>${keys.map(k=>`<td>${nf(s[k[0]])}</td>`).join("")}</tr>`).join("")}</table></details></figure>`}
+// A list of named counts with a bar each (sources, pages, countries). extra(r): text after the name.
+function dashBars(rows,{name=r=>r.name,num=r=>r.n,extra=()=>"",empty="Nothing yet."}={}){if(!rows.length)return `<p class="small muted">${empty}</p>`;const max=Math.max(1,...rows.map(num));
+  return `<div class="dbars">${rows.map(r=>`<div class="dbar"><span class="dbname">${esc(name(r))}${extra(r)}</span><b class="mono">${nf(num(r))}</b><i style="width:${Math.max(2,Math.round(100*num(r)/max))}%"></i></div>`).join("")}</div>`}
+const paidPill=r=>r.paid?` <span class="pill due">paid</span>`:"";
+const PAGE_NAMES={"/":"Home page","/coaches/":"For gyms page","/techniques/":"Techniques","/privacy/":"Privacy"};
+const pageName=p=>PAGE_NAMES[p]||p;
+const dCountry=c=>{if(!c)return "Unknown";try{return new Intl.DisplayNames(undefined,{type:"region"}).of(c)||c}catch(e){return c}};
+const BILL={trial:["plain","Free trial"],card:["ok","Card added"],paying:["ok","Paying"],due:["due","Card needed"],cancelled:["bad","Cancelled"]};
+function billTxt(b){if(!b)return "";const until=dShort(b.trialEnds);
+  return b.state==="trial"?`Free until ${until}`:b.state==="card"?`Card added, first charge ${until}`:b.state==="paying"?`Paying${b.lastPaidAt?`, last paid ${outDay(b.lastPaidAt)}`:""}`:b.state==="due"?`Free months ended ${until}, no card yet`:`Plan cancelled (free until ${until})`}
+function dashGyms(){const d=DASH.data;if(!d)return "";const q=DASH.q.trim().toLowerCase();
+  const by={members:(a,b)=>b.members-a.members,active:(a,b)=>b.active7-a.active7||b.bookings7-a.bookings7,newest:(a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)),seen:(a,b)=>String(b.lastSeen||"").localeCompare(String(a.lastSeen||""))}[DASH.sort];
+  const list=d.gyms.filter(g=>!q||[g.name,g.head&&g.head.name,g.head&&g.head.email].some(x=>String(x||"").toLowerCase().includes(q))).sort((a,b)=>by(a,b)||a.name.localeCompare(b.name));
+  if(!d.gyms.length)return `<p class="small muted">No gyms yet. When a coach starts a gym it shows here.</p>`;
+  if(!list.length)return `<p class="small muted">No gym or head coach called that.</p>`;
+  const many=!q&&!DASH.allGyms&&list.length>15;
+  return (many?list.slice(0,12):list).map(g=>{const b=BILL[(g.billing||{}).state]||["plain",""],pay=g.payments.n?`${g.payments.n} payment${g.payments.n===1?"":"s"} recorded this month (${money(g.payments.cents,g.payments.currency)})`:"No payments recorded this month";
+    return `<div class="dgym"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><b class="dgname">${esc(g.name)}</b>${b[1]?`<span class="pill ${b[0]}">${b[1]}</span>`:""}</div>
+      <div class="dgstats"><span><b class="mono">${nf(g.members)}</b>members</span><span><b class="mono">${nf(g.active7)}</b>used the app this week</span><span><b class="mono">${nf(g.classes7)}</b>classes next 7 days</span><span><b class="mono">${nf(g.bookings7)}</b>bookings last 7 days</span></div>
+      <p class="small">${g.head?`Head coach <b>${esc(g.head.name)}</b>${g.head.email?` · <a href="mailto:${esc(g.head.email)}">${esc(g.head.email)}</a>`:""}`:"No head coach"}</p>
+      <p class="small muted">${esc(billTxt(g.billing))}. ${esc(pay)}. ${g.onApp} of ${g.members} member${g.members===1?"":"s"} on the app · ${g.coaches} coach${g.coaches===1?"":"es"} · started ${esc(outDay(g.createdAt))} · last active ${esc(dAgo(g.lastSeen))}</p></div>`}).join("")+(many?`<button class="btn" style="justify-self:start" data-a="dashallgyms">Show all ${list.length} gyms</button>`:"")}
+const roleTxt=u=>u.role==="coach"?"Coach":u.parent?"Parent":u.kid?"Kid":u.gym?"Student":"On their own";
+function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
+  const seg=`<div class="seg3" role="group" aria-label="Days shown">${[7,30,90].map(n=>`<button data-a="dashdays" data-v="${n}" aria-pressed="${DASH.days===n}">${n} days</button>`).join("")}</div>`;
+  if(!d){openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash"><h1>Dashboard</h1>${seg}<p class="small muted">Loading…</p></div>`,keep);return}
+  const T=d.totals,S7=d.series,sum=k=>S7.reduce((a,s)=>a+s[k],0),since=d.countingSince;
+  const tile=(n,l,sub)=>`<div class="stat"><b>${nf(n)}</b><span>${l}</span>${sub?`<small>${sub}</small>`:""}</div>`;
+  const vNote=!since?`Visitor counting starts with the next visit to the website.`:since>d.from?`Visitor counting started on ${dShort(since)}, so earlier days show nothing.`:"";
+  const sorts=[["members","Members"],["active","Active"],["seen","Last seen"],["newest","Newest"]];
+  const o=d.outreach,ppl=[[T.active1,"people used the app today"],[T.active7,"people used the app this week"],[T.active30,"people used the app in the last 30 days"],[T.coaches,"coaches"],[T.members,`students in gyms (${nf(T.membersOnApp)} on the app, the rest added by their coach)`],[T.kids,"kids on a parent's login"],[T.selfStudy,"people studying on their own, without a gym"],[T.new1,"signed up today"],[T.new7,"signed up this week"],[T.new30,"signed up in the last 30 days"]];
+  openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash">
+    <div class="stack" style="gap:4px"><h1>Dashboard</h1><p class="small muted">Updated ${esc(new Date(DASH.at).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}))} · <button class="linkbtn" data-a="dashload">Refresh</button></p></div>
+    <div class="stats four dtiles">${tile(d.visitors.today,"Visitors today",`${nf(d.visitors.week)} this week`)}${tile(T.new7,"Sign-ups this week",`${nf(T.new1)} today`)}${tile(T.active7,"Used the app this week",`${nf(T.active1)} today`)}${tile(T.gyms,"Gyms",`${nf(T.gymsActive)} active this week`)}</div>
+    ${seg}
+    <section class="panel stack"><div class="row between"><h2 class="label">Website visitors</h2><span class="small muted">${nf(sum("visitors"))} in ${d.days} days</span></div>
+      ${dashChart(S7,[["visitors","var(--chart)","visitors"]],"Website visitors")}
+      <p class="small muted">${nf(sum("views"))} pages viewed. The app was opened ${nf(sum("appOpens"))} times in a browser. ${vNote}</p></section>
+    <section class="panel stack"><div class="row between"><h2 class="label">Sign-ups</h2><span class="small muted">${nf(sum("students")+sum("coaches"))} in ${d.days} days · ${nf(sum("gyms"))} new gym${sum("gyms")===1?"":"s"}</span></div>
+      ${dashChart(S7,[["students","var(--chart)","students"],["coaches","var(--good)","coaches"]],"Sign-ups")}</section>
+    <section class="panel stack"><h2 class="label">Gyms · ${nf(d.gyms.length)}</h2>
+      ${d.gyms.length>3?`<input id="dash-q" type="search" placeholder="Search gyms or head coaches" value="${esc(DASH.q)}" autocomplete="off" aria-label="Search gyms">`:""}
+      ${d.gyms.length>1?`<div class="seg4" role="group" aria-label="Sort gyms by">${sorts.map(([k,l])=>`<button data-a="dashsort" data-v="${k}" aria-pressed="${DASH.sort===k}">${l}</button>`).join("")}</div>`:""}
+      <div id="dash-gyms" class="dgyms">${dashGyms()}</div></section>
+    <section class="panel stack"><h2 class="label">Newest sign-ups</h2>
+      ${d.recent.length?`<div class="drecent">${d.recent.map((u,i)=>`${i===8?`<details class="drest"><summary class="linkbtn">Show ${d.recent.length-8} more</summary>`:""}<div class="drow"><div class="row between" style="flex-wrap:nowrap"><b class="dgname">${esc(u.name)}</b><span class="small muted" style="white-space:nowrap">${esc(dAgo(u.at))}</span></div>
+        <span class="small">${u.email?`<a href="mailto:${esc(u.email)}">${esc(u.email)}</a> · `:""}${roleTxt(u)}${u.gym?` at ${esc(u.gym)}`:""}</span><span class="small muted">From ${esc(u.source.name)}${u.source.paid?" (paid)":""}${u.campaign?`, campaign “${esc(u.campaign)}”`:""}</span></div>`).join("")}${d.recent.length>8?"</details>":""}</div>`:`<p class="small muted">No one has signed up yet.</p>`}</section>
+    <div class="dgrid">
+    <section class="panel stack"><h2 class="label">Where visitors come from</h2>${dashBars(d.sources,{extra:paidPill,empty:since?"No visitors in these days yet.":"Counting starts with the next visit."})}
+      ${d.campaigns.length?`<h3 class="label dsub">Campaigns</h3>${dashBars(d.campaigns,{extra:r=>r.ads?` <span class="pill due">ads</span>`:""})}`:""}
+      <p class="small muted">Direct: they typed the address, used a bookmark, or the link didn't say where it came from.</p></section>
+    <section class="panel stack"><h2 class="label">Where sign-ups come from</h2>${dashBars(d.signupSources,{extra:r=>paidPill(r)+`<span class="small muted"> ${[r.students?`${r.students} student${r.students===1?"":"s"}`:"",r.coaches?`${r.coaches} coach${r.coaches===1?"":"es"}`:""].filter(Boolean).join(", ")}</span>`,empty:"No sign-ups in these days."})}</section>
+    <section class="panel stack"><h2 class="label">Most viewed pages</h2>${dashBars(d.pages,{name:r=>pageName(r.path),empty:"No pages viewed in these days yet."})}</section>
+    <section class="panel stack"><h2 class="label">Countries</h2>${dashBars(d.countries,{name:r=>dCountry(r.code),empty:"No visitors in these days yet."})}</section>
+    </div>
+    <section class="panel stack"><h2 class="label">People</h2><div class="dppl">${ppl.map(([n,l])=>`<div><b class="mono">${nf(n)}</b><span>${esc(l)}</span></div>`).join("")}</div></section>
+    <section class="panel stack"><h2 class="label">Outreach</h2>${o.added?dashBars([{name:"Gyms added",n:o.added},{name:"Emailed",n:o.sent},{name:"Opened their preview",n:o.opened},{name:"Claimed their gym",n:o.claimed}])+(o.optedOut?`<p class="small muted">${nf(o.optedOut)} opted out.</p>`:""):`<p class="small muted">No outreach yet.</p>`}</section>
+    <p class="small muted">How visitors are counted: on JitsFlow's own server, without cookies, so it works whether or not someone allows Google Analytics. A visitor is one phone or computer on one day: the same person on two days counts twice. Bots and link previews aren't counted. No addresses are kept, and counts are kept for 13 months. Days run on UTC time (they start at 02:00 in South Africa). Counts update about once a minute.</p>
+    </div>`,keep)}
 
 /* ============ CLAIMING A GYM FROM ITS PREVIEW (/try/<token> → /app/?claimgym=<token>) ============ */
 async function claimInit(tok){S.ui.claimGym=tok;

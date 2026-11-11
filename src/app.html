@@ -404,6 +404,18 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .mrow-main{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:2px}
 .mrow-main .nm{font-weight:600}.mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.mrow-side .btn{min-height:36px}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
+/* the JitsFlow team's dashboard */
+.dash .stat small{display:block;font-size:13px;color:var(--ink-2);margin-top:2px}.dtiles .stat b{font-size:24px}
+.dlegend{display:flex;gap:14px;flex-wrap:wrap}.dlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:0}
+.dbars{display:grid;gap:10px}.dbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline}.dbname{min-width:0;overflow-wrap:anywhere}
+.dbar i{grid-column:1/-1;height:6px;border-radius:3px;background:var(--chart);display:block;min-width:2px}.dbar .pill{font-size:11px;padding:1px 7px;vertical-align:1px}
+h3.dsub{font-size:13px;margin-top:6px}.dchart{gap:4px}.dchart svg{height:120px}@media (min-width:600px){.dchart svg{height:170px}}.dax{font-size:11px;color:var(--ink-2);font-family:var(--f-mono,ui-monospace)}.drest>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;list-style:none}.drest>summary::-webkit-details-marker{display:none}.drest[open]>summary{display:none}
+.dgyms,.drecent{display:grid}.dgym,.drow{display:grid;gap:6px;border-top:1px solid var(--line);padding:12px 0;min-width:0}.dgym:first-child,.drow:first-child{border-top:0;padding-top:2px}
+.dgname{min-width:0;overflow-wrap:anywhere}.dgym a,.drow a{color:var(--blue);overflow-wrap:anywhere}.dgym .pill{flex:none}
+.dgstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.dgstats span{background:var(--surface-2);border-radius:10px;padding:6px 8px;font-size:12px;line-height:1.25;color:var(--ink-2);min-width:0}
+.dgstats b{display:block;font-size:18px;color:var(--ink)}
+.dppl{display:grid;gap:8px}.dppl div{display:grid;grid-template-columns:4.5em minmax(0,1fr);gap:10px;align-items:baseline}.dppl b{text-align:right;font-size:17px}
+.dgrid{display:grid;gap:26px}@media (min-width:640px){.dgrid{grid-template-columns:1fr 1fr;gap:16px}}
 .outlist{display:grid}.outrow{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 2px;color:inherit;font:inherit;cursor:pointer;min-height:52px}
 .outname{display:grid;min-width:0}.outname b,.outname span{overflow-wrap:anywhere}.outrow .pill{flex:none}.outlogo{width:56px;height:56px;object-fit:contain;border-radius:10px;background:#fff;border:1px solid var(--line);flex:none}
 .pill.plain{background:var(--surface-2,var(--line));color:var(--ink)}.outsw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;border:1px solid var(--line)}
@@ -2596,6 +2608,11 @@ document.addEventListener("click",e=>{
     case "paynew": paySheet(v||null);break;
     case "copy": copyText(v);break;
     case "outopen": outreachSheet();break;
+    case "dashopen": dashOpen();break;
+    case "dashload": dashLoad();break;
+    case "dashallgyms": DASH.allGyms=true;{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;
+    case "dashdays": if(+v!==DASH.days){DASH.data=null;dashLoad(+v);dashSheet(true)}break;
+    case "dashsort": DASH.sort=v;document.querySelectorAll('[data-a="dashsort"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===v)));{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;
     case "outpro": outPro(v);break;
     case "outsend": outSend("send",el);break;
     case "outfollow": outSend("followup",el);break;
@@ -2770,6 +2787,7 @@ let noteTimer=null,qTimer=null;
 document.addEventListener("input",e=>{
   if(e.target.id==="tag-q"){const sh=S.ui.sheet,s=sh&&S.sessions.find(x=>x.id===sh.id);if(s)document.getElementById("tag-list").innerHTML=tagChoices(s,sh.kind,e.target.value);return}
   if(e.target.id==="tag-note"){tagNote(e.target.value);return}
+  if(e.target.id==="dash-q"){DASH.q=e.target.value;const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms();return}
   if(e.target.id==="cp-q"&&S.ui.cpick){S.ui.cpick.q=e.target.value;const l=document.getElementById("cp-list");if(l)l.innerHTML=contactRows();return}
   if(e.target.dataset&&e.target.dataset.bk){const b=S.ui.bulk,p=b&&b.people[+e.target.dataset.i];if(p)p[e.target.dataset.bk]=e.target.value;return}
   const t=e.target;
