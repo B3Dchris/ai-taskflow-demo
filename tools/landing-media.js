@@ -24,16 +24,17 @@ const mk = (...p) => { const d = path.join(WEB, ...p); fs.mkdirSync(d, { recursi
 const ff = (...a) => execFileSync("ffmpeg", ["-v", "error", "-y", ...a], { stdio: "inherit" });
 const kb = (f) => Math.round(fs.statSync(f).size / 1024) + " KB";
 
-// Where the phone's screen sits in the 1080x1920 reels, and where each reel's end card starts (cut before it).
+// Where the phone's screen sits in the 1080x1920 reels, and where each reel's end card starts (cut before it; the
+// social kit's compose step prints it). crf: an H.264 quality override for a clip that would pass 1.5 MB.
 const SCREEN = "crop=604:1362:238:418";
 const CLIPS = [
-  { reel: "r05-moves-and-map", out: "moves-and-map", end: 21.8 },
+  { reel: "r05-moves-and-map", out: "moves-and-map", end: 25.6, crf: 29 }, // the navy map screens need a little more squeeze to stay under 1.5 MB
   { reel: "r01-website-to-ready-gym", out: "website-to-gym", end: 21.9, poster: 13 },
-  { reel: "r03-record-a-payment", out: "record-a-payment", end: 16.6 },
+  { reel: "r03-record-a-payment", out: "record-a-payment", end: 16.65 },
   { reel: "r04-book-a-class", out: "book-a-class", end: 18.3 },
 ];
 const STILLS = [ // coach screens from the reels: [reel, second, name]
-  ["r01-website-to-ready-gym", 9.5, "website-read"], ["r01-website-to-ready-gym", 21.3, "schedule"],
+  ["r01-website-to-ready-gym", 9.6, "website-read"], ["r01-website-to-ready-gym", 21.3, "schedule"],
   ["r03-record-a-payment", 0.5, "money"], ["r03-record-a-payment", 3.5, "reminders"],
 ];
 
@@ -126,7 +127,7 @@ function reels() {
   for (const c of CLIPS) {
     const src = path.join(REELS, c.reel + ".mp4"), mp4 = path.join(vd, c.out + ".mp4"), poster = path.join(vd, c.out + ".webp");
     ff("-i", src, "-t", String(c.end), "-an", "-vf", `${SCREEN},scale=600:-2:flags=lanczos,fps=24`, "-c:v", "libx264", "-profile:v", "main", "-pix_fmt", "yuv420p",
-      "-crf", "26", "-preset", "veryslow", "-tune", "animation", "-movflags", "+faststart", mp4);
+      "-crf", String(c.crf || 26), "-preset", "veryslow", "-tune", "animation", "-movflags", "+faststart", mp4);
     // The poster is the clip's first frame, so nothing jumps when it starts playing, unless that frame is a blank form.
     ff("-ss", String(c.poster || 0), "-i", mp4, "-frames:v", "1", "-c:v", "libwebp", "-quality", "80", "-compression_level", "6", poster);
     console.log(`clip ${c.out}: ${kb(mp4)}, poster ${kb(poster)}`);
