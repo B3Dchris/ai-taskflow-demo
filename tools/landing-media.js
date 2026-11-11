@@ -9,8 +9,8 @@
 //   web/img/thumbs/<move>.webp       560 px thumbnails of the technique photos in web/img/techniques/
 //   web/video/<name>.mp4 + .webp     the phone screen cut out of a social reel: 600 px wide, H.264, no sound, poster frame
 //   web/img/coach/<name>.webp        still coach screens from the same reels
-//   web/data/chains-demo.json        the app's attack chains, with the moves and positions they name (the home page's
-//                                    "play a scramble" demo; build.py turns it into the walk the page inlines)
+//   web/data/chains-demo.json        the app's attack chains, with the moves and positions they name (build.py typesets
+//                                    the home page's closed guard notebook and picks the chain lit up on its position map)
 "use strict";
 const { chromium, devices } = require("playwright");
 const { spawn, execFileSync } = require("child_process");

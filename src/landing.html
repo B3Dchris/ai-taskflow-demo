@@ -21,6 +21,8 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<!-- wide screens: the hero clip's poster is the largest thing in the first screen, so fetch it first -->
+<link rel="preload" as="image" href="/video/moves-and-map.webp" media="(min-width: 760px)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -170,74 +172,16 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 .beltrule i:nth-child(1){background:var(--b-white)}.beltrule i:nth-child(2){background:var(--b-blue)}.beltrule i:nth-child(3){background:var(--b-purple)}.beltrule i:nth-child(4){background:var(--b-brown)}
 .beltrule i:nth-child(5){background:linear-gradient(90deg,var(--b-black) 60%,var(--b-red) 60%,var(--b-red) 86%,var(--b-black) 86%)}
 
-/* hero: the headline runs across, the copy sits in a narrow column, the scramble takes the wide one */
+/* hero: the headline and the copy on the left, the app itself playing in a phone on the right (on phones, below) */
 .lead{padding-block:22px 92px}
 .lead h1{font-size:clamp(44px,14.6vw,94px);font-weight:800;text-transform:uppercase;color:#F4F6FB;line-height:.94;max-width:11.5em;margin-top:14px}
 .lead h1 span{display:inline}
 .lead h1 em{font-style:normal;color:#8FB0FF}
-.leadgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:20px}
+.leadgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:28px}
 .leadcopy{display:flex;flex-direction:column;gap:16px}
-.lead .lede{margin:0;color:#C9D3E6;font-size:clamp(18px,2vw,21px)}
-.howto{display:none;font-family:var(--f-mono);font-size:13px;line-height:1.6;color:#9FB0D0;border-left:3px solid var(--b-red);padding:2px 0 2px 12px;max-width:30em}
-
-/* the scramble */
-.scramble{position:relative;background:#101C3A;border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:0 16px 14px;box-shadow:0 30px 60px -30px rgba(0,0,0,.7);color:#EEF2FA;overflow:hidden}
-.scr-belt{display:grid;grid-template-columns:repeat(5,1fr);height:8px;margin:0 -16px}
-.scr-belt i{opacity:.16;transition:opacity .25s}.scr-belt i.on{opacity:1}
-.scr-belt i:nth-child(1){background:var(--b-white)}.scr-belt i:nth-child(2){background:#3D6FD8}.scr-belt i:nth-child(3){background:#8A4FC4}.scr-belt i:nth-child(4){background:#9A6A43}
-.scr-belt i:nth-child(5){background:linear-gradient(90deg,#000 62%,var(--b-red) 62%,var(--b-red) 88%,#000 88%);outline:1px solid rgba(255,255,255,.2)}
-.scr-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-top:12px}
-.scr-kicker{font-family:var(--f-mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#9FB0D0}
-.scr-starts{display:flex;flex-wrap:wrap;gap:6px}
-.scr-start{font:600 14px/1 var(--f-body);color:#C9D3E6;background:transparent;border:1px solid rgba(255,255,255,.2);border-radius:999px;min-height:44px;padding:0 11px;cursor:pointer}
-.scr-start[aria-pressed="true"]{background:#F4F6FB;color:#0D1730;border-color:#F4F6FB}
-.scr-start:hover{border-color:#8FB0FF}
-.scr-path{list-style:none;margin:12px 0 0;padding:0 0 4px;display:flex;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;font-family:var(--f-mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#9FB0D0;min-height:22px}
-.scr-path::-webkit-scrollbar{display:none}
-.scr-path li+li::before{content:"\203A";margin-right:6px;color:#5E6E90}
-.scr-path li[aria-current]{color:#F4F6FB}
-.scr-path li.tap{color:#FF8A80}
-.scr-step{display:grid;grid-template-columns:116px minmax(0,1fr);grid-template-areas:"pic pos" "why why" "name name";gap:10px 14px;margin-top:10px;align-items:start}
-.scr-pic{grid-area:pic;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:radial-gradient(110% 90% at 50% 25%,#1D3264 0%,#0B1530 70%);border:1px solid rgba(255,255,255,.08)}
-.scr-pic svg,.scr-pic img{display:block;width:100%;height:100%;object-fit:cover}
-.scr-pic svg{padding:4% 6% 0}
-.scr-move{display:contents}
-.scr-pos{grid-area:pos;font-family:var(--f-mono);font-size:12px;line-height:1.45;letter-spacing:.04em;text-transform:uppercase;color:#9FB0D0;align-self:center}
-.scr-meta{display:block;margin-top:6px;font-family:var(--f-body);font-size:14px;letter-spacing:0;text-transform:none;color:#C9D3E6}
-.scr-meta i{display:inline-block;width:18px;height:7px;border-radius:2px;background:var(--bc);margin-right:6px;vertical-align:middle;outline:1px solid rgba(255,255,255,.25)}
-.scr-watch{display:inline-flex;align-items:center;min-height:44px;margin-top:2px;color:#8FB0FF;font-weight:700;font-size:15px;text-transform:none;letter-spacing:0;font-family:var(--f-body)}
-.scr-why{grid-area:why;font-family:var(--f-mono);font-size:14px;line-height:1.45;color:var(--amber);min-height:2.9em}
-.scr-why span,.scr-if{font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid currentColor;border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:1px}
-.scr-name{grid-area:name;font-size:clamp(28px,4vw,36px);font-weight:800;text-transform:uppercase;line-height:1;min-height:2em;color:#F4F6FB}
-.scr-name::before{content:"You \2192  ";font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.1em;color:#8FB0FF;vertical-align:.5em}
-.scr-q{margin-top:12px;min-height:204px;display:flex;flex-direction:column;gap:8px}
-.scr-ask{font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#9FB0D0}
-.scr-opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.scr-opt{display:flex;align-items:center;gap:4px;width:100%;min-height:56px;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.04);color:#EEF2FA;font:600 16px/1.3 var(--f-body);text-align:left;text-decoration:none;cursor:pointer}
-.scr-opt .scr-if{color:var(--amber);flex:none}
-.scr-opt:hover{border-color:#8FB0FF;background:rgba(143,176,255,.1)}
-.scr-opt:focus-visible,.scr-start:focus-visible,.scr-ctl:focus-visible{outline:3px solid #FFFFFF;outline-offset:2px}
-.scr-tap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px 16px;align-items:center;padding-top:6px}
-.scr-stamp{display:inline-block;background:var(--b-red);color:#FFFFFF;font:800 56px/1 var(--f-display);text-transform:uppercase;padding:6px 16px 4px;border-radius:6px;transform:rotate(-4deg);box-shadow:0 0 0 3px #101C3A,0 0 0 5px var(--b-red)}
-.scr-tap p{color:#C9D3E6;font-size:16px}.scr-tap p b{color:#F4F6FB}
-.scr-again{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px}
-.scr-again .btn{min-height:48px;font-size:16px}
-.scramble .btn{background:rgba(255,255,255,.06);color:#F4F6FB;border-color:rgba(255,255,255,.22);cursor:pointer;font-family:var(--f-body)}
-.scramble .btn.primary{background:#5B8CFF;border-color:#5B8CFF;color:#07101F}
-.scr-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;margin-top:10px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.16);font-size:15px}
-.scr-foot a{color:#C9D3E6;min-height:44px;display:inline-flex;align-items:center}
-.scr-ctls{display:flex;gap:2px}
-.scr-foot .wide{display:none}
-.scr-ctl{font:600 15px/1 var(--f-body);color:#8FB0FF;background:none;border:0;min-height:44px;padding:0 6px;cursor:pointer}
-.scr-ctl:disabled{visibility:hidden}
-@media (prefers-reduced-motion: no-preference){
-  .scr-step.fresh .scr-name,.scr-step.fresh .scr-why,.scr-step.fresh .scr-pic{animation:scr-in .28s ease-out both}
-  .scr-step.fresh .scr-pic{animation-delay:.04s}
-  .scr-tap.fresh .scr-stamp{animation:scr-stamp .3s cubic-bezier(.2,1.6,.4,1) both}
-  .scr-opt{transition:border-color .12s,background .12s}
-}
-@keyframes scr-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes scr-stamp{from{opacity:0;transform:rotate(-14deg) scale(1.5)}to{opacity:1;transform:rotate(-4deg) scale(1)}}
+.lead .lede{margin:0;color:#C9D3E6;font-size:clamp(18px,2vw,21px);max-width:30em}
+.lead .cta{margin-top:6px}
+.heroclip .device{--w:min(272px,70vw)}
 
 /* two doors: a white belt for people who train, a black belt for people who run the gym */
 .doors{position:relative;z-index:3;display:grid;grid-template-columns:minmax(0,1fr);gap:18px;margin-top:-56px}
@@ -276,11 +220,12 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 .tcard{position:relative;display:flex;flex-direction:column;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:6px;overflow:hidden;text-decoration:none;color:var(--ink);box-shadow:0 1px 0 var(--line),0 14px 26px -22px rgba(17,23,34,.55)}
 .tcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .tno{position:absolute;right:8px;top:8px;z-index:1;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;color:#E8ECF4;background:rgba(10,16,32,.7);padding:2px 6px;border-radius:3px}
-.tpic{position:relative;display:block;aspect-ratio:1/1;background:#0E1A33;overflow:hidden}
+.tpic{position:relative;display:block;aspect-ratio:4/3;background:#0E1A33;overflow:hidden}
 .tpic img{width:100%;height:100%;object-fit:cover}
-.tpic.fig{background:radial-gradient(110% 80% at 50% 30%,#1D3264 0%,#0E1A33 65%)}
-.tpic.fig img{object-fit:contain;padding:14% 6% 20%}
-.tpic .from{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#C9D3E6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:3px 8px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* a video: the play badge, and whose video it is */
+.playb{position:absolute;left:50%;top:50%;width:46px;height:32px;margin:-16px 0 0 -23px;border-radius:9px;background:rgba(200,30,30,.92);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.playb::after{content:"";position:absolute;left:18px;top:9px;border-style:solid;border-width:7px 0 7px 12px;border-color:transparent transparent transparent #fff}
+.vcred{position:absolute;left:8px;bottom:8px;max-width:calc(100% - 16px);font-family:var(--f-mono);font-size:11px;letter-spacing:.03em;color:#E8ECF4;background:rgba(10,16,32,.72);padding:2px 7px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tmeta{position:relative;flex:1;display:flex;flex-direction:column;gap:5px;padding:17px 14px 16px;background-image:repeating-linear-gradient(180deg,transparent 0 25px,var(--rule) 25px 26px);background-position:0 12px}
 .tmeta::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--bc);box-shadow:0 1px 0 rgba(127,127,127,.25)}
 .tcat{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
@@ -322,10 +267,15 @@ footer .footlinks{line-height:2.6}
 .tname::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--tc)}
 .tier ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .t0{--tc:#1D7748}.t1{--tc:#3C9A6A}.t2{--tc:#1D4FB5}.t3{--tc:#6B7FA8}.t4{--tc:#C27A12}.t5{--tc:#B3261E}
-.pcard{display:flex;flex-direction:column;height:100%;border-radius:12px;overflow:hidden;background:radial-gradient(110% 90% at 50% 25%,#1D3264 0%,#0E1A33 70%);text-decoration:none;color:#EEF2FA;font-weight:700;font-size:15px;line-height:1.2}
-.pcard img{width:100%;height:auto;aspect-ratio:16/10;object-fit:contain;padding:4px 8px 0}
-.pcard span{padding:4px 10px 10px}
-.pcard:hover span{text-decoration:underline}
+.pcard{display:flex;flex-direction:column;height:100%;border-radius:12px;overflow:hidden;background:#0E1A33;text-decoration:none;color:#EEF2FA;font-weight:700;font-size:15px;line-height:1.2}
+.pcard>img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+.pcard.fig{background:radial-gradient(110% 90% at 50% 25%,#1D3264 0%,#0E1A33 70%)}
+.pcard.fig>img{object-fit:contain;padding:4px 8px 0}
+.pcard .playb{top:calc(50% - 14px);transform:scale(.8)}
+.pfig{position:absolute;right:6px;top:6px;width:54px;height:41px;border-radius:8px;background:rgba(10,16,32,.82);border:1px solid rgba(255,255,255,.14)}
+.pfig img{width:100%;height:100%;object-fit:contain;padding:2px 3px 0}
+.pname{padding:8px 10px 10px}
+.pcard:hover .pname{text-decoration:underline}
 .pcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:15px;color:var(--ink-2);margin-top:4px}
 .legend i{display:inline-block;width:22px;height:5px;border-radius:3px;margin-right:6px;vertical-align:middle;background:#6E9BFF}.legend i.them{background:#9AA6BA}
@@ -366,18 +316,11 @@ footer .footlinks{line-height:2.6}
 @media (min-width:720px){.browse{grid-template-columns:1fr 1fr}}
 @media (min-width:760px){
   .lead{padding-block:18px 104px}
-  .lead h1{margin-top:10px}
+  .lead h1{margin-top:10px;font-size:clamp(52px,5.7vw,80px)}
   .lead h1 span{display:block}
-  .leadgrid{grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:44px;margin-top:30px;align-items:start}
+  .leadgrid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:44px;align-items:center}
   .leadcopy{padding-top:6px}
-  .scramble{padding:0 22px 16px}.scr-belt{margin:0 -22px}
-  .scr-step{grid-template-columns:184px minmax(0,1fr);grid-template-areas:"pic pos" "pic why" "pic name";gap:6px 20px;align-items:start}
-  .scr-pos{align-self:start}
-  .scr-why{min-height:1.5em}
-  .scr-q{min-height:196px}
-  .scr-foot .wide{display:inline}
-  .howto{display:block}
-  .scr-start{font-size:15px;padding:0 14px}
+  .heroclip .device{--w:280px}
   .beltrule{width:200px}
   .doors{grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:22px;align-items:start;margin-top:-64px}
   .d-gym{margin-top:44px}
@@ -387,9 +330,7 @@ footer .footlinks{line-height:2.6}
   .railnav{display:flex}
   .tier{grid-template-columns:150px minmax(0,1fr);align-items:center;padding:12px 12px 12px 18px}
   .tier ul{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .pcard img{aspect-ratio:4/3}
   .study{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:start}
-  .study .clip{grid-row:span 2}
   .gyms .wrap{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}.gyms ul{grid-template-columns:1fr 1fr}
   .sa{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:56px;align-items:start}
   .ledger div{grid-template-columns:200px minmax(0,1fr);gap:16px}
@@ -419,15 +360,13 @@ main>.gyms,main>.final,main>#map{z-index:auto}
   .bs-side{left:calc(100% + 48px);right:auto;bottom:auto;top:0;width:calc(min(1080px,100vw - 40px) - 100% - 60px);max-width:none;height:170px}
   .bs-final{position:absolute;right:20px;top:50%;width:330px;height:270px;margin:-135px 0 0}
 }
-/* the map's lit chain: one branch of the scramble, standing to the tap (marked by the script after the map) */
+/* the map's lit chain: one of the app's chains, standing to the tap (numbered by build.py; web/js/belt.js draws the line) */
 .pcard{position:relative}
 .pcard[data-step]{box-shadow:inset 0 0 0 2px #5B8CFF}
 .pcard[data-step]::before{content:attr(data-step) / "";position:absolute;left:8px;top:8px;min-width:24px;height:24px;border-radius:12px;background:#5B8CFF;color:#07101F;font:600 13px/24px var(--f-mono);text-align:center}
-.pcard[data-tap]::after{content:"Tap" / "";position:absolute;right:8px;top:8px;height:22px;padding:0 7px;border-radius:4px;background:var(--b-red);color:#FFFFFF;font:800 15px/23px var(--f-display);text-transform:uppercase;transform:rotate(-4deg)}
-.lg-chain{display:none}.chain .lg-chain{display:inline}
+.pcard[data-tap]::after{content:"Tap" / "";position:absolute;right:66px;top:10px;height:22px;padding:0 7px;border-radius:4px;background:var(--b-red);color:#FFFFFF;font:800 15px/23px var(--f-display);text-transform:uppercase;transform:rotate(-4deg)}
 .legend i.chain{background:linear-gradient(90deg,#5B8CFF 70%,var(--b-red) 70%)}
 </style>
-<noscript><style>.scr-starts,.scr-ctls{display:none}</style></noscript>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
@@ -442,64 +381,21 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 </header>
 
   <section class="wrap lead" aria-labelledby="hero-h">
-    <p class="eyebrow">No-gi Jiu-Jitsu · made in Johannesburg</p>
-    <h1 id="hero-h"><span>Know what to do</span> <span>when <em>they react.</em></span></h1>
     <div class="leadgrid">
       <div class="leadcopy">
-        <p class="lede">Your first move rarely works. JitsFlow maps what comes next from every position, across @@NTECH@@ techniques from white to black belt. Free for students, and for gym owners it runs the timetable, bookings and fees.</p>
-        <p class="howto">Try it: pick where you start, then what they do. Every branch is a real chain from the app, and every one ends in a tap.</p>
+        <p class="eyebrow">No-gi Jiu-Jitsu · made in Johannesburg</p>
+        <h1 id="hero-h"><span>Know what to do</span> <span>when <em>they react.</em></span></h1>
+        <p class="lede">Your first move rarely works. JitsFlow maps what comes next from every position, across @@NTECH@@ techniques from white to black belt, each with a video. Free for students, and for gym owners it runs the timetable, bookings and fees.</p>
+        <div class="cta"><a class="btn primary" href="/app/">Open JitsFlow</a><a class="btn" href="/coaches/">For gyms</a></div>
         <div class="beltslot bs-hero" data-belt="white" data-pose="lie" aria-hidden="true"><svg style="--bc:#F4F4F0;--bar:#151515" focusable="false"><use href="#jf-belt"/></svg></div>
       </div>
-      <section class="scramble" id="scramble" aria-labelledby="scr-h">@@SCRAMBLE@@</section>
+      <figure class="clip heroclip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>The Moves library by belt, then the flow map: tap a position and play a chain through to the tap. (Screen recording, no sound.)</figcaption>
+      </figure>
     </div>
   </section>
 </div><!-- /night -->
-<script type="application/json" id="scr-data">@@SCRAMBLE_DATA@@</script>
-<script id="scramble-js">
-/* Play a scramble: the first step above is plain HTML (each reaction links to the move that answers it). This redraws it
-   from the app's chains and lets you play it out in place. No libraries; buttons and links only, so it works by keyboard. */
-(function(){
-  var root=document.getElementById("scramble"),D;try{D=JSON.parse(document.getElementById("scr-data").textContent)}catch(e){return}
-  if(!root||!D||!D.s||!D.s.length)return;
-  var st={s:0,p:[]},BELT={white:"#F4F4F0",blue:"#1F4FB0",purple:"#5E2D8C",brown:"#6A4326",black:"#151515"};
-  function esc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
-  function low(t){return t.charAt(0).toLowerCase()+t.slice(1)}
-  function nodes(){var n=D.s[st.s][3],out=[n];for(var i=0;i<st.p.length;i++){n=n[2][st.p[i]][1];out.push(n)}return out}
-  function why(){if(!st.p.length)return '<span>Start</span> '+esc(D.s[st.s][2].replace(/^Start:\s*/,""));
-    var ns=nodes(),prev=ns[ns.length-2];return '<span>If</span> '+esc(low(prev[2][st.p[st.p.length-1]][0]))}
-  function pic(id){var t=D.t[id];if(t[5])return '<div class="scr-pic"><img src="/img/thumbs/'+id+'.webp" alt="Photo: '+esc(t[0])+', shown by two grapplers" width="560" height="560" decoding="async"></div>';
-    return '<div class="scr-pic" role="img" aria-label="Diagram of '+esc(D.p[t[4]])+', you in blue">'+(D.f[t[4]]||"")+'</div>'}
-  function render(fresh){
-    var ns=nodes(),n=ns[ns.length-1],t=D.t[n[0]],tap=!!n[1],depth=st.p.length;
-    [].forEach.call(root.querySelectorAll(".scr-start"),function(b,i){b.setAttribute("aria-pressed",i===st.s?"true":"false")});
-    [].forEach.call(root.querySelectorAll(".scr-belt i"),function(b,i){b.className=tap||i<=depth?"on":""});
-    var path='<li>'+esc(D.s[st.s][1])+'</li>'+ns.map(function(x,i){return '<li'+(i===ns.length-1&&!tap?' aria-current="step"':'')+'>'+esc(D.t[x[0]][0])+'</li>'}).join("")+(tap?'<li class="tap" aria-current="step">Tap</li>':'');
-    var pl=root.querySelector(".scr-path");pl.innerHTML=path;pl.scrollLeft=depth?pl.scrollWidth:0;
-    var step=root.querySelector(".scr-step");
-    step.innerHTML=pic(n[0])+
-      '<div class="scr-move"><p class="scr-pos">'+esc(D.p[t[4]])+'<span class="scr-meta"><i style="--bc:'+(BELT[t[2]]||"#1F4FB0")+'"></i>'+esc(t[3])+' · '+esc(t[2].charAt(0).toUpperCase()+t[2].slice(1))+' belt <a class="scr-watch" href="/techniques/'+t[1]+'/">Watch<span class="vh"> '+esc(t[0])+'</span> &rarr;</a></span></p>'+
-      '<p class="scr-why">'+why()+'</p><h3 class="scr-name" tabindex="-1">'+esc(t[0])+'</h3></div>';
-    step.classList.toggle("fresh",!!fresh);
-    var q=root.querySelector(".scr-q");
-    if(tap){q.innerHTML='<div class="scr-tap'+(fresh?' fresh':'')+'"><b class="scr-stamp" aria-hidden="true">Tap</b><p>They tap to the <b>'+esc(t[0])+'</b>. '+depth+' reaction'+(depth===1?'':'s')+' from '+esc(low(D.s[st.s][1]))+'.</p>'+
-      '<div class="scr-again"><button type="button" class="btn primary" data-scr="reset">Start over</button><button type="button" class="btn" data-scr="back">Try their other reaction</button></div></div>'}
-    else q.innerHTML='<p class="scr-ask">What do they do?</p><ul class="scr-opts" role="list">'+n[2].map(function(k,i){return '<li><button type="button" class="scr-opt" data-i="'+i+'"><span class="scr-if">If</span><span>'+esc(low(k[0]))+'</span></button></li>'}).join("")+'</ul>';
-    [].forEach.call(root.querySelectorAll(".scr-ctl"),function(b){b.disabled=!depth||tap});
-  }
-  function say(m){var l=document.getElementById("scr-live");if(l)l.textContent=m}
-  function focusFirst(){var f=root.querySelector(".scr-q button");if(f)f.focus({preventScroll:true})}
-  root.addEventListener("click",function(e){
-    var b=e.target.closest("button");if(!b||!root.contains(b))return;
-    if(b.classList.contains("scr-opt")){var n=nodes().pop(),k=n[2][+b.getAttribute("data-i")];if(!k)return;st.p.push(+b.getAttribute("data-i"));render(true);
-      var t=D.t[k[1][0]];say("If "+low(k[0])+": "+t[0]+", "+t[3]+", "+t[2]+" belt."+(k[1][1]?" They tap.":""));focusFirst();return}
-    if(b.hasAttribute("data-start")){st.s=+b.getAttribute("data-start");st.p=[];render(true);say("Starting from "+D.s[st.s][1]+": "+D.t[D.s[st.s][3][0]][0]+".");return}
-    var a=b.getAttribute("data-scr");
-    if(a==="reset"){st.p=[];render(true);say("Back to the start: "+D.t[D.s[st.s][3][0]][0]+".");focusFirst()}
-    else if(a==="back"&&st.p.length){st.p.pop();render(true);say("One step back: "+D.t[nodes().pop()[0]][0]+".");focusFirst()}
-  });
-  render(false);
-})();
-</script>
 <main>
 
   <section class="wrap doors" aria-label="Two ways in">
@@ -557,10 +453,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
         <p class="muted">Every attacking position has a tree of what to do next. Start with the setup; each branch is how they react and what you switch to. This is the closed guard page, as the app has it.</p>
         @@NOTEBOOK@@
       </div>
-      <figure class="clip">
-        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
-        <figcaption>The Moves library by belt, then the flow map: tap a position and play a chain through to the tap. (Screen recording, no sound.)</figcaption>
-      </figure>
       <div class="copy">
         <h3>The same chains from the bottom</h3>
         <p class="muted">Flip any position and the same tree shows what they'll go for, how to stop each attack, and what they'll switch to when you do. 38 escapes and submission defenses.</p>
@@ -585,16 +477,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
       <p class="legend"><span><i></i>You</span><span><i class="them"></i>Your partner</span><span class="lg-chain"><i class="chain"></i>Numbered: one chain from the app, standing to the tap</span></p>
     </div>
     @@POS_MAP@@
-    <script id="chain-js">
-/* The map's lit chain: the scramble's longest branch from standing, by position (standing, front headlock, turtle, back
-   control: then the tap). Numbers the cards here, during parsing, so nothing moves later; web/js/belt.js draws the line. */
-(function(){try{var D=JSON.parse(document.getElementById("scr-data").textContent),st=D.s.filter(function(x){return x[0]==="standing"})[0]||D.s[0],best=[];
-  (function walk(n,ps){var p=D.t[n[0]][4];if(ps[ps.length-1]!==p)ps=ps.concat(p);if(n[1]){if(ps.length>best.length)best=ps;return}n[2].forEach(function(k){walk(k[1],ps)})})(st[3],[]);
-  var cards=best.map(function(p){var im=document.querySelector('.posmap img[src="/img/fig/'+p+'.svg"]');return im&&im.closest(".pcard")});
-  if(best.length<3||cards.some(function(a){return !a}))return;
-  cards.forEach(function(a,i){a.setAttribute("data-step",i+1)});cards[cards.length-1].setAttribute("data-tap","");
-  document.documentElement.classList.add("chain")}catch(e){}})();
-</script>
     <p class="seeall" style="margin-top:18px"><a href="/positions/">All positions, best to worst</a></p>
   </section>
 
@@ -675,7 +557,7 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 
   <section class="final">
     <div class="wrap">
-      <h2>Pick a position. Play it out.</h2>
+      <h2>Know what to do next, every roll.</h2>
       <p style="font-size:20px;max-width:32em;color:#C9D3E6">Open JitsFlow, rate what you already know in about five minutes, and see what to do when they react, from every position.</p>
       <div class="go"><a class="btn" href="/app/">Open JitsFlow</a><a class="btn ghost" href="/coaches/">JitsFlow for gyms</a></div>
       <div class="beltslot bs-final" data-belt="black" data-pose="knot" aria-hidden="true"><svg focusable="false"><use href="#jf-knot"/></svg></div>
