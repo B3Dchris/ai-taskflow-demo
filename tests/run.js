@@ -175,7 +175,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   // --- belt stages
   await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');
   for(const k of ['purple','brown','black','blue']){await p.locator(`.beltchips [data-v="${k}"]`).tap();const r=await ev(k=>({n:document.querySelectorAll('#learn-groups .trow').length,want:TECH.filter(t=>beltOf(t)===k).length}),k);ok(r.n===r.want&&r.want>0,`belt stage ${k} lists ${r.n} of ${r.want}`);await overflow('belt '+k)}
-  await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltchips [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
+  await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltpath [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
   ok(await ev(()=>goal()==='purple'&&rateable().length>54&&curBlocks()!==BLOCKS&&curBlocks().every(b=>b.ids.every(id=>TM[id]))),'purple goal changes blocks and rating scope');
   await p.locator('.bstage details.grp summary').first().tap();await p.locator('.bstage [data-a="comp"]').first().tap();ok(await ev(()=>(P().comp.purple||[]).length===1),'coach checklist ticks');
   ok(await ev(()=>/Purple-belt skill readiness/.test(document.body.innerText)&&!!document.querySelector('.belt .b.blue')),'Belt shows purple goal on a blue belt');await overflow('belt purple');
@@ -215,7 +215,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>/JitsFlow$/.test(document.title)&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
   ok(await ev(()=>document.querySelector('nav.tabs [data-v="learn"]').textContent.trim()==='Learn'),'tab is called Learn');
   for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="learn-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
-    ok(await ev(k=>location.hash==='#learn-belt'&&document.querySelector(`.beltchips [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
+    ok(await ev(k=>location.hash==='#learn-belt'&&document.querySelector(`.beltpath [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
   // --- glossary terms
   await ev(()=>techSheet('hg_frames'));const terms=await ev(()=>[...document.querySelectorAll('#sheet .term')].map(b=>b.dataset.v));
   ok(terms.includes('Underhook')&&terms.length>=4,`technique page has tappable terms (${terms.join(', ')})`);
@@ -247,8 +247,8 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(n=>P().settings.days.length===n+1&&P().settings.perWeek===n+1,before),'adding a training day updates the plan');await p.locator('[data-a="day"][data-v="5"]').tap();
   await ev(()=>techSheet('buggy_choke'));ok(await ev(()=>/Check with your coach/.test(document.querySelector('.coachbox').innerText)),'flagged move asks for a coach check');
   await p.locator('[data-a="coachok"]').tap();ok(await ev(()=>coachOK('buggy_choke')&&/Coach checked/.test(document.querySelector('.coachbox').innerText)),'coach check can be ticked');await p.tap('#sheetbar .back');
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltchips [data-v="black"]').tap();
-  ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltchips [data-v="blue"]').tap();
+  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltpath [data-v="black"]').tap();
+  ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltpath [data-v="blue"]').tap();
   await ev(()=>{window.__savedVid=VIDS.knee_cut;VIDS.knee_cut={v:'dQw4w9WgXcQ',title:'Knee cut pass',channel:'Test Channel',nogi:true};techSheet('knee_cut')});
   if(MODE==='local'){
     ok(await ev(()=>{const f=document.querySelector('#sheet .ytembed iframe');return f&&/youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/.test(f.src)&&f.getAttribute('loading')==='lazy'&&/autoplay/.test(f.getAttribute('allow'))&&/Test Channel/.test(document.querySelector('#sheet .ytcap').innerText)&&!document.querySelector('#sheet .ytface')}),'technique page shows YouTube\'s own player (lazy-loaded), so one tap plays it');
