@@ -130,7 +130,7 @@ function startSite() {
     ok(rowA.token_hash === require("crypto").createHash("sha256").update(tokA).digest("hex"), "the link is looked up by the token's hash");
     ok(rowA.logo_type === "image/png" && rowA.logo.length === LOGO.length && rowA.subject === "Green Lions BJJ is already set up on JitsFlow", "logo stored as PNG; subject suggested");
     // Built straight after the import (no admin step): a real gym, owned by nobody.
-    const gA = rowA.gym_id, gym = async (id) => (await pool.query("select * from gyms where id=$1", [id])).rows[0];
+    let gA = rowA.gym_id; const gym = async (id) => (await pool.query("select * from gyms where id=$1", [id])).rows[0];
     let G0 = await gym(gA);
     ok(A.gym && A.gym.id === String(gA) && A.gym.unclaimed && A.appUrl === `/app/?gym=${tokA}`, "the import builds the gym by itself: " + JSON.stringify(A.gym));
     ok(G0 && G0.claim && G0.claim.prospectId === idA && G0.claim.builtAt && G0.head_coach_id === null && G0.name === "Green Lions BJJ", "the built gym: unclaimed, no head coach, the gym's name");
@@ -167,6 +167,12 @@ function startSite() {
     ok(r.s === 302 && r.h.get("location") === `/app/?gym=${tokA}` && /noindex/.test(r.h.get("x-robots-tag") || "") && r.h.get("cache-control") === "no-store", "the old /try/ link goes to the app's preview of the gym");
     r = await pub("GET", `/app/?gym=${tokA}`); ok(r.s === 200 && /JF_BUILD/.test(r.t), "the app opens for it");
     const pv = (method, url, body, extra = {}) => anon(method, url, body, { "x-jf-preview": tokA, ...extra });
+    { // a link sent before gyms were built up front (no gym yet) builds it when first opened, instead of saying the link is gone
+      const before = (await pool.query("select gym_id from prospects where token=$1", [tokA])).rows[0].gym_id;
+      await pool.query("update prospects set gym_id=null where token=$1", [tokA]); await pool.query("delete from gyms where id=$1", [before]);
+      r = await pv("GET", "/me"); const after = (await pool.query("select gym_id from prospects where token=$1", [tokA])).rows[0].gym_id;
+      ok(r.s === 200 && after && String(after) !== String(before) && (await pool.query("select claim is not null as u from gyms where id=$1", [after])).rows[0].u, "an older link with no gym built yet builds the gym when it's first opened");
+      gA = after; }
     r = await pv("GET", "/me");
     ok(r.s === 200 && r.j.me.preview && r.j.me.preview.name === "Green Lions BJJ" && r.j.me.preview.email === "thabo@greenlions.test" && r.j.me.role === "coach" && r.j.me.gym.head === true && r.j.me.gym.id === String(gA) && r.j.me.id === "preview" && !r.j.me.email && !r.j.me.admin,
       "the link shows the gym as its head coach would see it (nobody signed in): " + JSON.stringify(r.j && r.j.me && { p: r.j.me.preview, g: r.j.me.gym && r.j.me.gym.id }));

@@ -156,7 +156,9 @@ function makeApi(pool, { secureCookies, build }) {
     return u || null;
   }
   async function previewOf(t) {
-    const p = await outreach.findToken(q, t);
+    let p = await outreach.findToken(q, t);
+    // A gym added before gyms were built up front (or one cleaned up since) has no gym yet: build it the first time its link is opened.
+    if (p && !p.gym_id && p.status !== "optedout" && p.status !== "claimed" && p.name && p.import_state !== "running" && (await buildGym(p.id))) p = await outreach.findToken(q, t);
     if (!p || !p.gym_id || !p.gym_unclaimed || p.status === "optedout") return null;
     const u = await standIn(p.gym_id, { name: clean(p.owner_name, 80) || "Head coach" }); if (!u) return null;
     u.preview = { token: p.token, prospectId: String(p.id), name: outreach.nameOf(p), domain: p.domain, email: p.owner_email || "", logo: p.logo ? `/try/${p.token}/logo` : null, accent: p.accent || null };
