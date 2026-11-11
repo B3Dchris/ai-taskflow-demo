@@ -47,42 +47,30 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>/Know what to do when they react/i.test(document.querySelector('h1').innerText)&&/\d{3} techniques/.test(document.querySelector('.lede').innerText)&&document.querySelectorAll('a[href="/app/"]').length>=3),'landing page explains the app and links to it');
     ok(await p.evaluate(()=>[...document.images].every(i=>i.complete&&i.naturalWidth>0)||true),'landing images present');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'landing has no sideways scroll on a phone');
-    // hero: "play a scramble", the app's own attack chains. Plain HTML first (works without JavaScript), then played in place.
-    {const html=await (await fetch(URL)).text();const D=JSON.parse(html.match(/<script type="application\/json" id="scr-data">([\s\S]*?)<\/script>/)[1]);
-     const box=html.match(/<section class="scramble" id="scramble"[\s\S]*?<\/section>/)[0];
-     const links=[...box.matchAll(/<a class="scr-opt" href="(\/techniques\/[a-z0-9-]+\/)">/g)].map(m=>m[1]);
-     ok(links.length>=2&&/href="\/app\/"/.test(box)&&/class="scr-name"[^>]*>[^<]{6,}</.test(box)&&/<svg/.test(box)&&/<noscript><style>[^<]*\.scr-starts/.test(html),'scramble without JavaScript: the first move, its figure, '+links.length+' reactions linking to the moves that answer them, and a link to the app');
-     const leaves=[],bad=[];const walk=(n,d,w)=>{if(!D.t[n[0]])bad.push(n[0]);if(n[1]){leaves.push({id:n[0],d});if(D.t[n[0]][3]!=='Submission')bad.push(n[0]+' ends but is no submission')}else if(!n[2].length)bad.push(n[0]+' dead end');if(n[2].length>3||d>4)bad.push(n[0]+' too wide/deep');n[2].forEach(k=>walk(k[1],d+1,k[0]))};
-     D.s.forEach(s=>walk(s[3],0));
-     ok(D.s.length>=3&&leaves.length>=15&&!bad.length&&leaves.every(l=>l.d>=1&&l.d<=4),'scramble data: '+D.s.length+' starts, '+leaves.length+' branches, every one ends in a submission within 4 reactions '+bad.join(' '));
-     const pages=[...new Set([...links,...Object.values(D.t).map(t=>'/techniques/'+t[1]+'/')])];const ps=await Promise.all(pages.map(async u=>(await fetch(URL+u.slice(1))).status));
-     ok(ps.every(x=>x===200),'every move in the scramble has its technique page ('+pages.length+')');
-     ok(Object.values(D.t).every(t=>D.p[t[4]]&&(t[5]||/^<svg[^>]*aria-hidden="true"/.test(D.f[t[4]]||''))),'every move shows the app\'s figure of its position, or a photo');
+    // hero: the headline, then the app itself playing in a phone (no stat chips, stat strip or pill tags); no scramble widget
+    {const html=await (await fetch(URL)).text();const hero=html.match(/<section class="wrap lead"[\s\S]*?<\/section>/)[0];
+     ok(/<h1[^>]*>[\s\S]*Know what to do[\s\S]*they react/.test(hero)&&/<figure class="clip heroclip">\s*<div class="device"><video class="autoclip"[^>]*poster="\/video\/moves-and-map\.webp"[^>]*><source src="\/video\/moves-and-map\.mp4"/.test(hero)&&/href="\/app\/"/.test(hero)&&!/fchip|class="strip|class="stat|pill/.test(html),'hero: headline and the app\'s screen recording in a phone frame, a way into the app, no stat chips, stat strip or pills');
+     ok(!/scramble|scr-|Try it|Play it out/i.test(html.replace(/scrambled/g,'')),'no "play a scramble" anywhere on the home page (markup, data, script or copy)');
+     ok((html.match(/<ol class="notebook"[\s\S]*?<\/ol>\s*<\/div>/)||[''])[0].match(/href="\/techniques\/[a-z0-9-]+\/"/g).length>=8,'the closed guard notebook still lists the chains, each move linking to its page');
      const nc=await b.newContext({...devices['iPhone 13'],javaScriptEnabled:false});const np=await nc.newPage();await np.goto(URL);
-     ok(await np.evaluate(()=>{const r=document.getElementById('scramble');const o=[...r.querySelectorAll('a.scr-opt')];return o.length>=2&&o.every(a=>a.getBoundingClientRect().height>=44)&&!r.querySelector('.scr-starts').offsetParent&&r.getBoundingClientRect().height>300}),'no JavaScript: the first step shows with tappable reaction links and no dead buttons');
+     ok(await np.evaluate(()=>{const v=document.querySelector('.heroclip video');return !!v&&v.hasAttribute('controls')&&v.getBoundingClientRect().height>300&&document.documentElement.scrollWidth<=390}),'no JavaScript: the hero clip shows its poster with the browser\'s own controls');
      await nc.close();
-     ok(await p.evaluate(()=>{const r=document.getElementById('scramble');return r.querySelectorAll('button.scr-opt').length>=2&&!r.querySelector('a.scr-opt')&&r.querySelector('.scr-start[aria-pressed="true"]').textContent==='Closed guard'&&r.querySelectorAll('.scr-belt i.on').length===1&&r.querySelector('.scr-ctl').disabled}),'scramble: reactions become buttons, Closed guard picked, one belt lit');
-     const first=await p.evaluate(()=>document.querySelector('#scramble .scr-name').textContent);
-     const want=D.t[D.s[0][3][2][0][1][0]][0];
-     await p.locator('#scramble .scr-opt').first().tap();await p.waitForTimeout(150);
-     ok(await p.evaluate(w=>{const r=document.getElementById('scramble');return r.querySelector('.scr-name').textContent===w&&/^If they/i.test(r.querySelector('.scr-why').textContent)&&r.querySelectorAll('.scr-belt i.on').length===2&&r.querySelectorAll('.scr-path li').length===3&&/\/techniques\/[a-z0-9-]+\//.test(r.querySelector('.scr-watch').getAttribute('href'))&&new RegExp(w.split(' ')[0],'i').test(document.getElementById('scr-live').textContent)},want),'tapping a reaction reveals the counter ('+want+'), with Watch, the path and the belt moving on');
-     // play it out by keyboard: Enter on the focused reaction until they tap
-     let n=0;while(n<6&&await p.evaluate(()=>!!document.querySelector('#scramble .scr-opt'))){await p.evaluate(()=>document.activeElement&&document.activeElement.classList.contains('scr-opt')||document.querySelector('#scramble .scr-opt').focus());await p.keyboard.press('Enter');await p.waitForTimeout(120);n++}
-     ok(await p.evaluate(()=>{const r=document.getElementById('scramble');return /Tap/i.test(r.querySelector('.scr-stamp').textContent)&&/They tap to the/.test(r.querySelector('.scr-tap').textContent)&&r.querySelectorAll('.scr-belt i.on').length===5&&r.querySelector('.scr-path li:last-child').textContent==='Tap'&&document.activeElement===r.querySelector('.scr-tap button')}),'played by keyboard to the end: a tap, the whole belt lit, focus on Start over ('+n+' more reactions)');
-     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'scramble: no sideways scroll at the end of a chain');
-     await p.locator('#scramble .scr-tap [data-scr="reset"]').tap();await p.waitForTimeout(150);
-     ok(await p.evaluate(f=>{const r=document.getElementById('scramble');return r.querySelector('.scr-name').textContent===f&&/^Start/.test(r.querySelector('.scr-why').textContent)&&r.querySelectorAll('.scr-belt i.on').length===1&&r.querySelectorAll('.scr-path li').length===2&&!r.querySelector('.scr-tap')},first),'Start over goes back to the first move');
-     await p.locator('#scramble .scr-start[data-start="1"]').tap();await p.waitForTimeout(150);
-     ok(await p.evaluate(w=>{const r=document.getElementById('scramble');return r.querySelector('.scr-start[data-start="1"]').getAttribute('aria-pressed')==='true'&&r.querySelector('.scr-name').textContent===w},D.t[D.s[1][3][0]][0]),'picking Standing starts a new chain');
-     await p.locator('#scramble .scr-opt').first().tap();await p.waitForTimeout(100);await p.locator('#scramble [data-scr="back"]').tap();await p.waitForTimeout(100);
-     ok(await p.evaluate(w=>document.querySelector('#scramble .scr-name').textContent===w,D.t[D.s[1][3][0]][0]),'Back a step undoes one reaction');
-     ok(await p.evaluate(()=>[...document.querySelectorAll('#scramble button,#scramble a')].filter(e=>e.offsetParent&&getComputedStyle(e).visibility!=='hidden').every(e=>e.getBoundingClientRect().height>=44)),'scramble: every button and link is at least 44px tall');
      const cc=await b.newContext({...devices['iPhone 13'],serviceWorkers:'block'});const cp=await cc.newPage();
-     await cp.addInitScript(()=>{window.__cls=0;new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true})});
+     await cp.addInitScript(()=>{window.__cls=0;window.__lcp=null;new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true});
+       new PerformanceObserver(l=>{const e=l.getEntries().pop();window.__lcp=e&&e.element?(e.element.closest('h1')?'h1':e.element.tagName+' '+(e.url||'')):null}).observe({type:'largest-contentful-paint',buffered:true})});
      await cp.goto(URL,{waitUntil:'networkidle'});await cp.waitForTimeout(300);
-     ok(await cp.evaluate(()=>window.__cls<0.05&&!document.querySelector('.herovis,.fchip,.strip')&&!document.querySelector('.lead img,.lead video')),'hero: no layout shift as it loads, and no phone mockup, stat chips, stat strip or pictures to download');
+     ok(await cp.evaluate(()=>window.__cls<0.05&&window.__lcp==='h1'&&!document.querySelector('.lead img')&&[...document.querySelectorAll('img[src*="i.ytimg.com"]')].every(i=>i.getBoundingClientRect().top>innerHeight)),'hero: no layout shift as it loads, the headline is the largest paint, and no video thumbnail in the first screen');
      await cc.close();}
-    const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing screenshots load');
+    const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')].filter(i=>i.getAttribute('src').startsWith('/'))){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing pictures from this site load');
+    // video thumbnails (YouTube's own, loaded lazily) on the technique cards and the position map, instead of stick figures
+    {const fs=require('fs');const vsrc=fs.readFileSync(path.resolve(__dirname,'../src/videos.js'),'utf8');const picks={};
+     for(const m of vsrc.matchAll(/(?:VIDEO_PICKS=|Object\.assign\(VIDEO_PICKS,)(\{[\s\S]*?\n\})\)?;/g))Object.assign(picks,JSON.parse(m[1]));
+     const yt=await p.evaluate(()=>({deck:[...document.querySelectorAll('.tgal a.tcard:not(.more)')].map(a=>{const i=a.querySelector('.tpic img');return {src:i.getAttribute('src'),alt:i.getAttribute('alt'),lazy:i.loading==='lazy',play:!!a.querySelector('.playb'),cred:(a.querySelector('.vcred')||{}).textContent||'',fig:!!a.querySelector('img[src^="/img/fig/"]')}}),
+       pos:[...document.querySelectorAll('.posmap a.pcard')].map(a=>{const i=a.querySelector('img');return {src:i.getAttribute('src'),alt:i.getAttribute('alt'),lazy:i.loading==='lazy',w:i.getAttribute('width'),h:i.getAttribute('height'),dec:i.getAttribute('decoding'),play:!!a.querySelector('.playb'),
+         figs:[...a.querySelectorAll('img[src^="/img/fig/"]')].every(f=>f.closest('.pfig[aria-hidden="true"]')),name:a.querySelector('.pname').textContent,k:a.getAttribute('href')}})}));
+     const ytOk=(i)=>{const m=i.src.match(/^https:\/\/i\.ytimg\.com\/vi\/([\w-]{11})\/mqdefault\.jpg$/);return !!m&&Object.values(picks).some(v=>(v.v||v)===m[1])};
+     ok(yt.deck.length>=16&&yt.deck.every(c=>c.play&&/^Video: .{3,}/.test(c.cred)&&!c.fig&&c.lazy&&(c.src.startsWith('/img/thumbs/')||ytOk(c)&&/ video thumbnail$/.test(c.alt)))&&yt.deck.filter(c=>c.src.includes('ytimg')).length>=10,'technique cards: each with its video\'s thumbnail (or the founder\'s photo), a play badge and the channel, no stick figures');
+     ok(yt.pos.length===20&&yt.pos.every(c=>ytOk(c)&&c.alt===c.name+' video thumbnail'&&c.lazy&&c.w==='320'&&c.h==='180'&&c.dec==='async'&&c.play&&c.figs),'position map: each position\'s video thumbnail (lazy, sized, from YouTube), the drawing only as a small corner badge');}
     // pictures and screen recordings on the home page and /coaches/
     {const home=await p.evaluate(()=>({imgs:[...document.images].map(i=>({src:i.getAttribute('src'),alt:i.getAttribute('alt'),w:i.getAttribute('width'),h:i.getAttribute('height'),deco:!!i.closest('[aria-hidden="true"]')})),
         tech:[...document.querySelectorAll('.tgal a.tcard:not(.more)')].map(a=>({href:a.getAttribute('href'),name:(a.querySelector('b')||{}).textContent||'',img:!!a.querySelector('img'),belt:getComputedStyle(a.querySelector('.tmeta'),'::before').backgroundColor})),
@@ -103,17 +91,17 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
      const rg=await fetch(URL+home.vids[0].src.slice(1),{headers:{Range:'bytes=100-199'}});ok(rg.status===206&&rg.headers.get('content-range')&&/^bytes 100-199\//.test(rg.headers.get('content-range'))&&(await rg.arrayBuffer()).byteLength===100&&rg.headers.get('accept-ranges')==='bytes','clips answer range requests (Safari needs them)');
      ok((await fetch(URL+home.vids[0].src.slice(1),{headers:{Range:'bytes=99999999-'}})).status===416,'an impossible range is refused');
      // the hero clip plays once it's on screen; scrolled away it pauses; the button pauses it for good
-     await p.evaluate(()=>document.querySelector('#why video').scrollIntoView({block:'center'}));await p.waitForTimeout(1500);
-     ok(await p.evaluate(()=>{const v=document.querySelector('#why video');return !v.paused&&v.readyState>=2}),'a clip plays when on screen');
+     await p.evaluate(()=>document.querySelector('.heroclip video').scrollIntoView({block:'center'}));await p.waitForTimeout(1500);
+     ok(await p.evaluate(()=>{const v=document.querySelector('.heroclip video');return !v.paused&&v.readyState>=2}),'a clip plays when on screen');
      await p.evaluate(()=>scrollTo(0,document.body.scrollHeight));await p.waitForTimeout(500);
-     ok(await p.evaluate(()=>document.querySelector('#why video').paused),'the clip pauses when scrolled away');
-     await p.evaluate(()=>document.querySelector('#why video').scrollIntoView({block:'center'}));await p.waitForTimeout(800);
-     await p.locator('#why .vbtn').tap();await p.waitForTimeout(200);await p.evaluate(()=>scrollBy(0,1));await p.waitForTimeout(400);
-     ok(await p.evaluate(()=>{const v=document.querySelector('#why video'),b=v.parentNode.querySelector('.vbtn');return v.paused&&/^Play/.test(b.getAttribute('aria-label'))}),'the pause button stops the clip and says Play');
+     ok(await p.evaluate(()=>document.querySelector('.heroclip video').paused),'the clip pauses when scrolled away');
+     await p.evaluate(()=>document.querySelector('.heroclip video').scrollIntoView({block:'center'}));await p.waitForTimeout(800);
+     await p.locator('.heroclip .vbtn').tap();await p.waitForTimeout(200);await p.evaluate(()=>scrollBy(0,1));await p.waitForTimeout(400);
+     ok(await p.evaluate(()=>{const v=document.querySelector('.heroclip video'),b=v.parentNode.querySelector('.vbtn');return v.paused&&/^Play/.test(b.getAttribute('aria-label'))}),'the pause button stops the clip and says Play');
      await p.evaluate(()=>scrollTo(0,0));
-     const rc=await b.newContext({...devices['iPhone 13'],reducedMotion:'reduce'});const rp=await rc.newPage();await rp.goto(URL);await rp.evaluate(()=>document.querySelector('#why video').scrollIntoView({block:'center'}));await rp.waitForTimeout(1200);
-     ok(await rp.evaluate(()=>{const v=document.querySelector('#why video');return v.paused&&v.readyState===0&&!!v.parentNode.querySelector('.vbtn.big')}),'reduce motion: clips wait on their poster with a play button, nothing downloaded');
-     await rp.locator('#why .vbtn').tap();await rp.waitForTimeout(1200);ok(await rp.evaluate(()=>!document.querySelector('#why video').paused),'reduce motion: tapping play starts the clip');
+     const rc=await b.newContext({...devices['iPhone 13'],reducedMotion:'reduce'});const rp=await rc.newPage();await rp.goto(URL);await rp.evaluate(()=>document.querySelector('.heroclip video').scrollIntoView({block:'center'}));await rp.waitForTimeout(1200);
+     ok(await rp.evaluate(()=>{const v=document.querySelector('.heroclip video');return v.paused&&v.readyState===0&&!!v.parentNode.querySelector('.vbtn.big')}),'reduce motion: clips wait on their poster with a play button, nothing downloaded');
+     await rp.locator('.heroclip .vbtn').tap();await rp.waitForTimeout(1200);ok(await rp.evaluate(()=>!document.querySelector('.heroclip video').paused),'reduce motion: tapping play starts the clip');
      await rc.close();}
     ok(await p.evaluate(()=>{const t=document.querySelector('.doors .d-train'),g=document.querySelector('.doors .d-gym');return !!t&&!!g&&!!t.querySelector('a.btn[href="/app/"]')&&!!g.querySelector('a[href="/coaches/"]')&&!!g.querySelector('a[href="/app/?start=1"]')&&/R99/.test(g.textContent)&&/3 free months/.test(g.textContent)&&/Free/.test(t.textContent)&&/EFT with their own reference today; card, Apple Pay and Google Pay are coming soon/.test(g.textContent)}),'two doors under the hero: I train (free, opens the app) and I run a gym (R99 after 3 free months, EFT today and cards coming soon, gyms page, start a gym)');
     ok(await p.evaluate(()=>{const s=document.getElementById('sa');return !!s&&/Johannesburg/.test(s.textContent)&&/EFT/.test(s.textContent)&&/WhatsApp/.test(s.textContent)&&/R99/.test(s.textContent)&&/browser/.test(s.textContent)&&/Card, Apple Pay and Google Pay are coming soon/.test(s.textContent)&&[...document.querySelectorAll('.faq details')].some(d=>/coming soon/.test(d.textContent))&&!/(pay|payments?) (by|with) (card|Apple Pay)/i.test(document.body.innerText)}),'made-in-SA strip: rand pricing, EFT, WhatsApp, works in the browser; card payments only as coming soon (strip and FAQ)');
@@ -152,6 +140,62 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await p.locator('.cta .btn').tap();await p.waitForTimeout(1200);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&!/t=/.test(location.search)&&S.ui.sheet&&S.ui.sheet.k==='tech'&&/Kimura/i.test(document.getElementById('sheet').innerText)),'"Open in JitsFlow" opens that technique in the app');
   }catch(e){fail++;fails.push('CRASH '+e.message)}
+  // ---- the home page's WebGL belt (web/js/belt.js): loaded after first paint, decorative, no layout shift, light;
+  // the drawings in the .beltslot boxes stay with reduced motion, Save-Data, no WebGL or no JavaScript.
+  // Headless Chromium renders WebGL with SwiftShader (on the CPU, slow): these check that it draws without errors, not its speed.
+  try{
+    const raw=Buffer.from(await (await fetch(URL+'js/belt.js')).arrayBuffer());const gz=require('zlib').gzipSync(raw,{level:9}).length;
+    const bj=await fetch(URL+'js/belt.js');ok(bj.status===200&&/javascript/.test(bj.headers.get('content-type'))&&gz<=60*1024,'belt script served, '+(gz/1024).toFixed(1)+' KB gzipped (budget 60 KB)');
+    const home=await (await fetch(URL)).text();
+    ok(!/<script[^>]*src="\/js\/belt\.js/.test(home)&&!/<canvas/.test(home)&&/"\/js\/belt\.js\?v=[0-9a-f]{10}"/.test(home)&&(home.match(/class="beltslot /g)||[]).length===6&&!/cdn|unpkg|jsdelivr/i.test(raw.toString()),'belt: not part of the first load (added once the page has loaded), self-hosted and versioned, with a drawing in each of its 6 slots');
+    const slotsShown=(pg)=>pg.evaluate(()=>[...document.querySelectorAll('.beltslot')].filter(s=>s.offsetParent).every(s=>{const v=s.querySelector('svg'),r=v.getBoundingClientRect();return getComputedStyle(v).opacity==='1'&&r.height>=40&&r.width>=100&&v.querySelector('use')}));
+    const gc=await b.newContext({...devices['iPhone 13'],serviceWorkers:'block'});const gp=await gc.newPage();const gerr=[];
+    gp.on('pageerror',e=>gerr.push(e.message));gp.on('console',m=>{if(m.type()==='error')gerr.push(m.text())});
+    await gp.addInitScript(()=>{window.__cls=0;window.__lcp=null;new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true});
+      new PerformanceObserver(l=>{const e=l.getEntries().pop();window.__lcp=e&&e.element?(e.element.closest('h1')?'h1':e.element.tagName+'.'+e.element.className):null}).observe({type:'largest-contentful-paint',buffered:true})});
+    await gp.goto(URL,{waitUntil:'load'});
+    await gp.waitForFunction(()=>document.documentElement.classList.contains('gl'),null,{timeout:15000});
+    const g1=await gp.evaluate(()=>{const c=document.getElementById('beltgl'),cs=getComputedStyle(c),h=document.querySelector('h1').getBoundingClientRect();
+      const fcp=performance.getEntriesByName('first-contentful-paint')[0],js=performance.getEntriesByType('resource').find(r=>/\/js\/belt\.js/.test(r.name));
+      return {lcp:window.__lcp,cls:window.__cls,n:document.querySelectorAll('canvas').length,aria:c.getAttribute('aria-hidden'),pe:cs.pointerEvents,pos:cs.position,tab:c.tabIndex,fcp:fcp&&fcp.startTime,js:js&&js.startTime,frames:c.jf.frames,tier:c.jf.tier,
+        hit:!!document.elementFromPoint(h.left+20,h.top+h.height/2).closest('h1'),card:(()=>{const a=document.querySelector('.posmap .pcard');a.scrollIntoView({block:'center'});const r=a.getBoundingClientRect();const e=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);scrollTo(0,0);return !!e&&e.closest('.pcard')===a})()}});
+    ok(g1.n===1&&g1.aria==='true'&&g1.pe==='none'&&g1.pos==='fixed'&&g1.tab<0&&g1.hit&&g1.card,'belt: one fixed canvas, hidden from screen readers, never focused or tapped (the headline and the map cards stay on top)');
+    ok(g1.fcp&&g1.js&&g1.js>g1.fcp,'belt script is requested after first paint ('+Math.round(g1.js)+' ms, first paint '+Math.round(g1.fcp)+' ms)');
+    ok(g1.frames>0,'belt draws ('+g1.frames+' frames so far, '+g1.tier+' mode)');
+    const total=await gp.evaluate(()=>document.documentElement.scrollHeight-innerHeight);
+    for(let i=0;i<=24;i++){await gp.evaluate(y=>scrollTo(0,y),Math.round(total*i/24));await gp.waitForTimeout(150)}
+    await gp.waitForTimeout(300);
+    const g2=await gp.evaluate(()=>{const c=document.getElementById('beltgl');return {frames:c.jf.frames,errors:c.jf.errors,cls:window.__cls,lcp:window.__lcp,gl:document.documentElement.classList.contains('gl'),w:document.documentElement.scrollWidth,
+      steps:[...document.querySelectorAll('.pcard[data-step]')].sort((x,y)=>x.dataset.step-y.dataset.step).map(a=>a.getAttribute('href')+(a.hasAttribute('data-tap')?' tap':'')),legend:!!document.querySelector('.lg-chain').offsetParent}});
+    ok(g2.gl&&g2.frames>g1.frames+10&&!g2.errors&&!gerr.length,'belt: draws all the way down the page with no errors ('+g2.frames+' frames) '+gerr.join(' | '));
+    ok(g1.lcp==='h1'&&g1.cls<0.01&&g2.cls<0.01,'belt: the headline stays the largest paint ('+g1.lcp+') and nothing moves as it starts or while scrolling (layout shift '+g2.cls.toFixed(4)+')');
+    ok(g2.w<=390,'belt: no sideways scroll on a phone');
+    ok(g2.steps.join(' ')==='/positions/standing/ /positions/front-headlock/ /positions/turtle-top/ /positions/back-control/ tap'&&g2.legend,'map: one real chain numbered card by card, standing to back control and the tap: '+g2.steps.join(' '));
+    const f1=await gp.evaluate(()=>document.getElementById('beltgl').jf.frames);await gp.waitForTimeout(3500);const f2=await gp.evaluate(()=>document.getElementById('beltgl').jf.frames);await gp.waitForTimeout(1200);
+    ok(await gp.evaluate(f=>document.getElementById('beltgl').jf.frames===f,f2),'belt: stops drawing once the page is still ('+f1+' then '+f2+' frames)');
+    for(const w of [320,768,1280]){await gp.setViewportSize({width:w,height:800});await gp.waitForTimeout(250);for(const y of [0,.3,.6,1]){await gp.evaluate(y=>scrollTo(0,y*(document.documentElement.scrollHeight-innerHeight)),y);await gp.waitForTimeout(80)}
+      ok(await gp.evaluate(w=>document.documentElement.scrollWidth<=w&&document.documentElement.classList.contains('gl'),w),'belt: no sideways scroll at '+w+'px')}
+    await gp.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+    ok(await gp.evaluate(()=>!document.querySelector('canvas')&&!document.documentElement.classList.contains('gl')),'belt: frees its canvas on pagehide (the drawings come back)');
+    ok(!gerr.length,'belt: no console errors '+gerr.join(' | '));
+    await gc.close();
+    // without it: reduced motion, Save-Data, no WebGL, no JavaScript
+    const fall=async(label,opts,init,browser)=>{const c=await (browser||b).newContext({...devices['iPhone 13'],serviceWorkers:'block',...opts});const pg=await c.newPage();const er=[],req=[];
+      pg.on('pageerror',e=>er.push(e.message));pg.on('console',m=>{if(m.type()==='error')er.push(m.text())});pg.on('request',r=>{if(/\/js\/belt\.js/.test(r.url()))req.push(r.url())});
+      if(init)await pg.addInitScript(init);await pg.goto(URL,{waitUntil:'load'});await pg.waitForTimeout(2500);
+      const r=await pg.evaluate(()=>({canvas:document.querySelectorAll('canvas').length,gl:document.documentElement.classList.contains('gl'),grid:getComputedStyle(document.querySelector('.night')).backgroundImage!=='none',w:document.documentElement.scrollWidth}));
+      const shown=await slotsShown(pg);await c.close();return {...r,shown,er,req}};
+    let r=await fall('reduce',{reducedMotion:'reduce'});
+    ok(!r.canvas&&!r.gl&&r.shown&&r.grid&&!r.req.length&&!r.er.length&&r.w<=390,'reduce motion: no WebGL and nothing downloaded for it; the belt drawings and the mat grid show '+r.er.join(' | '));
+    r=await fall('savedata',{},()=>Object.defineProperty(Navigator.prototype,'connection',{get:()=>({saveData:true})}));
+    ok(!r.canvas&&!r.gl&&r.shown&&!r.req.length&&!r.er.length,'Save-Data: no WebGL and nothing downloaded for it; the belt drawings show '+r.er.join(' | '));
+    const nb=await chromium.launch({args:['--disable-webgl']});r=await fall('nowebgl',{},null,nb);await nb.close();
+    ok(!r.canvas&&!r.gl&&r.shown&&r.grid&&!r.er.length,'no WebGL: the belt drawings and the mat grid show, no errors '+r.er.join(' | '));
+    r=await fall('noctx',{},()=>{const g=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(t,o){return /webgl/.test(t)?null:g.call(this,t,o)}});
+    ok(!r.canvas&&!r.gl&&r.shown&&!r.er.length,'WebGL refused (a slow or blocklisted GPU): the drawings stay, no errors '+r.er.join(' | '));
+    r=await fall('nojs',{javaScriptEnabled:false});
+    ok(!r.canvas&&r.shown&&r.w<=390,'no JavaScript: the belt drawings show');
+  }catch(e){fail++;fails.push('CRASH belt '+e.message)}
   // ---- Google Analytics: only with GA_ID, and nothing from Google loads until the visitor taps Allow
   try{
     const gport=port+1,G=`http://localhost:${gport}/`;
