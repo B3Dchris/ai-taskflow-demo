@@ -556,6 +556,9 @@ h2.label{font-size:14px;letter-spacing:.08em}
 .hero{position:relative;border-radius:var(--r-xl);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3);min-width:0;overflow:hidden;isolation:isolate;
   background:radial-gradient(120% 90% at 100% 0%,var(--navy-glow),transparent 62%),linear-gradient(170deg,var(--navy-2),var(--navy) 58%);box-shadow:var(--sh-2);border:1px solid rgba(255,255,255,.05)}
 .hero h1{font-size:34px;line-height:1.02;font-weight:700;color:#fff}
+.pagehero h1{font-size:30px}.pagehero .hero-t p{font-size:14px}.pagehero .hero-t{gap:4px}.pagehero .hact{display:flex;gap:10px;margin-top:4px}
+/* Focus moved to a heading or panel for screen readers isn't a keyboard focus: no ring (keyboard focus keeps its ring) */
+[tabindex="-1"]:focus{outline:none}
 .learnhero h1{font-size:30px}.learnhero .hero-t p{font-size:14px}.learnhero .hero-t{gap:4px}
 .eyebrow{display:block;font-family:var(--f-display);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .hero-t{display:flex;flex-direction:column;gap:6px}
@@ -2454,7 +2457,9 @@ function viewLog(){
   const tb=Object.entries(tapsBy).sort((a,b)=>b[1]-a[1]).slice(0,4);
   const inGym=API.me&&API.me.gym&&!isCoach();
   return `${header()}<div class="stack-lg">
-  <section class="stack"><div class="row between" style="flex-wrap:nowrap"><h1 style="font-size:34px;margin:0">Journal</h1><button class="btn sm" data-a="lognew">+ Log training</button></div>
+  <section class="hero dk pagehero" aria-label="Journal"><div class="hero-t"><span class="eyebrow">Journal</span><h1>Your training</h1><p>${hrs?`${Math.round(hrs)} mat hours logged`:"Log each session in ten seconds"}${l30.length?` · ${l30.length} session${l30.length===1?"":"s"} in 30 days`:""}</p></div>
+    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log training</button></div></section>
+  <section class="stack">
   <div class="stats"><div class="stat"><b>${Math.round((st.priorHours||0)+hrs)}</b><span>Total hours</span></div><div class="stat"><b>${l30.length}</b><span>Sessions · 30d</span></div><div class="stat"><b>${hits}</b><span>Worked · 30d</span></div></div>
   <p class="small muted">${inGym?"Classes you book are added here automatically after they finish, with what was taught. Tap what worked, what got you and where you got stuck; JitsFlow works out what to study next.":"Join your gym (Me › Your account) and the classes you book are logged here for you. For open mats and privates, tap + Log training."}</p></section>
   ${nextStepsCard()}
@@ -2577,7 +2582,8 @@ function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");els
 function viewMe(){
   const st=P().settings,b=blockIndex();const hand=st.hand||"left";
   if(API.me&&API.me.gym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="me"&&!S.ui.sheet)render()})}
-  return `${header()}<div class="stack-lg"><h1 style="font-size:34px">Me</h1>
+  const meName=API.me&&API.me.name,meGym=API.me&&API.me.gym&&API.me.gym.name;
+  return `${header()}<div class="stack-lg"><section class="hero dk pagehero" aria-label="Me"><div class="hero-t"><span class="eyebrow">Me</span><h1>${meName?esc(meName):"Your settings"}</h1><p>${meGym?`Training at ${esc(meGym)}`:API.me?"Studying on your own":"Your account, belt, appearance and data"}</p></div></section>
   ${accountSection()}
   ${API.me&&API.me.gym&&!isCoach()&&API.pay?feesCard():""}
   ${isCoach()?"":gymCard(false)}
