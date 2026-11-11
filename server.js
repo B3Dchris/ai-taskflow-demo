@@ -18,6 +18,8 @@ const TYPES = {
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
@@ -88,7 +90,7 @@ function gzipJson(req, res, next) {
 
 function cacheFor(rel) {
   if (rel.endsWith("/index.html") || rel === "/sw.js" || rel === "/manifest.webmanifest") return "no-cache";
-  if (rel.startsWith("/img/") || rel.startsWith("/og/")) return "public, max-age=86400";
+  if (rel.startsWith("/img/") || rel.startsWith("/og/") || rel.startsWith("/video/")) return "public, max-age=86400";
   if (rel.startsWith("/icons/")) return "public, max-age=604800";
   return "public, max-age=3600";
 }
@@ -128,6 +130,16 @@ function serveStatic(req, res) {
   }
 
   const f = files.get(rel);
+  // Videos: Safari only plays a clip if the server answers byte-range requests.
+  if (f.ext === ".mp4") {
+    const size = f.body.length, m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+    const base = { "Content-Type": f.type, "Accept-Ranges": "bytes", "Cache-Control": cacheFor(rel), ...SECURITY };
+    if (!m) { res.writeHead(200, { ...base, "Content-Length": size }); return res.end(req.method === "HEAD" ? undefined : f.body); }
+    let start = m[1] === "" ? size - Number(m[2]) : Number(m[1]), end = m[1] === "" || m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+    if (!(start >= 0 && start <= end && end < size)) { res.writeHead(416, { ...base, "Content-Range": `bytes */${size}` }); return res.end(); }
+    res.writeHead(206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
+    return res.end(req.method === "HEAD" ? undefined : f.body.subarray(start, end + 1));
+  }
   const gzip = f.gz && /\bgzip\b/.test(req.headers["accept-encoding"] || "");
   const body = gzip ? f.gz : f.body;
   const headers = { "Content-Type": f.type, "Content-Length": body.length, "Cache-Control": cacheFor(rel), Vary: "Accept-Encoding", ...SECURITY };

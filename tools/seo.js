@@ -288,6 +288,10 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   write("robots.txt", `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
   cards.push({ file: "og/coaches.jpg", eyebrow: "For gyms", title: "Run your gym from your phone", sub: "Timetable, bookings, waitlists, memberships, attendance insights, competitions and WhatsApp invites.", belt: "black" });
   cards.push({ file: "og/home.jpg", eyebrow: "No-gi BJJ study app", title: "Know what to do from every position", sub: `${D.tech.length} techniques, every position, attack chain and escape, white to black belt.`, belt: "black" });
+  // What the home page's picture galleries link to (build.py reads it): each move and position with its page address.
+  fs.writeFileSync(path.join(ROOT, "dist", "site-index.json"), JSON.stringify({
+    tech: D.tech.map((t) => ({ id: t.id, n: t.n, slug: tS[t.id], belt: t.belt, cat: D.cats[t.c] || t.c, f: t.f })),
+    pos: Object.fromEntries(posKeys.map((k) => [k, { l: D.pos[k].l, L: D.pos[k].L, r: D.pos[k].r, slug: pS[k] }])) }, null, 1));
   return { pages: all.length, cards };
 }
 

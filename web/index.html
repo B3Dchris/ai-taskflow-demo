@@ -73,25 +73,10 @@ p{margin:0}
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
 .facts{margin-top:18px;font-size:16px;color:var(--ink-2)}
 .toplinks a{white-space:nowrap}
-/* animated attack chain in the hero: a marker steps down the chain, lighting each move in turn */
-.flow{margin:0;position:relative;display:grid;gap:12px;width:min(420px,100%);justify-self:center}
-.flow figcaption{font-size:15px;color:#A9B5CC}
-.flow ol{list-style:none;margin:0;padding:0 0 0 30px;display:grid;gap:12px;position:relative}
-.flow ol::before{content:"";position:absolute;left:9px;top:12px;bottom:12px;width:2px;background:rgba(255,255,255,.18)}
-.flow li{position:relative;min-height:78px;border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px 14px;display:grid;align-content:center;gap:2px;background:rgba(255,255,255,.03);animation:lit 8s infinite;animation-delay:calc(var(--i) * 2s)}
-.flow li::before{content:"";position:absolute;left:-26px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:#0D1730;border:2px solid rgba(255,255,255,.35)}
-.flow li b{font-family:var(--f-display);font-size:24px;text-transform:uppercase;line-height:1;color:#F4F6FB}
-.flow li span{font-size:15px;color:#A9B5CC}
-.flow li em{font-style:normal;font-family:var(--f-mono);font-size:12px;letter-spacing:.04em;color:#E6A84C}
-.flow .dot{position:absolute;left:4px;top:0;width:12px;height:12px;border-radius:50%;background:#5B8CFF;animation:step 8s infinite;pointer-events:none}
-@keyframes lit{0%,22%{border-color:#5B8CFF;background:rgba(91,140,255,.14)}26%,100%{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.03)}}
-@media (prefers-reduced-motion:reduce){.flow li{animation:none}.flow .dot{display:none}}
 .beltbar{display:grid;grid-template-columns:repeat(5,1fr);height:14px;border-radius:3px;overflow:hidden;margin-top:34px;max-width:520px;outline:1px solid var(--line)}
 .beltbar i:nth-child(1){background:var(--b-white)}.beltbar i:nth-child(2){background:var(--b-blue)}.beltbar i:nth-child(3){background:var(--b-purple)}.beltbar i:nth-child(4){background:var(--b-brown)}
 .beltbar i:nth-child(5){background:var(--b-black);position:relative}.beltbar i:nth-child(5)::after{content:"";position:absolute;right:14%;top:0;bottom:0;width:26%;background:var(--b-red)}
 .beltlabels{display:grid;grid-template-columns:repeat(5,1fr);max-width:520px;margin-top:6px;font-family:var(--f-mono);font-size:12px;color:var(--ink-2)}
-.phone{justify-self:center;width:min(340px,100%);border-radius:38px;padding:12px;background:#0B0D11;box-shadow:0 30px 60px -20px rgba(17,23,34,.45),0 0 0 1px rgba(255,255,255,.06) inset}
-.phone img{border-radius:28px;width:100%;height:auto;aspect-ratio:390/664;object-fit:cover;object-position:top}
 
 /* night band: header, hero and stats on deep navy in both themes */
 .night{position:relative;overflow:hidden;color:#EEF2FA;background:#0D1730}
@@ -154,6 +139,80 @@ section.block{padding-block:72px}
 .gallery figcaption span{font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#9FB0D0}
 .beltcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:4px 0 6px}
 .beltcards img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+/* phone frames: app screens and screen recordings */
+.device{position:relative;margin:0 auto;width:var(--w,280px);max-width:100%;padding:9px;border-radius:46px;background:linear-gradient(150deg,#323846 0%,#0B0D11 38%,#0B0D11 70%,#262B35 100%);box-shadow:0 40px 70px -34px rgba(5,10,25,.75),0 0 0 1px rgba(255,255,255,.07) inset}
+.device>img,.device>video{display:block;width:100%;height:auto;border-radius:37px;background:#E9EDF3}
+.device>video{cursor:pointer}
+.clip{margin:0;display:flex;flex-direction:column;align-items:center;gap:14px}
+.clip figcaption{font-size:15px;line-height:1.4;color:var(--ink-2);text-align:center;max-width:24em}
+.night .clip figcaption,.gyms .clip figcaption{color:#A9B5CC}
+.vbtn{position:absolute;right:18px;bottom:18px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(13,23,48,.78);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.vbtn svg{width:20px;height:20px}
+.vbtn.big{right:auto;bottom:auto;left:50%;top:50%;width:76px;height:76px;transform:translate(-50%,-50%);background:#1D4FB5;border-color:rgba(255,255,255,.5);box-shadow:0 10px 30px rgba(5,10,25,.45)}
+.vbtn.big svg{width:30px;height:30px;margin-left:3px}
+.vbtn:focus-visible{outline:3px solid #FFFFFF;outline-offset:2px}
+
+/* hero picture: the app in a phone, with a real technique photo and one step of a chain floating beside it */
+.herovis{position:relative;display:flex;justify-content:center;width:100%;max-width:520px;justify-self:center}
+.herovis .clip{position:relative;z-index:2}
+.herovis .device{--w:min(272px,68vw)}
+.fphoto,.fchip{position:absolute;z-index:3;margin:0;pointer-events:none}
+.fphoto{left:max(0px,calc(50% - 228px));top:50%;width:clamp(104px,29vw,164px);border-radius:16px;overflow:hidden;border:3px solid #F4F6FB;background:#0E1A33;transform:rotate(-6deg);box-shadow:0 22px 40px -16px rgba(0,0,0,.7)}
+.fphoto img{width:100%;height:auto;aspect-ratio:1;object-fit:cover}
+.fphoto span{display:block;padding:6px 9px 8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#C9D3E6;background:#0E1A33}
+.fchip{right:max(0px,calc(50% - 236px));top:9%;display:grid;gap:2px;width:clamp(122px,33vw,176px);padding:10px 12px 11px;border-radius:14px;background:#F4F6FB;color:#111722;transform:rotate(4deg);box-shadow:0 22px 40px -16px rgba(0,0,0,.7);border-left:5px solid #5B8CFF}
+.fchip em{font-style:normal;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;color:#995A00}
+.fchip b{font-family:var(--f-display);font-size:24px;line-height:1;text-transform:uppercase}
+.fchip span{font-size:13px;color:#4E5869;line-height:1.3}
+@media (max-width:359px){.fchip{top:4%}.fchip span{display:none}}
+
+/* technique gallery: one deliberate sideways scroller */
+.railhead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+.railnav{display:none;gap:8px}
+.railnav button{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;line-height:1;cursor:pointer}
+.railnav button:hover{border-color:var(--blue);color:var(--blue)}
+.tgal{list-style:none;margin:28px 0 0;padding:6px max(20px,calc((100% - 1080px)/2)) 20px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(160px,46%);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:max(20px,calc((100% - 1080px)/2));overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.tgal li{scroll-snap-align:start;display:flex}
+.tcard{display:flex;flex-direction:column;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;text-decoration:none;color:var(--ink);box-shadow:0 16px 30px -24px rgba(17,23,34,.5)}
+.tcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.tpic{position:relative;display:block;aspect-ratio:1/1;background:#0E1A33;overflow:hidden}
+.tpic img{width:100%;height:100%;object-fit:cover}
+.tpic.fig{background:radial-gradient(110% 80% at 50% 30%,#1D3264 0%,#0E1A33 65%)}
+.tpic.fig img{object-fit:contain;padding:14% 6% 20%}
+.tpic .from{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#C9D3E6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:3px 8px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmeta{position:relative;flex:1;display:flex;flex-direction:column;gap:5px;padding:17px 14px 16px}
+.tmeta::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--bc);box-shadow:0 1px 0 rgba(127,127,127,.25)}
+.tcat{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+.tmeta b{font-family:var(--f-display);font-size:22px;font-weight:700;line-height:1.05;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tcard.more{justify-content:flex-end;gap:10px;padding:22px 20px;background:var(--blue);border-color:var(--blue);color:var(--on-blue);font-family:var(--f-display);font-size:30px;font-weight:800;line-height:1;text-transform:uppercase}
+.tcard.more b{font-size:40px}
+.seeall{margin-top:4px;font-weight:700}
+
+/* position map: the app's own figures, ranked best to worst */
+.posmap{display:grid;gap:10px;margin-top:30px}
+.tier{display:grid;gap:10px;padding:12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--tc)}
+.tname{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.tname::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--tc)}
+.tier ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.t0{--tc:#1D7748}.t1{--tc:#3C9A6A}.t2{--tc:#1D4FB5}.t3{--tc:#6B7FA8}.t4{--tc:#C27A12}.t5{--tc:#B3261E}
+.pcard{display:flex;flex-direction:column;height:100%;border-radius:12px;overflow:hidden;background:radial-gradient(110% 90% at 50% 25%,#1D3264 0%,#0E1A33 70%);text-decoration:none;color:#EEF2FA;font-weight:700;font-size:15px;line-height:1.2}
+.pcard img{width:100%;height:auto;aspect-ratio:16/10;object-fit:contain;padding:4px 8px 0}
+.pcard span{padding:4px 10px 10px}
+.pcard:hover span{text-decoration:underline}
+.pcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:15px;color:var(--ink-2);margin-top:4px}
+.legend i{display:inline-block;width:22px;height:5px;border-radius:3px;margin-right:6px;vertical-align:middle;background:#6E9BFF}.legend i.them{background:#9AA6BA}
+
+/* feature rows: bigger phones */
+.feature .device{--w:min(256px,72vw)}
+/* gyms band: recording plus coach screens */
+.cthumbs,.gyms .cthumbs{grid-column:1/-1;list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.gyms .cthumbs li{padding:0;color:inherit}.gyms .cthumbs li::before{content:none}
+.cthumbs figure{margin:0;height:100%;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;background:#15203C;border:1px solid rgba(255,255,255,.12)}
+.cthumbs img{width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;object-position:top}
+.cthumbs figcaption{padding:10px 12px 12px;font-size:15px;line-height:1.3;color:#DDE4F2;font-weight:600}
+.cthumbs figcaption span{display:block;font-weight:400;color:#A9B5CC;font-size:14px;margin-top:2px}
+.cthumbs.light figure{background:var(--surface);border-color:var(--line);box-shadow:0 16px 30px -24px rgba(17,23,34,.5)}.cthumbs.light figcaption{color:var(--ink)}.cthumbs.light figcaption span{color:var(--ink-2)}
 /* steps */
 .steps{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:32px;counter-reset:s;padding:0;list-style:none}
 .steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:8px}
@@ -180,6 +239,14 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
 
 @media (min-width:760px){
   .gallery{grid-auto-columns:minmax(240px,23%)}
+  .tgal{grid-auto-columns:214px}
+  .railnav{display:flex}
+  .tier{grid-template-columns:150px minmax(0,1fr);align-items:center;padding:12px 12px 12px 18px}
+  .tier ul{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .cthumbs,.gyms .cthumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .herovis .device{--w:272px}
+  .feature .device{--w:290px}
+  .pcard img{aspect-ratio:4/3}
   .hero{grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);padding-block:40px 80px}
   .strip .wrap{grid-template-columns:repeat(4,minmax(0,1fr))}
   .feature{grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:56px}
@@ -187,7 +254,8 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
   .steps{grid-template-columns:repeat(3,minmax(0,1fr))}
   .who{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-@media (prefers-reduced-motion: no-preference){.btn{transition:transform .12s}.btn:hover{transform:translateY(-1px)}}
+@media (prefers-reduced-motion: no-preference){.btn{transition:transform .12s}.btn:hover{transform:translateY(-1px)}.tcard{transition:transform .15s,box-shadow .15s}.tcard:hover{transform:translateY(-3px);box-shadow:0 22px 34px -22px rgba(17,23,34,.55)}}
+@media (min-width:560px) and (max-width:759px){.tier ul{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -207,21 +275,19 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
       <div class="beltbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="beltlabels" aria-hidden="true"><span>White</span><span>Blue</span><span>Purple</span><span>Brown</span><span>Black</span></div>
     </div>
-    <figure class="flow" aria-label="An attack chain from closed guard. Break posture. If they sit up: hip bump sweep. If they post a hand: kimura. If they grab their hands: omoplata.">
-      <figcaption>An attack chain from closed guard</figcaption>
-      <ol>
-        <li style="--i:0"><b>Break posture</b><span>Pull them down and control the head</span></li>
-        <li style="--i:1"><em>they sit up</em><b>Hip bump sweep</b><span>Sit up into them and roll to mount</span></li>
-        <li style="--i:2"><em>they post a hand</em><b>Kimura</b><span>Catch the posted arm</span></li>
-        <li style="--i:3"><em>they grab their hands</em><b>Omoplata</b><span>Swing your leg over the shoulder</span></li>
-      </ol>
-      <i class="dot" aria-hidden="true"></i>
-    </figure>
+    <div class="herovis">
+      <figure class="clip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the moves library by belt, a front headlock chain, the Japanese necktie with its video and steps, then the position map"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>Moves by belt, each with steps and a video, and the map of every position. (Screen recording, no sound.)</figcaption>
+      </figure>
+      <figure class="fphoto" aria-hidden="true"><img src="/img/thumbs/back_control.webp" alt="" width="560" height="560" decoding="async"><span>Back control</span></figure>
+      <p class="fchip" aria-hidden="true"><em>they post a hand</em><b>Kimura</b><span>An attack chain from closed guard</span></p>
+    </div>
   </section>
 
   <div class="strip" aria-label="What's inside">
     <div class="wrap">
-      <div class="stat"><b>137</b><span>no-gi techniques, white to black</span></div>
+      <div class="stat"><b>157</b><span>no-gi techniques, white to black</span></div>
       <div class="stat"><b>115</b><span>moves in attack and defense chains</span></div>
       <div class="stat"><b>146</b><span>hand-picked instructional videos</span></div>
       <div class="stat"><b>89</b><span>jargon terms, tap to define</span></div>
@@ -229,6 +295,19 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
   </div>
 </div><!-- /night -->
 <main>
+
+  <section class="block" id="techniques" aria-labelledby="tech-h" style="padding-bottom:40px">
+    <div class="wrap railhead">
+      <div class="intro">
+        <p class="eyebrow">Technique library</p>
+        <h2 id="tech-h">157 techniques, white to black belt</h2>
+        <p class="muted">Takedowns, guards, passes, sweeps, escapes and submissions. Each one has steps, the details that make it work, common mistakes, a drill and a video.</p>
+      </div>
+      <div class="railnav"><button type="button" data-rail="-1" aria-controls="tgal" aria-label="Scroll the techniques back">&larr;</button><button type="button" data-rail="1" aria-controls="tgal" aria-label="Scroll the techniques forward">&rarr;</button></div>
+    </div>
+    <ul class="tgal" id="tgal" role="list"><li><a class="tcard" href="/techniques/back-control-seatbelt-and-hooks/"><span class="tpic photo"><img src="/img/thumbs/back_control.webp" alt="Photo: Back control: seatbelt &amp; hooks, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Control · Blue belt</span><b>Back control: seatbelt &amp; hooks</b></span></a></li><li><a class="tcard" href="/techniques/high-wrist-guillotine/"><span class="tpic photo"><img src="/img/thumbs/hw_guillotine.webp" alt="Photo: High-wrist guillotine, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#5E2D8C"><span class="tcat">Submission · Purple belt</span><b>High-wrist guillotine</b></span></a></li><li><a class="tcard" href="/techniques/duck-under-to-the-back/"><span class="tpic photo"><img src="/img/thumbs/duck_under.webp" alt="Photo: Duck-under to the back, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#6A4326"><span class="tcat">Takedown · Brown belt</span><b>Duck-under to the back</b></span></a></li><li><a class="tcard" href="/techniques/arm-triangle-defense/"><span class="tpic photo"><img src="/img/thumbs/arm_tri_def.webp" alt="Photo: Arm triangle defense, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Defense · Blue belt</span><b>Arm triangle defense</b></span></a></li><li><a class="tcard" href="/techniques/stance-motion-and-hand-fighting/"><span class="tpic photo"><img src="/img/thumbs/stance_motion.webp" alt="Photo: Stance, motion &amp; hand fighting, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Control · Blue belt</span><b>Stance, motion &amp; hand fighting</b></span></a></li><li><a class="tcard" href="/techniques/kimura-trap-defense-from-half-guard-top/"><span class="tpic photo"><img src="/img/thumbs/kimura_trap_def.webp" alt="Photo: Kimura trap defense from half guard top, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#5E2D8C"><span class="tcat">Defense · Purple belt</span><b>Kimura trap defense from half guard top</b></span></a></li><li><a class="tcard" href="/techniques/body-lock-pass-defense/"><span class="tpic photo"><img src="/img/thumbs/bodylock_def.webp" alt="Photo: Body lock pass defense, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async"></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Defense · Blue belt</span><b>Body lock pass defense</b></span></a></li><li><a class="tcard" href="/techniques/triangle-choke/"><span class="tpic fig"><img src="/img/fig/cg_bot.svg" alt="Diagram of Closed guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Closed guard</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Submission · Blue belt</span><b>Triangle choke</b></span></a></li><li><a class="tcard" href="/techniques/double-leg-takedown/"><span class="tpic fig"><img src="/img/fig/standing.svg" alt="Diagram of Standing, you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Standing</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Takedown · Blue belt</span><b>Double-leg takedown</b></span></a></li><li><a class="tcard" href="/techniques/armbar-from-closed-guard/"><span class="tpic fig"><img src="/img/fig/cg_bot.svg" alt="Diagram of Closed guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Closed guard</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Submission · Blue belt</span><b>Armbar from closed guard</b></span></a></li><li><a class="tcard" href="/techniques/knee-cut-knee-slice-pass/"><span class="tpic fig"><img src="/img/fig/open_top.svg" alt="Diagram of Passing their open guard (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Passing</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Pass · Blue belt</span><b>Knee cut (knee slice) pass</b></span></a></li><li><a class="tcard" href="/techniques/hip-bump-sweep/"><span class="tpic fig"><img src="/img/fig/cg_bot.svg" alt="Diagram of Closed guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Closed guard</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Sweep · Blue belt</span><b>Hip bump sweep</b></span></a></li><li><a class="tcard" href="/techniques/rear-naked-choke/"><span class="tpic fig"><img src="/img/fig/back_top.svg" alt="Diagram of Back control (you're behind), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Back control</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Submission · Blue belt</span><b>Rear-naked choke</b></span></a></li><li><a class="tcard" href="/techniques/kimura-from-side-control/"><span class="tpic fig"><img src="/img/fig/sc_top.svg" alt="Diagram of Side control (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Side control</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Submission · Blue belt</span><b>Kimura from side control</b></span></a></li><li><a class="tcard" href="/techniques/elbow-knee-escape-shrimp/"><span class="tpic fig"><img src="/img/fig/mount_bot.svg" alt="Diagram of Under mount, you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Mounted</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Escape · Blue belt</span><b>Elbow-knee escape (shrimp)</b></span></a></li><li><a class="tcard" href="/techniques/d-arce-choke/"><span class="tpic fig"><img src="/img/fig/fhl_top.svg" alt="Diagram of Front headlock (you control the head), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Front headlock</span></span><span class="tmeta" style="--bc:#1F4FB0"><span class="tcat">Submission · Blue belt</span><b>D'Arce choke</b></span></a></li><li><a class="tcard" href="/techniques/omoplata-from-closed-guard/"><span class="tpic fig"><img src="/img/fig/cg_bot.svg" alt="Diagram of Closed guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Closed guard</span></span><span class="tmeta" style="--bc:#5E2D8C"><span class="tcat">Submission · Purple belt</span><b>Omoplata from closed guard</b></span></a></li><li><a class="tcard" href="/techniques/smash-pass-from-half-guard/"><span class="tpic fig"><img src="/img/fig/hg_top.svg" alt="Diagram of Half guard (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Half guard top</span></span><span class="tmeta" style="--bc:#5E2D8C"><span class="tcat">Pass · Purple belt</span><b>Smash pass from half guard</b></span></a></li><li><a class="tcard" href="/techniques/x-guard-entry-and-technical-stand-up-sweep/"><span class="tpic fig"><img src="/img/fig/bfly_bot.svg" alt="Diagram of Butterfly guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Butterfly</span></span><span class="tmeta" style="--bc:#5E2D8C"><span class="tcat">Sweep · Purple belt</span><b>X-guard entry and technical stand-up sweep</b></span></a></li><li><a class="tcard" href="/techniques/japanese-necktie-from-front-headlock/"><span class="tpic fig"><img src="/img/fig/fhl_top.svg" alt="Diagram of Front headlock (you control the head), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Front headlock</span></span><span class="tmeta" style="--bc:#6A4326"><span class="tcat">Submission · Brown belt</span><b>Japanese necktie from front headlock</b></span></a></li><li><a class="tcard" href="/techniques/berimbolo-from-de-la-riva-to-the-back/"><span class="tpic fig"><img src="/img/fig/seated.svg" alt="Diagram of Seated / open guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Seated guard</span></span><span class="tmeta" style="--bc:#6A4326"><span class="tcat">Back take · Brown belt</span><b>Berimbolo from De La Riva to the back</b></span></a></li><li><a class="tcard" href="/techniques/mounted-guillotine/"><span class="tpic fig"><img src="/img/fig/mount_top.svg" alt="Diagram of Mount (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span class="from">Mount</span></span><span class="tmeta" style="--bc:#151515"><span class="tcat">Submission · Black belt</span><b>Mounted guillotine</b></span></a></li><li><a class="tcard more" href="/techniques/"><span>See all 157 techniques</span><b aria-hidden="true">&rarr;</b></a></li></ul>
+    <p class="wrap seeall"><a href="/techniques/">See all 157 techniques</a></p>
+  </section>
 
   <section class="block wrap" id="why">
     <div class="intro">
@@ -241,7 +320,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
         <h3>What to do when they defend</h3>
         <p>Every attacking position has a tree of what to do next. Start with the setup, and each branch shows how they'll react and what you switch to.</p>
       </div>
-      <div class="shot"><img src="/img/chains.jpg" alt="Attack chain tree from closed guard in JitsFlow" loading="lazy" width="390" height="600"></div>
+      <div class="device"><img src="/img/screens/chains.webp" alt="JitsFlow's attack chains from closed guard: break posture and control, then if they sit up tall, hip bump sweep; if they post a hand, kimura; if they grab their hands, omoplata; if they pull the arm free, guillotine" loading="lazy" decoding="async" width="660" height="1428"></div>
     </div>
 
     <div class="feature flip">
@@ -249,7 +328,7 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
         <h3>The same chains from the bottom</h3>
         <p>Flip any position and the same tree shows what they'll go for, how to stop each attack, and what they'll switch to when you do. 38 escapes and submission defenses, and anything you log as tapping you links straight to its defense.</p>
       </div>
-      <div class="shot"><img src="/img/defense.jpg" alt="Defense view under mount, showing their attacks and your defenses" loading="lazy" width="390" height="600"></div>
+      <div class="device"><img src="/img/screens/defense.webp" alt="JitsFlow under mount: they go for mount control, the arm triangle and the armbar, with your defense to each one" loading="lazy" decoding="async" width="660" height="1428"></div>
     </div>
 
     <div class="feature">
@@ -257,15 +336,26 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
         
         <h3>White belt to black belt</h3>
         <ul>
-          <li><b>74</b> white→blue techniques: survive, escape, a few moves that work</li>
-          <li><b>31</b> blue→purple: build a guard and passing systems</li>
-          <li><b>18</b> purple→brown: chains, counters, leg locks</li>
-          <li><b>14</b> brown→black: finishing against people who know the defense</li>
+          <li><b>80</b> white→blue techniques: survive, escape, a few moves that work</li>
+          <li><b>38</b> blue→purple: build a guard and passing systems</li>
+          <li><b>23</b> purple→brown: chains, counters, leg locks</li>
+          <li><b>16</b> brown→black: finishing against people who know the defense</li>
         </ul>
         <p class="muted">Each technique has steps, the details that make it work, common mistakes, a drill and a video. Each belt explains what coaches look for.</p>
       </div>
-      <div class="shot"><img src="/img/belts.jpg" alt="The blue to purple belt stage in JitsFlow" loading="lazy" width="390" height="600"></div>
+      <div class="device"><img src="/img/screens/belt.webp" alt="JitsFlow's belt screen: blue belt readiness at 43%, mat hours, week streak, techniques rated and the weakest area" loading="lazy" decoding="async" width="660" height="1428"></div>
     </div>
+  </section>
+
+  <section class="block wrap" id="map" aria-labelledby="map-h" style="padding-top:0">
+    <div class="intro">
+      <p class="eyebrow">The position map</p>
+      <h2 id="map-h">Every position, mapped</h2>
+      <p class="muted">From back control down to being stuck under mount. Each position has your goal, the dangers, every move that starts there and the ways in.</p>
+      <p class="legend"><span><i></i>You</span><span><i class="them"></i>Your partner</span></p>
+    </div>
+    <div class="posmap"><div class="tier t0"><p class="tname">Winning</p><ul role="list"><li><a class="pcard" href="/positions/back-control/"><img src="/img/fig/back_top.svg" alt="Diagram of Back control (you're behind), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Back control</span></a></li><li><a class="pcard" href="/positions/mount/"><img src="/img/fig/mount_top.svg" alt="Diagram of Mount (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Mount</span></a></li></ul></div><div class="tier t1"><p class="tname">Advantage</p><ul role="list"><li><a class="pcard" href="/positions/side-control/"><img src="/img/fig/sc_top.svg" alt="Diagram of Side control (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Side control</span></a></li><li><a class="pcard" href="/positions/front-headlock/"><img src="/img/fig/fhl_top.svg" alt="Diagram of Front headlock (you control the head), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Front headlock</span></a></li><li><a class="pcard" href="/positions/turtle-top/"><img src="/img/fig/turtle_top.svg" alt="Diagram of They're turtled (you're on top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Turtle (top)</span></a></li><li><a class="pcard" href="/positions/leg-entangle/"><img src="/img/fig/ashi.svg" alt="Diagram of Leg entanglement (you're attacking), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Leg entangle</span></a></li></ul></div><div class="tier t2"><p class="tname">Neutral · top</p><ul role="list"><li><a class="pcard" href="/positions/standing/"><img src="/img/fig/standing.svg" alt="Diagram of Standing, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Standing</span></a></li><li><a class="pcard" href="/positions/passing/"><img src="/img/fig/open_top.svg" alt="Diagram of Passing their open guard (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Passing</span></a></li><li><a class="pcard" href="/positions/in-closed-guard/"><img src="/img/fig/cg_top.svg" alt="Diagram of In their closed guard (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>In closed guard</span></a></li><li><a class="pcard" href="/positions/half-guard-top/"><img src="/img/fig/hg_top.svg" alt="Diagram of Half guard (top), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Half guard top</span></a></li></ul></div><div class="tier t3"><p class="tname">Neutral · bottom</p><ul role="list"><li><a class="pcard" href="/positions/seated-guard/"><img src="/img/fig/seated.svg" alt="Diagram of Seated / open guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Seated guard</span></a></li><li><a class="pcard" href="/positions/butterfly/"><img src="/img/fig/bfly_bot.svg" alt="Diagram of Butterfly guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Butterfly</span></a></li><li><a class="pcard" href="/positions/closed-guard/"><img src="/img/fig/cg_bot.svg" alt="Diagram of Closed guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Closed guard</span></a></li><li><a class="pcard" href="/positions/half-guard/"><img src="/img/fig/hg_bot.svg" alt="Diagram of Half guard (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Half guard</span></a></li></ul></div><div class="tier t4"><p class="tname">Defending</p><ul role="list"><li><a class="pcard" href="/positions/side-bottom/"><img src="/img/fig/sc_bot.svg" alt="Diagram of Under side control, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Side (bottom)</span></a></li><li><a class="pcard" href="/positions/headlocked/"><img src="/img/fig/fhl_bot.svg" alt="Diagram of In their front headlock, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Headlocked</span></a></li><li><a class="pcard" href="/positions/turtled/"><img src="/img/fig/turtle_bot.svg" alt="Diagram of Turtle (bottom), you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Turtled</span></a></li><li><a class="pcard" href="/positions/legs-attacked/"><img src="/img/fig/ashi_def.svg" alt="Diagram of Your leg is entangled, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Legs attacked</span></a></li></ul></div><div class="tier t5"><p class="tname">Danger</p><ul role="list"><li><a class="pcard" href="/positions/mounted/"><img src="/img/fig/mount_bot.svg" alt="Diagram of Under mount, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Mounted</span></a></li><li><a class="pcard" href="/positions/back-taken/"><img src="/img/fig/back_bot.svg" alt="Diagram of Your back is taken, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>Back taken</span></a></li></ul></div></div>
+    <p class="seeall" style="margin-top:18px"><a href="/positions/">All positions, best to worst</a></p>
   </section>
 
 
@@ -296,7 +386,16 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
         </ul>
         <div class="cta" style="margin-top:6px"><a class="btn primary" href="/coaches/">See JitsFlow for gyms</a><a class="btn" href="/app/?start=1">Start your gym</a></div>
       </div>
-      <div class="phone"><img src="/img/coach/today.jpg" alt="The coach's Today screen: today's class, who's booked, and what needs attention" loading="lazy" width="390" height="600"></div>
+      <figure class="clip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/website-to-gym.webp" aria-label="Screen recording: a coach starts a gym, pastes the gym's website, checks what JitsFlow read in and saves it; the classes appear on the calendar"><source src="/video/website-to-gym.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>From your website to a gym that's ready to book, in about a minute. (Screen recording of a demo gym, no sound.)</figcaption>
+      </figure>
+      <ul class="cthumbs" role="list">
+        <li><figure><img src="/img/coach/website-read.webp" alt="Home screen after setup: we read mayhemjiujitsu.example, found 18 classes, 2 coaches, 3 prices and the logo" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Your website, read in<span>Classes, coaches, prices, logo</span></figcaption></figure></li>
+        <li><figure><img src="/img/coach/schedule.webp" alt="Schedule screen: this week's calendar with Kids BJJ, Fundamentals and Advanced No-Gi today and how many are booked" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Your timetable<span>Students book from their phones</span></figcaption></figure></li>
+        <li><figure><img src="/img/coach/money.webp" alt="Money screen for November: R25 100 collected of R31 750 expected, 79% of fees paid, with a six-month chart" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Fees at a glance<span>Collected, expected, who owes</span></figcaption></figure></li>
+        <li><figure><img src="/img/coach/reminders.webp" alt="List of members with overdue fees, each with a WhatsApp Remind button and a Paid button" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Reminders on WhatsApp<span>One tap per member</span></figcaption></figure></li>
+      </ul>
     </div>
   </section>
 
@@ -347,14 +446,31 @@ footer .wrap{display:flex;flex-direction:column;gap:8px}
     <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
   </div>
 </footer>
-<script>
-/* Hero chain: place the moving marker on each move (heights vary with text and screen width). */
-(function(){const f=document.querySelector(".flow");if(!f||matchMedia("(prefers-reduced-motion: reduce)").matches)return;const d=f.querySelector(".dot"),li=[...f.querySelectorAll("li")];
-  function place(){const top=f.getBoundingClientRect().top,ys=li.map(l=>{const r=l.getBoundingClientRect();return r.top-top+r.height/2-6});
-    const k=ys.map((y,i)=>`${i*25}%,${i*25+20}%{transform:translateY(${y}px)}`).join("");let st=document.getElementById("flowkf");if(!st){st=document.createElement("style");st.id="flowkf";document.head.appendChild(st)}
-    st.textContent=`@keyframes step{${k}100%{transform:translateY(${ys[0]}px)}}`}
-  place();addEventListener("resize",place);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(place);
+<script id="media-js">
+/* Screen recordings: play while they're on screen and pause when scrolled away, so only the one you're looking at uses data.
+   With reduced motion or Save-Data on, they wait on their first frame with a play button. Every clip has a pause button. */
+(function(){
+  var vids=[].slice.call(document.querySelectorAll("video.autoclip"));if(!vids.length)return;
+  var calm=matchMedia("(prefers-reduced-motion: reduce)").matches||!!(navigator.connection&&navigator.connection.saveData);
+  var ICON={play:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>',pause:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z" fill="currentColor"/></svg>'};
+  function play(v){var p=v.play();if(p&&p.catch)p.catch(function(){v.dataset.blocked="1";sync(v)})}
+  function sync(v){var b=v.parentNode.querySelector(".vbtn"),on=!v.paused;b.innerHTML=on?ICON.pause:ICON.play;
+    b.setAttribute("aria-label",(on?"Pause":"Play")+" the screen recording");b.classList.toggle("big",!on&&(calm||!!v.dataset.blocked||v.dataset.user==="paused"))}
+  function toggle(v){if(v.paused){v.dataset.user="play";play(v)}else{v.dataset.user="paused";v.pause()}}
+  vids.forEach(function(v){var b=v.parentNode.querySelector(".vbtn");v.removeAttribute("controls");b.hidden=false;
+    b.addEventListener("click",function(){toggle(v)});v.addEventListener("click",function(){toggle(v)});
+    v.addEventListener("play",function(){sync(v)});v.addEventListener("pause",function(){sync(v)});sync(v)});
+  if(calm||!("IntersectionObserver" in window))return;
+  function watch(){var io=new IntersectionObserver(function(es){es.forEach(function(e){var v=e.target;
+      if(e.isIntersecting&&e.intersectionRatio>=.35){if(v.dataset.user!=="paused")play(v)}else if(!v.paused)v.pause()})},{threshold:[0,.35,.7]});
+    vids.forEach(function(v){io.observe(v)})}
+  if(document.readyState==="complete")watch();else addEventListener("load",watch);
 })();
+/* Technique gallery arrows (wide screens; phones swipe). */
+(function(){var r=document.getElementById("tgal");if(!r)return;var smooth=!matchMedia("(prefers-reduced-motion: reduce)").matches;
+  [].forEach.call(document.querySelectorAll("[data-rail]"),function(b){b.addEventListener("click",function(){r.scrollBy({left:Number(b.dataset.rail)*r.clientWidth*.8,behavior:smooth?"smooth":"auto"})})})})();
+</script>
+<script>
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
 </script>
 </body>

@@ -1,0 +1,1382 @@
+{
+ "tech": [
+  {
+   "id": "stance_motion",
+   "n": "Stance, motion & hand fighting",
+   "slug": "stance-motion-and-hand-fighting",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "standing"
+  },
+  {
+   "id": "double_leg",
+   "n": "Double-leg takedown",
+   "slug": "double-leg-takedown",
+   "belt": "blue",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "single_leg",
+   "n": "Single leg (run the pipe)",
+   "slug": "single-leg-run-the-pipe",
+   "belt": "blue",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "snapdown",
+   "n": "Snap-down to front headlock",
+   "slug": "snap-down-to-front-headlock",
+   "belt": "blue",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "sprawl",
+   "n": "Sprawl",
+   "slug": "sprawl",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "standing"
+  },
+  {
+   "id": "arm_drag",
+   "n": "Arm drag to the back",
+   "slug": "arm-drag-to-the-back",
+   "belt": "blue",
+   "cat": "Back take",
+   "f": "standing"
+  },
+  {
+   "id": "guard_pull",
+   "n": "Sitting to guard safely",
+   "slug": "sitting-to-guard-safely",
+   "belt": "blue",
+   "cat": "Entry",
+   "f": "standing"
+  },
+  {
+   "id": "technical_standup",
+   "n": "Technical stand-up",
+   "slug": "technical-stand-up",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "seated"
+  },
+  {
+   "id": "guard_retention",
+   "n": "Guard retention: frames & hip escape",
+   "slug": "guard-retention-frames-and-hip-escape",
+   "belt": "blue",
+   "cat": "Guard",
+   "f": "seated"
+  },
+  {
+   "id": "shin_to_shin",
+   "n": "Shin-to-shin to single-leg X",
+   "slug": "shin-to-shin-to-single-leg-x",
+   "belt": "blue",
+   "cat": "Entry",
+   "f": "seated"
+  },
+  {
+   "id": "wrestle_up",
+   "n": "Wrestle-up from seated guard",
+   "slug": "wrestle-up-from-seated-guard",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "seated"
+  },
+  {
+   "id": "bfly_sweep",
+   "n": "Butterfly (hook) sweep",
+   "slug": "butterfly-hook-sweep",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "bfly_bot"
+  },
+  {
+   "id": "bfly_armdrag",
+   "n": "Arm drag from butterfly to the back",
+   "slug": "arm-drag-from-butterfly-to-the-back",
+   "belt": "blue",
+   "cat": "Back take",
+   "f": "bfly_bot"
+  },
+  {
+   "id": "cg_break_posture",
+   "n": "Closed guard: break posture & control",
+   "slug": "closed-guard-break-posture-and-control",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "cg_bot"
+  },
+  {
+   "id": "hip_bump",
+   "n": "Hip bump sweep",
+   "slug": "hip-bump-sweep",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "cg_bot"
+  },
+  {
+   "id": "kimura_cg",
+   "n": "Kimura from closed guard",
+   "slug": "kimura-from-closed-guard",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "guillotine_cg",
+   "n": "Guillotine from guard",
+   "slug": "guillotine-from-guard",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "triangle",
+   "n": "Triangle choke",
+   "slug": "triangle-choke",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "armbar_cg",
+   "n": "Armbar from closed guard",
+   "slug": "armbar-from-closed-guard",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "cg_posture",
+   "n": "Posture up & open closed guard",
+   "slug": "posture-up-and-open-closed-guard",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "cg_top"
+  },
+  {
+   "id": "knee_cut",
+   "n": "Knee cut (knee slice) pass",
+   "slug": "knee-cut-knee-slice-pass",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "bodylock_pass",
+   "n": "Body lock pass",
+   "slug": "body-lock-pass",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "toreando",
+   "n": "Toreando (bullfighter) pass",
+   "slug": "toreando-bullfighter-pass",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "leg_drag",
+   "n": "Leg drag pass",
+   "slug": "leg-drag-pass",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "over_under",
+   "n": "Over-under pass",
+   "slug": "over-under-pass",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "hg_frames",
+   "n": "Half guard bottom: knee shield & underhook",
+   "slug": "half-guard-bottom-knee-shield-and-underhook",
+   "belt": "blue",
+   "cat": "Guard",
+   "f": "hg_bot"
+  },
+  {
+   "id": "hg_dogfight",
+   "n": "Underhook to dogfight to single leg",
+   "slug": "underhook-to-dogfight-to-single-leg",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "hg_bot"
+  },
+  {
+   "id": "hg_recover",
+   "n": "Recover full guard from half",
+   "slug": "recover-full-guard-from-half",
+   "belt": "blue",
+   "cat": "Guard",
+   "f": "hg_bot"
+  },
+  {
+   "id": "hg_flatten",
+   "n": "Half guard top: crossface & flatten",
+   "slug": "half-guard-top-crossface-and-flatten",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "hg_top"
+  },
+  {
+   "id": "hg_pass",
+   "n": "Half guard pass: flatten & free the leg",
+   "slug": "half-guard-pass-flatten-and-free-the-leg",
+   "belt": "blue",
+   "cat": "Pass",
+   "f": "hg_top"
+  },
+  {
+   "id": "sc_control",
+   "n": "Side control: pins & pressure",
+   "slug": "side-control-pins-and-pressure",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "sc_top"
+  },
+  {
+   "id": "sc_to_mount",
+   "n": "Side control to mount",
+   "slug": "side-control-to-mount",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "sc_top"
+  },
+  {
+   "id": "americana",
+   "n": "Americana",
+   "slug": "americana",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "kimura_sc",
+   "n": "Kimura from side control",
+   "slug": "kimura-from-side-control",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "ns_choke",
+   "n": "North-south choke",
+   "slug": "north-south-choke",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "sc_frames",
+   "n": "Side control escape: frame & re-guard",
+   "slug": "side-control-escape-frame-and-re-guard",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "sc_bot"
+  },
+  {
+   "id": "sc_underhook_escape",
+   "n": "Side control escape: underhook to knees",
+   "slug": "side-control-escape-underhook-to-knees",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "sc_bot"
+  },
+  {
+   "id": "mount_control",
+   "n": "Mount: stay & climb",
+   "slug": "mount-stay-and-climb",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "mount_top"
+  },
+  {
+   "id": "mount_armbar",
+   "n": "Armbar from mount",
+   "slug": "armbar-from-mount",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "arm_tri",
+   "n": "Arm triangle (head & arm)",
+   "slug": "arm-triangle-head-and-arm",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "mount_to_back",
+   "n": "Mount to back take",
+   "slug": "mount-to-back-take",
+   "belt": "blue",
+   "cat": "Back take",
+   "f": "mount_top"
+  },
+  {
+   "id": "upa",
+   "n": "Trap & roll (upa)",
+   "slug": "trap-and-roll-upa",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "mount_bot"
+  },
+  {
+   "id": "elbow_knee",
+   "n": "Elbow-knee escape (shrimp)",
+   "slug": "elbow-knee-escape-shrimp",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "mount_bot"
+  },
+  {
+   "id": "back_control",
+   "n": "Back control: seatbelt & hooks",
+   "slug": "back-control-seatbelt-and-hooks",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "back_top"
+  },
+  {
+   "id": "rnc",
+   "n": "Rear-naked choke",
+   "slug": "rear-naked-choke",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "back_top"
+  },
+  {
+   "id": "back_to_mount",
+   "n": "Back to mount",
+   "slug": "back-to-mount",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "back_top"
+  },
+  {
+   "id": "back_escape",
+   "n": "Back escape",
+   "slug": "back-escape",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "back_bot"
+  },
+  {
+   "id": "turtle_recover",
+   "n": "Turtle: defend & recover guard",
+   "slug": "turtle-defend-and-recover-guard",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "turtle_backtake",
+   "n": "Back take from turtle",
+   "slug": "back-take-from-turtle",
+   "belt": "blue",
+   "cat": "Back take",
+   "f": "turtle_top"
+  },
+  {
+   "id": "guillotine",
+   "n": "Guillotine (arm-in / high elbow)",
+   "slug": "guillotine-arm-in-high-elbow",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "darce",
+   "n": "D'Arce choke",
+   "slug": "d-arce-choke",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "fhl_go_behind",
+   "n": "Go-behind from front headlock",
+   "slug": "go-behind-from-front-headlock",
+   "belt": "blue",
+   "cat": "Back take",
+   "f": "fhl_top"
+  },
+  {
+   "id": "fhl_escape",
+   "n": "Front headlock & guillotine defense",
+   "slug": "front-headlock-and-guillotine-defense",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "fhl_bot"
+  },
+  {
+   "id": "ashi_control",
+   "n": "Ashi garami / single-leg X control",
+   "slug": "ashi-garami-single-leg-x-control",
+   "belt": "blue",
+   "cat": "Control",
+   "f": "ashi"
+  },
+  {
+   "id": "sal",
+   "n": "Straight ankle lock",
+   "slug": "straight-ankle-lock",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "heel_hook",
+   "n": "Heel hook (know it, defend it)",
+   "slug": "heel-hook-know-it-defend-it",
+   "belt": "blue",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "ashi_def",
+   "n": "Leg lock defense",
+   "slug": "leg-lock-defense",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "ashi_def"
+  },
+  {
+   "id": "armbar_def",
+   "n": "Armbar defense: closed guard and mount",
+   "slug": "armbar-defense-closed-guard-and-mount",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "cg_top"
+  },
+  {
+   "id": "triangle_def",
+   "n": "Triangle defense",
+   "slug": "triangle-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "cg_top"
+  },
+  {
+   "id": "kimura_def",
+   "n": "Kimura and americana defense",
+   "slug": "kimura-and-americana-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "sc_bot"
+  },
+  {
+   "id": "arm_tri_def",
+   "n": "Arm triangle defense",
+   "slug": "arm-triangle-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "mount_bot"
+  },
+  {
+   "id": "rnc_def",
+   "n": "Rear-naked choke defense",
+   "slug": "rear-naked-choke-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "back_bot"
+  },
+  {
+   "id": "guillotine_def",
+   "n": "Guillotine defense: in their guard and standing",
+   "slug": "guillotine-defense-in-their-guard-and-standing",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "cg_top"
+  },
+  {
+   "id": "darce_def",
+   "n": "D'Arce and anaconda defense",
+   "slug": "d-arce-and-anaconda-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "fhl_bot"
+  },
+  {
+   "id": "sal_def",
+   "n": "Straight ankle lock defense",
+   "slug": "straight-ankle-lock-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "ashi_def"
+  },
+  {
+   "id": "ns_choke_def",
+   "n": "North-south choke defense",
+   "slug": "north-south-choke-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "sc_bot"
+  },
+  {
+   "id": "kob_escape",
+   "n": "Knee on belly escape",
+   "slug": "knee-on-belly-escape",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "sc_bot"
+  },
+  {
+   "id": "ns_escape",
+   "n": "North-south escape",
+   "slug": "north-south-escape",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "sc_bot"
+  },
+  {
+   "id": "backtake_def",
+   "n": "Stopping the back take from turtle or a scramble",
+   "slug": "stopping-the-back-take-from-turtle-or-a-scramble",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "single_leg_def",
+   "n": "Single-leg defense: whizzer, hip pressure and limp leg",
+   "slug": "single-leg-defense-whizzer-hip-pressure-and-limp-leg",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "standing"
+  },
+  {
+   "id": "double_leg_def",
+   "n": "Double-leg defense: downblock and sprawl",
+   "slug": "double-leg-defense-downblock-and-sprawl",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "standing"
+  },
+  {
+   "id": "knee_cut_def",
+   "n": "Knee cut defense: knee shield and underhook",
+   "slug": "knee-cut-defense-knee-shield-and-underhook",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "seated"
+  },
+  {
+   "id": "bodylock_def",
+   "n": "Body lock pass defense",
+   "slug": "body-lock-pass-defense",
+   "belt": "blue",
+   "cat": "Defense",
+   "f": "seated"
+  },
+  {
+   "id": "mount_def",
+   "n": "Mount defense: protect your neck and arms",
+   "slug": "mount-defense-protect-your-neck-and-arms",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "mount_bot"
+  },
+  {
+   "id": "crucifix_escape",
+   "n": "Crucifix escape",
+   "slug": "crucifix-escape",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "back_bot"
+  },
+  {
+   "id": "omoplata_def",
+   "n": "Omoplata defense: roll forward and recover",
+   "slug": "omoplata-defense-roll-forward-and-recover",
+   "belt": "purple",
+   "cat": "Defense",
+   "f": "cg_top"
+  },
+  {
+   "id": "kneebar_def",
+   "n": "Kneebar defense",
+   "slug": "kneebar-defense",
+   "belt": "purple",
+   "cat": "Defense",
+   "f": "ashi_def"
+  },
+  {
+   "id": "body_tri_escape",
+   "n": "Body triangle escape from the back",
+   "slug": "body-triangle-escape-from-the-back",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "back_bot"
+  },
+  {
+   "id": "mounted_tri_def",
+   "n": "Mounted triangle defense",
+   "slug": "mounted-triangle-defense",
+   "belt": "purple",
+   "cat": "Defense",
+   "f": "mount_bot"
+  },
+  {
+   "id": "kipping_escape",
+   "n": "Kipping (heel-drag) mount escape",
+   "slug": "kipping-heel-drag-mount-escape",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "mount_bot"
+  },
+  {
+   "id": "kimura_trap_def",
+   "n": "Kimura trap defense from half guard top",
+   "slug": "kimura-trap-defense-from-half-guard-top",
+   "belt": "purple",
+   "cat": "Defense",
+   "f": "hg_top"
+  },
+  {
+   "id": "dlr_guard",
+   "n": "De La Riva guard: hook and control",
+   "slug": "de-la-riva-guard-hook-and-control",
+   "belt": "purple",
+   "cat": "Guard",
+   "f": "seated"
+  },
+  {
+   "id": "rdlr_sweep",
+   "n": "Reverse De La Riva sweep and back exposure",
+   "slug": "reverse-de-la-riva-sweep-and-back-exposure",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "seated"
+  },
+  {
+   "id": "xguard_sweep",
+   "n": "X-guard entry and technical stand-up sweep",
+   "slug": "x-guard-entry-and-technical-stand-up-sweep",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "bfly_bot"
+  },
+  {
+   "id": "slx_sweep",
+   "n": "Single-leg X sweep",
+   "slug": "single-leg-x-sweep",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "seated"
+  },
+  {
+   "id": "pendulum_sweep",
+   "n": "Pendulum (flower) sweep from closed guard",
+   "slug": "pendulum-flower-sweep-from-closed-guard",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "cg_bot"
+  },
+  {
+   "id": "omoplata",
+   "n": "Omoplata from closed guard",
+   "slug": "omoplata-from-closed-guard",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "kimura_trap_hg",
+   "n": "Kimura trap from half guard bottom: sweep or back take",
+   "slug": "kimura-trap-from-half-guard-bottom-sweep-or-back-take",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "hg_bot"
+  },
+  {
+   "id": "waiter_sweep",
+   "n": "Waiter sweep from deep half guard",
+   "slug": "waiter-sweep-from-deep-half-guard",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "hg_bot"
+  },
+  {
+   "id": "lockdown_sweep",
+   "n": "Lockdown half guard and old-school sweep",
+   "slug": "lockdown-half-guard-and-old-school-sweep",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "hg_bot"
+  },
+  {
+   "id": "hq_pass",
+   "n": "Headquarters position: knee slice and backstep options",
+   "slug": "headquarters-position-knee-slice-and-backstep-options",
+   "belt": "purple",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "smash_pass",
+   "n": "Smash pass from half guard",
+   "slug": "smash-pass-from-half-guard",
+   "belt": "purple",
+   "cat": "Pass",
+   "f": "hg_top"
+  },
+  {
+   "id": "stack_pass",
+   "n": "Double-under (stack) pass",
+   "slug": "double-under-stack-pass",
+   "belt": "purple",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "kob_armbar",
+   "n": "Knee on belly and far-side armbar",
+   "slug": "knee-on-belly-and-far-side-armbar",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "mounted_triangle",
+   "n": "Mounted triangle",
+   "slug": "mounted-triangle",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "back_armbar",
+   "n": "Armbar from back control when they defend the choke",
+   "slug": "armbar-from-back-control-when-they-defend-the-choke",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "back_top"
+  },
+  {
+   "id": "arm_trap_rnc",
+   "n": "Arm-trap rear-naked choke",
+   "slug": "arm-trap-rear-naked-choke",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "back_top"
+  },
+  {
+   "id": "back_retention",
+   "n": "Back retention: re-seating hooks when they slide out",
+   "slug": "back-retention-re-seating-hooks-when-they-slide-out",
+   "belt": "purple",
+   "cat": "Back take",
+   "f": "back_top"
+  },
+  {
+   "id": "crucifix",
+   "n": "Crucifix from turtle and the crucifix choke",
+   "slug": "crucifix-from-turtle-and-the-crucifix-choke",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "turtle_top"
+  },
+  {
+   "id": "anaconda",
+   "n": "Anaconda choke from front headlock",
+   "slug": "anaconda-choke-from-front-headlock",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "hw_guillotine",
+   "n": "High-wrist guillotine",
+   "slug": "high-wrist-guillotine",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "ankle_pick",
+   "n": "Ankle pick takedown",
+   "slug": "ankle-pick-takedown",
+   "belt": "purple",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "high_crotch",
+   "n": "High crotch takedown",
+   "slug": "high-crotch-takedown",
+   "belt": "purple",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "ghost_escape",
+   "n": "Ghost escape from side control",
+   "slug": "ghost-escape-from-side-control",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "sc_bot"
+  },
+  {
+   "id": "kneebar",
+   "n": "Kneebar from outside position (ashi)",
+   "slug": "kneebar-from-outside-position-ashi",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "kguard_saddle",
+   "n": "K-guard entry to the saddle (backside entanglement)",
+   "slug": "k-guard-entry-to-the-saddle-backside-entanglement",
+   "belt": "brown",
+   "cat": "Entry",
+   "f": "seated"
+  },
+  {
+   "id": "saddle_control",
+   "n": "Saddle (inside sankaku) control: breaking the knee line",
+   "slug": "saddle-inside-sankaku-control-breaking-the-knee-line",
+   "belt": "brown",
+   "cat": "Control",
+   "f": "ashi"
+  },
+  {
+   "id": "inside_heel_hook",
+   "n": "Inside heel hook from the saddle",
+   "slug": "inside-heel-hook-from-the-saddle",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "outside_heel_hook",
+   "n": "Outside heel hook from outside ashi",
+   "slug": "outside-heel-hook-from-outside-ashi",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "fifty_fifty",
+   "n": "50/50: entry, sweep and heel exposure",
+   "slug": "50-50-entry-sweep-and-heel-exposure",
+   "belt": "brown",
+   "cat": "Sweep",
+   "f": "seated"
+  },
+  {
+   "id": "counter_leglock",
+   "n": "Counter leg lock: clear the knee line into your own attack",
+   "slug": "counter-leg-lock-clear-the-knee-line-into-your-own-attack",
+   "belt": "brown",
+   "cat": "Escape",
+   "f": "ashi_def"
+  },
+  {
+   "id": "saddle_escape",
+   "n": "Leg lock defense from the saddle: hand fight & escape",
+   "slug": "leg-lock-defense-from-the-saddle-hand-fight-and-escape",
+   "belt": "brown",
+   "cat": "Escape",
+   "f": "ashi_def"
+  },
+  {
+   "id": "truck_back",
+   "n": "Truck entry from turtle to back take",
+   "slug": "truck-entry-from-turtle-to-back-take",
+   "belt": "brown",
+   "cat": "Back take",
+   "f": "turtle_top"
+  },
+  {
+   "id": "berimbolo",
+   "n": "Berimbolo from De La Riva to the back",
+   "slug": "berimbolo-from-de-la-riva-to-the-back",
+   "belt": "brown",
+   "cat": "Back take",
+   "f": "seated"
+  },
+  {
+   "id": "kimura_trap_back",
+   "n": "Kimura trap from side control to the back",
+   "slug": "kimura-trap-from-side-control-to-the-back",
+   "belt": "brown",
+   "cat": "Back take",
+   "f": "sc_top"
+  },
+  {
+   "id": "backstep_pass",
+   "n": "Backstep pass from half guard top",
+   "slug": "backstep-pass-from-half-guard-top",
+   "belt": "brown",
+   "cat": "Pass",
+   "f": "hg_top"
+  },
+  {
+   "id": "leg_weave",
+   "n": "Leg weave pass to mount",
+   "slug": "leg-weave-pass-to-mount",
+   "belt": "brown",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "mount_chain",
+   "n": "Mount attack chain: arm triangle, armbar, back take",
+   "slug": "mount-attack-chain-arm-triangle-armbar-back-take",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "fhl_chain",
+   "n": "Front headlock chain: guillotine, d'arce, anaconda & go-behind",
+   "slug": "front-headlock-chain-guillotine-d-arce-anaconda-and-go-behind",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "bodylock_trip",
+   "n": "Body lock takedown with outside trip",
+   "slug": "body-lock-takedown-with-outside-trip",
+   "belt": "brown",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "duck_under",
+   "n": "Duck-under to the back",
+   "slug": "duck-under-to-the-back",
+   "belt": "brown",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "shoulder_clamp",
+   "n": "Shoulder clamp (overhook guard) to triangle or back",
+   "slug": "shoulder-clamp-overhook-guard-to-triangle-or-back",
+   "belt": "brown",
+   "cat": "Guard",
+   "f": "cg_bot"
+  },
+  {
+   "id": "peterson_roll",
+   "n": "Peterson roll (sit-out) from turtle to leg entanglement",
+   "slug": "peterson-roll-sit-out-from-turtle-to-leg-entanglement",
+   "belt": "brown",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "back_handfight",
+   "n": "Back attack hand-fight: two-on-one strip to choke or armbar",
+   "slug": "back-attack-hand-fight-two-on-one-strip-to-choke-or-armbar",
+   "belt": "black",
+   "cat": "Back take",
+   "f": "back_top"
+  },
+  {
+   "id": "rnc_chin",
+   "n": "Rear-naked choke against a defended chin",
+   "slug": "rear-naked-choke-against-a-defended-chin",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "back_top"
+  },
+  {
+   "id": "power_half",
+   "n": "Power half and spiral ride from turtle",
+   "slug": "power-half-and-spiral-ride-from-turtle",
+   "belt": "black",
+   "cat": "Control",
+   "f": "turtle_top"
+  },
+  {
+   "id": "reverse_triangle",
+   "n": "Reverse triangle from top (side control or turtle)",
+   "slug": "reverse-triangle-from-top-side-control-or-turtle",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "mounted_guillotine",
+   "n": "Mounted guillotine",
+   "slug": "mounted-guillotine",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "ezekiel_nogi",
+   "n": "No-gi Ezekiel choke from mount",
+   "slug": "no-gi-ezekiel-choke-from-mount",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "mount_top"
+  },
+  {
+   "id": "ns_kimura_armbar",
+   "n": "North-south kimura to armbar",
+   "slug": "north-south-kimura-to-armbar",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "buggy_choke",
+   "n": "Buggy choke from under side control",
+   "slug": "buggy-choke-from-under-side-control",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "sc_bot"
+  },
+  {
+   "id": "drag_bodylock_return",
+   "n": "Arm drag to body lock to mat return",
+   "slug": "arm-drag-to-body-lock-to-mat-return",
+   "belt": "black",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "imanari_roll",
+   "n": "Imanari roll to leg entanglement",
+   "slug": "imanari-roll-to-leg-entanglement",
+   "belt": "black",
+   "cat": "Entry",
+   "f": "standing"
+  },
+  {
+   "id": "backside_5050_heel",
+   "n": "Backside 50/50 heel hook",
+   "slug": "backside-50-50-heel-hook",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "inside_position_pass",
+   "n": "Inside position passing: hands and knees first",
+   "slug": "inside-position-passing-hands-and-knees-first",
+   "belt": "black",
+   "cat": "Pass",
+   "f": "open_top"
+  },
+  {
+   "id": "guard_ret_pressure",
+   "n": "Guard retention against heavy pressure: frames and leg pummeling",
+   "slug": "guard-retention-against-heavy-pressure-frames-and-leg-pummeling",
+   "belt": "black",
+   "cat": "Guard",
+   "f": "seated"
+  },
+  {
+   "id": "seated_counter_wrestle",
+   "n": "Counter-wrestling from seated guard: front headlock and guillotine",
+   "slug": "counter-wrestling-from-seated-guard-front-headlock-and-guillotine",
+   "belt": "black",
+   "cat": "Guard",
+   "f": "seated"
+  },
+  {
+   "id": "turtle_standup",
+   "n": "Stand-up from turtle",
+   "slug": "stand-up-from-turtle",
+   "belt": "blue",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "tripod_sweep",
+   "n": "Tripod sweep against a standing passer",
+   "slug": "tripod-sweep-against-a-standing-passer",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "seated"
+  },
+  {
+   "id": "lumberjack_sweep",
+   "n": "Lumberjack sweep when they stand in your closed guard",
+   "slug": "lumberjack-sweep-when-they-stand-in-your-closed-guard",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "cg_bot"
+  },
+  {
+   "id": "knee_tap",
+   "n": "Knee tap takedown",
+   "slug": "knee-tap-takedown",
+   "belt": "blue",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "scissor_sweep",
+   "n": "Scissor sweep with collar tie and wrist control",
+   "slug": "scissor-sweep-with-collar-tie-and-wrist-control",
+   "belt": "blue",
+   "cat": "Sweep",
+   "f": "cg_bot"
+  },
+  {
+   "id": "inside_trip",
+   "n": "Inside trip (ouchi gari) from the clinch",
+   "slug": "inside-trip-ouchi-gari-from-the-clinch",
+   "belt": "blue",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "von_flue_choke",
+   "n": "Von Flue choke: guillotine counter from side control",
+   "slug": "von-flue-choke-guillotine-counter-from-side-control",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "sc_top"
+  },
+  {
+   "id": "wrist_lock_cg",
+   "n": "Wrist lock from closed guard against a posted hand",
+   "slug": "wrist-lock-from-closed-guard-against-a-posted-hand",
+   "belt": "purple",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "electric_chair_sweep",
+   "n": "Electric chair sweep from lockdown half guard",
+   "slug": "electric-chair-sweep-from-lockdown-half-guard",
+   "belt": "purple",
+   "cat": "Sweep",
+   "f": "hg_bot"
+  },
+  {
+   "id": "granby_roll",
+   "n": "Granby roll from turtle to guard",
+   "slug": "granby-roll-from-turtle-to-guard",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "wrestling_switch",
+   "n": "Wrestling switch from turtle",
+   "slug": "wrestling-switch-from-turtle",
+   "belt": "purple",
+   "cat": "Escape",
+   "f": "turtle_bot"
+  },
+  {
+   "id": "russian_tie",
+   "n": "Russian tie (two-on-one) to the back or single leg",
+   "slug": "russian-tie-two-on-one-to-the-back-or-single-leg",
+   "belt": "purple",
+   "cat": "Entry",
+   "f": "standing"
+  },
+  {
+   "id": "firemans_carry",
+   "n": "Fireman's carry takedown",
+   "slug": "fireman-s-carry-takedown",
+   "belt": "purple",
+   "cat": "Takedown",
+   "f": "standing"
+  },
+  {
+   "id": "japanese_necktie",
+   "n": "Japanese necktie from front headlock",
+   "slug": "japanese-necktie-from-front-headlock",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "peruvian_necktie",
+   "n": "Peruvian necktie from front headlock",
+   "slug": "peruvian-necktie-from-front-headlock",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "fhl_top"
+  },
+  {
+   "id": "gogoplata",
+   "n": "Gogoplata from closed guard",
+   "slug": "gogoplata-from-closed-guard",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "cg_bot"
+  },
+  {
+   "id": "truck_calf_slicer",
+   "n": "Calf slicer from the truck",
+   "slug": "calf-slicer-from-the-truck",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "back_top"
+  },
+  {
+   "id": "toe_hold",
+   "n": "Toe hold from outside ashi",
+   "slug": "toe-hold-from-outside-ashi",
+   "belt": "brown",
+   "cat": "Submission",
+   "f": "ashi"
+  },
+  {
+   "id": "flying_guillotine",
+   "n": "Flying guillotine",
+   "slug": "flying-guillotine",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "standing"
+  },
+  {
+   "id": "banana_split",
+   "n": "Banana split from the truck",
+   "slug": "banana-split-from-the-truck",
+   "belt": "black",
+   "cat": "Submission",
+   "f": "back_top"
+  }
+ ],
+ "pos": {
+  "back_top": {
+   "l": "Back control",
+   "L": "Back control (you're behind)",
+   "r": 0,
+   "slug": "back-control"
+  },
+  "mount_top": {
+   "l": "Mount",
+   "L": "Mount (top)",
+   "r": 0,
+   "slug": "mount"
+  },
+  "sc_top": {
+   "l": "Side control",
+   "L": "Side control (top)",
+   "r": 1,
+   "slug": "side-control"
+  },
+  "fhl_top": {
+   "l": "Front headlock",
+   "L": "Front headlock (you control the head)",
+   "r": 1,
+   "slug": "front-headlock"
+  },
+  "turtle_top": {
+   "l": "Turtle (top)",
+   "L": "They're turtled (you're on top)",
+   "r": 1,
+   "slug": "turtle-top"
+  },
+  "ashi": {
+   "l": "Leg entangle",
+   "L": "Leg entanglement (you're attacking)",
+   "r": 1,
+   "slug": "leg-entangle"
+  },
+  "standing": {
+   "l": "Standing",
+   "L": "Standing",
+   "r": 2,
+   "slug": "standing"
+  },
+  "open_top": {
+   "l": "Passing",
+   "L": "Passing their open guard (top)",
+   "r": 2,
+   "slug": "passing"
+  },
+  "cg_top": {
+   "l": "In closed guard",
+   "L": "In their closed guard (top)",
+   "r": 2,
+   "slug": "in-closed-guard"
+  },
+  "hg_top": {
+   "l": "Half guard top",
+   "L": "Half guard (top)",
+   "r": 2,
+   "slug": "half-guard-top"
+  },
+  "seated": {
+   "l": "Seated guard",
+   "L": "Seated / open guard (bottom)",
+   "r": 3,
+   "slug": "seated-guard"
+  },
+  "bfly_bot": {
+   "l": "Butterfly",
+   "L": "Butterfly guard (bottom)",
+   "r": 3,
+   "slug": "butterfly"
+  },
+  "cg_bot": {
+   "l": "Closed guard",
+   "L": "Closed guard (bottom)",
+   "r": 3,
+   "slug": "closed-guard"
+  },
+  "hg_bot": {
+   "l": "Half guard",
+   "L": "Half guard (bottom)",
+   "r": 3,
+   "slug": "half-guard"
+  },
+  "sc_bot": {
+   "l": "Side (bottom)",
+   "L": "Under side control",
+   "r": 4,
+   "slug": "side-bottom"
+  },
+  "fhl_bot": {
+   "l": "Headlocked",
+   "L": "In their front headlock",
+   "r": 4,
+   "slug": "headlocked"
+  },
+  "turtle_bot": {
+   "l": "Turtled",
+   "L": "Turtle (bottom)",
+   "r": 4,
+   "slug": "turtled"
+  },
+  "ashi_def": {
+   "l": "Legs attacked",
+   "L": "Your leg is entangled",
+   "r": 4,
+   "slug": "legs-attacked"
+  },
+  "mount_bot": {
+   "l": "Mounted",
+   "L": "Under mount",
+   "r": 5,
+   "slug": "mounted"
+  },
+  "back_bot": {
+   "l": "Back taken",
+   "L": "Your back is taken",
+   "r": 5,
+   "slug": "back-taken"
+  }
+ }
+}

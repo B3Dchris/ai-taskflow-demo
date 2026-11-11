@@ -20,6 +20,8 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   // Account data always comes live from the server, never from the offline cache.
   if (url.origin === location.origin && url.pathname.startsWith("/api/")) return;
+  // Home-page clips stream from the server in pieces (range requests); they aren't kept offline.
+  if (url.origin === location.origin && url.pathname.startsWith("/video/")) return;
 
   // Pages: try the network first so updates arrive, fall back to the cached app offline.
   if (req.mode === "navigate") {

@@ -48,6 +48,38 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>[...document.images].every(i=>i.complete&&i.naturalWidth>0)||true),'landing images present');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'landing has no sideways scroll on a phone');
     const imgs=await p.evaluate(async()=>{const r=[];for(const i of [...document.querySelectorAll('img')]){const x=await fetch(i.getAttribute('src'));r.push(x.status)}return r});ok(imgs.length>=3&&imgs.every(s=>s===200),'all landing screenshots load');
+    // pictures and screen recordings on the home page and /coaches/
+    {const home=await p.evaluate(()=>({imgs:[...document.images].map(i=>({src:i.getAttribute('src'),alt:i.getAttribute('alt'),w:i.getAttribute('width'),h:i.getAttribute('height'),deco:!!i.closest('[aria-hidden="true"]')})),
+        tech:[...document.querySelectorAll('.tgal a.tcard:not(.more)')].map(a=>({href:a.getAttribute('href'),name:(a.querySelector('b')||{}).textContent||'',img:!!a.querySelector('img'),belt:getComputedStyle(a.querySelector('.tmeta'),'::before').backgroundColor})),
+        pos:[...document.querySelectorAll('.posmap a.pcard')].map(a=>a.getAttribute('href')),
+        vids:[...document.querySelectorAll('video')].map(v=>({poster:v.getAttribute('poster'),src:(v.querySelector('source')||{}).getAttribute&&v.querySelector('source').getAttribute('src'),muted:v.muted,inline:v.playsInline,pre:v.getAttribute('preload'),loop:v.loop,label:v.getAttribute('aria-label')||'',cap:((v.closest('figure')||{}).querySelector&&v.closest('figure').querySelector('figcaption')||{}).textContent||'',btn:!!v.parentNode.querySelector('.vbtn:not([hidden])[aria-label]')})),
+        seeAll:!!document.querySelector('#techniques a[href="/techniques/"]')}));
+     ok(home.imgs.length>=40&&home.imgs.every(i=>i.alt!==null&&i.w&&i.h),'home page: '+home.imgs.length+' pictures, each with alt text and a size: '+home.imgs.filter(i=>i.alt===null||!i.w||!i.h).map(i=>i.src).join(' '));
+     ok(home.imgs.filter(i=>!i.deco).every(i=>i.alt.length>10),'home page: every picture that isn\'t decoration says what it shows');
+     ok(home.tech.length>=16&&home.tech.every(t=>/^\/techniques\/[a-z0-9-]+\/$/.test(t.href)&&t.name.length>3&&t.img&&t.belt!=='rgba(0, 0, 0, 0)')&&home.seeAll,'technique gallery: '+home.tech.length+' cards with a picture, name and belt colour, plus See all');
+     ok(home.pos.length===20,'position map lists all 20 positions ('+home.pos.length+')');
+     const st=await Promise.all([...home.tech.map(t=>t.href),...home.pos].map(async u=>(await fetch(URL+u.slice(1))).status));ok(st.every(x=>x===200),'gallery and position map link to real pages');
+     const vh=await (await fetch(URL+'coaches/')).text();const cv=[...vh.matchAll(/<video[^>]*poster="([^"]+)"[^>]*>\s*<source src="([^"]+)" type="video\/mp4">/g)].map(m=>({poster:m[1],src:m[2]}));
+     ok(home.vids.length>=2&&home.vids.every(v=>v.poster&&v.src&&v.muted&&v.inline&&v.pre==='none'&&v.loop&&v.label.length>20&&v.cap.length>20&&v.btn),'home page clips: muted, inline, preload none, a poster, a description, a visible caption and a play/pause button');
+     ok(cv.length>=3&&/class="vbtn"/.test(vh)&&/<figcaption>[^<]{20,}/.test(vh),'coaches page has '+cv.length+' clips with posters and captions');
+     const media=[...new Set([...home.vids,...cv].flatMap(v=>[v.poster,v.src]))];
+     const ms=await Promise.all(media.map(async u=>{const r=await fetch(URL+u.slice(1));const b=await r.arrayBuffer();return {u,s:r.status,t:r.headers.get('content-type'),n:b.byteLength}}));
+     ok(ms.every(m=>m.s===200&&(/\.mp4$/.test(m.u)?m.t==='video/mp4'&&m.n<1.5e6:m.t==='image/webp'&&m.n<120e3)),'clips (video/mp4, under 1.5 MB) and posters (WebP, under 120 KB) load: '+ms.filter(m=>m.s!==200).map(m=>m.u).join(' '));
+     const rg=await fetch(URL+home.vids[0].src.slice(1),{headers:{Range:'bytes=100-199'}});ok(rg.status===206&&rg.headers.get('content-range')&&/^bytes 100-199\//.test(rg.headers.get('content-range'))&&(await rg.arrayBuffer()).byteLength===100&&rg.headers.get('accept-ranges')==='bytes','clips answer range requests (Safari needs them)');
+     ok((await fetch(URL+home.vids[0].src.slice(1),{headers:{Range:'bytes=99999999-'}})).status===416,'an impossible range is refused');
+     // the hero clip plays once it's on screen; scrolled away it pauses; the button pauses it for good
+     await p.evaluate(()=>document.querySelector('.herovis video').scrollIntoView({block:'center'}));await p.waitForTimeout(1500);
+     ok(await p.evaluate(()=>{const v=document.querySelector('.herovis video');return !v.paused&&v.readyState>=2}),'hero clip plays when on screen');
+     await p.evaluate(()=>scrollTo(0,document.body.scrollHeight));await p.waitForTimeout(500);
+     ok(await p.evaluate(()=>document.querySelector('.herovis video').paused),'hero clip pauses when scrolled away');
+     await p.evaluate(()=>document.querySelector('.herovis video').scrollIntoView({block:'center'}));await p.waitForTimeout(800);
+     await p.locator('.herovis .vbtn').tap();await p.waitForTimeout(200);await p.evaluate(()=>scrollBy(0,1));await p.waitForTimeout(400);
+     ok(await p.evaluate(()=>{const v=document.querySelector('.herovis video'),b=v.parentNode.querySelector('.vbtn');return v.paused&&/^Play/.test(b.getAttribute('aria-label'))}),'the pause button stops the clip and says Play');
+     await p.evaluate(()=>scrollTo(0,0));
+     const rc=await b.newContext({...devices['iPhone 13'],reducedMotion:'reduce'});const rp=await rc.newPage();await rp.goto(URL);await rp.evaluate(()=>document.querySelector('.herovis video').scrollIntoView({block:'center'}));await rp.waitForTimeout(1200);
+     ok(await rp.evaluate(()=>{const v=document.querySelector('.herovis video');return v.paused&&v.readyState===0&&!!v.parentNode.querySelector('.vbtn.big')}),'reduce motion: clips wait on their poster with a play button, nothing downloaded');
+     await rp.locator('.herovis .vbtn').tap();await rp.waitForTimeout(1200);ok(await rp.evaluate(()=>!document.querySelector('.herovis video').paused),'reduce motion: tapping play starts the clip');
+     await rc.close();}
     await p.locator('.hero .cta a.btn.primary').tap();await p.waitForTimeout(800);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&/JitsFlow$/.test(document.title)&&!window.claude),'"Open JitsFlow" opens the app');
     // with accounts on (a database), a new visitor first picks how they use JitsFlow; without, the study setup shows straight away

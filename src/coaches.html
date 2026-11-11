@@ -27,8 +27,12 @@
 <style>
 @@LANDING_CSS@@
 /* coaches page */
-.hero .phone{width:min(300px,100%)}
-.hero .phone img{aspect-ratio:390/600}
+.hero .clip{justify-self:center}
+.hero .device{--w:min(272px,72vw)}
+.studentgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:center;margin-top:28px}
+.studentgrid .studentside{margin-top:0;grid-template-columns:minmax(0,1fr)}
+@media (min-width:760px){.studentgrid{grid-template-columns:minmax(0,1fr) minmax(0,.8fr)}.studentgrid .studentside{grid-template-columns:minmax(0,1fr)}}
+.cthumbs.light-strip{margin-top:28px}
 .checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .checks li{padding-left:28px;position:relative}
 .checks li::before{content:"";position:absolute;left:4px;top:.62em;width:12px;height:6px;border-left:2.5px solid var(--good);border-bottom:2.5px solid var(--good);transform:translateY(-50%) rotate(-45deg)}
@@ -59,7 +63,10 @@
         <li>Your students also get the full no-gi study app</li>
       </ul>
     </div>
-    <div class="phone"><img src="/img/coach/today.jpg" alt="The coach's Today screen: today's class with 8 of 24 booked, and what needs attention: a competition request, unpaid fees, a student at risk of dropping off" width="390" height="600"></div>
+    <figure class="clip">
+      <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/website-to-gym.webp" aria-label="Screen recording: a coach starts a gym, pastes the gym's website, checks the name, logo and details JitsFlow read in and saves; the week's classes appear on the calendar"><source src="/video/website-to-gym.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+      <figcaption>Paste your website, check what JitsFlow found, save. (Screen recording of a demo gym, no sound.)</figcaption>
+    </figure>
   </section>
 </div><!-- /night -->
 <main>
@@ -74,6 +81,12 @@
       <li><h3>Send the invite</h3><p class="muted">Share your gym's join link on WhatsApp. Students sign up in under a minute and land in your gym.</p></li>
       <li><h3>Students book</h3><p class="muted">They see the week's classes, book a spot, join a waitlist or book a private lesson. You see who's coming.</p></li>
     </ol>
+    <ul class="cthumbs light-strip light" role="list">
+      <li><figure><img src="/img/coach/website-read.webp" alt="Home screen after setup: we read mayhemjiujitsu.example, found 18 classes, 2 coaches, 3 prices and the logo, with a getting-started checklist" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Your website, read in<span>You check it before it's saved</span></figcaption></figure></li>
+      <li><figure><img src="/img/coach/schedule.webp" alt="Schedule screen: this week's calendar with Kids BJJ, Fundamentals and Advanced No-Gi today and how many are booked" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Classes on the calendar<span>Ready for students to book</span></figcaption></figure></li>
+      <li><figure><img src="/img/coach/money.webp" alt="Money screen for November: R25 100 collected of R31 750 expected, 79% of fees paid, with a six-month chart" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Fees at a glance<span>Collected, expected, outstanding</span></figcaption></figure></li>
+      <li><figure><img src="/img/coach/reminders.webp" alt="List of members with overdue fees, each with a WhatsApp Remind button and a Paid button" loading="lazy" decoding="async" width="480" height="1082"><figcaption>Who owes, and a reminder<span>One tap to WhatsApp them</span></figcaption></figure></li>
+    </ul>
   </section>
 
   <section class="block wrap" id="features" style="padding-top:0">
@@ -114,7 +127,10 @@
         <p>Set up your plans, like Unlimited or 2x a week, and put each student on one. A 2x-a-week member can't book a third class that week. Record EFT and cash payments, and Today shows who hasn't paid this month.</p>
         <p class="muted">JitsFlow doesn't take card payments. Money still goes straight to you, the way it does now.</p>
       </div>
-      <div class="shot"><img src="/img/coach/today.jpg" alt="Today screen listing who hasn't paid this month" loading="lazy" width="390" height="600"></div>
+      <figure class="clip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/record-a-payment.webp" aria-label="Screen recording: the Money screen, the list of members who owe with WhatsApp reminders, then recording an R1 700 EFT payment that covers two months; the paid figure goes up"><source src="/video/record-a-payment.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>Record an EFT and it pays the oldest month first. (Screen recording of a demo gym, no sound.)</figcaption>
+      </figure>
     </div>
 
     <div class="feature flip">
@@ -147,10 +163,16 @@ Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
       <h2>What your students get</h2>
       <p class="muted">The same app they book with is a no-gi study guide. They go over what you taught between classes instead of forgetting it by Thursday.</p>
     </div>
-    <div class="studentside">
-      <div><h3>Book in two taps</h3><p class="muted">See the week, book or cancel, join a waitlist, and see who else is coming if you allow it.</p></div>
-      <div><h3>Study what you taught</h3><p class="muted">@@NTECH@@ techniques with steps, common mistakes, drills and videos, plus a map of every position and what to do next.</p></div>
-      <div><h3>Their own progress</h3><p class="muted">Their membership, classes used this week, upcoming competitions and a training log.</p></div>
+    <div class="studentgrid">
+      <div class="studentside">
+        <div><h3>Book in two taps</h3><p class="muted">See the week, book or cancel, join a waitlist, and see who else is coming if you allow it.</p></div>
+        <div><h3>Study what you taught</h3><p class="muted">@@NTECH@@ techniques with steps, common mistakes, drills and videos, plus a map of every position and what to do next.</p></div>
+        <div><h3>Their own progress</h3><p class="muted">Their membership, classes used this week, upcoming competitions and a training log.</p></div>
+      </div>
+      <figure class="clip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/book-a-class.webp" aria-label="Screen recording from a student's phone: their membership, Book my usual books this week's classes, and joining a waitlist for a full class"><source src="/video/book-a-class.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>A student books their usual classes in one tap. (Screen recording of a demo gym, no sound.)</figcaption>
+      </figure>
     </div>
     <p style="margin-top:20px"><a href="/">See the study app</a></p>
 
@@ -182,6 +204,8 @@ Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
     <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
   </div>
 </footer>
+<script>
+@@MEDIA_JS@@</script>
 <script>
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
 </script>

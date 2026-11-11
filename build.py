@@ -122,6 +122,60 @@ def fill_landing(landing, img):
             .replace("@@BELT_CARDS@@", belts).replace("@@POS_GALLERY@@", gallery))
 
 
+# Home page technique gallery: moves with a photo come first (in this order), then well-known moves shown with the
+# app's drawing of the position they start from. Any move in the library can be listed; unknown ids are skipped.
+GALLERY_TECH = ["back_control", "hw_guillotine", "duck_under", "arm_tri_def", "stance_motion", "kimura_trap_def", "bodylock_def",
+                "triangle", "double_leg", "armbar_cg", "knee_cut", "hip_bump", "rnc", "kimura_sc", "elbow_knee", "darce", "omoplata",
+                "smash_pass", "xguard_sweep", "japanese_necktie", "berimbolo", "mounted_guillotine", "back_handfight"]
+GALLERY_MAX = 22
+BELT_HEX = {"white": "#F4F4F0", "blue": "#1F4FB0", "purple": "#5E2D8C", "brown": "#6A4326", "black": "#151515"}
+TIERS = ["Winning", "Advantage", "Neutral · top", "Neutral · bottom", "Defending", "Danger"]
+
+
+def site_index():
+    path = os.path.join(ROOT, "dist", "site-index.json")
+    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {"tech": [], "pos": {}}
+
+
+def media_html(idx):
+    """The picture galleries on the home page: technique cards and the position map, linking to their pages."""
+    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    have = lambda *p: os.path.exists(os.path.join(ROOT, "web", *p))
+    tech = {t["id"]: t for t in idx["tech"]}
+    pos = idx["pos"]
+    photo = lambda i: have("img", "thumbs", i + ".webp")
+    picks = [i for i in GALLERY_TECH if i in tech]
+    picks = ([i for i in picks if photo(i)] + [i for i in picks if not photo(i)])[:GALLERY_MAX]
+    cards = []
+    for i in picks:
+        t = tech[i]
+        belt = t["belt"]
+        if photo(i):
+            pic = '<img src="/img/thumbs/%s.webp" alt="Photo: %s, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async">' % (i, esc(t["n"]))
+            kind = "photo"
+        elif have("img", "fig", t["f"] + ".svg") and t["f"] in pos:
+            pic = ('<img src="/img/fig/%s.svg" alt="Diagram of %s, you in blue" width="400" height="300" loading="lazy" decoding="async">'
+                   '<span class="from">%s</span>') % (t["f"], esc(pos[t["f"]]["L"]), esc(pos[t["f"]]["l"]))
+            kind = "fig"
+        else:
+            continue
+        cards.append('<li><a class="tcard" href="/techniques/%s/"><span class="tpic %s">%s</span><span class="tmeta" style="--bc:%s">'
+                     '<span class="tcat">%s · %s belt</span><b>%s</b></span></a></li>' % (t["slug"], kind, pic, BELT_HEX.get(belt, "#1F4FB0"), esc(t["cat"]), belt.capitalize(), esc(t["n"])))
+    cards.append('<li><a class="tcard more" href="/techniques/"><span>See all %d techniques</span><b aria-hidden="true">&rarr;</b></a></li>' % len(idx["tech"]))
+    gallery = '<ul class="tgal" id="tgal" role="list">%s</ul>' % "".join(cards)
+    tiers = []
+    for r, name in enumerate(TIERS):
+        ks = [k for k, v in pos.items() if v["r"] == r and have("img", "fig", k + ".svg")]
+        if not ks:
+            continue
+        tiers.append('<div class="tier t%d"><p class="tname">%s</p><ul role="list">%s</ul></div>' % (r, esc(name), "".join(
+            '<li><a class="pcard" href="/positions/%s/"><img src="/img/fig/%s.svg" alt="Diagram of %s, you in blue" width="400" height="300" loading="lazy" decoding="async"><span>%s</span></a></li>'
+            % (pos[k]["slug"], k, esc(pos[k]["L"]), esc(pos[k]["l"])) for k in ks)))
+    posmap = '<div class="posmap">%s</div>' % "".join(tiers) if tiers else ""
+    counts = {b: sum(1 for t in idx["tech"] if t["belt"] == b) for b in ["blue", "purple", "brown", "black"]}
+    return gallery, posmap, counts
+
+
 def landing_ld(landing):
     """Structured data for the home page: the site, the app, and the FAQ (read from the page itself)."""
     strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
@@ -160,12 +214,17 @@ def build_web(app):
     html = html.replace("@BUILD@", hashlib.sha256(html.encode()).hexdigest()[:10])
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
+    gallery, posmap, belts = media_html(site_index())
+    landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap)
+    for b, n in belts.items():
+        landing = landing.replace("@@N_%s@@" % b.upper(), str(n))
     landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     # Coaches page: same look as the landing page (its stylesheet is shared), own copy and FAQ.
     css = re.search(r"<style>\n(.*?)</style>", read("src", "landing.html"), re.S).group(1)
-    coaches = read("src", "coaches.html").replace("@@LANDING_CSS@@", css).replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"]))
+    js = re.search(r'<script id="media-js">\n(.*?)</script>', read("src", "landing.html"), re.S).group(1)
+    coaches = read("src", "coaches.html").replace("@@LANDING_CSS@@", css).replace("@@MEDIA_JS@@", js).replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"]))
     coaches = coaches.replace("@@LDJSON@@", page_ld(coaches, "/coaches/"))
     assert "@@" not in coaches, "unfilled placeholder in coaches page"
     write(coaches, "web", "coaches", "index.html")
