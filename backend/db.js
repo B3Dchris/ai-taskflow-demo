@@ -410,6 +410,28 @@ create table if not exists outreach_dnc(
   created_at timestamptz not null default now(),
   primary key(kind, value)
 );
+-- Pre-built gyms: outreach makes the gym from its website before anyone owns it. claim (not null = unclaimed): {prospectId, builtAt,
+-- builtBy}. An unclaimed gym has no head coach, its codes don't work, no jobs run for it, and only its preview link shows it (read only).
+-- prospects.gym_id: the gym built for that prospect (it stays after the claim). token_hash: what the preview link is looked up by.
+alter table gyms add column if not exists claim jsonb;
+alter table gyms add column if not exists claimed_at timestamptz;
+alter table prospects add column if not exists gym_id bigint references gyms(id) on delete set null;
+alter table prospects add column if not exists claimed_by bigint references users(id) on delete set null;
+alter table prospects add column if not exists token_hash text generated always as (encode(sha256(decode(token, 'escape')), 'hex')) stored;
+create unique index if not exists prospects_token_hash on prospects(token_hash);
+-- The beta ("founding gyms"): {status: applied|accepted|declined|left, appliedAt, note, acceptedAt, feeCents, feeUntil, afterCents,
+-- features: [flags], adminNote}. Feedback from beta gyms (text and an optional screenshot) for the JitsFlow team.
+alter table gyms add column if not exists beta jsonb;
+create table if not exists beta_feedback(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint references users(id) on delete set null,
+  text text not null default '',
+  shot bytea,
+  shot_type text,
+  done_at timestamptz,
+  created_at timestamptz not null default now()
+);
 -- Website visitors, counted on the server without cookies (backend/visits.js): page views per page per day, and one row per visitor
 -- per day (vhash: a hash of the address and browser with that day's secret, which is deleted once the day is over). 13 months kept.
 create table if not exists site_daily(
@@ -489,7 +511,8 @@ async function rollTimetable(pool, gymId) {
 async function rollAll(pool) {
   await pool.query(TT_IDS);
   await pool.query("delete from class_skips where starts_at < now() - interval '14 days'");
-  const gyms = (await pool.query(`select id from gyms where timetable_rolled is distinct from current_date and jsonb_typeof(profile->'timetable')='array'
+  // Unclaimed gyms (outreach previews) aren't rolled here: their preview rolls its own calendar when it's opened.
+  const gyms = (await pool.query(`select id from gyms where claim is null and timetable_rolled is distinct from current_date and jsonb_typeof(profile->'timetable')='array'
     and jsonb_array_length(profile->'timetable') > 0`)).rows;
   let added = 0;
   for (const g of gyms) { try { added += await rollTimetable(pool, g.id); } catch (e) { console.warn("timetable:", g.id, e.message); } }

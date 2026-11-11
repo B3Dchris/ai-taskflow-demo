@@ -15,6 +15,7 @@ const brand = require("./brand");
 const outreach = require("./outreach");
 const visits = require("./visits");
 const adminDash = require("./admin");
+const beta = require("./beta");
 const { LONGEST, rollTimetable } = require("./db");
 
 const COOKIE = "jf_s";
@@ -74,7 +75,7 @@ function clientIp(req) {
 
 // Who's signed in, with their gym and its head coach (only while that coach is still an active coach there).
 const ME_COLS = `u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup,
-  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, g.access_mode, g.private_plan_ids, g.private_price_cents as gym_private_cents, g.bill_start as gym_bill_start, h.id as head_id, h.name as head_name`;
+  g.profile->'socials'->>'whatsapp' as gym_wa_link, g.profile->>'phone' as gym_phone, g.access_fee_cents, g.access_mode, g.private_plan_ids, g.private_price_cents as gym_private_cents, g.bill_start as gym_bill_start, g.beta as gym_beta, h.id as head_id, h.name as head_name`;
 const ME_JOIN = "left join gyms g on g.id=u.gym_id left join users h on h.id=g.head_coach_id and h.gym_id=g.id and h.role='coach' and h.active";
 // A login and the kids linked to it (in a gym), for "Booking for: Lerato ▾". The login first.
 const FAM = (x) => `(select coalesce(json_agg(json_build_object('id', f.id::text, 'name', f.name, 'gymId', f.gym_id::text) order by f.id<>${x}, f.id), '[]'::json)
@@ -84,6 +85,9 @@ const FAM = (x) => `(select coalesce(json_agg(json_build_object('id', f.id::text
 const FIRST_KID = (l) => `(select k.id from users k where k.parent_id=${l} and k.gym_id is not null and not exists (select 1 from users l2 where l2.id=${l} and l2.gym_id is not null) order by k.id limit 1)`;
 const AS_USER = `coalesce((select k.id from users k where k.id=s.as_user and (k.id=s.user_id or (k.parent_id=s.user_id and k.gym_id is not null))), ${FIRST_KID("s.user_id")}, s.user_id)`;
 // The email that reaches someone: their own, or (a kid linked to a parent's login) their parent's.
+// Joining with a code of a gym that outreach built and nobody has claimed yet.
+const TEAM_CLAIM = "The JitsFlow team can't claim a gym from its link: only its owner can.";
+const NOT_YET = "This gym isn't on JitsFlow yet. Ask your coach for the invite link once they've set it up.";
 const EMAIL = (a) => `coalesce(${a}.email, (select pe.email from users pe where pe.id=${a}.parent_id))`;
 
 function makeApi(pool, { secureCookies, build }) {
@@ -108,7 +112,7 @@ function makeApi(pool, { secureCookies, build }) {
 
   // Proof-of-payment uploads carry a file (base64), so they get a bigger allowance than everything else.
   const smallJson = express.json({ limit: "400kb" }), bigJson = express.json({ limit: "12mb" });
-  api.use((req, res, next) => (/\/(proof|read-people)$/.test(req.path) ? bigJson : smallJson)(req, res, next));
+  api.use((req, res, next) => (/\/(proof|read-people|feedback)$/.test(req.path) ? bigJson : smallJson)(req, res, next));
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
@@ -134,6 +138,39 @@ function makeApi(pool, { secureCookies, build }) {
         }
       }
     }
+    next();
+  }));
+  // ---------- the preview of a gym outreach built (the email's link: /app/?gym=<token>) ----------
+  // The app sends the link's token in x-jf-preview. It signs nobody in: the request runs as a stand-in head coach of that one
+  // unclaimed gym (every route works on req.user.gym_id only, so no other gym can be reached), and only the GET routes a head
+  // coach's screens read are allowed. Every other request is refused with "Claim your gym first". A token that isn't a live
+  // preview (unknown, opted out, claimed) is a 404. Tokens are 192 random bits, looked up by their hash (see outreach.findToken).
+  const PREVIEW_GETS = [/^\/me$/, /^\/status$/, /^\/classes$/, /^\/me\/notices$/, /^\/coach\/classes\/\d+$/, /^\/coach\/roster$/, /^\/coach\/plans$/, /^\/coach\/insights$/,
+    /^\/competitions$/, /^\/gym$/, /^\/coach\/import\/job$/, /^\/coach\/gym\/pay$/, /^\/coach\/packs$/, /^\/coach\/payments$/, /^\/coach\/payments\/months$/, /^\/coach\/money$/,
+    /^\/coach\/billing$/, /^\/coach\/payfast$/, /^\/coach\/beta$/];
+  const CLAIM_FIRST = "Claim your gym first. It's free: make your account and it's yours.";
+  // The stand-in head coach of an unclaimed gym: no account behind it (id null), the gym's own settings. extra: more of its fields.
+  async function standIn(gymId, extra = {}) {
+    const u = (await q(`select ${ME_COLS}, null::bigint as login_id, '[]'::json as family from (select (r).* from (select jsonb_populate_record(null::users, $2::jsonb) r) x) u ${ME_JOIN}
+      where g.id=$1 and g.claim is not null`, [gymId, { gym_id: gymId, role: "coach", name: "Head coach", belt: "white", stripes: 0, active: true, notes: "", ...extra }])).rows[0];
+    return u || null;
+  }
+  async function previewOf(t) {
+    const p = await outreach.findToken(q, t);
+    if (!p || !p.gym_id || !p.gym_unclaimed || p.status === "optedout") return null;
+    const u = await standIn(p.gym_id, { name: clean(p.owner_name, 80) || "Head coach" }); if (!u) return null;
+    u.preview = { token: p.token, prospectId: String(p.id), name: outreach.nameOf(p), domain: p.domain, email: p.owner_email || "", logo: p.logo ? `/try/${p.token}/logo` : null, accent: p.accent || null };
+    return u;
+  }
+  api.use(wrap(async (req, res, next) => {
+    const t = req.headers["x-jf-preview"]; if (t === undefined) return next();
+    res.set({ "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" });
+    const u = await previewOf(String(t));
+    if (!u) return res.status(404).json({ error: "This link isn't valid any more. If the gym is yours and you claimed it, sign in.", previewGone: true });
+    if (req.method !== "GET" || !PREVIEW_GETS.some((re) => re.test(req.path))) return res.status(403).json({ error: CLAIM_FIRST, preview: true });
+    // Its calendar is filled from its timetable when someone looks (the daily roll leaves unclaimed gyms out).
+    if (req.path === "/me" && (await q("select timetable_rolled is distinct from current_date as stale from gyms where id=$1", [u.gym_id])).rows[0].stale) await rollTimetable(pool, u.gym_id);
+    req.user = u; req.preview = u.preview;
     next();
   }));
   // The signed-in person for a session token (see AS_USER), or nothing.
@@ -198,6 +235,10 @@ function makeApi(pool, { secureCookies, build }) {
     if (u.gym_id) { const b = u.brand || {}; out.gym.brand = /^#[0-9a-f]{6}$/i.test(b.accent || "") ? { accent: b.accent } : {}; if (isCoach(u)) out.gym.setup = u.setup || {}; }
     if (isCoach(u)) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, head: isHead(u), headCoach: u.head_id ? { id: String(u.head_id), name: u.head_name } : null });
     if (isHead(u)) out.gym.monthlyFeeCents = u.gym_fee;
+    // The beta: switched-on feature flags for everyone in the gym (the app reads gym.features), the status for the head coach (its pill).
+    if (u.gym_id) { const b = u.gym_beta; out.gym.features = beta.active(b) ? b.features || [] : []; if (isHead(u) && b && b.status) out.gym.beta = b.status; }
+    // A preview of a gym outreach built: who it's for, so the app shows the claim bar (and fills in the sign-up).
+    if (u.preview) { Object.assign(out, { id: "preview", email: null, preview: { name: u.preview.name, domain: u.preview.domain, email: u.preview.email, accent: u.preview.accent } }); out.gym.logo = u.preview.logo; out.gym.headCoach = null; }
     if (outreach.isAdmin(loginOf(u).email)) out.admin = true; // JitsFlow's own people (JF_ADMIN_EMAILS): the Outreach screen
     return out;
   }
@@ -263,18 +304,23 @@ function makeApi(pool, { secureCookies, build }) {
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     const perIp = "gym:" + clientIp(req); // new gyms per address per day (each one sends a welcome email)
     if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email hello@jitsflow.com.");
+    // The team looks at gyms through their links: a team address never claims one (only the owner does).
+    if (b.prospect && outreach.isAdmin(clean(b.email, 254))) fail(403, TEAM_CLAIM);
     const pro = b.prospect ? await takeProspect(b.prospect) : null;
     let id, gymId;
     try {
       const gymName = clean(b.gym, 100) || (pro ? clean(outreach.nameOf(pro), 100) : "");
       if (!gymName) fail(400, "Enter your gym's name.");
       const tz = (await validTz(b.timezone)) || "Africa/Johannesburg";
-      const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz]);
-      gymId = g.rows[0].id;
+      // Claiming the gym outreach built for them: the account joins that gym (built now if it wasn't yet).
+      gymId = pro ? await buildGym(pro.id, { claiming: true }) : null;
+      if (pro && !gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email hello@jitsflow.com.");
+      if (!gymId) gymId = (await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz])).rows[0].id;
       try { id = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); }
-      catch (e) { await q("delete from gyms where id=$1", [gymId]); throw e; }
+      catch (e) { if (!pro) await q("delete from gyms where id=$1", [gymId]); throw e; }
+      if (pro) await claimBuilt(gymId, id, { name: gymName, tz });
     } catch (e) { if (pro) await untakeProspect(pro); throw e; }
-    await q("update gyms set head_coach_id=$1 where id=$2", [id, gymId]);
+    if (!pro) await q("update gyms set head_coach_id=$1 where id=$2", [id, gymId]);
     limited(perIp, Infinity, 24 * 3600e3);
     await startSession(res, id);
     if (pro) await claimProspect(await loadMe(id), pro);
@@ -289,8 +335,9 @@ function makeApi(pool, { secureCookies, build }) {
     let gymId = null, role = "student";
     const c = clean(b.code, 20).toUpperCase();
     if (c) {
-      const g = await q("select id, (coach_code=$1) as coach from gyms where student_code=$1 or coach_code=$1", [c]);
+      const g = await q("select id, (coach_code=$1) as coach, claim is not null as unclaimed from gyms where student_code=$1 or coach_code=$1", [c]);
       if (!g.rows[0]) fail(404, "That gym code isn't right. Check it with your coach.");
+      if (g.rows[0].unclaimed) fail(404, NOT_YET);
       gymId = g.rows[0].id; role = g.rows[0].coach ? "coach" : "student";
     }
     let id;
@@ -485,8 +532,9 @@ function makeApi(pool, { secureCookies, build }) {
     // A parent booking for a kid: it's the login that joins or moves (and books for itself again).
     const u = loginOf(needUser(req)); if (req.user.login) await setAs(req, null);
     const c = clean(req.body?.code, 20).toUpperCase();
-    const g = await q("select id, (coach_code=$1) as coach from gyms where student_code=$1 or coach_code=$1", [c]);
+    const g = await q("select id, (coach_code=$1) as coach, claim is not null as unclaimed from gyms where student_code=$1 or coach_code=$1", [c]);
     if (!g.rows[0]) fail(404, "That gym code isn't right. Check it with your coach.");
+    if (g.rows[0].unclaimed) fail(404, NOT_YET);
     if (!(String(u.gym_id) === String(g.rows[0].id) && g.rows[0].coach)) await handOverFirst(u);
     if (String(u.gym_id) !== String(g.rows[0].id)) { if (u.gym_id && u.role === "student") await tellLeaving(u); await leaveGym(u, g.rows[0].id, g.rows[0].coach ? "coach" : "student"); }
     else await q("update users set role=$1 where id=$2", [g.rows[0].coach ? "coach" : "student", u.id]);
@@ -1910,19 +1958,20 @@ function makeApi(pool, { secureCookies, build }) {
     const u = needUser(req); if (!u.gym_id) return res.json({ gym: null });
     const r = await q("select id,name,profile,logo_v,currency,profile_updated_at from gyms where id=$1", [u.gym_id]);
     const g = r.rows[0];
-    res.json({ gym: { id: String(g.id), name: g.name, currency: g.currency, profile: g.profile || {}, updatedAt: g.profile_updated_at, logo: g.logo_v ? `/api/gyms/${g.id}/logo?v=${g.logo_v}` : null } });
+    const logo = req.preview ? req.preview.logo : g.logo_v ? `/api/gyms/${g.id}/logo?v=${g.logo_v}` : null;
+    res.json({ gym: { id: String(g.id), name: g.name, currency: g.currency, profile: g.profile || {}, updatedAt: g.profile_updated_at, logo } });
   }));
   // The first screen checks a gym code before sign-up ("Joining Lions BJJ"). Just the name; an unknown code is { gym: null }.
   // With a kid's own invite link (claim), also the kid's name, so the parent sees who they're signing up for.
   api.get("/gyms/by-code/:code", wrap(async (req, res) => {
     if (limited("code:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
     const c = clean(req.params.code, 20).toUpperCase(), claim = clean(req.query.claim, 40);
-    const g = c ? (await q("select id, name, (coach_code=$1) as coach from gyms where student_code=$1 or coach_code=$1", [c])).rows[0] : null;
+    const g = c ? (await q("select id, name, (coach_code=$1) as coach from gyms where (student_code=$1 or coach_code=$1) and claim is null", [c])).rows[0] : null;
     const kid = g && claim ? (await q("select name from users where claim_token=$1 and gym_id=$2 and pass_hash is null and parent_id is null and parent_name<>''", [claim, g.id])).rows[0] : null;
     res.json({ gym: g ? { id: String(g.id), name: g.name, coach: !!g.coach, ...(kid ? { kid: kid.name } : {}) } : null });
   }));
   api.get("/gyms/:id/logo", wrap(async (req, res) => {
-    const r = await q("select logo, logo_type from gyms where id=$1 and logo is not null", [intOr(req.params.id, 0)]);
+    const r = await q("select logo, logo_type from gyms where id=$1 and logo is not null and claim is null", [intOr(req.params.id, 0)]);
     if (!r.rows[0]) return res.status(404).json({ error: "No logo." });
     res.set({ "Content-Type": r.rows[0].logo_type, "Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'", "X-Content-Type-Options": "nosniff" });
     res.send(r.rows[0].logo);
@@ -2289,7 +2338,8 @@ function makeApi(pool, { secureCookies, build }) {
   api.get("/coach/gym/pay", wrap(async (req, res) => {
     const u = needHead(req), g = (await q("select pay, pop_token, pop_notice, auto_remind from gyms where id=$1", [u.gym_id])).rows[0];
     let tok = g.pop_token;
-    if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
+    if (req.preview) tok = "yourgym"; // the preview writes nothing: the gym gets its own address when it's claimed
+    else if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
     res.json({ pay: g.pay || {}, autoRemind: g.auto_remind, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, accessMode: u.access_mode || "fee", privatePlanIds: (u.private_plan_ids || []).map(String), privateCents: u.gym_private_cents ?? null });
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
@@ -2757,7 +2807,7 @@ function makeApi(pool, { secureCookies, build }) {
   async function autoRemind(opts = {}) {
     if (!mail.mailOn()) return 0;
     const gyms = (await q(`select id, pay, to_char(now() at time zone coalesce(timezone,'Africa/Johannesburg'),'YYYY-MM-DD') as day,
-      extract(hour from now() at time zone coalesce(timezone,'Africa/Johannesburg'))::int as hour from gyms where auto_remind`)).rows;
+      extract(hour from now() at time zone coalesce(timezone,'Africa/Johannesburg'))::int as hour from gyms where auto_remind and claim is null`)).rows;
     let n = 0;
     for (const g of gyms) {
       const day = opts.day || g.day, wk = new Date(Date.parse(day + "T12:00:00Z") - 7 * DAY).toISOString().slice(0, 10), due = dueDayOf(g.pay);
@@ -2887,35 +2937,50 @@ function makeApi(pool, { secureCookies, build }) {
   // The same day n months on, or the last day of that month if it's shorter (31 January + 1 month is 28 February, not 3 March).
   const addMonths = (day, n) => { const [y, m, dd] = day.split("-").map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1));
     t.setUTCDate(Math.min(dd, new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate())); return t.toISOString().slice(0, 10); };
+  const todayZA = () => new Date(Date.now() + 2 * 3600e3).toISOString().slice(0, 10); // South Africa has no daylight saving
+  // The gym's monthly price: R99 (payfast.PRICE_CENTS), or its beta deal while it's in the beta (0: nothing to pay).
+  const priceOf = (g, today = todayZA()) => { const x = beta.priceFor(g.beta, today, payfast.PRICE_CENTS()); return x === null ? payfast.PRICE_CENTS() : x; };
   async function billingOf(gymId) {
-    const g = (await q("select billing, created_at from gyms where id=$1", [gymId])).rows[0]; const b = g.billing || {};
+    const g = (await q("select billing, created_at, claim, beta from gyms where id=$1", [gymId])).rows[0]; const b = g.billing || {};
     // A card added while JitsFlow was in test mode was never real: once live, the gym adds one again.
     if (b.sandbox && !payfast.platform().sandbox) { delete b.status; delete b.token; }
+    b.priceCents = priceOf(g); b.beta = g.beta || null;
+    // A gym outreach built and nobody has claimed: its free months start when it's claimed (as if that were today). Nothing saved.
+    if (g.claim) { b.trialEnds = b.trialEnds || addMonths(todayZA(), payfast.TRIAL_MONTHS()); return b; }
     if (!b.trialEnds) { const start = g.created_at.toISOString().slice(0, 10); b.trialEnds = addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS()); await q("update gyms set billing = billing || $1 where id=$2", [{ trialEnds: b.trialEnds }, gymId]); }
     return b;
   }
   // A gym's JitsFlow plan for the team's dashboard, read only (like billingOf, without saving the trial's end).
   // state: trial (free months), card (card added, free months still running), paying, due (free months over, no card), cancelled.
+  // due is a reminder, never a gate: nothing in JitsFlow stops working when the free months are over and there's no card.
+  // beta: in the beta with nothing to pay right now (its price is 0).
   function billState(g) {
     const b = { ...(g.billing || {}) }; if (b.sandbox && !payfast.platform().sandbox) { delete b.status; delete b.token; }
-    const start = new Date(g.created_at).toISOString().slice(0, 10), trialEnds = b.trialEnds || addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS());
-    const inTrial = new Date().toISOString().slice(0, 10) < trialEnds, out = { trialEnds, lastPaidAt: b.lastPaidAt || null, test: !!b.sandbox };
+    const start = new Date(g.claimed_at || g.created_at).toISOString().slice(0, 10), trialEnds = b.trialEnds || addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS());
+    const inTrial = new Date().toISOString().slice(0, 10) < trialEnds, price = priceOf(g), out = { trialEnds, lastPaidAt: b.lastPaidAt || null, test: !!b.sandbox, priceCents: price, beta: beta.active(g.beta) };
     if (b.status === "active") return { state: inTrial ? "card" : "paying", ...out };
     if (b.status === "cancelled") return { state: "cancelled", ...out };
+    if (beta.active(g.beta) && price === 0) return { state: "beta", ...out };
     return { state: inTrial ? "trial" : "due", ...out };
   }
   const notifyUrl = () => mail.appUrl() + "/api/payfast/notify";
   api.get("/coach/billing", wrap(async (req, res) => {
     const u = needHead(req), b = await billingOf(u.gym_id), P = payfast.platform();
-    res.json({ billing: { status: b.status || "trial", trialEnds: b.trialEnds, card: !!b.token, lastPaidAt: b.lastPaidAt || null, priceCents: payfast.PRICE_CENTS(), feePct: payfast.FEE_PCT(), test: P.sandbox } });
+    const today = todayZA(), bt = beta.forGym(b.beta, today, payfast.PRICE_CENTS());
+    res.json({ billing: { status: b.status || "trial", trialEnds: b.trialEnds, card: !!b.token, lastPaidAt: b.lastPaidAt || null, priceCents: b.priceCents, normalCents: payfast.PRICE_CENTS(),
+      feePct: payfast.FEE_PCT(), test: P.sandbox, due: today >= b.trialEnds && b.status !== "active" && b.priceCents > 0, beta: bt.status === "accepted" ? { line: bt.line, priceCents: bt.priceCents, feeUntil: bt.feeUntil, afterCents: bt.afterCents } : null } });
   }));
   // Card details for the monthly plan. During the free months nothing is charged now; PayFast starts on the first day after them.
   api.post("/coach/billing/checkout", wrap(async (req, res) => {
     const u = needHead(req), b = await billingOf(u.gym_id), P = payfast.platform(), today = await todayIn(u);
-    const inTrial = today < b.trialEnds, price = payfast.money(payfast.PRICE_CENTS());
+    if (!b.priceCents && !beta.priceFor(b.beta, "9999-12-31", payfast.PRICE_CENTS())) fail(400, "Your beta deal is free: there's nothing to add a card for.");
+    // A free beta stretch that ends later: the card starts on the day the beta price does.
+    const bUntil = beta.active(b.beta) && !b.priceCents && b.beta.feeUntil ? b.beta.feeUntil : null, startOn = bUntil && bUntil > b.trialEnds ? bUntil : b.trialEnds;
+    const later = beta.active(b.beta) ? beta.priceFor(b.beta, startOn, payfast.PRICE_CENTS()) : payfast.PRICE_CENTS();
+    const inTrial = today < startOn, price = payfast.money(b.priceCents || later);
     const c = payfast.checkout({ merchant_id: P.id, merchant_key: P.key, return_url: mail.appUrl() + "/app/?billing=done", cancel_url: mail.appUrl() + "/app/?billing=cancel", notify_url: notifyUrl(),
       name_first: first(u.name), email_address: u.email || "", m_payment_id: `sub-${u.gym_id}-${Date.now()}`, amount: inTrial ? "0.00" : price, item_name: "JitsFlow monthly plan",
-      item_description: clean(u.gym_name, 100), custom_int1: String(u.gym_id), custom_str1: "sub", subscription_type: "1", billing_date: inTrial ? b.trialEnds : addMonths(today, 1),
+      item_description: clean(u.gym_name, 100), custom_int1: String(u.gym_id), custom_str1: "sub", subscription_type: "1", billing_date: inTrial ? startOn : addMonths(today, 1),
       recurring_amount: price, frequency: "3", cycles: "0" }, { pass: P.pass, sandbox: P.sandbox });
     res.json(c);
   }));
@@ -3271,7 +3336,7 @@ function makeApi(pool, { secureCookies, build }) {
     await dropAutopay(`a.stopped_at < now() - interval '${AUTO_UNDO_MIN} minutes'`, []);
     for (const c of (await q("update autopay_charges set status='unsure', updated_at=now() where status in ('charging','sent') and created_at < now() - interval '1 day' returning *")).rows) await autoTell(c, "unsure");
     const gyms = (await q(`select g.id, g.pay, g.payfast, to_char(now() at time zone coalesce(g.timezone,'Africa/Johannesburg'),'YYYY-MM-DD') as day,
-      extract(hour from now() at time zone coalesce(g.timezone,'Africa/Johannesburg'))::int as hour from gyms g where exists (select 1 from autopay a where a.gym_id=g.id and a.stopped_at is null)`)).rows;
+      extract(hour from now() at time zone coalesce(g.timezone,'Africa/Johannesburg'))::int as hour from gyms g where g.claim is null and exists (select 1 from autopay a where a.gym_id=g.id and a.stopped_at is null)`)).rows;
     let n = 0;
     for (const g of gyms) {
       const p = autoLive(pfLive(pfOf(g))), day = opts.day || g.day; if (!p || (opts.hour ?? g.hour) < AUTO_HOUR) continue;
@@ -3289,7 +3354,7 @@ function makeApi(pool, { secureCookies, build }) {
     const secret = process.env.INBOUND_SECRET || "", got = String(req.headers["x-jf-inbound"] || "");
     if (!secret || got.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(secret))) fail(403, "Not allowed.");
     const to = String(req.headers["x-jf-to"] || "").toLowerCase(), tok = (to.match(/^pop-([a-z0-9]{6,32})@/) || [])[1];
-    const g = tok && (await q("select g.id, g.currency, g.timezone from gyms g where g.pop_token=$1", [tok])).rows[0];
+    const g = tok && (await q("select g.id, g.currency, g.timezone from gyms g where g.pop_token=$1 and g.claim is null", [tok])).rows[0];
     if (!g) fail(404, "Unknown address.");
     if (limited("pop-g:" + g.id, 300, 24 * 3600e3)) fail(429, "Too many emails today.");
     const { simpleParser } = require("mailparser");
@@ -3310,50 +3375,81 @@ function makeApi(pool, { secureCookies, build }) {
   // A gym claimed from its preview page. takeProspect marks it claimed first (one claim per token, even two at once); the gym is
   // then made by the caller and filled in by claimProspect through applyProfile, the same save a coach's own website import uses.
   async function takeProspect(token) {
-    const t = clean(token, 64);
-    const r = outreach.TOKEN_RE.test(t) ? await q(`update prospects set status='claimed', claimed_at=now() where token=$1 and claimed_at is null and status<>'optedout'
-      and import_state<>'running' and name<>'' returning *`, [t]) : { rows: [] };
+    const t = clean(token, 64), x = await outreach.findToken(q, t);
+    const r = x ? await q(`update prospects set status='claimed', claimed_at=now() where id=$1 and claimed_at is null and status<>'optedout'
+      and import_state<>'running' and name<>'' returning *`, [x.id]) : { rows: [] };
     if (r.rows[0]) return r.rows[0];
-    const x = outreach.TOKEN_RE.test(t) ? (await q("select claimed_at, status from prospects where token=$1", [t])).rows[0] : null;
     if (x && x.claimed_at) fail(409, "This gym has been claimed already. If it's yours, sign in.");
-    fail(404, "That preview link isn't valid any more. Start your gym from scratch instead: it only takes a minute.");
+    fail(404, "That link isn't valid any more. Start your gym from scratch instead: it only takes a minute.");
   }
-  const untakeProspect = (p) => q("update prospects set status=$2, claimed_at=null where id=$1 and claimed_gym_id is null", [p.id, p.sent_at ? "sent" : "draft"]);
+  const untakeProspect = (p) => q("update prospects set status=$2, claimed_at=null, claimed_by=null where id=$1 and claimed_gym_id is null", [p.id, p.sent_at ? "sent" : "draft"]);
+  // Told to the admins once a gym is claimed. The gym was built already (buildGym), so it's theirs as it was in the preview.
   async function claimProspect(u, p) {
-    await q("update prospects set claimed_gym_id=$2 where id=$1", [p.id, u.gym_id]);
-    try {
-      const profile = { ...(p.profile || {}), ...(p.accent ? { brand: { accent: p.accent, source: "site" } } : {}) };
-      await applyProfile(u, { profile, plans: true }, { logo: p.logo ? { body: p.logo, type: p.logo_type } : null });
-    } catch (e) { console.error("claim:", e.message); }
+    await q("update prospects set claimed_gym_id=$2, claimed_by=$3 where id=$1", [p.id, u.gym_id, u.id]);
     for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.prospectClaimed(u.gym_name || outreach.nameOf(p), u.name, u.email, p.domain) });
   }
-  // The claim screen's first look at a preview: the gym's name, logo and colour, and what's ready.
+
+  // ---------- gyms built by outreach, before anyone owns them ----------
+  // Once a website is read (and again on each re-import), the gym is made from it as a real gym with nobody in it: the same save a
+  // coach's own website import uses (applyProfile), so its timetable (and 8 weeks of classes), plans from its prices, coaches, logo and
+  // colour come through as a claimed gym gets them. claim (not null) marks it unclaimed: see the preview above and claimBuilt below.
+  // claiming: built at claim time (the prospect is marked claimed already). Returns the gym's id, or null.
+  async function buildGym(prospectId, { by = null, claiming = false, fromImport = false } = {}) {
+    const p = (await q("select * from prospects where id=$1", [prospectId])).rows[0];
+    if (!p || p.status === "optedout" || (p.status === "claimed" && !claiming) || !p.name || (p.import_state === "running" && !fromImport)) return null;
+    let g = p.gym_id ? (await q("select id, claim from gyms where id=$1", [p.gym_id])).rows[0] : null;
+    if (g && !g.claim) return null; // claimed: it's theirs now
+    const name = clean(outreach.nameOf(p), 100);
+    if (!g) {
+      g = (await q(`insert into gyms(name,student_code,coach_code,timezone,claim) values($1,$2,$3,'Africa/Johannesburg',$4) returning id`,
+        [name, code(), code(), { prospectId: String(p.id), builtAt: new Date().toISOString(), builtBy: by ? String(by) : null }])).rows[0];
+      if (!(await q("update prospects set gym_id=$2 where id=$1 and gym_id is null returning id", [p.id, g.id])).rows[0]) { // built twice at once: one stays
+        await q("delete from gyms where id=$1", [g.id]); return (await q("select gym_id from prospects where id=$1", [p.id])).rows[0].gym_id; }
+    } else await q("update gyms set name=$2, claim = claim || $3 where id=$1", [g.id, name, { rebuiltAt: new Date().toISOString() }]);
+    const u = await standIn(g.id);
+    const profile = { ...(p.profile || {}), ...(p.accent ? { brand: { accent: p.accent, source: "site" } } : {}) };
+    await applyProfile(u, { profile, plans: true }, { logo: p.logo ? { body: p.logo, type: p.logo_type } : null });
+    if (p.accent) await q("update gyms set brand = brand || $1 where id=$2", [{ accent: p.accent }, g.id]);
+    return g.id;
+  }
+  // The gym becomes theirs: userId is its head coach, its codes are new (nobody could use the old ones), and its free months start
+  // today. First come: whoever has the link and signs up first claims it (the team sees who, and can unclaim or reassign it).
+  async function claimBuilt(gymId, userId, { name, tz } = {}) {
+    const r = await q(`update gyms set claim=null, claimed_at=now(), head_coach_id=$2, student_code=$3, coach_code=$4, name=coalesce(nullif($5,''), name),
+        timezone=coalesce($6, timezone), bill_start=date_trunc('month', now() at time zone coalesce($6, timezone))::date, billing = coalesce(billing,'{}'::jsonb) || $7
+      where id=$1 and claim is not null returning id`, [gymId, userId, code(), code(), clean(name, 100), tz || null, { trialEnds: addMonths(todayZA(), payfast.TRIAL_MONTHS()) }]);
+    if (!r.rows[0]) fail(409, "This gym has been claimed already. If it's yours, sign in.");
+  }
+  // Unclaimed gyms nobody has looked at: deleted 60 days after they were built, unless their link was opened in the last 14 days.
+  const tidyUnclaimed = () => q(`delete from gyms g where g.claim is not null and coalesce(g.claim->>'builtAt','') <> '' and (g.claim->>'builtAt')::timestamptz < now() - interval '60 days'
+    and not exists (select 1 from prospects p where p.gym_id=g.id and p.last_viewed_at > now() - interval '14 days')`).then((r) => r.rowCount);
+  // The claim screen's first look at a gym: its name, logo and colour, and what's ready.
   api.get("/prospects/:token", wrap(async (req, res) => {
     if (limited("pro:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
-    const t = clean(req.params.token, 64), p = outreach.TOKEN_RE.test(t) ? (await q(`select ${outreach.LIST_COLS}, profile from prospects where token=$1`, [t])).rows[0] : null;
-    if (!p || p.status === "optedout" || p.import_state === "running" || !p.name) fail(404, "That preview link isn't valid any more.");
+    const x = await outreach.findToken(q, clean(req.params.token, 64)), p = x ? (await q(`select ${outreach.LIST_COLS}, profile from prospects where id=$1`, [x.id])).rows[0] : null;
+    if (!p || p.status === "optedout" || p.import_state === "running" || !p.name) fail(404, "That link isn't valid any more.");
     if (p.claimed_at) return res.json({ gym: { name: outreach.nameOf(p), claimed: true } });
     const pr = p.profile || {};
-    res.json({ gym: { name: outreach.nameOf(p), logo: p.has_logo ? `/try/${p.token}/logo` : null, accent: p.accent || null, classes: (pr.timetable || []).length, coaches: (pr.coaches || []).length, prices: (pr.rates || []).length } });
+    res.json({ gym: { name: outreach.nameOf(p), logo: p.has_logo ? `/try/${p.token}/logo` : null, accent: p.accent || null, classes: (pr.timetable || []).length, coaches: (pr.coaches || []).length,
+      prices: (pr.rates || []).length, email: p.owner_email || "", built: !!p.gym_unclaimed, pitch: outreach.PITCH(p), deal: outreach.noObligation(), betaDeal: beta.dealLine(payfast.PRICE_CENTS()) } });
   }));
   // Signed in with no gym of their own, they claim it straight away and become its head coach.
   api.post("/me/claim-gym", wrap(async (req, res) => {
     const u = needUser(req), lg = loginOf(u);
+    if (outreach.isAdmin(lg.email)) fail(403, TEAM_CLAIM);
     if (lg.gym_id || u.gym_id) fail(409, `You're already in ${u.gym_name || "a gym"}. To claim this gym, sign out and start it with another email.`);
     const pro = await takeProspect(req.body?.token);
-    let gymId;
     try {
-      const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id",
-        [clean(outreach.nameOf(pro), 100), code(), code(), (await validTz(req.body?.timezone)) || "Africa/Johannesburg"]);
-      gymId = g.rows[0].id;
+      const gymId = await buildGym(pro.id, { claiming: true });
+      if (!gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email hello@jitsflow.com.");
+      await claimBuilt(gymId, lg.id, { tz: await validTz(req.body?.timezone) });
       await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [gymId, lg.id]);
-      await q("update gyms set head_coach_id=$1 where id=$2", [lg.id, gymId]);
-    } catch (e) { if (gymId) await q("delete from gyms where id=$1", [gymId]).catch(() => {}); await untakeProspect(pro); throw e; }
+    } catch (e) { await untakeProspect(pro); throw e; }
     await claimProspect(await loadMe(lg.id), pro);
     res.status(201).json({ me: me(await loginMe(lg.id)), claimed: true });
   }));
 
-  const outQueue = outreach.makeQueue(q, (m) => console.warn(m));
+  const outQueue = outreach.makeQueue(q, (m) => console.warn(m), (id) => buildGym(id, { fromImport: true }));
   // Imports a restart cut short start again.
   q("select id from prospects where import_state='running' order by id").then((r) => r.rows.forEach((x) => outQueue.add(x.id))).catch(() => {});
   const proRow = async (id) => (await q(`select ${outreach.LIST_COLS} from prospects where id=$1`, [intOr(id, 0)])).rows[0] || fail(404, "Not found.");
@@ -3391,7 +3487,7 @@ function makeApi(pool, { secureCookies, build }) {
     const u = needAdmin(req), r = await proRow(req.params.id), full = await proFull(req.params.id);
     const email = r.status === "optedout" || !r.name ? null : outreach.renderEmail(full, { admin: adminOf(u), base: mail.appUrl() });
     const fu = email && r.status === "sent" && !r.followup_sent_at ? outreach.renderEmail(full, { admin: adminOf(u), base: mail.appUrl(), followup: true }) : null;
-    res.json({ prospect: await proOut(r), email, followup: fu, from: `${adminOf(u).name} from JitsFlow`, replyTo: adminOf(u).email });
+    res.json({ prospect: await proOut(r), email, followup: fu, from: outreach.fromName(adminOf(u)), replyTo: adminOf(u).email });
   }));
   // The email as the owner would see it, for the admin to look at in a browser tab.
   api.get("/admin/prospects/:id/email", wrap(async (req, res) => {
@@ -3424,7 +3520,7 @@ function makeApi(pool, { secureCookies, build }) {
     if (!took.rows[0]) fail(409, followup ? (p.followup_sent_at ? "The follow-up has gone already. One is enough." : p.status !== "sent" ? "Send the first email before a follow-up." : `A follow-up can go ${outreach.FOLLOWUP_DAYS} days after the first email.`) : "This email has gone already. A follow-up can go after " + outreach.FOLLOWUP_DAYS + " days.");
     const row = took.rows[0], e = outreach.renderEmail(row, { admin: a, base: mail.appUrl(), followup }), out = outreach.optoutUrl(row, mail.appUrl());
     try {
-      await mail.sendRaw({ fromName: `${a.name} from JitsFlow`, to: followup ? row.sent_to || row.owner_email : row.owner_email, replyTo: a.email, subject: e.subject, html: e.html, text: e.text,
+      await mail.sendRaw({ fromName: outreach.fromName(a), to: followup ? row.sent_to || row.owner_email : row.owner_email, replyTo: a.email, subject: e.subject, html: e.html, text: e.text,
         headers: { "List-Unsubscribe": `<${out}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
     } catch (err) {
       console.warn("outreach send:", err.message);
@@ -3445,8 +3541,128 @@ function makeApi(pool, { secureCookies, build }) {
   }));
   api.delete("/admin/prospects/:id", wrap(async (req, res) => {
     needAdmin(req); const p = await proRow(req.params.id);
+    if (p.gym_id) await q("delete from gyms where id=$1 and claim is not null", [p.gym_id]); // the gym built for it, unless it's claimed
     await q("delete from prospects where id=$1", [p.id]);
     res.json({ ok: true });
+  }));
+  // Build the gym now (or build it again from what was read), and delete it (the next import, or Build, makes it again).
+  api.post("/admin/prospects/:id/build", wrap(async (req, res) => {
+    const u = needAdmin(req), p = await proRow(req.params.id);
+    if (p.status === "optedout" || p.status === "claimed") fail(409, p.status === "claimed" ? "This gym has been claimed." : "This gym opted out.");
+    if (p.import_state === "running" || !p.name) fail(409, "Still reading their website. Try again in a minute.");
+    if (!(await buildGym(p.id, { by: u.id }))) fail(409, "Couldn't build this gym.");
+    res.json({ prospect: await proOut(await proRow(p.id)) });
+  }));
+  api.delete("/admin/prospects/:id/gym", wrap(async (req, res) => {
+    needAdmin(req); const p = await proRow(req.params.id);
+    if (p.gym_id) await q("delete from gyms where id=$1 and claim is not null", [p.gym_id]);
+    res.json({ prospect: await proOut(await proRow(p.id)) });
+  }));
+  // The wrong person claimed a gym (first come, first served): give it back to its link, or to another account.
+  const builtGym = async (id) => { const g = (await q("select g.*, p.id as prospect_id, p.sent_at from gyms g join prospects p on p.gym_id=g.id where g.id=$1", [intOr(id, 0)])).rows[0];
+    if (!g) fail(404, "That isn't a gym outreach built."); if (g.claim) fail(409, "Nobody has claimed this gym."); return g; };
+  api.post("/admin/gyms/:id/unclaim", wrap(async (req, res) => {
+    const u = needAdmin(req), g = await builtGym(req.params.id);
+    const others = (await q("select count(*)::int as n from users where gym_id=$1 and id is distinct from $2", [g.id, g.head_coach_id])).rows[0].n;
+    if (others) fail(409, `${g.name} has ${others} other ${others === 1 ? "person" : "people"} in it now. Reassign it to the right account instead.`);
+    await q("update users set gym_id=null where id=$1 and gym_id=$2", [g.head_coach_id, g.id]);
+    await q(`update gyms set claim=$2, claimed_at=null, head_coach_id=null, student_code=$3, coach_code=$4, billing = coalesce(billing,'{}'::jsonb) - 'trialEnds' where id=$1`,
+      [g.id, { prospectId: String(g.prospect_id), builtAt: new Date().toISOString(), builtBy: String(u.id), unclaimed: true }, code(), code()]);
+    await q("update prospects set status=$2, claimed_at=null, claimed_gym_id=null, claimed_by=null where id=$1", [g.prospect_id, g.sent_at ? "sent" : "draft"]);
+    res.json({ prospect: await proOut(await proRow(g.prospect_id)) });
+  }));
+  api.post("/admin/gyms/:id/reassign", wrap(async (req, res) => {
+    needAdmin(req); const g = await builtGym(req.params.id), email = clean(req.body?.email, 254).toLowerCase();
+    const t = isEmail(email) ? (await q("select id, gym_id, name from users where email=$1 and pass_hash is not null", [email])).rows[0] : null;
+    if (!t) fail(404, "No JitsFlow account has that email. Ask them to sign up first (with no gym).");
+    if (t.gym_id) fail(409, `${t.name} is in a gym already.`);
+    await q("update users set gym_id=null where id=$1 and gym_id=$2", [g.head_coach_id, g.id]);
+    await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [g.id, t.id]);
+    await q("update gyms set head_coach_id=$2 where id=$1", [g.id, t.id]);
+    await q("update prospects set claimed_by=$2 where id=$1", [g.prospect_id, t.id]);
+    res.json({ prospect: await proOut(await proRow(g.prospect_id)) });
+  }));
+
+  // ---------- the beta ("founding gyms") ----------
+  // The head coach applies in one tap (with what they'd want built), sees where it stands, and beta gyms send feedback.
+  const betaOf = async (gymId) => (await q("select beta from gyms where id=$1", [gymId])).rows[0].beta || null;
+  api.get("/coach/beta", wrap(async (req, res) => {
+    const u = needHead(req), b = await betaOf(u.gym_id);
+    const fb = beta.active(b) ? (await q("select id, text, shot is not null as shot, done_at, created_at from beta_feedback where gym_id=$1 order by id desc limit 5", [u.gym_id])).rows : [];
+    res.json({ beta: beta.forGym(b, todayZA(), payfast.PRICE_CENTS()), deal: beta.dealLine(payfast.PRICE_CENTS()), normalCents: payfast.PRICE_CENTS(),
+      feedback: fb.map((x) => ({ id: String(x.id), text: x.text, shot: x.shot, done: !!x.done_at, at: x.created_at })) });
+  }));
+  api.post("/coach/beta", wrap(async (req, res) => {
+    const u = needHead(req), b = await betaOf(u.gym_id) || {}, action = req.body?.action;
+    if (action === "apply") {
+      if (b.status === "applied" || b.status === "accepted") return res.json({ beta: beta.forGym(b, todayZA(), payfast.PRICE_CENTS()) });
+      const note = clean(String(req.body?.note || "").replace(/\s+/g, " "), 1000);
+      const nb = { ...b, status: "applied", appliedAt: new Date().toISOString(), note, features: b.features || [] };
+      await q("update gyms set beta=$2 where id=$1", [u.gym_id, nb]);
+      for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.betaApplied(u.gym_name, u.name, u.email, note) });
+      return res.json({ beta: beta.forGym(nb, todayZA(), payfast.PRICE_CENTS()) });
+    }
+    if (action === "leave") {
+      if (!b.status) fail(409, "You're not in the beta.");
+      const nb = { ...b, status: "left", leftAt: new Date().toISOString() };
+      await q("update gyms set beta=$2 where id=$1", [u.gym_id, nb]);
+      return res.json({ beta: beta.forGym(nb, todayZA(), payfast.PRICE_CENTS()) });
+    }
+    fail(400, "Apply or leave.");
+  }));
+  // Feedback from a beta gym: a few words and, if they like, a screenshot (stored like a proof of payment). The team gets an email.
+  api.post("/coach/beta/feedback", once(async (req, res) => {
+    const u = needCoach(req), b = await betaOf(u.gym_id);
+    if (!beta.active(b)) fail(403, "Feedback here is for gyms in the beta. Email hello@jitsflow.com any time.");
+    const text = clean(req.body?.text, 4000), f = req.body?.file;
+    let shot = null, type = null;
+    if (f && f.data) { const pf = proofFile(f); if (!pf || !/^image\//.test(pf.type)) fail(400, "Attach a screenshot (a picture)."); shot = pf.data; type = pf.type; }
+    if (!text && !shot) fail(400, "Write what you'd like us to know.");
+    if (limited("fb:" + u.gym_id, 30, 24 * 3600e3)) fail(429, "That's a lot of feedback for one day. Thank you! Try again tomorrow.");
+    const r = await q("insert into beta_feedback(gym_id,user_id,text,shot,shot_type) values($1,$2,$3,$4,$5) returning id", [u.gym_id, loginOf(u).id, text, shot, type]);
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.betaFeedback(u.gym_name, u.name, u.email, text, !!shot) });
+    res.status(201).json({ id: String(r.rows[0].id) });
+  }));
+  // The team's side: who applied (with their gym's size and use), accept with a fee, decline, remove; feature flags; the feedback inbox.
+  api.get("/admin/beta", wrap(async (req, res) => {
+    needAdmin(req);
+    const gyms = (await q(`select g.id, g.name, g.beta, h.name as head_name, h.email as head_email,
+        (select count(*) from users m where m.gym_id=g.id and m.role='student' and m.active)::int as members,
+        (select count(*) from users m where m.gym_id=g.id and m.active and m.last_seen > now() - interval '7 days')::int as active7,
+        (select count(*) from classes c where c.gym_id=g.id and c.starts_at >= now() - interval '7 days' and c.starts_at < now())::int as classes7
+      from gyms g left join users h on h.id=g.head_coach_id where g.beta is not null and g.claim is null order by (g.beta->>'appliedAt') desc nulls last, g.id`)).rows;
+    const fb = (await q(`select f.id, f.text, f.shot is not null as shot, f.done_at, f.created_at, g.name as gym, u.name as who, u.email
+      from beta_feedback f join gyms g on g.id=f.gym_id left join users u on u.id=f.user_id order by f.done_at is not null, f.id desc limit 100`)).rows;
+    const today = todayZA();
+    res.json({ gyms: gyms.map((g) => ({ id: String(g.id), name: g.name, head: g.head_name ? { name: g.head_name, email: g.head_email } : null, members: g.members, active7: g.active7, classes7: g.classes7,
+        beta: { ...g.beta, line: beta.feeLine(g.beta, today, payfast.PRICE_CENTS()), priceCents: beta.priceFor(g.beta, today, payfast.PRICE_CENTS()) } })),
+      feedback: fb.map((x) => ({ id: String(x.id), text: x.text, shot: x.shot, done: !!x.done_at, at: x.created_at, gym: x.gym, who: x.who, email: x.email })),
+      defaults: { freeMonths: beta.FREE_MONTHS, afterCents: beta.AFTER_CENTS, normalCents: payfast.PRICE_CENTS() } });
+  }));
+  api.patch("/admin/gyms/:id/beta", wrap(async (req, res) => {
+    needAdmin(req); const body = req.body || {};
+    const g = (await q("select id, beta from gyms where id=$1 and claim is null", [intOr(req.params.id, 0)])).rows[0]; if (!g) fail(404, "Not found.");
+    const b = { ...(g.beta || {}) }, today = todayZA();
+    if (body.action === "accept") Object.assign(b, { status: "accepted", acceptedAt: new Date().toISOString() }, beta.acceptDeal(today, body));
+    else if (body.action === "decline") Object.assign(b, { status: "declined", decidedAt: new Date().toISOString() });
+    else if (body.action === "remove") Object.assign(b, { status: "left", leftAt: new Date().toISOString() });
+    else if (body.action === "fee") { if (!beta.active(b)) fail(409, "Accept the gym first."); Object.assign(b, beta.acceptDeal(today, body)); }
+    else if (body.action !== undefined) fail(400, "Unknown action.");
+    if (body.features !== undefined) b.features = beta.readFeatures(body.features);
+    if (body.adminNote !== undefined) b.adminNote = clean(body.adminNote, 1000);
+    if (!b.status) b.status = "accepted";
+    await q("update gyms set beta=$2 where id=$1", [g.id, b]);
+    res.json({ beta: { ...b, line: beta.feeLine(b, today, payfast.PRICE_CENTS()), priceCents: beta.priceFor(b, today, payfast.PRICE_CENTS()) } });
+  }));
+  api.post("/admin/feedback/:id/done", wrap(async (req, res) => {
+    needAdmin(req);
+    const r = await q("update beta_feedback set done_at=case when $2 then now() end where id=$1 returning id", [intOr(req.params.id, 0), req.body?.done !== false]);
+    if (!r.rows[0]) fail(404, "Not found."); res.json({ ok: true });
+  }));
+  api.get("/admin/feedback/:id/shot", wrap(async (req, res) => {
+    needAdmin(req); const r = (await q("select shot, shot_type from beta_feedback where id=$1 and shot is not null", [intOr(req.params.id, 0)])).rows[0];
+    if (!r) fail(404, "No screenshot.");
+    res.set({ "Content-Type": r.shot_type, "Content-Security-Policy": "default-src 'none'", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" }).send(r.shot);
   }));
 
   api.use((req, res) => res.status(404).json({ error: "Not found." }));
@@ -3461,7 +3677,8 @@ function makeApi(pool, { secureCookies, build }) {
   });
   // Scheduled jobs (server.js runs them every 15 minutes; each is safe to run twice or on several servers).
   // Card autopay goes first, so on a due day members whose card pays aren't reminded too.
-  api.jobs = { autoRemind, tellMissed, autopay, run: async () => { await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); } };
+  // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, run: async () => { await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
   return api;
 }
 
