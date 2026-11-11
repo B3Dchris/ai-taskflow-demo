@@ -152,6 +152,62 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await p.locator('.cta .btn').tap();await p.waitForTimeout(1200);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&!/t=/.test(location.search)&&S.ui.sheet&&S.ui.sheet.k==='tech'&&/Kimura/i.test(document.getElementById('sheet').innerText)),'"Open in JitsFlow" opens that technique in the app');
   }catch(e){fail++;fails.push('CRASH '+e.message)}
+  // ---- the home page's WebGL belt (web/js/belt.js): loaded after first paint, decorative, no layout shift, light;
+  // the drawings in the .beltslot boxes stay with reduced motion, Save-Data, no WebGL or no JavaScript.
+  // Headless Chromium renders WebGL with SwiftShader (on the CPU, slow): these check that it draws without errors, not its speed.
+  try{
+    const raw=Buffer.from(await (await fetch(URL+'js/belt.js')).arrayBuffer());const gz=require('zlib').gzipSync(raw,{level:9}).length;
+    const bj=await fetch(URL+'js/belt.js');ok(bj.status===200&&/javascript/.test(bj.headers.get('content-type'))&&gz<=60*1024,'belt script served, '+(gz/1024).toFixed(1)+' KB gzipped (budget 60 KB)');
+    const home=await (await fetch(URL)).text();
+    ok(!/<script[^>]*src="\/js\/belt\.js/.test(home)&&!/<canvas/.test(home)&&/"\/js\/belt\.js\?v=[0-9a-f]{10}"/.test(home)&&(home.match(/class="beltslot /g)||[]).length===6&&!/cdn|unpkg|jsdelivr/i.test(raw.toString()),'belt: not part of the first load (added once the page has loaded), self-hosted and versioned, with a drawing in each of its 6 slots');
+    const slotsShown=(pg)=>pg.evaluate(()=>[...document.querySelectorAll('.beltslot')].filter(s=>s.offsetParent).every(s=>{const v=s.querySelector('svg'),r=v.getBoundingClientRect();return getComputedStyle(v).opacity==='1'&&r.height>=40&&r.width>=100&&v.querySelector('use')}));
+    const gc=await b.newContext({...devices['iPhone 13'],serviceWorkers:'block'});const gp=await gc.newPage();const gerr=[];
+    gp.on('pageerror',e=>gerr.push(e.message));gp.on('console',m=>{if(m.type()==='error')gerr.push(m.text())});
+    await gp.addInitScript(()=>{window.__cls=0;window.__lcp=null;new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true});
+      new PerformanceObserver(l=>{const e=l.getEntries().pop();window.__lcp=e&&e.element?(e.element.closest('h1')?'h1':e.element.tagName+'.'+e.element.className):null}).observe({type:'largest-contentful-paint',buffered:true})});
+    await gp.goto(URL,{waitUntil:'load'});
+    await gp.waitForFunction(()=>document.documentElement.classList.contains('gl'),null,{timeout:15000});
+    const g1=await gp.evaluate(()=>{const c=document.getElementById('beltgl'),cs=getComputedStyle(c),h=document.querySelector('h1').getBoundingClientRect();
+      const fcp=performance.getEntriesByName('first-contentful-paint')[0],js=performance.getEntriesByType('resource').find(r=>/\/js\/belt\.js/.test(r.name));
+      return {lcp:window.__lcp,cls:window.__cls,n:document.querySelectorAll('canvas').length,aria:c.getAttribute('aria-hidden'),pe:cs.pointerEvents,pos:cs.position,tab:c.tabIndex,fcp:fcp&&fcp.startTime,js:js&&js.startTime,frames:c.jf.frames,tier:c.jf.tier,
+        hit:!!document.elementFromPoint(h.left+20,h.top+h.height/2).closest('h1'),card:(()=>{const a=document.querySelector('.posmap .pcard');a.scrollIntoView({block:'center'});const r=a.getBoundingClientRect();const e=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);scrollTo(0,0);return !!e&&e.closest('.pcard')===a})()}});
+    ok(g1.n===1&&g1.aria==='true'&&g1.pe==='none'&&g1.pos==='fixed'&&g1.tab<0&&g1.hit&&g1.card,'belt: one fixed canvas, hidden from screen readers, never focused or tapped (the headline and the map cards stay on top)');
+    ok(g1.fcp&&g1.js&&g1.js>g1.fcp,'belt script is requested after first paint ('+Math.round(g1.js)+' ms, first paint '+Math.round(g1.fcp)+' ms)');
+    ok(g1.frames>0,'belt draws ('+g1.frames+' frames so far, '+g1.tier+' mode)');
+    const total=await gp.evaluate(()=>document.documentElement.scrollHeight-innerHeight);
+    for(let i=0;i<=24;i++){await gp.evaluate(y=>scrollTo(0,y),Math.round(total*i/24));await gp.waitForTimeout(150)}
+    await gp.waitForTimeout(300);
+    const g2=await gp.evaluate(()=>{const c=document.getElementById('beltgl');return {frames:c.jf.frames,errors:c.jf.errors,cls:window.__cls,lcp:window.__lcp,gl:document.documentElement.classList.contains('gl'),w:document.documentElement.scrollWidth,
+      steps:[...document.querySelectorAll('.pcard[data-step]')].sort((x,y)=>x.dataset.step-y.dataset.step).map(a=>a.getAttribute('href')+(a.hasAttribute('data-tap')?' tap':'')),legend:!!document.querySelector('.lg-chain').offsetParent}});
+    ok(g2.gl&&g2.frames>g1.frames+10&&!g2.errors&&!gerr.length,'belt: draws all the way down the page with no errors ('+g2.frames+' frames) '+gerr.join(' | '));
+    ok(g1.lcp==='h1'&&g1.cls<0.01&&g2.cls<0.01,'belt: the headline stays the largest paint ('+g1.lcp+') and nothing moves as it starts or while scrolling (layout shift '+g2.cls.toFixed(4)+')');
+    ok(g2.w<=390,'belt: no sideways scroll on a phone');
+    ok(g2.steps.join(' ')==='/positions/standing/ /positions/front-headlock/ /positions/turtle-top/ /positions/back-control/ tap'&&g2.legend,'map: one real chain numbered card by card, standing to back control and the tap: '+g2.steps.join(' '));
+    const f1=await gp.evaluate(()=>document.getElementById('beltgl').jf.frames);await gp.waitForTimeout(3500);const f2=await gp.evaluate(()=>document.getElementById('beltgl').jf.frames);await gp.waitForTimeout(1200);
+    ok(await gp.evaluate(f=>document.getElementById('beltgl').jf.frames===f,f2),'belt: stops drawing once the page is still ('+f1+' then '+f2+' frames)');
+    for(const w of [320,768,1280]){await gp.setViewportSize({width:w,height:800});await gp.waitForTimeout(250);for(const y of [0,.3,.6,1]){await gp.evaluate(y=>scrollTo(0,y*(document.documentElement.scrollHeight-innerHeight)),y);await gp.waitForTimeout(80)}
+      ok(await gp.evaluate(w=>document.documentElement.scrollWidth<=w&&document.documentElement.classList.contains('gl'),w),'belt: no sideways scroll at '+w+'px')}
+    await gp.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+    ok(await gp.evaluate(()=>!document.querySelector('canvas')&&!document.documentElement.classList.contains('gl')),'belt: frees its canvas on pagehide (the drawings come back)');
+    ok(!gerr.length,'belt: no console errors '+gerr.join(' | '));
+    await gc.close();
+    // without it: reduced motion, Save-Data, no WebGL, no JavaScript
+    const fall=async(label,opts,init,browser)=>{const c=await (browser||b).newContext({...devices['iPhone 13'],serviceWorkers:'block',...opts});const pg=await c.newPage();const er=[],req=[];
+      pg.on('pageerror',e=>er.push(e.message));pg.on('console',m=>{if(m.type()==='error')er.push(m.text())});pg.on('request',r=>{if(/\/js\/belt\.js/.test(r.url()))req.push(r.url())});
+      if(init)await pg.addInitScript(init);await pg.goto(URL,{waitUntil:'load'});await pg.waitForTimeout(2500);
+      const r=await pg.evaluate(()=>({canvas:document.querySelectorAll('canvas').length,gl:document.documentElement.classList.contains('gl'),grid:getComputedStyle(document.querySelector('.night')).backgroundImage!=='none',w:document.documentElement.scrollWidth}));
+      const shown=await slotsShown(pg);await c.close();return {...r,shown,er,req}};
+    let r=await fall('reduce',{reducedMotion:'reduce'});
+    ok(!r.canvas&&!r.gl&&r.shown&&r.grid&&!r.req.length&&!r.er.length&&r.w<=390,'reduce motion: no WebGL and nothing downloaded for it; the belt drawings and the mat grid show '+r.er.join(' | '));
+    r=await fall('savedata',{},()=>Object.defineProperty(Navigator.prototype,'connection',{get:()=>({saveData:true})}));
+    ok(!r.canvas&&!r.gl&&r.shown&&!r.req.length&&!r.er.length,'Save-Data: no WebGL and nothing downloaded for it; the belt drawings show '+r.er.join(' | '));
+    const nb=await chromium.launch({args:['--disable-webgl']});r=await fall('nowebgl',{},null,nb);await nb.close();
+    ok(!r.canvas&&!r.gl&&r.shown&&r.grid&&!r.er.length,'no WebGL: the belt drawings and the mat grid show, no errors '+r.er.join(' | '));
+    r=await fall('noctx',{},()=>{const g=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(t,o){return /webgl/.test(t)?null:g.call(this,t,o)}});
+    ok(!r.canvas&&!r.gl&&r.shown&&!r.er.length,'WebGL refused (a slow or blocklisted GPU): the drawings stay, no errors '+r.er.join(' | '));
+    r=await fall('nojs',{javaScriptEnabled:false});
+    ok(!r.canvas&&r.shown&&r.w<=390,'no JavaScript: the belt drawings show');
+  }catch(e){fail++;fails.push('CRASH belt '+e.message)}
   // ---- Google Analytics: only with GA_ID, and nothing from Google loads until the visitor taps Allow
   try{
     const gport=port+1,G=`http://localhost:${gport}/`;
