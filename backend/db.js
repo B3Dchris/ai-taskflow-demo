@@ -410,6 +410,33 @@ create table if not exists outreach_dnc(
   created_at timestamptz not null default now(),
   primary key(kind, value)
 );
+-- Website visitors, counted on the server without cookies (backend/visits.js): page views per page per day, and one row per visitor
+-- per day (vhash: a hash of the address and browser with that day's secret, which is deleted once the day is over). 13 months kept.
+create table if not exists site_daily(
+  day date not null,
+  path text not null,
+  views int not null default 0,
+  primary key(day, path)
+);
+create table if not exists site_visitors(
+  day date not null,
+  vhash text not null,
+  first_path text not null default '',
+  ref text not null default '',
+  utm_source text not null default '',
+  utm_medium text not null default '',
+  utm_campaign text not null default '',
+  click text not null default '',
+  click_id text not null default '',
+  country text not null default '',
+  pages int not null default 0,
+  app int not null default 0,
+  primary key(day, vhash)
+);
+create table if not exists site_salt(day date primary key, salt text not null);
+-- Where someone came from before signing up (the app sends it; see backend/visits.js signupSource), and when they made their login.
+alter table users add column if not exists signup_source jsonb;
+alter table users add column if not exists signed_up_at timestamptz;
 `;
 
 // Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.
@@ -518,6 +545,8 @@ async function migrate(pool) {
   await pool.query(HEAD_FIX);
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
+  // Logins made before sign-up times were kept: when the record was made.
+  await pool.query("update users set signed_up_at=created_at where signed_up_at is null and pass_hash is not null");
   await purgeRejected(pool);
   // Gyms from before running balances start owing from the month this went live, whatever they recorded before: until now Money only
   // looked at the current month, so fees paid in cash and never recorded must not turn into months of arrears. Older months still

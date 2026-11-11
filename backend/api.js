@@ -13,6 +13,8 @@ const people = require("./people");
 const payfast = require("./payfast");
 const brand = require("./brand");
 const outreach = require("./outreach");
+const visits = require("./visits");
+const adminDash = require("./admin");
 const { LONGEST, rollTimetable } = require("./db");
 
 const COOKIE = "jf_s";
@@ -210,7 +212,8 @@ function makeApi(pool, { secureCookies, build }) {
     if (keys.some(([k, max]) => over(k, max))) fail(429, "Too many attempts. Wait 15 minutes and try again.");
     return () => keys.forEach(([k]) => limited(k, Infinity, 15 * 60e3));
   }
-  async function newUser({ name, email, password, role, gymId, phone }) {
+  // source: where they came from before signing up (signup_source; see visits.signupSource).
+  async function newUser({ name, email, password, role, gymId, phone, source }) {
     name = clean(name, 80); email = clean(email, 254).toLowerCase(); password = String(password || "");
     if (!name) fail(400, "Enter your name.");
     if (!isEmail(email)) fail(400, "Enter a valid email address.");
@@ -221,7 +224,7 @@ function makeApi(pool, { secureCookies, build }) {
     // so that record is only taken over through the coach's invite link (claim) or a password reset email.
     if ((await q("select 1 from users where email=$1 and pass_hash is null", [email])).rows[0]) fail(409, "Your coach already added you with this email. Ask them for your invite link and sign up from that.");
     try {
-      const r = await q("insert into users(gym_id,role,name,email,pass_hash,phone) values($1,$2,$3,$4,$5,$6) returning id", [gymId, role, name, email, hash, cleanPhone(phone)]);
+      const r = await q("insert into users(gym_id,role,name,email,pass_hash,phone,signup_source,signed_up_at) values($1,$2,$3,$4,$5,$6,$7,now()) returning id", [gymId, role, name, email, hash, cleanPhone(phone), source || null]);
       return r.rows[0].id;
     } catch (e) {
       if (e.code === "23505") fail(409, "An account with that email already exists. Sign in instead.");
@@ -268,7 +271,7 @@ function makeApi(pool, { secureCookies, build }) {
       const tz = (await validTz(b.timezone)) || "Africa/Johannesburg";
       const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz]);
       gymId = g.rows[0].id;
-      try { id = await newUser({ ...b, role: "coach", gymId }); }
+      try { id = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); }
       catch (e) { await q("delete from gyms where id=$1", [gymId]); throw e; }
     } catch (e) { if (pro) await untakeProspect(pro); throw e; }
     await q("update gyms set head_coach_id=$1 where id=$2", [id, gymId]);
@@ -330,10 +333,11 @@ function makeApi(pool, { secureCookies, build }) {
       await checkNew(pre.id);
       // A kid's record (it has a parent's name): the parent signs up for them. The kid keeps their name; the parent's goes in as the parent.
       await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
-        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end where id=$4`, [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone)]);
+        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now()) where id=$4`,
+        [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code")]);
       id = pre.id;
       if (kids.length) await linkKids(id, kids.map((x) => x.id), clean(b.name, 80));
-    } else id = await newUser({ ...b, role, gymId });
+    } else id = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) });
     await startSession(res, id);
     const m = await loadMe(id);
     if (m.role === "student") mail.sendLater({ to: m.email, ...mail.templates.welcomeStudent(m.name, m.gym_name) });
@@ -374,7 +378,7 @@ function makeApi(pool, { secureCookies, build }) {
     const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
     if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
     const uid = r.rows[0].user_id;
-    await q("update users set pass_hash=$1, offline=false, claim_token=null where id=$2", [await bcrypt.hash(password, 11), uid]);
+    await q("update users set pass_hash=$1, offline=false, claim_token=null, signed_up_at=coalesce(signed_up_at, now()) where id=$2", [await bcrypt.hash(password, 11), uid]);
     await q("delete from sessions where user_id=$1", [uid]); // sign out everywhere else
     await startSession(res, uid);
     res.json({ me: me(await loginMe(uid)) });
@@ -2890,6 +2894,16 @@ function makeApi(pool, { secureCookies, build }) {
     if (!b.trialEnds) { const start = g.created_at.toISOString().slice(0, 10); b.trialEnds = addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS()); await q("update gyms set billing = billing || $1 where id=$2", [{ trialEnds: b.trialEnds }, gymId]); }
     return b;
   }
+  // A gym's JitsFlow plan for the team's dashboard, read only (like billingOf, without saving the trial's end).
+  // state: trial (free months), card (card added, free months still running), paying, due (free months over, no card), cancelled.
+  function billState(g) {
+    const b = { ...(g.billing || {}) }; if (b.sandbox && !payfast.platform().sandbox) { delete b.status; delete b.token; }
+    const start = new Date(g.created_at).toISOString().slice(0, 10), trialEnds = b.trialEnds || addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS());
+    const inTrial = new Date().toISOString().slice(0, 10) < trialEnds, out = { trialEnds, lastPaidAt: b.lastPaidAt || null, test: !!b.sandbox };
+    if (b.status === "active") return { state: inTrial ? "card" : "paying", ...out };
+    if (b.status === "cancelled") return { state: "cancelled", ...out };
+    return { state: inTrial ? "trial" : "due", ...out };
+  }
   const notifyUrl = () => mail.appUrl() + "/api/payfast/notify";
   api.get("/coach/billing", wrap(async (req, res) => {
     const u = needHead(req), b = await billingOf(u.gym_id), P = payfast.platform();
@@ -3344,6 +3358,11 @@ function makeApi(pool, { secureCookies, build }) {
   const proFull = async (id) => (await q("select * from prospects where id=$1", [intOr(id, 0)])).rows[0] || fail(404, "Not found.");
   const proOut = async (r) => outreach.prospectOut(r, { base: "", blocked: r.status !== "optedout" && (await outreach.blocked(q, r.domain, r.owner_email)) });
   const adminOf = (u) => { const lg = loginOf(u); return { name: lg.name, email: lg.email }; };
+  // The team's dashboard: visitors, sign-ups, who's using the app, every gym, and outreach (see backend/admin.js).
+  api.get("/admin/overview", wrap(async (req, res) => {
+    needAdmin(req);
+    res.json(await adminDash.overview(q, { days: intOr(req.query.days, 30), bill: billState }));
+  }));
   api.get("/admin/prospects", wrap(async (req, res) => {
     needAdmin(req);
     const rows = (await q(`select ${outreach.LIST_COLS} from prospects order by created_at desc, id desc limit 300`)).rows;
@@ -3444,4 +3463,4 @@ function makeApi(pool, { secureCookies, build }) {
   return api;
 }
 
-module.exports = { makeApi };
+module.exports = { makeApi, clientIp };

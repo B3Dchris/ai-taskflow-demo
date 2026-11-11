@@ -2,7 +2,8 @@
 "use strict";
 const express = require("express");
 const { makePool, migrate, purgeRejected, tick, rollAll } = require("./backend/db");
-const { makeApi } = require("./backend/api");
+const { makeApi, clientIp } = require("./backend/api");
+const visits = require("./backend/visits");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
@@ -31,6 +32,15 @@ const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_ID || "") ? process.env.G
 // The file's hash goes in the address, so Cloudflare and browsers fetch a new copy whenever it changes.
 const GA_VER = (() => { try { return require("crypto").createHash("sha256").update(fs.readFileSync(path.join(ROOT, "analytics.js"))).digest("hex").slice(0, 8); } catch (e) { return "1"; } })();
 const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/analytics.js?v=${GA_VER}" defer></script>` : "";
+// Where a visitor first came from (utm tags, a Google Ads click id, or the site that linked here), kept in this browser for 30 days
+// and sent with their sign-up only (see signupSource in backend/visits.js). No cookie, nothing sent anywhere else, so no consent needed.
+// A later visit with a campaign tag or ad click replaces one that only had a referring site.
+const SRC_TAG = `<script>(function(){try{var K="jf.src",L=location,q=new URLSearchParams(L.search),o={},r="",n=0;
+try{r=document.referrer?new URL(document.referrer).hostname.replace(/^www\\./,""):""}catch(e){}if(r===L.hostname.replace(/^www\\./,""))r="";
+["utm_source","utm_medium","utm_campaign","gclid","gbraid","wbraid"].forEach(function(k){var v=q.get(k);if(v){o[k]=v.slice(0,150);n++}});
+if(r)o.ref=r.slice(0,100);if(!n&&!r)return;var s=null;try{s=JSON.parse(localStorage.getItem(K)||"null")}catch(e){}
+if(s&&Date.now()-s.t<30*864e5&&(!n||s.utm_source||s.gclid||s.gbraid||s.wbraid))return;
+o.land=L.pathname.slice(0,120);o.t=Date.now();localStorage.setItem(K,JSON.stringify(o))}catch(e){}})();</script>`;
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -62,7 +72,7 @@ const files = new Map();
     const rel = "/" + path.relative(ROOT, full).split(path.sep).join("/");
     const ext = path.extname(name).toLowerCase();
     let body = fs.readFileSync(full);
-    if (ext === ".html" && GA_TAG) body = Buffer.from(body.toString("utf8").replace("</head>", GA_TAG + "\n</head>"));
+    if (ext === ".html") body = Buffer.from(body.toString("utf8").replace("</head>", SRC_TAG + GA_TAG + "\n</head>"));
     files.set(rel, { body, gz: COMPRESS.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null, ext,
       type: TYPES[ext] || "application/octet-stream" });
   }
@@ -94,6 +104,9 @@ function cacheFor(rel) {
   if (rel.startsWith("/icons/")) return "public, max-age=604800";
   return "public, max-age=3600";
 }
+
+// Website visitors, counted here without cookies (backend/visits.js); on when there's a database.
+let counter = null;
 
 function serveStatic(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -146,6 +159,8 @@ function serveStatic(req, res) {
   if (gzip) headers["Content-Encoding"] = "gzip";
   res.writeHead(200, headers);
   res.end(req.method === "HEAD" ? undefined : body);
+  // A page (not a file it loads): the app's page counts as an app open, any other as a website visit.
+  if (counter && f.ext === ".html" && req.method === "GET") counter.record(req, rel === "/app/index.html" ? "/app/" : rel.replace(/index\.html$/, ""), rel === "/app/index.html");
 }
 
 async function main() {
@@ -170,6 +185,11 @@ async function main() {
     // Every 15 minutes: automatic fee reminders (on each gym's due day and 7 days later) and "we miss you" notes. Safe on several servers.
     const jobs = () => api.jobs.run().catch((e) => console.warn("jobs:", e.message));
     jobs(); setInterval(jobs, 15 * 60e3).unref();
+    counter = visits.makeCounter(pool, { clientIp, flushMs: Number(process.env.PAGEVIEW_FLUSH_MS) || 60e3, ownHost: (() => { try { return new URL(process.env.APP_URL || "https://www.jitsflow.com").hostname; } catch (e) { return ""; } })() }).start();
+    // Render stops the server with SIGTERM on each deploy: write the last minute's counts first.
+    let stopping = false;
+    for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { if (stopping) return; stopping = true;
+      Promise.race([counter.stop(), new Promise((r) => setTimeout(r, 5000))]).catch(() => {}).then(() => process.exit(0)); });
     console.log("Accounts API on (database connected)");
   } else {
     app.use("/api", (req, res) => res.status(503).set("Cache-Control", "no-store").json({ error: "Accounts aren't switched on for this site yet." }));
