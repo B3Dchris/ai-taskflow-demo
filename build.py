@@ -69,7 +69,9 @@ HEAD = """<!doctype html>
 <meta property="og:title" content="JitsFlow">
 <meta property="og:description" content="No-gi technique library and flow map.">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>%s</style>
 """ % RESET

@@ -18,5 +18,10 @@ icon(512).save(os.path.join(OUT,'icon-512.png'))
 icon(192).save(os.path.join(OUT,'icon-192.png'))
 icon(180).convert('RGB').save(os.path.join(OUT,'apple-touch-icon.png'))
 icon(512,pad=0.12).save(os.path.join(OUT,'icon-maskable-512.png'))
-icon(64,round_=True).save(os.path.join(OUT,'favicon.png'))
+icon(64,round_=True).save(os.path.join(OUT,'favicon.png'))  # kept for old links
+# Google shows a site's icon in search only if it is square and a multiple of 48px, so offer 48, 96 and 192.
+icon(96,round_=True).save(os.path.join(OUT,'favicon-96.png'))
+icon(48,round_=True).save(os.path.join(OUT,'favicon-48.png'))
+# /favicon.ico at the site root: what browsers, Bing and feed readers ask for when a page names no icon.
+icon(256,round_=True).save(os.path.join(OUT,'..','favicon.ico'),sizes=[(16,16),(32,32),(48,48)])
 print('icons written')

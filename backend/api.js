@@ -1284,7 +1284,15 @@ function makeApi(pool, { secureCookies, build }) {
   }
   // A cancelled booking lets go of its price (booking again prices it again). One they were checked into keeps it.
   const UNPRICE = (a = "attendance") => ["price_cents", "price_from", "price_label"].map((k) => `${k}=case when ${a}.attended then ${a}.${k} end`).join(", ");
-  const dayIn = (d, tz) => { try { return new Date(d).toLocaleDateString("en-CA", { timeZone: tz }); } catch (e) { return new Date(d).toISOString().slice(0, 10); } };
+  // The day (YYYY-MM-DD) a moment falls on in a time zone. One formatter per zone, kept: making one per call is slow (the Money list
+  // calls this thousands of times). A zone that isn't real falls back to UTC, as before.
+  const dayFmts = new Map();
+  const dayIn = (d, tz) => {
+    let f = dayFmts.get(tz);
+    if (f === undefined) { try { f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }); } catch (e) { f = null; } if (dayFmts.size < 1000) dayFmts.set(tz, f); }
+    const t = new Date(d); if (isNaN(t)) return "Invalid Date";
+    return f ? f.format(t) : t.toISOString().slice(0, 10);
+  };
   const packOut = (k) => ({ id: String(k.id), name: k.name, lessons: k.lessons, priceCents: k.price_cents, expiryMonths: k.expiry_months, active: k.active });
   async function packIn(gymId, id, activeOnly) {
     const k = (await q(`select * from packs where id=$1 and gym_id=$2${activeOnly ? " and active" : ""}`, [intOr(id, 0), gymId])).rows[0];
@@ -2607,7 +2615,8 @@ function makeApi(pool, { secureCookies, build }) {
       .map((r) => ({ id: String(r.id), name: r.name, cents: r.amount_cents, month: r.month }));
     const lastEver = Object.fromEntries((await q("select user_id, max(paid_on) as last from payments where gym_id=$1 and status='confirmed' and user_id is not null group by user_id", [u.gym_id])).rows.map((r) => [String(r.user_id), r.last]));
     // Joined before the next month starts, by the gym's own clock (not UTC: someone added at 00:30 on the 1st joined that month).
-    const joined = (x) => dayIn(x.created_at, tzOf(u)), inMonth = rows.filter((x) => joined(x) < next), fam = familiesOf(inMonth);
+    const tz = tzOf(u); for (const x of rows) x.joinedDay = dayIn(x.created_at, tz);
+    const joined = (x) => x.joinedDay, inMonth = rows.filter((x) => joined(x) < next), fam = familiesOf(inMonth);
     // family: brothers and sisters share it (the id of the family's oldest record), for one reminder between them.
     const students = inMonth.map((x) => { const s = { paid: x.led.paid[month], pending: x.led.pending[month] }, d = x.dues(month); return { id: String(x.id), name: x.name, parentName: x.parent_name || "", family: fam[String(x.id)] ? fam[String(x.id)][0] : null, email: x.email || "", phone: x.phone || "", offline: x.offline, plan: x.plan ? x.plan.name : null, term: x.term,
       feeCents: x.fee, membershipCents: d.membershipCents, accessCents: d.accessCents, privatesCents: d.privatesCents, privates: d.privates, planStatus: x.plan_status, paidCents: Number(s.paid || 0), pendingCents: Number(s.pending || 0), lastPaid: lastEver[String(x.id)] || null, reference: x.pay_ref, claimUrl: x.claimUrl || null,
@@ -2620,11 +2629,11 @@ function makeApi(pool, { secureCookies, build }) {
     const total = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as c, coalesce(sum(amount_cents) filter (where status='confirmed' and user_id is null),0) as unmatched,
       coalesce(sum(amount_cents) filter (where status='pending'),0) as pending from payments where gym_id=$1 and paid_on >= $2 and paid_on < $3`, [u.gym_id, start, next])).rows[0];
     // six months up to this one
-    const hist = [];
+    const hist = [], from6 = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 6, 1)).toISOString().slice(0, 10);
+    const colBy = Object.fromEntries((await q("select to_char(paid_on,'YYYY-MM') as m, sum(amount_cents) as c from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3 group by 1", [u.gym_id, from6, next])).rows.map((r) => [r.m, Number(r.c)]));
     for (let i = 5; i >= 0; i--) {
       const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 - i, 1)), m = d.toISOString().slice(0, 7), nx = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
-      const col = Number((await q("select coalesce(sum(amount_cents),0) as c from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3", [u.gym_id, m + "-01", nx])).rows[0].c);
-      hist.push({ month: m, collectedCents: col, expectedCents: rows.filter((x) => joined(x) < nx).reduce((a, x) => a + x.dues(m).dueCents, 0) });
+      hist.push({ month: m, collectedCents: colBy[m] || 0, expectedCents: rows.filter((x) => joined(x) < nx).reduce((a, x) => a + x.dues(m).dueCents, 0) });
     }
     const g = (await q("select pay, auto_remind from gyms where id=$1", [u.gym_id])).rows[0];
     // People who left that month still owing (they're not on the list above any more).
