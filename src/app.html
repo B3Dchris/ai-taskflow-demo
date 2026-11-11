@@ -2181,7 +2181,7 @@ function mapAtlas(sel){
 }
 function mapStop(g,sel,index){
   const name=g.d==="sub"?"Submission finish":g.d===sel?"Maintain position":POS[g.d].L;
-  const tag={up:"ADVANCE",side:"TRANSITION",fin:"SUBMIT",stay:"CONTROL",down:"RECOVER"}[g.dir];
+  const tag={up:"ADVANCE",side:"TRANSITION",fin:"SUBMIT",stay:"CONTROL",down:"RISK"}[g.dir];
   return `<article class="jf-stop jf-${g.dir}" data-mapstop="${index}">
     <div class="jf-stop-heading"><div class="jf-stop-kicker">${index+1} / ${tag} · ${g.ts.length} move${g.ts.length===1?"":"s"}</div>
     ${g.d!=="sub"&&g.d!==sel?`<button class="jf-stop-name" data-a="mappos" data-v="${g.d}">${esc(name)} <span aria-hidden="true">↗</span></button>`:`<strong class="jf-stop-name">${esc(name)}</strong>`}</div>
@@ -2189,22 +2189,22 @@ function mapStop(g,sel,index){
   </article>`;
 }
 function mapSubway(sel){
-  const groups=flowGroups(sel,flowMax()).filter(g=>g.d!==sel);
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">01 / SUBWAY</span><h3>Routes from ${esc(POS[sel].L)}</h3><p>Follow the coloured lines to your next position.</p></div><div class="jf-route-legend"><span class="jf-up">Advance</span><span class="jf-side">Transition</span><span class="jf-fin">Submit</span><span class="jf-down">Recover</span></div></div>
+  const groups=flowGroups(sel,flowMax());
+  return `<div class="jf-route-top"><div><span class="jf-eyebrow">01 / SUBWAY</span><h3>Routes from ${esc(POS[sel].L)}</h3><p>Follow the coloured lines to your next position.</p></div><div class="jf-route-legend"><span class="jf-up">Advance</span><span class="jf-side">Transition</span><span class="jf-fin">Submit</span><span class="jf-down">Risk</span></div></div>
    ${groups.length?`<div class="jf-track-board"><svg id="jf-route-svg" class="jf-route-svg" aria-hidden="true"></svg>
      <div class="jf-track-source">${mapAnatomy(sel)}<span>START HERE</span><strong>${esc(POS[sel].L)}</strong></div>
      <div class="jf-track-stops">${groups.map((g,i)=>mapStop(g,sel,i)).join("")}</div>
    </div>`:`<p class="muted">No connected moves for the current belt filter.</p>`}`;
 }
 function mapHub(sel){
-  const groups=flowGroups(sel,flowMax()).filter(g=>g.d!==sel);
+  const groups=flowGroups(sel,flowMax());
   return `<div class="jf-route-top"><div><span class="jf-eyebrow">02 / HUB</span><h3>One position. Every option.</h3><p>Your position stays central; follow one branch at a time.</p></div></div>
     <div class="jf-hub-origin">${mapAnatomy(sel)}<span>CURRENT POSITION</span><strong>${esc(POS[sel].L)}</strong></div>
     <div class="jf-hub-stem"><span>CHOOSE A ROUTE</span></div>
     ${groups.length?`<div class="jf-hub-grid">${groups.map((g,i)=>mapStop(g,sel,i)).join("")}</div>`:`<p class="muted">No connected moves for the current belt filter.</p>`}`;
 }
 function mapLanes(sel){
-  const groups=flowGroups(sel,flowMax()).filter(g=>g.d!==sel),defs=[["up","ADVANCE","Reach a better position"],["side","TRANSITION","Move laterally"],["fin","SUBMISSION","Finish from here"],["stay","CONTROL","Maintain the position"],["down","RECOVER","Defend and reset"]];
+  const groups=flowGroups(sel,flowMax()),defs=[["up","ADVANCE","Reach a better position"],["side","TRANSITION","Move laterally"],["fin","SUBMISSION","Finish from here"],["stay","CONTROL","Maintain the position"],["down","RISK","Moves that concede position"]];
   return `<div class="jf-route-top"><div><span class="jf-eyebrow">03 / LANES</span><h3>Connections by purpose.</h3><p>Organised by what each move achieves.</p></div></div>
   <div class="jf-lane-groups">${defs.map(([key,title,description])=>{const members=groups.filter(g=>g.dir===key);return members.length?`<section class="jf-lane jf-${key}"><div class="jf-lane-head"><div><span>${title}</span><p>${description}</p></div><strong>${members.length}</strong></div><div class="jf-lane-list">${members.map((g,i)=>mapStop(g,sel,i)).join("")}</div></section>`:""}).join("")}</div>`;
 }
@@ -2723,7 +2723,7 @@ document.addEventListener("click",e=>{
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
     case "maplayout": S.ui.mapLayout=["subway","hub","lanes"].includes(v)?v:"subway";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
-    case "mappos": {const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y)}break;
+    case "mappos": {const y=window.scrollY,x=document.querySelector(".jf-atlas-scroll")?.scrollLeft||0;S.ui.flowSel=v;render();const atlas=document.querySelector(".jf-atlas-scroll");if(atlas)atlas.scrollLeft=x;window.scrollTo(0,y)}break;
     case "maplines": S.ui.mapLines=S.ui.mapLines===false;{const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y)}break;
     case "mapfocus": {const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollTo({left:Math.max(0,box.x+box.width/2-m.clientWidth/2),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}break;}
     case "flowmode": S.ui.flowMode=v==="overview"?"overview":"guide";S.ui.mapHasFocused=false;{const y=window.scrollY;render();window.scrollTo(0,y)}break;
