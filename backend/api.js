@@ -2959,7 +2959,9 @@ function makeApi(pool, { secureCookies, build }) {
     const cents = pack ? pack.price_cents : intOr(req.body?.amountCents, 0); if (cents < 500 || cents > 5e6) fail(400, "Enter an amount from R5.");
     const P = payfast.platform(), split = p.id !== P.id ? { merchant_id: Number(P.id), percentage: payfast.FEE_PCT() } : null;
     const [fn, ...ln] = String(u.name || "").trim().split(/\s+/);
-    res.json(payfast.checkout({ merchant_id: p.id, merchant_key: p.key, return_url: mail.appUrl() + "/app/?paid=card", cancel_url: mail.appUrl() + "/app/", notify_url: notifyUrl(),
+    // The student picked Apple Pay, Google Pay, card or Instant EFT in the app: PayFast opens on just that one (its payment_method codes).
+    const method = { ap: "ap", gp: "gp", cc: "cc", ef: "ef" }[req.body?.method] || undefined;
+    res.json(payfast.checkout({ merchant_id: p.id, merchant_key: p.key, return_url: mail.appUrl() + "/app/?paid=card", payment_method: method, cancel_url: mail.appUrl() + "/app/", notify_url: notifyUrl(),
       name_first: clean(fn, 100), name_last: clean(ln.join(" "), 100), email_address: u.email || "", m_payment_id: `pay-${u.id}-${Date.now()}`, amount: payfast.money(cents),
       item_name: clean(pack ? `${g.name}: ${pack.name}` : `${g.name} fees`, 100), item_description: clean(u.name, 255), custom_int1: String(u.id), custom_int2: String(u.gym_id),
       custom_int3: pack ? String(pack.id) : "", custom_str1: "pay" }, { pass: p.pass, sandbox: p.sandbox, split }));

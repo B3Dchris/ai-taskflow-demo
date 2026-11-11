@@ -659,6 +659,14 @@ textarea{min-height:76px;resize:vertical}
 .progress i{display:block;height:100%;background:var(--blue)}
 @media (max-width:420px){.levels button{font-size:11px}.bignum{font-size:38px}}
 @media (prefers-reduced-motion: no-preference){.panel,.trow{transition:background-color .15s}}
+/* Pay sheet: how to pay (Apple Pay / Google Pay / card / EFT) and the proof-of-payment drop zone */
+.paytiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px}
+.paytile{position:relative;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;padding:8px 6px;cursor:pointer}
+.paytile:active{transform:scale(.98)}.paytile.on{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft);color:var(--blue)}
+.paytile.dark{background:#000;color:#fff;border-color:#000}.paytile .pill{position:absolute;top:-8px;right:-4px;font-size:10px}
+.apmark{font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:1px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+.gpmark{display:flex;align-items:center;gap:3px;font-size:19px;font-weight:600;color:var(--ink-2)}
+.popzone{display:flex;flex-direction:column;gap:6px;align-items:flex-start;border:2px dashed var(--line);border-radius:12px;padding:14px}.popzone.over{border-color:var(--blue);background:var(--blue-soft)}
 </style>
 
 <main class="wrap app" id="app"></main>
@@ -2663,7 +2671,9 @@ document.addEventListener("click",e=>{
     case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
-    case "mypay": myPaySheet();break;
+    case "mypay": S.ui.payEft=false;myPaySheet();break;
+    case "payeft": S.ui.payEft=!S.ui.payEft;myPaySheet();if(S.ui.payEft)setTimeout(()=>{const x=document.getElementById("payeft");if(x)x.scrollIntoView({behavior:"smooth",block:"start"})},60);break;
+    case "poppaste": pasteProof();break;
     case "moneyview": COACH.moneyView=v;render();break;
     case "moneyfilter": COACH.moneyFilter=v;render();break;
     case "moneymonth": if(COACH.money){COACH.moneyMonth=monthShift(COACH.money.month,Number(v));render()}break;
@@ -2705,13 +2715,13 @@ document.addEventListener("click",e=>{
     case "bulkpick": { const b=S.ui.bulk;if(b){b.pick[+v]=!b.pick[+v];bulkSheet()}break }
     case "bulkparse": { const t=(document.getElementById("bulk-paste")||{}).value||"",ppl=parseList(t);if(!ppl.length){toast("Type one name per line.");break}bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)));break }
     case "bulkkind": bulkKind(+v); break;
-    case "paycard": payByCard(); break;
+    case "paycard": payByCard(null,v); break;
     case "autoon": autoOn(); break;
     case "autostop": autoStop(); break;
     case "packcard": payByCard(v); break;
     case "packedit": S.ui.packEdit=v||null;render();break;
     case "ratefill": { const t=document.getElementById(el.dataset.for);if(t){t.value=v;el.parentNode.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed",String(b===el)))}break }
-    case "paysoon": toast("Card and Instant EFT payments with PayFast are coming soon. For now, please pay by EFT."); break;
+    case "paysoon": toast("Card, Apple Pay and Google Pay are coming soon. For now, please pay by EFT."); break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;

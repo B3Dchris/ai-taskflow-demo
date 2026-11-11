@@ -946,7 +946,7 @@ function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!b
       :p.dueCents?`${money(p.paidCents,cur)} of ${money(p.dueCents,cur)} paid${p.pendingCents?`, ${money(p.pendingCents,cur)} being checked by your coach`:""}.`:"Your coach hasn't set a fee for you."} Your payment reference: <b class="mono">${esc(p.reference)}</b></p>
     ${p.creditCents>0?`<p class="small">You've paid <b>${money(p.creditCents,cur)}</b> ahead.</p>`:""}${autoLine(p)}${famPay(p)?`<p class="small">${famLine(famPay(p),cur)}</p>`:""}
     ${(td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:""}${privLeftLine(p)}
-    <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${ready?"How to pay":"Send proof of payment"}</button></section>`}
+    <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${ready||p.card?"Pay":"Send proof of payment"}</button></section>`}
 // "3 privates left" for students who've bought a pack (or have privates they still owe for).
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
@@ -966,6 +966,9 @@ async function autoOn(){toast("Opening PayFast…");try{const c=await api("POST"
 async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,back=owesBack(p),td=!back&&termOwed(p),left=td||myOwed(p),ks=p.packs||[],pls=p.plans||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
+  // How to pay: Apple Pay / Google Pay (whichever this phone has), card, EFT. EFT opens the bank details and proof of payment;
+  // with no card payments at the gym (and no "coming soon"), EFT is the only way, so it's simply open.
+  const tiles=payTiles(p,b),eft=!tiles||S.ui.payEft;
   // Owing for more than this month: one line a month ("October: R850"). Otherwise what makes up this month's fees.
   const parts=td?termLines(p,cur):back?p.owedMonths.map(o=>`${longMon(o.month)}: ${money(o.cents,cur)}`):dueLines(p,cur);
   // Joining a plan to book privates: with one plan to pick, what to pay is its price plus what's due now, and the amounts below say so.
@@ -978,10 +981,11 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
       <p class="small">${one?`To join, pay <b>${money(one.priceCents,cur)}</b> for ${esc(one.name)}${left?` plus what's due now (${money(left,cur)}): <b>${money(amt,cur)}</b> in all`:""}, with your reference. The amounts below include it.`
         :`Pay the price of the plan you pick${left?` plus what's due now (${money(left,cur)})`:""}, with your reference.`} Tell your coach which plan it's for. They put you on the plan, then you can book privates.</p>${joinAsk(ja)}</section>`:""}
     ${parts.length?`<section class="stack"><h2 class="label">${td||back?"What's due":"This month"}</h2><div class="panel stack" style="gap:6px">${parts.map(x=>`<span class="small">${esc(x)}</span>`).join("")}<b class="small">Total: ${money(td||(back?p.owedCents:p.dueCents),cur)}</b></div></section>`:""}
-    ${!p.card&&b.cardSoon?`<section class="stack"><button class="btn primary" data-a="paysoon">Pay by card or Instant EFT <span class="pill">Coming soon</span></button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast, coming soon. For now, pay by EFT below.</p></section>`:""}
-    ${p.card?`<section class="stack"><h2 class="label">Pay now</h2><label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:p.dueCents?p.dueCents/100:""}"></label>
-      <button class="btn primary" data-a="paycard">Pay by card or Instant EFT</button><p class="small muted" style="margin-top:-6px">Secure checkout by PayFast. Your coach sees it straight away.</p></section>`:""}
+    ${tiles?`<section class="stack" id="paymethods"><h2 class="label">Pay with</h2>
+      ${p.card?`<label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:p.dueCents?p.dueCents/100:""}"></label>`:""}${tiles}
+      <p class="small muted" style="margin-top:-6px">${p.card?`Apple Pay, Google Pay and card go through PayFast's secure checkout, and your coach sees it straight away. <button class="linkbtn small" data-a="paycard" data-v="ef">Or Instant EFT from your banking app</button>`:"Card, Apple Pay and Google Pay are coming soon. For now, pay by EFT."}</p></section>`:""}
     ${autoSec(p)}
+    ${eft?`<div class="stack-lg" id="payeft">
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
       <div class="kv refrow"><span class="small muted">Reference</span><b class="mono">${esc(p.reference)}</b><button class="linkbtn small" data-a="copy" data-v="${esc(p.reference)}">Copy</button></div></div>
       <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference. It tells your coach the payment is yours.${amt?` Amount: <b>${money(amt,cur)}</b>${one?` (${esc(one.name)} ${money(one.priceCents,cur)}${left?` + ${money(left,cur)} due now`:""})`:""}.`:""}</p></section>`:""}
@@ -991,11 +995,32 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
     <section class="stack"><h2 class="label">Already paid?</h2><p class="small">Send the proof of payment (the PDF from your bank, or a screenshot). Your coach checks it and marks you as paid.</p>
       ${ks.length||pls.length?`<label class="f">What's it for?<select id="mypop-pack"><option value="">My fees</option>${ks.map(k=>`<option value="${k.id}" data-price="${k.priceCents}">${esc(k.name)}</option>`).join("")}${pls.map(x=>`<option value="plan:${x.id}" data-price="${x.priceCents}"${p.plan&&p.plan.id===x.id&&p.planStatus==="trial"?" selected":""}>Joining: ${esc(x.name)} · ${money(x.priceCents,cur)} ${esc(PERL[x.period]||"")}</option>`).join("")}</select></label>`:""}
       <label class="f">Amount you paid (${esc(cur)})<input id="mypop-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${amt?amt/100:p.plan&&p.planStatus==="trial"&&pls.length?p.plan.priceCents/100:""}"></label>
-      <label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label><input type="file" id="mypop" accept="image/*,application/pdf" hidden></section>
+      <div class="popzone" id="popzone"><b>Paste a screenshot of the payment</b><span class="small muted">or drop the PDF from your bank here</span>
+        <div class="row"><button class="btn" type="button" data-a="poppaste">Paste</button><label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label></div></div><input type="file" id="mypop" accept="image/*,application/pdf" hidden>
+      <p class="small muted" style="margin-top:-6px">It shows as <b>Checking</b> until your coach confirms it.</p></section></div>`:""}
     ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.lessons} private lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · use within ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span>${p.card?`<button class="btn sm primary" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
       <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p></section>`:""}
     ${(p.payments||[]).length?`<section class="stack"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span></div>`}).join("")}</div></section>`:""}
   </div>`)}
+// Apple Pay only where the phone or Mac can use it; Google Pay everywhere else (PayFast shows each only where it works).
+function canApplePay(){try{return !!(window.ApplePaySession&&ApplePaySession.canMakePayments())}catch(e){return false}}
+const PAYICON={card:`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9.5h19" stroke="currentColor" stroke-width="2.4"/><path d="M6 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  bank:`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 10.5v6.5M10 10.5v6.5M14 10.5v6.5M18.5 10.5v6.5M3.5 19.5h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  g:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6z"/></svg>`};
+function payTiles(p,b){const live=!!p.card,soon=!live&&!!b.cardSoon;if(!live&&!soon)return "";
+  const a=live?"paycard":"paysoon",ap=canApplePay(),gp=!ap&&!/iPhone|iPad|iPod/.test(navigator.userAgent),badge=soon?`<span class="pill">Soon</span>`:"";
+  const t=(v,label,inner,cls="")=>`<button class="paytile ${cls}" data-a="${a}" data-v="${v}" aria-label="${label}${soon?" (coming soon)":""}">${inner}${badge}</button>`;
+  return `<div class="paytiles" role="group" aria-label="How to pay">${ap?t("ap","Apple Pay",`<span class="apmark"><span aria-hidden="true">\uF8FF</span>Pay</span>`,"dark"):""}${gp?t("gp","Google Pay",`<span class="gpmark">${PAYICON.g}<span>Pay</span></span>`):""}${t("cc","Card",`${PAYICON.card}<span>Card</span>`)}
+    <button class="paytile${S.ui.payEft?" on":""}" data-a="payeft" aria-pressed="${!!S.ui.payEft}" aria-label="EFT: bank details and proof of payment">${PAYICON.bank}<span>EFT</span></button></div>`}
+// Proof of payment from the clipboard: the Paste button (asks the browser), or pasting/dropping anywhere on the Pay sheet.
+async function pasteProof(){try{for(const it of await navigator.clipboard.read()){const ty=it.types.find(x=>/^image\//.test(x));if(ty){const bl=await it.getType(ty);return sendMyProof(new File([bl],"proof."+(ty.split("/")[1]||"png"),{type:ty}))}}
+  toast("There's no picture to paste. Take a screenshot of the payment, copy it, then tap Paste.")}catch(e){toast("This browser won't paste here. Tap Choose instead, or long-press and paste.")}}
+const popTarget=()=>S.ui.sheet&&S.ui.sheet.k==="mypay"&&document.getElementById("popzone");
+const popFile=list=>[...(list||[])].find(f=>/^image\/|\/pdf$/.test(f.type));
+document.addEventListener("paste",e=>{if(!popTarget())return;const f=popFile(e.clipboardData&&e.clipboardData.files);if(f){e.preventDefault();sendMyProof(f)}});
+document.addEventListener("dragover",e=>{const z=popTarget();if(z&&e.target.closest&&e.target.closest("#popzone")){e.preventDefault();z.classList.add("over")}});
+document.addEventListener("dragleave",e=>{const z=popTarget();if(z&&e.target.id==="popzone")z.classList.remove("over")});
+document.addEventListener("drop",e=>{const z=popTarget();if(!z||!(e.target.closest&&e.target.closest("#popzone")))return;e.preventDefault();z.classList.remove("over");const f=popFile(e.dataTransfer&&e.dataTransfer.files);if(f)sendMyProof(f);else toast("Drop a picture or PDF of the payment.")});
 async function sendMyProof(file){const amt=Number((document.getElementById("mypop-amt")||{}).value||0),w=(document.getElementById("mypop-pack")||{}).value||"",plan=/^plan:/.test(w)?w.slice(5):null,pack=plan?null:w||null;toast("Sending…");
   try{const f=await fileToProof(file);await api("POST","/me/pay/proof",{...f,amountCents:Math.round(amt*100)||0,packId:pack,planId:plan});if(plan)API.mem=undefined;await loadPay();myPaySheet();toast("Sent. Your coach will check it and mark you as paid.");jfTrack("pop_sent",{})}catch(e){toast(e.message)}}
 const coverOpts=n=>[1,2,3,4,5,6,7,8,9,10,11,12,...(n>12?[n]:[])].map(m=>`<option value="${m}"${m===n?" selected":""}>${m===1?"1 month":m+" months"}</option>`).join("");
@@ -1934,9 +1959,9 @@ function lookPanel(){const cur=(API.me.gym.brand||{}).accent||"";
 function payfastGo(c){const f=document.createElement("form");f.method="POST";f.action=c.action;f.style.display="none";
   for(const [k,v] of Object.entries(c.fields)){const i=document.createElement("input");i.type="hidden";i.name=k;i.value=v;f.appendChild(i)}
   document.body.appendChild(f);f.submit()}
-async function payByCard(packId){const amt=Math.round(Number((document.getElementById("card-amt")||{}).value||0)*100);
+async function payByCard(packId,method){const amt=Math.round(Number((document.getElementById("card-amt")||{}).value||0)*100);
   if(!packId&&!(amt>=500)){toast("Enter the amount, from R5.");return}
-  toast("Opening PayFast…");try{const c=await api("POST","/me/pay/payfast",packId?{packId}:{amountCents:amt});jfTrack("pay_card",packId?{pack:1}:{cents:amt});payfastGo(c)}catch(e){toast(e.message)}}
+  toast("Opening PayFast…");try{const c=await api("POST","/me/pay/payfast",{...(packId?{packId}:{amountCents:amt}),...(method?{method}:{})});jfTrack("pay_card",{...(packId?{pack:1}:{cents:amt}),method:method||"any"});payfastGo(c)}catch(e){toast(e.message)}}
 function pfPanel(){const og=S.ui.openG||{},pi=COACH.payInfo;
   if(COACH.pf===undefined){COACH.pf=null;api("GET","/coach/payfast").then(j=>{COACH.pf=j.payfast;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   const p=COACH.pf;if(!p)return "";

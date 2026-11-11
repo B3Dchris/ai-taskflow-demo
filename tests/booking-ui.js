@@ -172,14 +172,25 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(await ev(s1, () => (API.pay.dueCents > API.pay.paidCents) === !!document.querySelector("#app .feecard")), "Home shows the fees card only when something is due");
     await ev(s1, () => go("me")); await s1.waitForTimeout(300);
     await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400);
+    ok(await ev(s1, () => /^Pay$/.test(document.querySelector('.feecard [data-a="mypay"]').textContent.trim())), "the fees card's button just says Pay");
+    ok(await ev(s1, () => { const ts = [...document.querySelectorAll("#paymethods .paytile")].map((b) => b.getAttribute("aria-label")); const wallet = canApplePay() ? "Apple Pay" : /iPhone|iPad|iPod/.test(navigator.userAgent) ? null : "Google Pay";
+      return ts.includes("Card") && ts.some((x) => /^EFT/.test(x)) && (wallet ? ts.includes(wallet) : !ts.includes("Apple Pay") && !ts.includes("Google Pay")) && !document.getElementById("payeft"); }), "Pay opens on the ways to pay: the phone's wallet (Apple Pay on Apple, Google Pay elsewhere), card and EFT (EFT details stay closed)");
+    ok(await ev(s1, () => { window.ApplePaySession = { canMakePayments: () => true }; myPaySheet(); const ts = [...document.querySelectorAll("#paymethods .paytile")].map((b) => b.getAttribute("aria-label")); delete window.ApplePaySession; myPaySheet(); return ts.includes("Apple Pay") && !ts.includes("Google Pay"); }), "on a device with Apple Pay, the Apple Pay button shows (and not Google Pay)");
+    await s1.tap('#sheet [data-a="payeft"]'); await s1.waitForTimeout(300);
+    ok(await ev(s1, () => !!document.getElementById("payeft") && !!document.getElementById("popzone")), "EFT opens the bank details and proof of payment");
     ok(await ev(s1, (r) => { const t = document.getElementById("sheet").innerText; return /62123456789/.test(t) && /250655/.test(t) && t.includes(r) && !!document.querySelector('#sheet [data-a="copy"][data-v="62123456789"]'); }, ref), "pay sheet: bank details, copy buttons and the reference");
-    ok(await ev(s1, () => !!document.querySelector('#sheet [data-a="paycard"]') && /Pay by card or Instant EFT/.test(document.getElementById("sheet").innerText)), "the student can pay by card or Instant EFT");
+    ok(await ev(s1, () => !!document.querySelector('#sheet [data-a="paycard"][data-v="cc"]') && !!document.querySelector('#sheet [data-a="paycard"][data-v="ef"]')), "the student can pay by card or Instant EFT");
     { let posted = null; await s1.route("https://sandbox.payfast.co.za/**", (rt) => { posted = rt.request().postData(); rt.fulfill({ status: 200, contentType: "text/html", body: "<title>PayFast</title>" }); });
-      await s1.tap('[data-a="paycard"]'); await s1.waitForTimeout(1500);
+      await s1.tap('#sheet [data-a="paycard"][data-v="cc"]'); await s1.waitForTimeout(1500);
       const f = new URLSearchParams(posted || "");
+      ok(f.get("payment_method") === "cc", "the Card button opens PayFast on card only (payment_method cc)");
       ok(f.get("merchant_id") === "10000100" && /^\d+\.\d{2}$/.test(f.get("amount") || "") && f.get("custom_str1") === "pay" && /^[a-f0-9]{32}$/.test(f.get("signature") || ""), "Pay by card opens PayFast's checkout with a signed payment: " + (posted || "").slice(0, 80));
       await s1.unroute("https://sandbox.payfast.co.za/**"); await s1.goto(URL + "/app/?paid=card"); await s1.waitForTimeout(1500);
-      ok(/PayFast confirms/.test(await toast(s1)), "back from PayFast, the student is told it shows once confirmed"); await ev(s1, () => go("me")); await s1.waitForTimeout(800); await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400); }
+      ok(/PayFast confirms/.test(await toast(s1)), "back from PayFast, the student is told it shows once confirmed"); await ev(s1, () => go("me")); await s1.waitForTimeout(800); await s1.tap('[data-a="mypay"]'); await s1.waitForTimeout(400); await s1.tap('#sheet [data-a="payeft"]'); await s1.waitForTimeout(300); }
+    // pasting a screenshot anywhere on the EFT view sends it as the proof (checked without sending: the real send is next)
+    ok(await ev(s1, () => { let got = null; const keep = window.sendMyProof; window.sendMyProof = (f) => { got = f.type; };
+      const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" })); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+      window.sendMyProof = keep; return got === "image/png"; }), "pasting a screenshot on the Pay sheet sends it as proof of payment");
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
     await s1.fill("#mypop-amt", "650"); await s1.setInputFiles("#mypop", { name: "pop.png", mimeType: "image/png", buffer: png }); await s1.waitForTimeout(1500);
     ok(/Sent/.test(await toast(s1)) && await ev(s1, () => /Checking/.test(document.getElementById("sheet").innerText)), "student sends a screenshot as proof; it shows as Checking");
