@@ -481,7 +481,7 @@ textarea{min-height:76px;resize:vertical}
 @media(prefers-reduced-motion:reduce){.jf-chevron{transition:none}}
 
 /* Three interactive full-map layouts: no connector ever passes behind a position card. */
-.jf-map-layout-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--line);border-radius:16px;background:var(--surface-2)}
+.jf-map-layout-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--line);border-radius:16px;background:var(--surface-2)}
 .jf-map-layout-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border:0;border-radius:12px;min-height:55px;background:transparent;color:var(--ink-2);font-weight:700}
 .jf-map-layout-tabs button span{font-size:15px}.jf-map-layout-tabs button small{font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase}
 .jf-map-layout-tabs button[aria-pressed=true]{color:var(--ink);background:var(--surface);box-shadow:0 3px 14px rgba(0,0,0,.10)}
@@ -3951,7 +3951,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 function blankProgress(){return {v:1,mastery:{},notes:{},srs:{},settings:{perWeek:2,priorHours:100,targetHours:300,sessionMins:90,cycleStart:today(),hand:"left"},solo:{date:"",done:[]},photos:{},videos:{},comp:{}}}
-const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",learnView:"moves",flowSel:"hg_bot",flowMode:"overview",mapLayout:"subway",filterP:"all",filterM:"all",kind:"all",q:""}};
+const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",learnView:"moves",flowSel:"hg_bot",flowMode:"overview",mapLayout:"hub",filterP:"all",filterM:"all",kind:"all",q:""}};
 const P=()=>S.progress;
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
@@ -4363,7 +4363,7 @@ function mapStation(key,sel,links){
 function mapAtlas(sel){
   const links={};flowGroups(sel,flowMax()).forEach(g=>links[g.d]=g);
   return `<section class="jf-atlas-shell">
-    <div class="jf-atlas-intro"><div><span class="jf-eyebrow">THE POSITIONAL ATLAS</span><h3>Every position. One clear hierarchy.</h3></div><span class="jf-atlas-note">Blue = you &nbsp;·&nbsp; Grey = partner</span></div>
+    <div class="jf-atlas-intro"><div><span class="jf-eyebrow">THE POSITIONAL ATLAS</span><h3>Choose your position.</h3></div><span class="jf-atlas-note">Blue = you &nbsp;·&nbsp; Grey = opponent · diagrams are schematic</span></div>
     <div class="jf-atlas-scroll" tabindex="0" aria-label="Swipe horizontally to explore all positional cards">
       <div class="jf-atlas-inner">${ROWS.map((row,i)=>`<div class="jf-atlas-row"><div class="jf-atlas-rowhead"><span>${String(i+1).padStart(2,"0")}</span>${esc(TIERS[i])}</div><div class="jf-atlas-grid" style="--cols:${row.length}">${row.map(p=>mapStation(p,sel,links)).join("")}</div></div>`).join("")}</div>
     </div>
@@ -4379,43 +4379,23 @@ function mapStop(g,sel,index){
     <div class="jf-stop-tech">${g.ts.slice(0,3).map(t=>`<button data-a="open" data-v="${esc(t.id)}">${esc(t.n)} <span aria-hidden="true">›</span></button>`).join("")}${g.ts.length>3?`<span class="jf-stop-more">+${g.ts.length-3} more in Explore</span>`:""}</div>
   </article>`;
 }
-function mapSubway(sel){
-  const groups=flowGroups(sel,flowMax());
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">01 / SUBWAY</span><h3>Routes from ${esc(POS[sel].L)}</h3><p>Follow the coloured lines to your next position.</p></div><div class="jf-route-legend"><span class="jf-up">Advance</span><span class="jf-side">Transition</span><span class="jf-fin">Submit</span><span class="jf-down">Risk</span></div></div>
-   ${groups.length?`<div class="jf-track-board"><svg id="jf-route-svg" class="jf-route-svg" aria-hidden="true"></svg>
-     <div class="jf-track-source">${mapAnatomy(sel)}<span>START HERE</span><strong>${esc(POS[sel].L)}</strong></div>
-     <div class="jf-track-stops">${groups.map((g,i)=>mapStop(g,sel,i)).join("")}</div>
-   </div>`:`<p class="muted">No connected moves for the current belt filter.</p>`}`;
-}
 function mapHub(sel){
   const groups=flowGroups(sel,flowMax());
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">02 / HUB</span><h3>One position. Every option.</h3><p>Your position stays central; follow one branch at a time.</p></div></div>
+  return `<div class="jf-route-top"><div><span class="jf-eyebrow">01 / HUB</span><h3>One position. Every option.</h3><p>Your position stays central; follow one branch at a time.</p></div></div>
     <div class="jf-hub-origin">${mapAnatomy(sel)}<span>CURRENT POSITION</span><strong>${esc(POS[sel].L)}</strong></div>
     <div class="jf-hub-stem"><span>CHOOSE A ROUTE</span></div>
     ${groups.length?`<div class="jf-hub-grid">${groups.map((g,i)=>mapStop(g,sel,i)).join("")}</div>`:`<p class="muted">No connected moves for the current belt filter.</p>`}`;
 }
 function mapLanes(sel){
   const groups=flowGroups(sel,flowMax()),defs=[["up","ADVANCE","Reach a better position"],["side","TRANSITION","Move laterally"],["fin","SUBMISSION","Finish from here"],["stay","CONTROL","Maintain the position"],["down","RISK","Moves that concede position"]];
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">03 / LANES</span><h3>Connections by purpose.</h3><p>Organised by what each move achieves.</p></div></div>
+  return `<div class="jf-route-top"><div><span class="jf-eyebrow">02 / LANES</span><h3>Connections by purpose.</h3><p>Organised by what each move achieves.</p></div></div>
   <div class="jf-lane-groups">${defs.map(([key,title,description])=>{const members=groups.filter(g=>g.dir===key);return members.length?`<section class="jf-lane jf-${key}"><div class="jf-lane-head"><div><span>${title}</span><p>${description}</p></div><strong>${members.length}</strong></div><div class="jf-lane-list">${members.map((g,i)=>mapStop(g,sel,i)).join("")}</div></section>`:""}).join("")}</div>`;
 }
 function flowMapLayouts(sel){
- const mode=["subway","hub","lanes"].includes(S.ui.mapLayout)?S.ui.mapLayout:"subway";
+ const mode=["hub","lanes"].includes(S.ui.mapLayout)?S.ui.mapLayout:"hub";
  return `<div class="jf-map-layout-tabs" role="group" aria-label="Full map layout">
-   ${[["subway","Subway","Routes"],["hub","Hub","Focus"],["lanes","Lanes","Grouped"]].map(([id,name,sub])=>`<button type="button" data-a="maplayout" data-v="${id}" aria-pressed="${mode===id}"><span>${name}</span><small>${sub}</small></button>`).join("")}
-  </div>${mapAtlas(sel)}<section class="jf-map-route" aria-live="polite">${mode==="hub"?mapHub(sel):mode==="lanes"?mapLanes(sel):mapSubway(sel)}</section>`;
-}
-function drawMapRouteRails(){
- const board=document.querySelector(".jf-track-board"),svg=document.getElementById("jf-route-svg"),src=board?.querySelector(".jf-track-source");
- if(!board||!svg||!src)return;
- const b=board.getBoundingClientRect(),r=src.getBoundingClientRect(),stops=Array.from(board.querySelectorAll("[data-mapstop]"));
- const w=b.width,h=b.height;
- svg.setAttribute("viewBox",`0 0 ${w} ${h}`);svg.setAttribute("width",w);svg.setAttribute("height",h);
- const x0=r.right-b.left,y0=r.top+r.height/2-b.top;
- const parts=stops.map((el,i)=>{const z=el.getBoundingClientRect(),x2=z.left-b.left,y2=z.top+Math.min(35,z.height/2)-b.top;
- const gutter=Math.max(1,x2-x0),track=x0+Math.min(gutter-8,8+(i%4)*5),klass=el.classList.contains("jf-up")?"up":el.classList.contains("jf-fin")?"fin":el.classList.contains("jf-down")?"down":el.classList.contains("jf-stay")?"stay":"side";
- return `<path class="${klass}" d="M${x0},${y0} H${track} V${y2} H${x2}"/>`});
- svg.innerHTML=parts.join("");
+   ${[["hub","Hub","Focus"],["lanes","Lanes","Grouped"]].map(([id,name,sub])=>`<button type="button" data-a="maplayout" data-v="${id}" aria-pressed="${mode===id}"><span>${name}</span><small>${sub}</small></button>`).join("")}
+  </div>${mapAtlas(sel)}<section class="jf-map-route" aria-live="polite">${mode==="lanes"?mapLanes(sel):mapHub(sel)}</section>`;
 }
 function flowSVG(sel){
   // Readable landscape map: keep nodes at a real touch size and let small screens pan, rather than squeezing 4 columns into 360px.
@@ -4479,7 +4459,7 @@ function drawFlowLines(anim){const box=document.querySelector(".fsk");if(!box)re
     out+=`<path class="fl ${k}" style="--i:${i}" stroke-width="${w}" d="M${x},${y0-2} L${x},${yc-r} Q${x},${yc} ${x+r},${yc} L${gut-3},${yc}" marker-end="url(#fa-${k})"/>`});
   svg.innerHTML=out}
 // iOS fires resize when the toolbar hides on scroll: only redraw when the width really changed, and without the fade.
-addEventListener("resize",()=>{if(isMap())drawMapRouteRails();const b=isMap()&&document.querySelector(".fsk");if(b&&Math.abs(b.getBoundingClientRect().width-(b._w||0))>1)drawFlowLines()});
+addEventListener("resize",()=>{const b=isMap()&&document.querySelector(".fsk");if(b&&Math.abs(b.getBoundingClientRect().width-(b._w||0))>1)drawFlowLines()});
 /* Shortest chain of techniques from one position to another (breadth-first over "from → to" moves). */
 function routeFind(from,to,max){if(from===to)return [];const prev={[from]:null},q=[from];
   while(q.length){const p=q.shift();for(const t of fromPos(p,max)){if(t.t==="sub"||t.t===p||t.t in prev)continue;prev[t.t]=t;if(t.t===to){const path=[];let x=to;while(prev[x]){path.unshift(prev[x]);x=prev[x].f}return path}q.push(t.t)}}
@@ -4700,7 +4680,7 @@ function render(){
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
   const fab=v==="home"?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   app.innerHTML=(v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday())+fab;
-  if(isMap()){drawFlowLines(true);drawMapRouteRails();if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines());if(S.ui.flowMode==="overview"&&!S.ui.mapHasFocused){S.ui.mapHasFocused=true;requestAnimationFrame(()=>{const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollLeft=Math.max(0,box.x+box.width/2-m.clientWidth/2)}})}}
+  if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines());if(S.ui.flowMode==="overview"&&!S.ui.mapHasFocused){S.ui.mapHasFocused=true;requestAnimationFrame(()=>{const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollLeft=Math.max(0,box.x+box.width/2-m.clientWidth/2)}})}}
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
@@ -4913,7 +4893,7 @@ document.addEventListener("click",e=>{
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
-    case "maplayout": S.ui.mapLayout=["subway","hub","lanes"].includes(v)?v:"subway";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
+    case "maplayout": S.ui.mapLayout=["hub","lanes"].includes(v)?v:"hub";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
     case "mappos": {const y=window.scrollY,x=document.querySelector(".jf-atlas-scroll")?.scrollLeft||0;S.ui.flowSel=v;render();const atlas=document.querySelector(".jf-atlas-scroll");if(atlas)atlas.scrollLeft=x;window.scrollTo(0,y)}break;
     case "maplines": S.ui.mapLines=S.ui.mapLines===false;{const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y)}break;
     case "mapfocus": {const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollTo({left:Math.max(0,box.x+box.width/2-m.clientWidth/2),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}break;}
