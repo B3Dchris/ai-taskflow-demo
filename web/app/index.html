@@ -463,6 +463,44 @@ textarea{min-height:76px;resize:vertical}
 .flowsvg .node.fin rect{fill:var(--surface);stroke:var(--bad);stroke-dasharray:4 3}.flowsvg .node.fin text{fill:var(--bad);font-family:var(--f-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
 .flowsvg .node.fin.dest rect{fill:var(--bad-soft);stroke-dasharray:none;stroke-width:2.2}.flowsvg .node.fin.dim{opacity:.5}
 @media (prefers-reduced-motion:reduce){.flowsvg .edge,.fsk-lines.anim .fl{animation:none}}
+/* JitsFlow premium exploration mode: clear hierarchy, generous touch targets, restrained colour. */
+.jf-modebar{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px}
+.jf-modebar button{min-height:46px;border:0;border-radius:10px;background:transparent;color:var(--ink-2);font-weight:700;letter-spacing:.01em}
+.jf-modebar button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.10)}
+.jf-intro{display:flex;flex-direction:column;gap:5px}.jf-intro h1{font-size:38px;letter-spacing:-.025em}
+.jf-guide{display:flex;flex-direction:column;gap:18px}
+.jf-hero{position:relative;overflow:hidden;border-radius:20px;padding:24px 21px 21px;background:linear-gradient(145deg,var(--surface),var(--surface-2));border:1px solid var(--line);box-shadow:0 8px 26px rgba(0,0,0,.07)}
+.jf-hero::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;background:var(--blue);border-radius:0 3px 3px 0}
+.jf-eyebrow{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.09em;color:var(--ink-2);font-weight:600}
+.jf-tag{display:inline-block;padding:4px 8px;margin-left:5px;border:1px solid var(--line);border-radius:20px;letter-spacing:0;color:var(--ink)}
+.jf-hero h2{margin:13px 0 9px;font-size:clamp(29px,7vw,41px);line-height:1.06;letter-spacing:-.02em}
+.jf-hero p{font-size:14px;color:var(--ink-2);max-width:50ch}
+.jf-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:19px}
+.jf-stats span{font-size:12px;color:var(--ink-2);border:1px solid var(--line);padding:5px 9px;border-radius:20px}
+.jf-sectionhead h3{font-size:25px;letter-spacing:-.01em;margin-top:5px}
+.jf-destinations{display:grid;gap:10px}
+.jf-destination{--jf-accent:var(--blue);border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden;box-shadow:0 3px 16px rgba(0,0,0,.035)}
+.jf-destination.jf-up{--jf-accent:var(--good)}.jf-destination.jf-fin{--jf-accent:var(--bad)}
+.jf-destination.jf-down{--jf-accent:var(--warn)}.jf-destination.jf-stay{--jf-accent:var(--ink-2)}
+.jf-destination summary{list-style:none;display:flex;align-items:center;gap:13px;min-height:90px;padding:14px;cursor:pointer;touch-action:manipulation}
+.jf-destination summary::-webkit-details-marker{display:none}
+.jf-desticon{width:46px;height:46px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:27px;background:var(--surface-2);color:var(--jf-accent);font-weight:700}
+.jf-destmain{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}
+.jf-destlabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--jf-accent);font-weight:700}
+.jf-destmain strong{font-size:19px;line-height:1.2}
+.jf-desthint{font-size:13px;color:var(--ink-2)}
+.jf-chevron{font-size:23px;color:var(--ink-2);transition:transform .18s ease}.jf-destination[open] .jf-chevron{transform:rotate(180deg)}
+.jf-destbody{padding:0 14px 16px 73px;display:grid;gap:10px}
+.jf-techlist{display:grid;gap:6px}
+.jf-tech{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);min-height:46px;padding:10px 12px;font-size:14px;font-weight:600}
+.jf-tech span:last-child{color:var(--blue)}
+.jf-next{width:100%;border:0;border-radius:10px;min-height:46px;padding:10px 12px;background:var(--blue-soft);color:var(--blue);font-weight:700;text-align:left;display:flex;align-items:center;justify-content:space-between}
+.jf-overview{border:1px solid var(--line);background:var(--surface);padding:14px 10px;border-radius:16px}
+.jf-overview .flowsvg{min-width:360px}
+.jf-support{margin-top:6px}
+@media(min-width:720px){.jf-destinations{grid-template-columns:1fr 1fr}.jf-guide{gap:22px}.jf-hero{padding:30px}}
+@media(prefers-reduced-motion:reduce){.jf-chevron{transition:none}}
+
 /* "From here": lines run down the gutter into each destination */
 .fsk{position:relative;display:flex;flex-direction:column;gap:10px}
 .fsk-src{background:var(--blue);color:var(--on-blue);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column}
@@ -4200,6 +4238,33 @@ const FDIR={fin:"Submission",up:"To a better position",side:"Same level",down:"T
 function flowGroups(sel,mx){const g={};fromPos(sel,mx).forEach(t=>{(g[t.t]=g[t.t]||[]).push(t)});const flat=ROWS.flat();
   const rank=d=>d==="sub"?-1:d===sel?999:POS[d].r*100+flat.indexOf(d);
   return Object.keys(g).sort((a,b)=>rank(a)-rank(b)).map(d=>({d,dir:flowDir(sel,d),ts:g[d]}))}
+function flowGuide(sel){
+  const p=POS[sel],mx=flowMax(),groups=flowGroups(sel,mx);
+  const priority={up:0,side:1,fin:2,stay:3,down:4};
+  const ordered=[...groups].sort((a,b)=>(priority[a.dir]??5)-(priority[b.dir]??5));
+  const words={up:"Improve position",side:"Change position",fin:"Finish the fight",stay:"Keep control",down:"Defensive transition"};
+  const arrows={up:"↗",side:"→",fin:"◎",stay:"◉",down:"↘"};
+  const count=groups.reduce((n,g)=>n+g.ts.length,0);
+  return `<section class="jf-guide" aria-label="Explore from ${esc(p.l)}">
+    <div class="jf-hero">
+      <div class="jf-eyebrow">YOUR CURRENT POSITION <span class="jf-tag">${esc(TIERS[p.r])}</span></div>
+      <h2>${esc(p.L)}</h2>
+      <p>${gl((PD[sel]||{}).d||p.g)}</p>
+      <div class="jf-stats"><span>${count} technique${count===1?"":"s"}</span><span>${groups.length} destination${groups.length===1?"":"s"}</span></div>
+    </div>
+    <div class="jf-sectionhead"><div><span class="jf-eyebrow">YOUR NEXT MOVE</span><h3>Where do you go from here?</h3></div></div>
+    ${ordered.length?`<div class="jf-destinations">${ordered.map(g=>{
+      const destination=g.d==="sub"?"Submission":g.d===sel?"Maintain "+p.l:POS[g.d].L;
+      const title=g.ts.length===1?g.ts[0].n:g.ts.length+" techniques";
+      return `<details class="jf-destination jf-${g.dir}">
+        <summary><span class="jf-desticon" aria-hidden="true">${arrows[g.dir]}</span><span class="jf-destmain"><span class="jf-destlabel">${words[g.dir]}</span><strong>${esc(destination)}</strong><span class="jf-desthint">${esc(title)}</span></span><span class="jf-chevron" aria-hidden="true">⌄</span></summary>
+        <div class="jf-destbody"><p class="small muted">Choose a technique to see the steps and what comes next.</p>
+          <div class="jf-techlist">${g.ts.map(t=>`<button class="jf-tech" data-a="open" data-v="${esc(t.id)}"><span>${esc(t.n)}</span><span aria-hidden="true">↗</span></button>`).join("")}</div>
+          ${g.d!=="sub"&&g.d!==sel?`<button class="jf-next" data-a="pos" data-v="${g.d}">Explore ${esc(destination)} <span aria-hidden="true">→</span></button>`:""}
+        </div>
+      </details>`}).join("")}</div>`:`<div class="panel"><p class="muted">No techniques available at this belt filter. Choose a higher belt below to explore more options.</p></div>`}
+  </section>`;
+}
 function flowSVG(sel){
   // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
   const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
@@ -4266,9 +4331,13 @@ function routeBlock(sel){const mx=flowMax(),to=S.ui.routeTo&&POS[S.ui.routeTo]&&
 function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),outs=fromPos(sel,mx),ins=intoPos(sel,mx);
   return `
-  <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions from best (top) to worst (bottom). Tap one to see where it leads.</p>
-  <div style="overflow-x:auto">${flowSVG(sel)}</div>
-  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>`})()}</section>
+  <section class="jf-intro"><span class="jf-eyebrow">LEARN / THE MAP</span><h1>Find your next move.</h1><p class="muted small">Explore techniques from your position, or see the complete positional map.</p></section>
+  <div class="jf-modebar" role="group" aria-label="Flow map view">
+    <button type="button" data-a="flowmode" data-v="guide" aria-pressed="${(S.ui.flowMode||"guide")==="guide"}">Explore</button>
+    <button type="button" data-a="flowmode" data-v="overview" aria-pressed="${S.ui.flowMode==="overview"}">Full map</button>
+  </div>
+  ${S.ui.flowMode==="overview"?`<section class="stack jf-overview"><p class="muted small">Positions are ranked from strongest to most vulnerable. Tap a position to see your options.</p><div style="overflow-x:auto">${flowSVG(sel)}</div>
+  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>technique confidence</span></div>`})()}</section>` : flowGuide(sel)}
   <section class="stack" id="flow-from"><div class="row between"><h2 class="label">From ${esc(p.l.toLowerCase())}</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
   <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
   ${flowFrom(sel)}
@@ -4682,6 +4751,7 @@ document.addEventListener("click",e=>{
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
+    case "flowmode": S.ui.flowMode=v==="overview"?"overview":"guide";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
     case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);break} // tapping the map: stay where you are
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("learn-map"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
