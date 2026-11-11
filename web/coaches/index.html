@@ -15,7 +15,7 @@
 <meta property="og:image" content="https://www.jitsflow.com/og/coaches.jpg">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "url": "https://www.jitsflow.com/coaches/", "mainEntity": [{"@type": "Question", "name": "Do students have to download an app?", "acceptedAnswer": {"@type": "Answer", "text": "No. They open your invite link in Safari or Chrome and can add it to their home screen. It opens full screen like any app, and the study parts work offline."}}, {"@type": "Question", "name": "Do I have to type my timetable in?", "acceptedAnswer": {"@type": "Answer", "text": "Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward."}}, {"@type": "Question", "name": "Can other coaches help run it?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach."}}, {"@type": "Question", "name": "Can students see who else is booked?", "acceptedAnswer": {"@type": "Answer", "text": "Only if you turn it on. It's one switch in the Gym tab."}}, {"@type": "Question", "name": "Does JitsFlow take payments?", "acceptedAnswer": {"@type": "Answer", "text": "No. Students pay you the way they do now. You record payments in JitsFlow and see who's behind."}}, {"@type": "Question", "name": "Where is the data kept?", "acceptedAnswer": {"@type": "Answer", "text": "On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the privacy notice."}}, {"@type": "Question", "name": "Is it only for no-gi?", "acceptedAnswer": {"@type": "Answer", "text": "The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi."}}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "url": "https://www.jitsflow.com/coaches/", "mainEntity": [{"@type": "Question", "name": "Do students have to download an app?", "acceptedAnswer": {"@type": "Answer", "text": "No. They open your invite link in Safari or Chrome and can add it to their home screen. It opens full screen like any app, and the study parts work offline."}}, {"@type": "Question", "name": "Do I have to type my timetable in?", "acceptedAnswer": {"@type": "Answer", "text": "Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward."}}, {"@type": "Question", "name": "Can other coaches help run it?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach."}}, {"@type": "Question", "name": "Can students see who else is booked?", "acceptedAnswer": {"@type": "Answer", "text": "Only if you turn it on. It's one switch in the Gym tab."}}, {"@type": "Question", "name": "Does JitsFlow take payments?", "acceptedAnswer": {"@type": "Answer", "text": "Not in the app yet. Members pay you by EFT with their own reference today, and you record payments in JitsFlow and see who's behind. Card, Apple Pay and Google Pay are coming soon."}}, {"@type": "Question", "name": "Where is the data kept?", "acceptedAnswer": {"@type": "Answer", "text": "On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the privacy notice."}}, {"@type": "Question", "name": "Is it only for no-gi?", "acceptedAnswer": {"@type": "Answer", "text": "The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi."}}]}</script>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
@@ -25,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
-/* Layout: one column on phones, two-column hero and feature rows on wide screens. Motif: the belt bar, white to black. */
+/* Shared with /coaches/ (build.py copies this block). Motif: the belt bar, white to black, on a navy mat. */
 :root{
   --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E3E8EF; --ink:#111722; --ink-2:#4E5869; --line:#D3DAE4;
   --blue:#1D4FB5; --blue-soft:#DCE5F8; --on-blue:#FFFFFF; --warn:#995A00; --good:#1D7748;
@@ -45,6 +45,8 @@ body{margin:0;color:var(--ink);font-family:var(--f-body);font-size:18px;line-hei
 img{max-width:100%;display:block}
 a{color:var(--blue)}
 a:focus-visible,button:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
+[tabindex="-1"]:focus{outline:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.02;letter-spacing:.005em}
 h2{font-size:clamp(34px,5vw,52px);font-weight:800;text-transform:uppercase}
@@ -71,13 +73,11 @@ p{margin:0}
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
 .facts{margin-top:18px;font-size:16px;color:var(--ink-2)}
 .toplinks a{white-space:nowrap}
-.beltbar{display:grid;grid-template-columns:repeat(5,1fr);height:14px;border-radius:3px;overflow:hidden;margin-top:34px;max-width:520px;outline:1px solid var(--line)}
-.beltbar i:nth-child(1){background:var(--b-white)}.beltbar i:nth-child(2){background:var(--b-blue)}.beltbar i:nth-child(3){background:var(--b-purple)}.beltbar i:nth-child(4){background:var(--b-brown)}
-.beltbar i:nth-child(5){background:var(--b-black);position:relative}.beltbar i:nth-child(5)::after{content:"";position:absolute;right:14%;top:0;bottom:0;width:26%;background:var(--b-red)}
-.beltlabels{display:grid;grid-template-columns:repeat(5,1fr);max-width:520px;margin-top:6px;font-family:var(--f-mono);font-size:12px;color:var(--ink-2)}
 
-/* night band: header, hero and stats on deep navy in both themes */
-.night{position:relative;overflow:hidden;color:#EEF2FA;background:#0D1730}
+/* night band: header and hero on deep navy in both themes, over a faint tatami grid (2:1 mats) */
+.night{position:relative;overflow:hidden;color:#EEF2FA;background-color:#0D1730;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:180px 90px;background-position:-1px -1px}
 .night .heroart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:70% 40%;opacity:.95}
 .night.has-art::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,16,32,.96) 0%,rgba(10,16,32,.85) 38%,rgba(10,16,32,.25) 75%,rgba(10,16,32,.55) 100%);z-index:1}
 .night>header,.night>section,.night>.strip{position:relative;z-index:2}
@@ -88,34 +88,15 @@ p{margin:0}
 .night .facts{color:#A9B5CC}
 .night .btn{background:rgba(255,255,255,.06);color:#F4F6FB;border-color:rgba(255,255,255,.22)}
 .night .btn.primary{background:#5B8CFF;border-color:#5B8CFF;color:#07101F}
-.night .beltlabels{color:#9FB0D0}
-.night .beltbar{outline-color:rgba(255,255,255,.18)}
 .toplinks{display:flex;align-items:center;gap:16px}
-.browse{display:grid;gap:12px;margin:8px 0 28px}@media (min-width:720px){.browse{grid-template-columns:1fr 1fr}}
-.browse a{display:grid;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink)}
-.browse a b{font-family:var(--f-display);font-size:24px;text-transform:uppercase}.browse a span{color:var(--ink-2);font-size:16px}
 .footlinks a{color:inherit}
 .toplinks .signin{color:#C9D3E6;font-weight:600;font-size:15px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
 .toplinks .signin:hover{color:#FFFFFF;text-decoration:underline}
-/* narrow phones: two text links fit, the button doesn't (the hero repeats it right below) */
+/* narrow phones: two text links fit, the button doesn't (the page repeats it right below) */
 .toplinks .gymlink{color:#F4F6FB;font-weight:700;font-size:17px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center;padding:0 16px;border:1.5px solid rgba(255,255,255,.45);border-radius:999px}
 .toplinks .gymlink:hover{border-color:#FFFFFF;background:rgba(255,255,255,.08)}
 @media (max-width:520px){.toplinks .btn{display:none}.toplinks{gap:12px}.toplinks .gymlink{padding:0 12px;font-size:16px}}
 @media (max-width:360px){.brand{font-size:24px}.brand .mark{width:28px}}
-/* for gyms band */
-.gyms{background:#0D1730;color:#EEF2FA}
-.gyms .wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:center;padding-block:64px}
-.gyms h2{color:#F4F6FB}.gyms .eyebrow{color:#9FB0D0}.gyms p{color:#C9D3E6;font-size:19px}
-.gyms ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
-.gyms li{padding-left:26px;position:relative;color:#DDE4F2}.gyms li::before{content:"";position:absolute;left:3px;top:.6em;width:11px;height:6px;border-left:2.5px solid #6FD3A0;border-bottom:2.5px solid #6FD3A0;transform:translateY(-50%) rotate(-45deg)}
-.gyms .btn.primary{background:#5B8CFF;border-color:#5B8CFF;color:#07101F}.gyms .btn{background:rgba(255,255,255,.06);color:#F4F6FB;border-color:rgba(255,255,255,.22)}
-@media (min-width:760px){.gyms .wrap{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}.gyms ul{grid-template-columns:1fr 1fr}}
-/* stats strip */
-.strip{background:transparent;color:#EEF2FA;border-top:1px solid rgba(255,255,255,.12)}
-.stat b{font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#FFFFFF,#A9C3FF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.strip .wrap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;padding-block:30px}
-.stat b{display:block;font-family:var(--f-display);font-weight:800;font-size:46px;line-height:1}
-.stat span{font-size:15px;color:#A9B5CC}
 
 /* sections */
 section.block{padding-block:72px}
@@ -126,18 +107,7 @@ section.block{padding-block:72px}
 .feature ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .shot{justify-self:center;width:min(330px,100%);border-radius:22px;overflow:hidden;border:1px solid var(--line);box-shadow:0 18px 40px -22px rgba(17,23,34,.35);background:var(--surface)}
 .shot img{width:100%;height:auto;aspect-ratio:390/600;object-fit:cover;object-position:top}
-.chainline{font-family:var(--f-mono);font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;line-height:1.7;overflow-x:auto}
-.chainline .if{color:var(--warn)}
-
-/* positions gallery */
-.gallery{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,64%);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;margin-top:28px;-webkit-overflow-scrolling:touch}
-.gallery figure{margin:0;scroll-snap-align:start;background:#0E1626;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 40px -24px rgba(17,23,34,.6)}
-.gallery img{width:100%;aspect-ratio:1/1;object-fit:cover}
-.gallery figcaption{padding:10px 14px 14px;color:#EEF2FA;font-weight:700;display:flex;flex-direction:column;gap:2px}
-.gallery figcaption span{font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#9FB0D0}
-.beltcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:4px 0 6px}
-.beltcards img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
-/* phone frames: app screens and screen recordings */
+/* phone frames: screen recordings */
 .device{position:relative;margin:0 auto;width:var(--w,280px);max-width:100%;padding:9px;border-radius:46px;background:linear-gradient(150deg,#323846 0%,#0B0D11 38%,#0B0D11 70%,#262B35 100%);box-shadow:0 40px 70px -34px rgba(5,10,25,.75),0 0 0 1px rgba(255,255,255,.07) inset}
 .device>img,.device>video{display:block;width:100%;height:auto;border-radius:37px;background:#E9EDF3}
 .device>video{cursor:pointer}
@@ -149,61 +119,8 @@ section.block{padding-block:72px}
 .vbtn.big{right:auto;bottom:auto;left:50%;top:50%;width:76px;height:76px;transform:translate(-50%,-50%);background:#1D4FB5;border-color:rgba(255,255,255,.5);box-shadow:0 10px 30px rgba(5,10,25,.45)}
 .vbtn.big svg{width:30px;height:30px;margin-left:3px}
 .vbtn:focus-visible{outline:3px solid #FFFFFF;outline-offset:2px}
-
-/* hero picture: the app in a phone, with a real technique photo and one step of a chain floating beside it */
-.herovis{position:relative;display:flex;justify-content:center;width:100%;max-width:520px;justify-self:center}
-.herovis .clip{position:relative;z-index:2}
-.herovis .device{--w:min(272px,68vw)}
-.fphoto,.fchip{position:absolute;z-index:3;margin:0;pointer-events:none}
-.fphoto{left:max(0px,calc(50% - 228px));top:50%;width:clamp(104px,29vw,164px);border-radius:16px;overflow:hidden;border:3px solid #F4F6FB;background:#0E1A33;transform:rotate(-6deg);box-shadow:0 22px 40px -16px rgba(0,0,0,.7)}
-.fphoto img{width:100%;height:auto;aspect-ratio:1;object-fit:cover}
-.fphoto span{display:block;padding:6px 9px 8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#C9D3E6;background:#0E1A33}
-.fchip{right:max(0px,calc(50% - 236px));top:9%;display:grid;gap:2px;width:clamp(122px,33vw,176px);padding:10px 12px 11px;border-radius:14px;background:#F4F6FB;color:#111722;transform:rotate(4deg);box-shadow:0 22px 40px -16px rgba(0,0,0,.7);border-left:5px solid #5B8CFF}
-.fchip em{font-style:normal;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;color:#995A00}
-.fchip b{font-family:var(--f-display);font-size:24px;line-height:1;text-transform:uppercase}
-.fchip span{font-size:13px;color:#4E5869;line-height:1.3}
-@media (max-width:359px){.fchip{top:4%}.fchip span{display:none}}
-
-/* technique gallery: one deliberate sideways scroller */
-.railhead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-.railnav{display:none;gap:8px}
-.railnav button{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;line-height:1;cursor:pointer}
-.railnav button:hover{border-color:var(--blue);color:var(--blue)}
-.tgal{list-style:none;margin:28px 0 0;padding:6px max(20px,calc((100% - 1080px)/2)) 20px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(160px,46%);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:max(20px,calc((100% - 1080px)/2));overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
-.tgal li{scroll-snap-align:start;display:flex}
-.tcard{display:flex;flex-direction:column;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;text-decoration:none;color:var(--ink);box-shadow:0 16px 30px -24px rgba(17,23,34,.5)}
-.tcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
-.tpic{position:relative;display:block;aspect-ratio:1/1;background:#0E1A33;overflow:hidden}
-.tpic img{width:100%;height:100%;object-fit:cover}
-.tpic.fig{background:radial-gradient(110% 80% at 50% 30%,#1D3264 0%,#0E1A33 65%)}
-.tpic.fig img{object-fit:contain;padding:14% 6% 20%}
-.tpic .from{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#C9D3E6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:3px 8px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tmeta{position:relative;flex:1;display:flex;flex-direction:column;gap:5px;padding:17px 14px 16px}
-.tmeta::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--bc);box-shadow:0 1px 0 rgba(127,127,127,.25)}
-.tcat{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
-.tmeta b{font-family:var(--f-display);font-size:22px;font-weight:700;line-height:1.05;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.tcard.more{justify-content:flex-end;gap:10px;padding:22px 20px;background:var(--blue);border-color:var(--blue);color:var(--on-blue);font-family:var(--f-display);font-size:30px;font-weight:800;line-height:1;text-transform:uppercase}
-.tcard.more b{font-size:40px}
-.seeall{margin-top:4px;font-weight:700}
-
-/* position map: the app's own figures, ranked best to worst */
-.posmap{display:grid;gap:10px;margin-top:30px}
-.tier{display:grid;gap:10px;padding:12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--tc)}
-.tname{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:8px}
-.tname::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--tc)}
-.tier ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.t0{--tc:#1D7748}.t1{--tc:#3C9A6A}.t2{--tc:#1D4FB5}.t3{--tc:#6B7FA8}.t4{--tc:#C27A12}.t5{--tc:#B3261E}
-.pcard{display:flex;flex-direction:column;height:100%;border-radius:12px;overflow:hidden;background:radial-gradient(110% 90% at 50% 25%,#1D3264 0%,#0E1A33 70%);text-decoration:none;color:#EEF2FA;font-weight:700;font-size:15px;line-height:1.2}
-.pcard img{width:100%;height:auto;aspect-ratio:16/10;object-fit:contain;padding:4px 8px 0}
-.pcard span{padding:4px 10px 10px}
-.pcard:hover span{text-decoration:underline}
-.pcard:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
-.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:15px;color:var(--ink-2);margin-top:4px}
-.legend i{display:inline-block;width:22px;height:5px;border-radius:3px;margin-right:6px;vertical-align:middle;background:#6E9BFF}.legend i.them{background:#9AA6BA}
-
-/* feature rows: bigger phones */
 .feature .device{--w:min(256px,72vw)}
-/* gyms band: recording plus coach screens */
+/* coach screens */
 .cthumbs,.gyms .cthumbs{grid-column:1/-1;list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .gyms .cthumbs li{padding:0;color:inherit}.gyms .cthumbs li::before{content:none}
 .cthumbs figure{margin:0;height:100%;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;background:#15203C;border:1px solid rgba(255,255,255,.12)}
@@ -211,17 +128,15 @@ section.block{padding-block:72px}
 .cthumbs figcaption{padding:10px 12px 12px;font-size:15px;line-height:1.3;color:#DDE4F2;font-weight:600}
 .cthumbs figcaption span{display:block;font-weight:400;color:#A9B5CC;font-size:14px;margin-top:2px}
 .cthumbs.light figure{background:var(--surface);border-color:var(--line);box-shadow:0 16px 30px -24px rgba(17,23,34,.5)}.cthumbs.light figcaption{color:var(--ink)}.cthumbs.light figcaption span{color:var(--ink-2)}
-/* steps */
+/* steps (the gyms page's set-up) */
 .steps{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:32px;counter-reset:s;padding:0;list-style:none}
 .steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:8px}
 .steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:44px;line-height:1;color:var(--blue)}
 
-/* who + faq */
-.who{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:28px}
-.who div{border-left:4px solid var(--blue);padding:4px 0 4px 16px}
+/* faq */
 .faq{margin-top:28px;display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .faq details{border-bottom:1px solid var(--line)}
-.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:700;font-size:19px;display:flex;justify-content:space-between;gap:12px}
+.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:700;font-size:19px;display:flex;justify-content:space-between;gap:12px;min-height:44px}
 .faq summary::-webkit-details-marker{display:none}
 .faq summary::after{content:"+";font-family:var(--f-mono);color:var(--ink-2)}
 .faq details[open] summary::after{content:"–"}
@@ -236,24 +151,14 @@ footer{padding-block:32px;font-size:14px;color:var(--ink-2)}
 footer .wrap{display:flex;flex-direction:column;gap:8px}
 
 @media (min-width:760px){
-  .gallery{grid-auto-columns:minmax(240px,23%)}
-  .tgal{grid-auto-columns:214px}
-  .railnav{display:flex}
-  .tier{grid-template-columns:150px minmax(0,1fr);align-items:center;padding:12px 12px 12px 18px}
-  .tier ul{grid-template-columns:repeat(4,minmax(0,1fr))}
   .cthumbs,.gyms .cthumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .herovis .device{--w:272px}
   .feature .device{--w:290px}
-  .pcard img{aspect-ratio:4/3}
   .hero{grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);padding-block:40px 80px}
-  .strip .wrap{grid-template-columns:repeat(4,minmax(0,1fr))}
   .feature{grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:56px}
   .feature.flip .copy{order:2}
   .steps{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .who{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-@media (prefers-reduced-motion: no-preference){.btn{transition:transform .12s}.btn:hover{transform:translateY(-1px)}.tcard{transition:transform .15s,box-shadow .15s}.tcard:hover{transform:translateY(-3px);box-shadow:0 22px 34px -22px rgba(17,23,34,.55)}}
-@media (min-width:560px) and (max-width:759px){.tier ul{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (prefers-reduced-motion: no-preference){.btn{transition:transform .12s}.btn:hover{transform:translateY(-1px)}}
 
 /* coaches page */
 .hero .clip{justify-self:center}
@@ -410,7 +315,7 @@ Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
       <details><summary>Do I have to type my timetable in?</summary><p>Not if it's on your website. Paste the link and JitsFlow reads your classes, times, coaches and rates, and you check them before saving. You can also add classes by hand, repeat them weekly and copy a week forward.</p></details>
       <details><summary>Can other coaches help run it?</summary><p>Yes. Send them the coach invite from the Gym tab. Keep that link private: anyone who has it joins as a coach.</p></details>
       <details><summary>Can students see who else is booked?</summary><p>Only if you turn it on. It's one switch in the Gym tab.</p></details>
-      <details><summary>Does JitsFlow take payments?</summary><p>No. Students pay you the way they do now. You record payments in JitsFlow and see who's behind.</p></details>
+      <details><summary>Does JitsFlow take payments?</summary><p>Not in the app yet. Members pay you by EFT with their own reference today, and you record payments in JitsFlow and see who's behind. Card, Apple Pay and Google Pay are coming soon.</p></details>
       <details><summary>Where is the data kept?</summary><p>On servers in Frankfurt, Germany. Students can delete their account and data themselves in Settings. See the <a href="/privacy/">privacy notice</a>.</p></details>
       <details><summary>Is it only for no-gi?</summary><p>The booking, membership and competition tools work for any gym. The study library is no-gi, and most of it carries over to the gi.</p></details>
     </div>
@@ -453,7 +358,7 @@ Book your spot in JitsFlow: www.jitsflow.com/app/#book</div>
     vids.forEach(function(v){io.observe(v)})}
   if(document.readyState==="complete")watch();else addEventListener("load",watch);
 })();
-/* Technique gallery arrows (wide screens; phones swipe). */
+/* Technique deck arrows (wide screens; phones swipe). */
 (function(){var r=document.getElementById("tgal");if(!r)return;var smooth=!matchMedia("(prefers-reduced-motion: reduce)").matches;
   [].forEach.call(document.querySelectorAll("[data-rail]"),function(b){b.addEventListener("click",function(){r.scrollBy({left:Number(b.dataset.rail)*r.clientWidth*.8,behavior:smooth?"smooth":"auto"})})})})();
 </script>

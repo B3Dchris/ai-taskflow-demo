@@ -144,6 +144,7 @@ def media_html(idx):
     tech = {t["id"]: t for t in idx["tech"]}
     pos = idx["pos"]
     photo = lambda i: have("img", "thumbs", i + ".webp")
+    order = {t["id"]: n + 1 for n, t in enumerate(idx["tech"])}  # the card's number: its place in the library, white to black
     picks = [i for i in GALLERY_TECH if i in tech]
     picks = ([i for i in picks if photo(i)] + [i for i in picks if not photo(i)])[:GALLERY_MAX]
     cards = []
@@ -159,8 +160,8 @@ def media_html(idx):
             kind = "fig"
         else:
             continue
-        cards.append('<li><a class="tcard" href="/techniques/%s/"><span class="tpic %s">%s</span><span class="tmeta" style="--bc:%s">'
-                     '<span class="tcat">%s · %s belt</span><b>%s</b></span></a></li>' % (t["slug"], kind, pic, BELT_HEX.get(belt, "#1F4FB0"), esc(t["cat"]), belt.capitalize(), esc(t["n"])))
+        cards.append('<li><a class="tcard" href="/techniques/%s/"><span class="tno" aria-hidden="true">No. %03d</span><span class="tpic %s">%s</span><span class="tmeta" style="--bc:%s">'
+                     '<span class="tcat">%s · %s belt</span><b>%s</b></span></a></li>' % (t["slug"], order[i], kind, pic, BELT_HEX.get(belt, "#1F4FB0"), esc(t["cat"]), belt.capitalize(), esc(t["n"])))
     cards.append('<li><a class="tcard more" href="/techniques/"><span>See all %d techniques</span><b aria-hidden="true">&rarr;</b></a></li>' % len(idx["tech"]))
     gallery = '<ul class="tgal" id="tgal" role="list">%s</ul>' % "".join(cards)
     tiers = []
@@ -174,6 +175,122 @@ def media_html(idx):
     posmap = '<div class="posmap">%s</div>' % "".join(tiers) if tiers else ""
     counts = {b: sum(1 for t in idx["tech"] if t["belt"] == b) for b in ["blue", "purple", "brown", "black"]}
     return gallery, posmap, counts
+
+
+# Home page hero: "play a scramble". The app's own attack chains (web/data/chains-demo.json, from tools/landing-media.js),
+# walked from a few starting positions: they react, you switch, until a submission. Each branch is cut at 4 reactions and
+# kept only if it ends in a tap; at most 3 reactions per step. Inlined into the page; the first step is plain HTML too.
+SCRAMBLE_STARTS = [("cg_bot", "Closed guard"), ("standing", "Standing"), ("sc_top", "Side control")]
+SCR_DEPTH, SCR_OPTS = 4, 3
+
+
+def scramble(idx):
+    path = os.path.join(ROOT, "web", "data", "chains-demo.json")
+    if not os.path.exists(path):
+        return None
+    d = json.load(open(path, encoding="utf-8"))
+    chains, moves, site = d["chains"], d["tech"], {t["id"]: t for t in idx["tech"]}
+    used = set()
+
+    def carry_on(pos):  # a move that ends in a new position goes on with that position's chains ("Start:" setups skipped)
+        out = []
+        for r in chains.get(pos, []):
+            out += r[2:] if r[1].startswith("Start:") else [r]
+        return out
+
+    def walk(raw, seen, depth):
+        tid = raw[0]
+        if tid not in site or tid not in moves:
+            return None
+        sub = moves[tid]["c"] == "sub"
+        nxt = raw[2:] or ([] if moves[tid]["t"] == "sub" else carry_on(moves[tid]["t"]))
+        if sub and depth >= 3 or depth >= SCR_DEPTH:
+            return [tid, 1, []] if sub else None
+        kids = []
+        for k in nxt:
+            if k[0] in seen:
+                continue
+            n = walk(k, seen | {k[0]}, depth + 1)
+            if n:
+                kids.append([k[1], n])
+            if len(kids) == SCR_OPTS:
+                break
+        if not kids:
+            return [tid, 1, []] if sub else None
+        return [tid, 0, kids]
+
+    starts = []
+    for pos, label in SCRAMBLE_STARTS:
+        roots = chains.get(pos, [])
+        first = next((r for r in roots if r[1].startswith("Start:")), None)
+        if not first:
+            continue
+        node = walk(first[:2] + first[2:] + [r for r in roots if r is not first], {first[0]}, 0)
+        if node:
+            starts.append([pos, label, first[1], node])
+
+    def mark(n):
+        used.add(n[0])
+        for _, k in n[2]:
+            mark(k)
+    for st in starts:
+        mark(st[3])
+    have = lambda *p: os.path.exists(os.path.join(ROOT, "web", *p))
+    figs = {}
+    for tid in sorted(used):  # sorted: the same page every build
+        f = moves[tid]["f"]
+        if f not in figs and have("img", "fig", f + ".svg"):
+            svg = read("web", "img", "fig", f + ".svg").strip()
+            figs[f] = re.sub(r' width="\d+" height="\d+"', ' aria-hidden="true" focusable="false"', svg, count=1)
+    tech = {tid: [site[tid]["n"], site[tid]["slug"], site[tid]["belt"], site[tid]["cat"], moves[tid]["f"], 1 if have("img", "thumbs", tid + ".webp") else 0]
+            for tid in sorted(used)}
+    pos = {k: d["pos"][k]["L"] for k in sorted({moves[t]["f"] for t in used})}
+    return {"s": starts, "t": tech, "p": pos, "f": figs}
+
+
+def scramble_html(data):
+    """The widget's first step as plain HTML: works without JavaScript (each reaction links to the move that answers it).
+    The script in the page redraws the same markup from the inlined data, then takes over; keep the two in step."""
+    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    low = lambda t: t[:1].lower() + t[1:]
+    pos, lab, why, node = data["s"][0]
+    n, slug, belt, cat, f, photo = data["t"][node[0]]
+    starts = "".join('<button type="button" class="scr-start" data-start="%d" aria-pressed="%s">%s</button>' % (i, "true" if i == 0 else "false", esc(s[1]))
+                     for i, s in enumerate(data["s"]))
+    opts = "".join('<li><a class="scr-opt" href="/techniques/%s/"><span class="scr-if">If</span><span>%s</span></a></li>' % (data["t"][k[0]][1], esc(low(w)))
+                   for w, k in node[2])
+    return ('<div class="scr-belt" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i></div>'
+            '<div class="scr-head"><p class="scr-kicker" id="scr-h">Play a scramble</p><div class="scr-starts" role="group" aria-label="Start from">%s</div></div>'
+            '<ol class="scr-path" aria-label="Your path so far"><li>%s</li><li aria-current="step">%s</li></ol>'
+            '<div class="scr-step"><div class="scr-pic" role="img" aria-label="Diagram of %s, you in blue">%s</div>'
+            '<div class="scr-move"><p class="scr-pos">%s<span class="scr-meta"><i style="--bc:%s"></i>%s · %s belt <a class="scr-watch" href="/techniques/%s/">Watch<span class="vh"> %s</span> &rarr;</a></span></p>'
+            '<p class="scr-why"><span>Start</span> %s</p><h3 class="scr-name" tabindex="-1">%s</h3></div></div>'
+            '<div class="scr-q"><p class="scr-ask">What do they do?</p><ul class="scr-opts" role="list">%s</ul></div>'
+            '<p class="scr-foot"><a href="/app/">Open the app<span class="wide"> for every chain from every position</span></a><span class="scr-ctls">'
+            '<button type="button" class="scr-ctl" data-scr="back" disabled>&larr; Back a step</button><button type="button" class="scr-ctl" data-scr="reset" disabled>Start over</button></span></p>'
+            '<p class="vh" aria-live="polite" id="scr-live"></p>') % (
+        starts, esc(lab), esc(n), esc(data["p"][f]), data["f"].get(f, ""), esc(data["p"][f]), BELT_HEX.get(belt, "#1F4FB0"), esc(cat), belt.capitalize(),
+        slug, esc(n), esc(re.sub(r"^Start:\s*", "", why)), esc(n), opts)
+
+
+def notebook_html(data, idx):
+    """The closed guard chain tree, typeset like a page of a coach's notebook, two branches deep, each move linking to its page."""
+    if not data:
+        return ""
+    path = os.path.join(ROOT, "web", "data", "chains-demo.json")
+    chains = json.load(open(path, encoding="utf-8"))["chains"].get("cg_bot", [])
+    site = {t["id"]: t for t in idx["tech"]}
+    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+
+    def line(r, depth):
+        t = site.get(r[0])
+        if not t:
+            return ""
+        w = re.sub(r"^Start:\s*", "", r[1])
+        kids = "".join(line(k, depth + 1) for k in r[2:]) if depth < 2 else ""
+        return '<li><span class="nb-if%s">%s</span> <a href="/techniques/%s/">%s</a>%s</li>' % (
+            " start" if r[1].startswith("Start:") else "", esc(w[:1].lower() + w[1:]), t["slug"], esc(t["n"]), '<ol>%s</ol>' % kids if kids else "")
+    return '<ol class="notebook" aria-label="Attack chains from closed guard">%s</ol>' % "".join(line(r, 0) for r in chains)
 
 
 def landing_ld(landing):
@@ -216,6 +333,12 @@ def build_web(app):
     landing = fill_landing(read("src", "landing.html"), img)
     gallery, posmap, belts = media_html(site_index())
     landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap)
+    scr = scramble(site_index())
+    assert scr and scr["s"], "no chains for the home page hero: run node tools/landing-media.js --only chains"
+    landing = (landing.replace("@@SCRAMBLE@@", scramble_html(scr)).replace("@@NOTEBOOK@@", notebook_html(scr, site_index()))
+               .replace("@@SCRAMBLE_DATA@@", json.dumps(scr, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")))
+    counts = json.load(open(os.path.join(ROOT, "dist", "counts.json")))
+    landing = landing.replace("@@NPOS@@", str(counts["positions"])).replace("@@NTERMS@@", str(counts["terms"]))
     for b, n in belts.items():
         landing = landing.replace("@@N_%s@@" % b.upper(), str(n))
     landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))

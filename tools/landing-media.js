@@ -1,7 +1,7 @@
 // Makes the pictures and clips for the home page (/) and /coaches/. Run it again after the app's look changes.
 //   node tools/landing-media.js                       figures, app screens, technique thumbnails
 //   node tools/landing-media.js --reels <folder>      also the screen recordings and the coach stills taken from them
-//   node tools/landing-media.js --only figs,screens   just some of: figs, screens, thumbs, reels
+//   node tools/landing-media.js --only figs,screens   just some of: figs, screens, thumbs, reels, chains
 // Needs Playwright and ffmpeg. Reads web/app/index.html, so run python3 build.py first.
 // Writes (all committed, served as they are):
 //   web/img/fig/<position>.svg       the app's own position figure, coloured for the navy cards (you blue, partner grey)
@@ -9,6 +9,8 @@
 //   web/img/thumbs/<move>.webp       560 px thumbnails of the technique photos in web/img/techniques/
 //   web/video/<name>.mp4 + .webp     the phone screen cut out of a social reel: 600 px wide, H.264, no sound, poster frame
 //   web/img/coach/<name>.webp        still coach screens from the same reels
+//   web/data/chains-demo.json        the app's attack chains, with the moves and positions they name (the home page's
+//                                    "play a scramble" demo; build.py turns it into the walk the page inlines)
 "use strict";
 const { chromium, devices } = require("playwright");
 const { spawn, execFileSync } = require("child_process");
@@ -16,7 +18,7 @@ const fs = require("fs"), path = require("path"), os = require("os");
 
 const ROOT = path.resolve(__dirname, ".."), WEB = path.join(ROOT, "web");
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
-const ONLY = (arg("--only") || "figs,screens,thumbs,reels").split(",");
+const ONLY = (arg("--only") || "figs,screens,thumbs,reels,chains").split(",");
 const REELS = arg("--reels");
 const mk = (...p) => { const d = path.join(WEB, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const ff = (...a) => execFileSync("ffmpeg", ["-v", "error", "-y", ...a], { stdio: "inherit" });
@@ -91,6 +93,24 @@ async function screens(p) {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+// The attack chains exactly as the app has them (CHAINS), plus each move's name, category, belt and the positions it
+// goes from and to (TECH), and the positions' names (POS). Read-only: nothing in the app changes.
+async function chains(p) {
+  const data = await p.evaluate(() => {
+    const TM = Object.fromEntries(TECH.map((t) => [t.id, t])), ids = new Set();
+    const walk = (n) => { ids.add(n.t); (n.k || []).forEach(walk); return [n.t, n.w, ...(n.k || []).map(walk)]; };
+    const ch = Object.fromEntries(Object.keys(CHAINS).map((k) => [k, CHAINS[k].map(walk)]));
+    const tech = {}; [...ids].sort().forEach((id) => { const t = TM[id]; if (t) tech[id] = { n: t.n, c: t.c, f: t.f, t: t.t, belt: beltOf(t) }; });
+    const pos = Object.fromEntries(Object.keys(POS).map((k) => [k, { l: POS[k].l, L: POS[k].L }]));
+    return { note: "From the app's CHAINS, TECH and POS (src/app.html). Chain node: [move id, when they..., ...what to switch to]. Made by tools/landing-media.js.", chains: ch, tech, pos };
+  });
+  const out = path.join(mk("data"), "chains-demo.json");
+  // One line per position, move and position name: small, and a diff shows what changed.
+  const block = (o) => "{\n" + Object.entries(o).map(([k, v]) => ` ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(",\n") + "\n}";
+  fs.writeFileSync(out, `{"note": ${JSON.stringify(data.note)},\n"chains": ${block(data.chains)},\n"tech": ${block(data.tech)},\n"pos": ${block(data.pos)}}\n`);
+  console.log(`chains: ${Object.keys(data.chains).length} positions, ${Object.keys(data.tech).length} moves, ${kb(out)}`);
+}
+
 function thumbs() {
   const src = path.join(WEB, "img", "techniques"), out = mk("img", "thumbs");
   for (const f of fs.readdirSync(src).filter((f) => f.endsWith(".jpg"))) {
@@ -121,7 +141,7 @@ function reels() {
 (async () => {
   if (ONLY.includes("thumbs")) thumbs();
   if (ONLY.includes("reels")) reels();
-  if (!ONLY.includes("figs") && !ONLY.includes("screens")) return;
+  if (!["figs", "screens", "chains"].some((k) => ONLY.includes(k))) return;
   // Serve web/ the way the site does, without a database, and open the app.
   const port = 18000 + Math.floor(Math.random() * 1000), env = { ...process.env, PORT: String(port) }; delete env.DATABASE_URL;
   const srv = spawn("node", [path.join(ROOT, "server.js")], { env, stdio: "ignore" });
@@ -132,6 +152,7 @@ function reels() {
     const p = await ctx.newPage();
     await p.goto(`http://localhost:${port}/app/`); await p.waitForFunction(() => typeof SCENES !== "undefined" && typeof render === "function"); await p.waitForTimeout(500);
     if (ONLY.includes("figs")) await figures(p);
+    if (ONLY.includes("chains")) await chains(p);
     if (ONLY.includes("screens")) await screens(p);
     await b.close();
   } finally { srv.kill(); }
