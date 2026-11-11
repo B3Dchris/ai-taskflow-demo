@@ -335,7 +335,7 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .bp span{font-size:12px;color:var(--ink-2)}
 .bp.now{border-color:var(--blue);background:var(--blue-soft)}
 .bp.done span{color:var(--good)}
-.beltwrap .bp{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#EEF2FA}.beltwrap .bp span{color:#A9B5CC}.beltwrap .bp.now{border-color:#82A5FF;background:rgba(130,165,255,.18)}.beltwrap .bp.done span{color:#52C78E}
+.beltwrap .bp{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#EEF2FA}.beltwrap .bp span{color:#A9B5CC}.beltwrap .bp.now{border-color:#82A5FF;background:rgba(130,165,255,.18)}.beltwrap .bp.done span{color:#52C78E}.beltwrap .bp[aria-pressed="true"]{border:2px solid #82A5FF;background:rgba(130,165,255,.2);box-shadow:0 0 0 2px rgba(130,165,255,.10)}
 .bstage{display:flex;flex-direction:column;gap:10px}
 .beltchips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .beltchips button{min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:700;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
@@ -4119,7 +4119,7 @@ function weekPlan(){const st=P().settings,days=(st.days&&st.days.length?st.days:
 function weekKey(d){const x=parseD(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return ds(x)}
 function weekStreak(){const wk=new Set(S.sessions.map(s=>s.date&&weekKey(s.date)).filter(Boolean));let k=weekKey(today());if(!wk.has(k))k=addDays(k,-7);let n=0;while(wk.has(k)){n++;k=addDays(k,-7)}return n}
 const AREAS=[{n:"Escapes & defense",f:isDef},{n:"Guard & sweeps",f:t=>["guard","sweep","entry"].includes(t.c)},{n:"Passing",f:t=>t.c==="pass"},{n:"Pins & control",f:t=>t.c==="control"},{n:"Back takes",f:t=>t.c==="back"},{n:"Submissions",f:t=>t.c==="sub"},{n:"Takedowns",f:t=>t.c==="takedown"}];
-function areaScores(){const g=goal();return AREAS.map(a=>{const ts=TECH.filter(t=>t.p!=="plus"&&beltOf(t)===g&&a.f(t));const v=ts.reduce((x,t)=>x+lv(t.id),0)/(ts.length*4||1);return {n:a.n,pct:Math.round(100*v),count:ts.length}}).filter(a=>a.count)}
+function areaScores(g=goal()){return AREAS.map(a=>{const ts=TECH.filter(t=>t.p!=="plus"&&beltOf(t)===g&&a.f(t));const v=ts.reduce((x,t)=>x+lv(t.id),0)/(ts.length*4||1);return {n:a.n,pct:Math.round(100*v),count:ts.length}}).filter(a=>a.count)}
 function avgSessionHrs(){const ms=S.sessions.map(s=>Number(s.mins)||0).filter(Boolean);return ms.length?ms.reduce((a,b)=>a+b,0)/ms.length/60:(P().settings.sessionMins||90)/60}
 function monthsTo(perWeek){const st=P().settings;const rem=Math.max(0,(st.targetHours||300)-((st.priorHours||0)+hoursLogged()));return rem/(perWeek*avgSessionHrs())/4.345}
 
@@ -4133,8 +4133,8 @@ const ytURL=q=>"https://www.youtube.com/results?search_query="+encodeURIComponen
 const ytBtn=(q,label)=>`<a class="btn yt" href="${ytURL(q)}" target="_blank" rel="noopener"><span class="ytplay" aria-hidden="true">▶</span>${esc(label||"Watch on YouTube")}</a>`;
 function techThumb(t){const v=(P().videos||{})[t.id];const ti=!v&&techImg(t.id);if(ti)return `<span class="thumb"><img src="${ti}" alt="" loading="lazy">${vidOf(t.id)?`<span class="play">▶</span>`:""}</span>`;const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
 function tRow(t,extra){const b=beltOf(t);return `<button class="trow" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span><span class="meta">${cat(t.c)}<span>${esc(POS[t.f].l)} → ${t.t==="sub"?"Tap":esc(POS[t.t].l)}</span>${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}${extra||""}</span></span>${stripes(lv(t.id))}</button>`}
-function beltSVG(pct){
-  const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[goal()];
+function beltSVG(pct,belt=goal()){
+  const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[belt];
   const n=Math.min(4,Math.floor(pct/20));
   let st="";for(let i=0;i<4;i++)st+=`<rect class="${i<n?"on":"off"}" x="${250+i*13}" y="10" width="7" height="26"/>`;
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
@@ -4238,18 +4238,18 @@ function viewMoves(){
   <div id="learn-groups">${learnGroups()}</div>`;
 }
 function viewBelt(){
-  const g=goal(),G=BELT[g],pct=readiness(),st=P().settings,hrs=(st.priorHours||0)+hoursLogged(),rq=rateQueue(),rTotal=rateable().length,rDone=rTotal-rq.length;
-  const bk=S.ui.belt||g,B=BELT[bk],stage=TECH.filter(t=>beltOf(t)===bk),comp=(P().comp||{})[bk]||[];
+  const g=goal(),bk=S.ui.belt||g,B=BELT[bk],pct=readiness(bk),st=P().settings,hrs=(st.priorHours||0)+hoursLogged();
+  const stage=TECH.filter(t=>beltOf(t)===bk),rated=stage.filter(t=>t.p!=="plus"&&Object.prototype.hasOwnProperty.call(P().mastery,t.id)).length;
+  const rateableStage=stage.filter(t=>t.p!=="plus"),rTotal=rateableStage.length,rDone=rated,rq=rateQueue(),comp=(P().comp||{})[bk]||[];
   return `<section class="beltwrap" aria-label="Progress">
-    <div class="beltpath">${BELTS.map(b=>{const r=readiness(b.k);const st=RANK[b.k]<RANK[goal()]?"done":b.k===goal()?"now":"next";return `<button data-a="openbelt" data-v="${b.k}" class="bp ${st}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${st==="done"?"✓":r+"%"}</span></button>`}).join("")}</div>
-    ${beltSVG(pct)}
-    <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${G.to}-belt skill readiness (core + key techniques)</p></div>${rq.length?"":`<button class="btn" data-a="qr">Re-rate</button>`}</div>
+    <div class="beltpath" role="group" aria-label="Select belt to view">${BELTS.map(b=>{const r=readiness(b.k),selected=b.k===bk;return `<button data-a="belt" data-v="${b.k}" class="bp ${selected?"now":""}" aria-pressed="${selected}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${r}%</span></button>`}).join("")}</div>
+    ${beltSVG(pct,bk)}
+    <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${B.to}-belt skill readiness (core + key techniques)</p></div>${bk===g&&!rq.length?`<button class="btn" data-a="qr">Re-rate</button>`:""}</div>
     <div class="stats"><div class="stat"><b>${Math.round(hrs)}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${rDone}/${rTotal}</b><span>Rated</span></div></div>
-    ${(()=>{const a=areaScores();const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>.</p>`:""})()}
+    ${(()=>{const a=areaScores(bk);const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>.</p>`:""})()}
   </section>
-  <section class="stack"><h1 style="font-size:34px">Belt curriculum</h1>
-   <p class="small muted">Pick a belt to see everything you need for it, from white to black.</p>
-   <div class="beltchips" role="group" aria-label="Belt">${BELTS.map(b=>`<button data-a="belt" data-v="${b.k}" aria-pressed="${bk===b.k}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div>
+  <section class="stack"><h1 style="font-size:34px">${B.to} belt curriculum</h1>
+   <p class="small muted">The requirements for the selected belt are below. Change belts using the selector above.</p>
   </section>
   <section class="panel bstage">${beltImg(bk)?`<img class="beltbanner" src="${beltImg(bk)}" alt="${B.to} belt" loading="lazy">`:""}<h2 class="label">${B.from} → ${B.to} belt</h2><p>${gl(B.about)}</p><p class="small muted">${esc(B.time)}</p>
    <div class="row between"><span class="small"><b class="mono">${readiness(bk)}%</b> ready · ${stage.length} techniques</span>${bk!==goal()?`<button class="btn" data-a="setgoal" data-v="${bk}">Make this my goal</button>`:`<span class="small muted">Your current goal</span>`}</div>
