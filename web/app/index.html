@@ -501,6 +501,43 @@ textarea{min-height:76px;resize:vertical}
 @media(min-width:720px){.jf-destinations{grid-template-columns:1fr 1fr}.jf-guide{gap:22px}.jf-hero{padding:30px}}
 @media(prefers-reduced-motion:reduce){.jf-chevron{transition:none}}
 
+/* Full map v2: designed at an accessible scale; on narrow screens it pans horizontally instead of shrinking text. */
+.jf-map-shell{border:1px solid var(--line);border-radius:20px;background:var(--surface);overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.06)}
+.jf-map-head{padding:18px 18px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+.jf-map-head h2{font-size:23px}.jf-map-head p{font-size:13px;color:var(--ink-2);margin-top:4px}
+.jf-map-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.jf-map-tools button{font-size:12px;font-weight:700;min-height:40px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+.jf-map-tools button[aria-pressed="false"]{color:var(--ink-2)}
+.jf-map-scroller{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;scrollbar-width:thin;scrollbar-color:var(--line) transparent;background:var(--bg)}
+.jf-map-canvas{width:740px;min-width:740px;transform-origin:top left}
+.jf-map-canvas .flowsvg{width:740px;height:auto;max-width:none;display:block}
+.jf-map-scroller:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+.jf-fullsvg .jf-mapband rect{fill:var(--surface);stroke:var(--line);stroke-width:.7}
+.jf-fullsvg .jf-band-0 rect{fill:var(--bad-soft)}.jf-fullsvg .jf-band-1 rect{fill:var(--good-soft)}
+.jf-fullsvg .jf-band-5 rect,.jf-fullsvg .jf-band-6 rect{fill:var(--surface-2)}
+.jf-fullsvg .jf-mapband text{font-family:var(--f-display);font-size:15px;letter-spacing:.12em;font-weight:700;fill:var(--ink-2)}
+.jf-fullsvg .jf-mapband line{stroke:var(--line);stroke-width:1;opacity:.6}
+.jf-fullsvg .node .jf-card{fill:var(--surface);stroke:var(--line);stroke-width:1.5;filter:drop-shadow(0 3px 5px rgba(0,0,0,.05))}
+.jf-fullsvg .node .jf-accent{fill:var(--blue)}
+.jf-fullsvg .node.t0 .jf-accent{fill:var(--good)}.jf-fullsvg .node.t4 .jf-accent{fill:var(--warn)}.jf-fullsvg .node.t5 .jf-accent{fill:var(--bad)}
+.jf-fullsvg .node .jf-cardlabel{font-family:var(--f-body);font-size:15px;font-weight:700;fill:var(--ink)}
+.jf-fullsvg .node .jf-cardmeta{font-family:var(--f-mono);font-size:9px;letter-spacing:.02em;fill:var(--ink-2)}
+.jf-fullsvg .node.sel .jf-card{fill:var(--blue-soft);stroke:var(--blue);stroke-width:2.7;filter:drop-shadow(0 0 8px rgba(91,140,255,.18))}
+.jf-fullsvg .node.sel .jf-cardlabel{fill:var(--ink)}.jf-fullsvg .node.sel .jf-cardmeta{fill:var(--blue)}
+.jf-fullsvg .node.dest .jf-card{stroke:var(--good);stroke-width:2.2}.jf-fullsvg .node.dest.side .jf-card{stroke:var(--blue)}.jf-fullsvg .node.dest.down .jf-card{stroke:var(--warn)}
+.jf-fullsvg .node.dim{opacity:.72}.jf-fullsvg .node.dim .jf-cardlabel{fill:var(--ink)}
+.jf-fullsvg .jf-progressbg{fill:var(--line)}.jf-fullsvg .jf-progress{fill:var(--good)}
+.jf-fullsvg .node.sel .jf-progress{fill:var(--blue)}
+.jf-fullsvg .node.fin rect{fill:var(--surface);stroke:var(--bad);stroke-width:1.8}
+.jf-fullsvg .node.fin text{font-size:17px;letter-spacing:.08em}
+.jf-fullsvg .node.fin.dest rect{fill:var(--bad-soft);stroke-width:2.5}
+.jf-fullsvg .edge{opacity:.8;stroke-width:2.7;filter:drop-shadow(0 1px 2px rgba(0,0,0,.10))}
+.jf-map-foot{padding:13px 17px 17px;border-top:1px solid var(--line);display:grid;gap:9px}
+.jf-map-current{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
+.jf-map-current strong{font-size:16px}
+.jf-map-current .jf-tag{margin:0;color:var(--blue)}
+.jf-map-hint{font-size:12px;color:var(--ink-2)}
+@media(prefers-reduced-motion:reduce){.jf-map-scroller{scroll-behavior:auto}}
 /* "From here": lines run down the gutter into each destination */
 .fsk{position:relative;display:flex;flex-direction:column;gap:10px}
 .fsk-src{background:var(--blue);color:var(--on-blue);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column}
@@ -4266,31 +4303,42 @@ function flowGuide(sel){
   </section>`;
 }
 function flowSVG(sel){
-  // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
-  const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
-  ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH}})});
-  const FW=150;pos.sub={x:(W-FW)/2,y:top,w:FW};
-  const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};gs.forEach(g=>cnt[g.d]=g.ts.length);
-  const s=pos[sel],scx=s.x+NW/2,wOf=p=>pos[p].w||NW;
-  // spread the arrow starts along the edge they leave from, in the order of where they land, so they don't cross at the start
-  const leave={top:[],bot:[]};gs.forEach(g=>{const e=pos[g.d];(e.y>s.y?leave.bot:leave.top).push(g)});
-  const sx={};for(const k of ["top","bot"]){const L=leave[k].sort((a,b)=>(pos[a.d].x+wOf(a.d)/2)-(pos[b.d].x+wOf(b.d)/2)),step=Math.min(14,(NW-24)/Math.max(1,L.length-1));L.forEach((g,i)=>sx[g.d]=scx+(i-(L.length-1)/2)*step)}
-  const edges=gs.map((g,i)=>{const e=pos[g.d],ecx=e.x+wOf(g.d)/2,n=g.ts.length,sw=(1.6+Math.min(5,n)*.75).toFixed(1),x1=sx[g.d];let d;
-    if(e.y<s.y){const y1=s.y,y2=e.y+NH+3,k=Math.min(46,(y1-y2)/2);d=`M${x1},${y1} C${x1},${y1-k} ${ecx},${y2+k} ${ecx},${y2}`}
-    else if(e.y>s.y){const y1=s.y+NH,y2=e.y-3,k=Math.min(46,(y2-y1)/2);d=`M${x1},${y1} C${x1},${y1+k} ${ecx},${y2-k} ${ecx},${y2}`}
-    else{const y=s.y,lift=26;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-3}`}
-    return `<path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#ah-${g.dir})"/>`}).join("");
-  const marks=["fin","up","side","down"].map(k=>`<marker id="ah-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
-  const labels=["Finish",...TIERS].map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
-  const any=gs.length>0;let nodes="";
-  Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p];
-    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":any?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submissions${n?`: ${n} from ${esc(POS[sel].l)}`:""}"><rect x="${c.x}" y="${c.y}" width="${w}" height="${NH}" rx="19"/><text x="${c.x+w/2}" y="${c.y+NH/2+4}" text-anchor="middle">Submission</text></g>`;return}
-    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(any)cls.push("dim");
-    const k=posKnown(p,mx);
-    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${n?`, ${n} move${n>1?"s":""} from ${esc(POS[sel].l)}`:""}${k!==null?`, you know ${Math.round(k*100)}% of its moves`:""}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="7"/>
-      <text x="${c.x+NW/2}" y="${c.y+NH/2+2}" text-anchor="middle">${esc(POS[p].l)}</text>
-      ${k!==null?`<rect class="kbar-bg" x="${c.x+10}" y="${c.y+NH-8}" width="${NW-20}" height="3.5" rx="1.75"/><rect class="kbar" x="${c.x+10}" y="${c.y+NH-8}" width="${Math.max(0,(NW-20)*k)}" height="3.5" rx="1.75"/>`:""}</g>`});
-  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+6*RH+NH+8}" role="group" aria-label="Position map"><defs>${marks}</defs><g class="edges">${edges}</g>${labels}${nodes}</svg>`;
+  // Readable landscape map: keep nodes at a real touch size and let small screens pan, rather than squeezing 4 columns into 360px.
+  const W=740,NW=156,NH=61,G=15,top=18,RH=112,mx=flowMax(),pos={};
+  ROWS.forEach((row,ri)=>{const tw=row.length*NW+(row.length-1)*G,x0=(W-tw)/2;
+    row.forEach((p,i)=>pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH+33})});
+  pos.sub={x:(W-174)/2,y:top+33,w:174};
+  const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};
+  gs.forEach(g=>cnt[g.d]=g.ts.length);
+  const s=pos[sel],scx=s.x+NW/2,wOf=p=>pos[p].w||NW,showLines=S.ui.mapLines!==false;
+  const sources={top:[],bot:[]};
+  gs.forEach(g=>{const e=pos[g.d];(e.y>s.y?sources.bot:sources.top).push(g)});
+  const sx={};
+  for(const k of ["top","bot"]){const L=sources[k].sort((a,b)=>(pos[a.d].x+wOf(a.d)/2)-(pos[b.d].x+wOf(b.d)/2));
+    const step=Math.min(18,(NW-32)/Math.max(1,L.length-1));
+    L.forEach((g,i)=>sx[g.d]=scx+(i-(L.length-1)/2)*step)}
+  const edges=showLines?gs.map((g,i)=>{const e=pos[g.d],ecx=e.x+wOf(g.d)/2,x1=sx[g.d],sw=2.7;let d;
+    if(e.y<s.y){const y1=s.y-2,y2=e.y+NH+4,k=Math.min(66,(y1-y2)/2);d=`M${x1},${y1} C${x1},${y1-k} ${ecx},${y2+k} ${ecx},${y2}`}
+    else if(e.y>s.y){const y1=s.y+NH+2,y2=e.y-4,k=Math.min(66,(y2-y1)/2);d=`M${x1},${y1} C${x1},${y1+k} ${ecx},${y2-k} ${ecx},${y2}`}
+    else{const y=s.y,lift=29;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-4}`}
+    return `<path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#jf-arrow-${g.dir})"/>`}).join(""):"";
+  const marks=["fin","up","side","down"].map(k=>`<marker id="jf-arrow-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
+  const bandNames=["FINISH",...TIERS],H=top+7*RH+18;
+  const bands=bandNames.map((name,i)=>{const y=top+i*RH;
+    return `<g class="jf-mapband jf-band-${i}"><rect x="8" y="${y}" width="${W-16}" height="102" rx="15"/><text x="28" y="${y+23}">${esc(name)}</text><line x1="28" y1="${y+29}" x2="${W-28}" y2="${y+29}"/></g>`}).join("");
+  let nodes="";
+  Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p],x=c.x,y=c.y;
+    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":gs.length?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submission finishes${n?", "+n+" technique options":""}"><rect x="${x}" y="${y}" width="${w}" height="${NH}" rx="13"/><text x="${x+w/2}" y="${y+36}" text-anchor="middle">SUBMISSION</text></g>`;return}
+    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(gs.length)cls.push("dim");
+    const k=posKnown(p,mx),known=k===null?"":Math.round(k*100)+"% learned";
+    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${p===sel?", selected":n?", "+n+" possible transitions":""}${known?", "+known:""}">
+      <rect class="jf-card" x="${x}" y="${y}" width="${w}" height="${NH}" rx="12"/>
+      <rect class="jf-accent" x="${x+2}" y="${y+13}" width="3" height="28" rx="1.5"/>
+      <text class="jf-cardlabel" x="${x+15}" y="${y+25}">${esc(POS[p].l)}</text>
+      <text class="jf-cardmeta" x="${x+15}" y="${y+44}">${p===sel?"SELECTED":n?n+" CONNECTION"+(n>1?"S":""):known||"TAP TO EXPLORE"}</text>
+      ${k!==null?`<rect class="jf-progressbg" x="${x+12}" y="${y+54}" width="${w-24}" height="2" rx="1"/><rect class="jf-progress" x="${x+12}" y="${y+54}" width="${(w-24)*k}" height="2" rx="1"/>`:""}
+    </g>`});
+  return `<svg class="flowsvg jf-fullsvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="BJJ position map. Scroll horizontally to see all positions and tap one to explore."><defs>${marks}</defs><g class="jf-bands">${bands}</g><g class="edges">${edges}</g><g class="jf-nodes">${nodes}</g></svg>`;
 }
 /* "From here": a transit-map view. Coloured lines leave the position and run down a gutter to each destination, which lists the moves that get you there. */
 function flowFrom(sel){const mx=flowMax(),gs=flowGroups(sel,mx),p=POS[sel];
@@ -4336,8 +4384,7 @@ function viewFlow(){
     <button type="button" data-a="flowmode" data-v="guide" aria-pressed="${(S.ui.flowMode||"guide")==="guide"}">Explore</button>
     <button type="button" data-a="flowmode" data-v="overview" aria-pressed="${S.ui.flowMode==="overview"}">Full map</button>
   </div>
-  ${S.ui.flowMode==="overview"?`<section class="stack jf-overview"><p class="muted small">Positions are ranked from strongest to most vulnerable. Tap a position to see your options.</p><div style="overflow-x:auto">${flowSVG(sel)}</div>
-  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>technique confidence</span></div>`})()}</section>` : flowGuide(sel)}
+  ${S.ui.flowMode==="overview"?`<section class="stack jf-map-shell"><div class="jf-map-head"><div><h2>Position hierarchy</h2><p>Tap any position to follow its connections.</p></div><div class="jf-map-tools"><button type="button" data-a="maplines" aria-pressed="${S.ui.mapLines!==false}">${S.ui.mapLines===false?"Show":"Hide"} paths</button><button type="button" data-a="mapfocus">Centre selection</button></div></div><div class="jf-map-scroller" tabindex="0" aria-label="Scrollable position hierarchy map"><div class="jf-map-canvas">${flowSVG(sel)}</div></div><div class="jf-map-foot"><div class="jf-map-current"><span class="jf-tag">SELECTED</span><strong>${esc(p.L)}</strong><span class="muted">${flowGroups(sel,mx).filter(g=>g.d!==sel).length} destinations</span></div><p class="jf-map-hint">Swipe left or right to explore the hierarchy. Connected positions are highlighted. Select one to see its techniques below.</p></div></section>` : flowGuide(sel)}
   <section class="stack" id="flow-from"><div class="row between"><h2 class="label">From ${esc(p.l.toLowerCase())}</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
   <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
   ${flowFrom(sel)}
@@ -4538,7 +4585,7 @@ function render(){
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
   const fab=v==="home"?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
   app.innerHTML=(v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday())+fab;
-  if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
+  if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines());if(S.ui.flowMode==="overview"&&!S.ui.mapHasFocused){S.ui.mapHasFocused=true;requestAnimationFrame(()=>{const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollLeft=Math.max(0,box.x+box.width/2-m.clientWidth/2)}})}}
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
@@ -4751,8 +4798,10 @@ document.addEventListener("click",e=>{
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
-    case "flowmode": S.ui.flowMode=v==="overview"?"overview":"guide";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
-    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);break} // tapping the map: stay where you are
+    case "maplines": S.ui.mapLines=S.ui.mapLines===false;{const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y)}break;
+    case "mapfocus": {const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollTo({left:Math.max(0,box.x+box.width/2-m.clientWidth/2),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}break;}
+    case "flowmode": S.ui.flowMode=v==="overview"?"overview":"guide";S.ui.mapHasFocused=false;{const y=window.scrollY;render();window.scrollTo(0,y)}break;
+    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;S.ui.flowSel=v;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y);break} // tapping the map: stay where you are
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("learn-map"); break;
     case "filter": S.ui[el.dataset.k]=v; render(); break;
     case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
