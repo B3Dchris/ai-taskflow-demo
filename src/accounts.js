@@ -41,13 +41,15 @@ async function acctInit(){
     if(API.me)await startSync();else if(lsGet("rtb.owner")){if(pendingLogs().size){S.ui.authMode="login";S.ui.deep=true;setTimeout(()=>{authSheet();toast("Sign in to send the sessions saved on this phone to your account.")},50)}else wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone (unless it hasn't reached the account yet)
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
-  S.ui.deep=["signin","start","join","claim","reset"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
+  S.ui.deep=["signin","start","join","claim","reset","claimgym"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
   const rt=qs.get("reset");
   if(rt){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
   const cl=qs.get("claim");if(cl)S.ui.claim=cl;
+  // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
+  const cg=qs.get("claimgym");if(cg){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}if(API.on)setTimeout(()=>claimInit(cg),50);else setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
   // Back from PayFast
   const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay");
   if(paid||bill||ap){try{const k=new URLSearchParams(location.search);k.delete("paid");k.delete("billing");k.delete("autopay");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
@@ -118,20 +120,22 @@ function authSheet(){
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="current-password" minlength="8" required></label>
     <p class="small"><button type="button" class="linkbtn small" data-a="authmode" data-v="forgot">Forgot your password?</button></p></form></div>`,false,{back:"Cancel",act:`<button class="btn primary grow" type="submit" form="authform">Sign in</button>`});
   const tabs=[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
-  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
+  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?"Claim your gym":m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
    ${seg("Account","authmode",tabs,m)}
    ${m==="register"&&S.ui.authGym&&c?`<p class="panel accent small" id="a-joining">Joining <b>${esc(S.ui.authGym)}</b>.${kid?` Signing up for <b>${esc(kid)}</b>.`:""}</p>`:""}
+   ${S.ui.claimGym&&S.ui.claimInfo&&m!=="login"?`<div class="panel accent small" id="a-claiming"><div style="display:flex;flex-direction:row;align-items:center;gap:12px">${S.ui.claimInfo.logo?`<img src="${esc(S.ui.claimInfo.logo)}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#fff;flex:none">`:""}<span>Claiming <b>${esc(S.ui.claimInfo.name)}</b>: ${esc(claimReady(S.ui.claimInfo))} ${S.ui.claimInfo.classes+S.ui.claimInfo.coaches+S.ui.claimInfo.prices>1?"are":"is"} ready. Make your account and it's yours.</span></div></div>`:""}
+   ${m==="login"&&S.ui.claimGym&&S.ui.claimInfo?`<p class="panel accent small" id="a-claiming"><span>Sign in to claim <b>${esc(S.ui.claimInfo.name)}</b>.</span></p>`:""}
    ${m==="login"&&S.ui.claim&&S.ui.authKid?`<p class="panel accent small" id="a-joining">Sign in to add <b>${esc(S.ui.authKid)}</b> to your login.</p>`:""}
-   <p class="muted">${m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
+   <p class="muted">${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?"You'll be its head coach. Free for 3 months, no card needed.":m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
    <form id="authform" class="stack" novalidate>
-    ${m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label><label class="f">Your gym's website (optional)<input id="a-site" name="site" type="text" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="url" placeholder="yourgym.co.za"><span class="small muted">We'll read your timetable, prices, coaches and logo while you look around.</span></label>`:""}
+    ${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required value="${esc(S.ui.claimInfo.name)}"></label>`:m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label><label class="f">Your gym's website (optional)<input id="a-site" name="site" type="text" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="url" placeholder="yourgym.co.za"><span class="small muted">We'll read your timetable, prices, coaches and logo while you look around.</span></label>`:""}
     ${m!=="login"?`<label class="f">${kid?"Your name (parent)":"Your name"}<input id="a-name" name="name" autocomplete="name" required></label>`:""}
     <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required></label>
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
     ${m==="register"?`<label class="f">Gym code (optional)<input id="a-code" name="code" value="${esc(c)}" autocapitalize="characters" placeholder="From your coach"></label><label class="f">WhatsApp number (optional)<input id="a-wa" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="082 123 4567"><span class="small muted">Only your coaches see it.</span></label>`:""}
     ${m==="login"?`<p class="small"><button type="button" class="linkbtn small" data-a="authmode" data-v="forgot">Forgot your password?</button></p>`:""}
     ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Me.</p>`:""}
-   </form></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}</button>`});
+   </form></div>`,false,{act:`<button class="btn primary grow" type="submit" form="authform">${m==="gym"&&S.ui.claimGym?"Claim gym":m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}</button>`});
 }
 function resetSheet(m){
   const sent=S.ui.resetSent;
@@ -155,7 +159,8 @@ async function submitAuth(form){
   const btn=document.querySelector('#sheetbar [type=submit]');if(btn){btn.disabled=true;btn.textContent="One moment…"}
   try{
     const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();
-    const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password"),timezone:tz})
+    const claiming=m==="gym"&&S.ui.claimGym;
+    const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password"),timezone:tz,...(claiming?{prospect:S.ui.claimGym}:{})})
       :m==="register"?await api("POST","/auth/register",S.ui.regBody={name:v("name"),email:v("email"),password:v("password"),code:v("code"),phone:v("phone"),claim:S.ui.claim||undefined})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
     if(j.ask)return askSheet(j.ask);
@@ -165,7 +170,8 @@ async function submitAuth(form){
     // Signed in with a kid's invite link in hand (a parent with a login already): offer to add that kid now.
     if(m==="login"&&S.ui.claim&&S.ui.authKid&&!isCoach())kidAddSheet(S.ui.authKid,S.ui.authGym||j.me.gym&&j.me.gym.name||"your gym");
     if(m==="register"&&j.me.gym&&j.me.role==="student"){API.askPlan=true;loadMembership()}
-    if(m==="gym"){const site=v("site");if(site)await impStart(site);setTimeout(welcomeSheet,250)}
+    if(m==="gym"){if(claiming){S.ui.claimGym=null;S.ui.claimInfo=null;jfTrack("claim_gym",{})}const site=v("site");if(site)await impStart(site);setTimeout(welcomeSheet,250)}
+    else if(m==="login"&&S.ui.claimGym&&API.me&&!API.me.gym)claimSheet();
   }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}
     // A kid's link with an email that has an account already: straight to Sign in, email filled in. Signing in adds the kid.
     if(m==="register"&&S.ui.claim&&/Sign in to add/.test(e.message)){const em=v("email");S.ui.authMode="login";authSheet();const x=document.getElementById("a-email");if(x)x.value=em}}
@@ -248,7 +254,7 @@ function accountSection(){
       :g&&API.me.role!=="coach"?`<details class="more"><summary>Add your kids</summary><div style="padding-top:8px">${kidForm()}</div></details>`:""}
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":fam?`${esc(first(API.me.name))} trains at`:"Training at"} <b>${esc(g.name)}</b>${API.me.role==="coach"?"":` · <button type="button" class="linkbtn small" data-a="leavegym">Leave gym</button>`}</p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
     <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
-    ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>`;
+    ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>${outPanel()}`;
 }
 
 /* ----- next class (students and coaches) ----- */
@@ -1902,7 +1908,7 @@ function brandVars(accent){const c=hex2rgb(accent),W=[255,255,255],B=[12,18,32],
   let light=c,i=0;while(contrast(light,W)<4.5&&i++<20)light=mix(light,[0,0,0],.08);
   let dark=c;i=0;while(contrast(dark,DB)<5&&i++<20)dark=mix(dark,W,.1);
   return {light:{blue:rgb2hex(light),soft:rgb2hex(mix(LB,light,.14)),on:"#ffffff"},dark:{blue:rgb2hex(dark),soft:rgb2hex(mix([21,26,34],dark,.22)),on:rgb2hex(B)}}}
-function applyBrand(){let st=document.getElementById("brandcss");const a=API.me&&API.me.gym&&API.me.gym.brand&&API.me.gym.brand.accent;
+function applyBrand(){let st=document.getElementById("brandcss");const a=API.me&&API.me.gym?API.me.gym.brand&&API.me.gym.brand.accent:!API.me&&S.ui.claimGym&&S.ui.claimInfo&&S.ui.claimInfo.accent; // claiming a gym: its colour already
   if(!a){if(st)st.remove();return}
   if(!st){st=document.createElement("style");st.id="brandcss";document.head.appendChild(st)}
   const v=brandVars(a),L=`--blue:${v.light.blue};--blue-soft:${v.light.soft};--on-blue:${v.light.on}`,D=`--blue:${v.dark.blue};--blue-soft:${v.dark.soft};--on-blue:${v.dark.on}`;
@@ -1975,3 +1981,86 @@ function contactSheet(){const c=S.ui.cpick;if(!c)return;S.ui.sheet={k:"cpick"};S
 function cpToggle(i){const c=S.ui.cpick;if(!c)return;c.pick.has(i)?c.pick.delete(i):c.pick.add(i);const l=document.getElementById("cp-list");if(l)l.innerHTML=contactRows();
   const b=document.querySelector('#sheetbar [data-a="cpdone"]');if(b){const n=c.pick.size;b.disabled=!n;b.textContent=n?`Add ${n} to the list`:"Tick the people to add"}}
 function cpDone(){const c=S.ui.cpick;if(!c)return;const ppl=[...c.pick].map(i=>c.all[i]);S.ui.cpick=null;bulkSheet(((S.ui.bulk||{}).people||[]).concat(intake(ppl)))}
+
+/* ============ OUTREACH (JitsFlow's own team: JF_ADMIN_EMAILS) ============ */
+/* Paste gym websites; each becomes a private preview of that gym on JitsFlow (/try/<token>) with an email to its owner.
+   Tucked into Me (and the coach's Gym tab) for admins only; the server refuses everyone else. */
+const OUT={list:null,cur:null,timer:null,draft:""};
+function outPanel(){if(!API.me||!API.me.admin)return "";
+  return `<section class="panel stack" id="outpanel"><h2 class="label">Outreach · JitsFlow team</h2><p class="small">Show gym owners their own gym on JitsFlow: paste their websites, check the email, send.</p><button class="btn" style="justify-self:start" data-a="outopen">Open Outreach</button></section>`}
+const outPill=p=>{const c=p.status==="claimed"?" ok":p.status==="optedout"||p.blocked||(p.importError&&!p.counts.classes&&!p.counts.coaches)?" bad":p.views?" ok":p.status==="sent"?" due":" plain";return `<span class="pill${c}">${esc(p.label)}</span>`};
+const outRows=()=>!OUT.list?`<p class="small muted">Loading…</p>`:!OUT.list.length?`<p class="small muted">No gyms yet. Paste a website above.</p>`
+  :OUT.list.map(p=>`<button class="outrow" data-a="outpro" data-v="${esc(p.id)}"><span class="outname"><b>${esc(p.name)}</b><span class="small muted">${p.name!==p.domain?esc(p.domain):""}${p.ownerEmail?`${p.name!==p.domain?" · ":""}${esc(p.ownerEmail)}`:""}</span></span>${outPill(p)}</button>`).join("");
+// Imports run on the server one after another: while any is running, look again every few seconds.
+async function outLoad(){try{const j=await api("GET","/admin/prospects");OUT.list=j.prospects;OUT.mail=j.mail;OUT.days=j.followupDays}catch(e){toast(e.message)}
+  const el=document.getElementById("outlist");if(el)el.innerHTML=outRows();
+  if(OUT.cur){const p=(OUT.list||[]).find(x=>x.id===OUT.cur.prospect.id);if(p&&OUT.cur.prospect.importing&&!p.importing&&S.ui.sheet&&S.ui.sheet.k==="outpro")outPro(p.id,true)}
+  clearTimeout(OUT.timer);if((OUT.list||[]).some(p=>p.importing))OUT.timer=setTimeout(()=>{if(S.ui.sheet&&/^out/.test(S.ui.sheet.k))outLoad()},3000)}
+function outreachSheet(){S.ui.sheet={k:"outreach"};S.ui.stack=[];OUT.cur=null;const ta=document.getElementById("out-text");if(ta)OUT.draft=ta.value;
+  openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg"><h1>Outreach</h1>
+    <p class="muted">Paste gym websites. We read each one (a minute or two each) and make a private preview of that gym on JitsFlow, with an email to its owner.</p>
+    <form id="outform" class="stack" novalidate><label class="f">Websites, one per line<textarea id="out-text" name="text" rows="4" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="jpbuys.com/academy, JP Buys, jp@example.com">${esc(OUT.draft)}</textarea>
+      <span class="small muted">Add the owner's name and email after a comma if you have them.</span></label><button class="btn primary" style="justify-self:start" type="submit">Add gyms</button></form>
+    ${OUT.mail===false?`<p class="insight warn small">Email isn't switched on here. Use Copy email to send it from your own inbox.</p>`:""}
+    <div class="stack" style="gap:0"><h2 class="label">Gyms</h2><div id="outlist" class="outlist">${outRows()}</div></div></div>`,true);
+  outLoad()}
+async function outAdd(f){const ta=f.querySelector("[name=text]");if(!ta.value.trim()){toast("Paste at least one website.");return}
+  try{const j=await api("POST","/admin/prospects",{text:ta.value},formKey(f));delete f.dataset.key;OUT.draft="";ta.value="";
+    toast(`${j.added.length?`Reading ${j.added.length} website${j.added.length===1?"":"s"}.`:"Nothing added."}${j.skipped.length?` Skipped: ${j.skipped.map(s=>s.why).join(" ")}`:""}`);await outLoad()}catch(e){toast(e.message)}}
+const outDay=d=>d?new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short"}):"";
+async function outPro(id,keep){try{const j=await api("GET","/admin/prospects/"+encodeURIComponent(id));OUT.cur=j;if(!keep)OUT.key=null}catch(e){toast(e.message);return}
+  const p=OUT.cur.prospect,e=OUT.cur.email,gone=p.status==="optedout";S.ui.sheet={k:"outpro",id};S.ui.stack=["list","pro"];
+  const found=`${p.counts.classes} class${p.counts.classes===1?"":"es"}, ${p.counts.coaches} coach${p.counts.coaches===1?"":"es"}, ${p.counts.rates} price${p.counts.rates===1?"":"s"}`;
+  const sent=p.sentAt?`Sent to ${esc(p.sentTo||p.ownerEmail)} on ${outDay(p.sentAt)}.`:"";
+  const seen=p.views?` Opened ${p.views} time${p.views===1?"":"s"}, last on ${outDay(p.lastViewedAt)}.`:p.sentAt?" Not opened yet.":"";
+  const fu=p.followupSentAt?`Follow-up sent on ${outDay(p.followupSentAt)}.`:p.followupReady?"":p.followupFrom?`A follow-up can go from ${outDay(p.followupFrom)} if they haven't claimed it.`:"";
+  const canSend=!gone&&p.status==="draft"&&!p.importing&&!p.blocked&&!!e;
+  openSheet(`${sheetHead("Outreach")}<div class="stack-lg">
+    <div class="row" style="flex-wrap:nowrap;gap:12px">${p.logo?`<img class="outlogo" src="${esc(p.logo)}" alt="">`:""}<div style="min-width:0"><h1 style="overflow-wrap:anywhere">${esc(p.name)}</h1><p class="small muted" style="margin:0">${esc(p.domain)} · ${outPill(p)}</p></div></div>
+    ${p.importing?`<p class="insight small">Reading ${esc(p.domain)}… This page updates when it's done.</p>`:""}
+    ${p.importError?`<p class="insight warn small">${esc(p.importError)}</p>`:""}
+    ${p.blocked&&!gone?`<p class="insight warn small">This gym or address is on the do-not-contact list. It can't be emailed.</p>`:""}
+    ${gone?`<p class="insight small">They opted out on ${outDay(p.optedOutAt||p.createdAt)||"their page"}. What we read is deleted and the gym won't be contacted again.</p>`:`
+    ${p.status==="claimed"?`<p class="insight good small"><b>Claimed on ${outDay(p.claimedAt)}.</b> They're on JitsFlow now.</p>`:""}
+    ${!p.importing?`<p class="small">Found on their website: ${found}${p.accent?` · <span style="white-space:nowrap"><span class="outsw" style="background:${esc(p.accent)}"></span> their colour</span>`:" · no colour of its own (JitsFlow blue)"}</p>`:""}
+    ${sent||seen||fu?`<p class="small">${sent}${seen} ${fu}</p>`:""}
+    ${e?`<div class="row"><a class="btn" href="${esc(p.previewUrl)}" target="_blank" rel="noopener">Open preview</a><a class="btn" href="/api/admin/prospects/${esc(p.id)}/email" target="_blank" rel="noopener">View email</a></div>`:""}
+    ${p.status!=="claimed"?`<form id="outedit" class="panel stack" novalidate><h2 class="label">The email</h2>
+      <label class="f">Owner's name<input name="ownerName" autocomplete="off" value="${esc(p.ownerName)}" placeholder="So the email says Hi JP"></label>
+      <label class="f">Owner's email<input name="ownerEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off" value="${esc(p.ownerEmail)}" placeholder="From their website or Instagram"></label>
+      <label class="f">Your own first line (optional)<textarea name="personalLine" rows="2" maxlength="300" placeholder="Saw your team won gold at the Gauteng Open: congrats!">${esc(p.personalLine)}</textarea></label>
+      <label class="f">Subject<input name="subject" maxlength="150" value="${esc(p.subject||(e&&e.subject)||"")}"></label>
+      <p class="small muted">From: ${esc(OUT.cur.from)} · replies go to ${esc(OUT.cur.replyTo)}</p>
+      <button class="btn" style="justify-self:start" type="submit">Save</button></form>`:""}
+    ${e?`<div class="row"><button class="btn" data-a="outcopy" data-v="html">Copy email HTML</button><button class="btn" data-a="outcopy" data-v="text">Copy plain text</button></div>`:""}
+    ${p.followupReady&&OUT.cur.followup&&!p.blocked?`<div class="panel stack"><h2 class="label">Follow-up</h2><p class="small">One short reminder, ${OUT.days||5} days or more after the first email. There's only ever one.</p><div class="row"><button class="btn primary" data-a="outfollow">Send follow-up</button><a class="btn" href="/api/admin/prospects/${esc(p.id)}/email?followup=1" target="_blank" rel="noopener">View it</a></div></div>`:""}`}
+    <div class="row">${!gone&&p.status!=="claimed"?`<button class="btn" data-a="outre">Re-import</button>`:""}<button class="btn danger" data-a="outdel">${OUT.delAsk===p.id?"Tap again to delete":"Delete"}</button></div></div>`,keep,
+    {act:canSend?`<button class="btn primary grow" data-a="outsend">Send email</button>`:`<span class="grow small muted" style="align-self:center;text-align:center">${p.status==="sent"?"Sent":p.status==="claimed"?"Claimed":gone?"Opted out":p.importing?"Reading website…":p.blocked?"Do not contact":""}</span>`});
+  if(p.importing)outLoad()}
+function outForm(){const f=document.getElementById("outedit");if(!f)return null;const v=n=>f.querySelector(`[name=${n}]`).value;return {ownerName:v("ownerName"),ownerEmail:v("ownerEmail").trim(),personalLine:v("personalLine"),subject:v("subject")}}
+async function outSave(quiet){const b=outForm();if(!b)return true;try{await api("PATCH","/admin/prospects/"+OUT.cur.prospect.id,b);if(!quiet){toast("Saved.");await outPro(OUT.cur.prospect.id,true)}return true}catch(e){toast(e.message);return false}}
+// Send and the follow-up carry one key per opened gym (x-jf-key), and the server sends each once, so a double tap sends one email.
+async function outSend(kind,el){const p=OUT.cur.prospect;if(kind==="send"){const b=outForm();if(b&&!b.ownerEmail){toast("Add the owner's email first.");return}if(!(await outSave(true)))return}
+  if(el){el.disabled=true;el.textContent="Sending…"}OUT.key=OUT.key||Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  try{await api("POST",`/admin/prospects/${p.id}/${kind==="send"?"send":"followup"}`,{},OUT.key+kind);OUT.key=null;toast(kind==="send"?"Sent. You'll see here when they open it.":"Follow-up sent.");await outLoad();await outPro(p.id,true)}
+  catch(e){toast(e.message);if(el){el.disabled=false;el.textContent=kind==="send"?"Send":"Send follow-up"}}}
+async function outAct(a){const p=OUT.cur&&OUT.cur.prospect;if(!p)return;
+  if(a==="outcopy-html"||a==="outcopy-text"){const e=OUT.cur.email;if(e)copyText(a==="outcopy-html"?e.html:`Subject: ${e.subject}\n\n${e.text}`);return}
+  if(a==="outre"){try{await api("POST",`/admin/prospects/${p.id}/reimport`,{});toast("Reading their website again.");await outLoad();await outPro(p.id,true)}catch(e){toast(e.message)}return}
+  if(a==="outdel"){if(OUT.delAsk!==p.id){OUT.delAsk=p.id;outPro(p.id,true);return}OUT.delAsk=null;try{await api("DELETE","/admin/prospects/"+p.id);OUT.list=(OUT.list||[]).filter(x=>x.id!==p.id);toast("Deleted.");outreachSheet()}catch(e){toast(e.message)}}}
+
+/* ============ CLAIMING A GYM FROM ITS PREVIEW (/try/<token> → /app/?claimgym=<token>) ============ */
+async function claimInit(tok){S.ui.claimGym=tok;
+  let j;try{j=await api("GET","/prospects/"+encodeURIComponent(tok))}catch(e){S.ui.claimGym=null;toast(e.message);return}
+  if(j.gym.claimed){S.ui.claimGym=null;toast(`${j.gym.name} has been claimed already. If it's yours, sign in.`);if(!API.me){S.ui.authMode="login";authSheet()}return}
+  S.ui.claimInfo=j.gym;applyBrand();
+  if(!API.me){S.ui.authMode="gym";authSheet()}else if(!API.me.gym)claimSheet();
+  else{S.ui.claimGym=null;toast(`You're already in ${API.me.gym.name}. To claim ${j.gym.name}, sign out and start it with another email.`)}}
+const claimReady=g=>{const n=[g.classes?`${g.classes} class${g.classes===1?"":"es"}`:"",g.coaches?`${g.coaches} coach${g.coaches===1?"":"es"}`:"",g.prices?`${g.prices} price${g.prices===1?"":"s"}`:""].filter(Boolean);return n.length?n.join(", ").replace(/, ([^,]*)$/," and $1")+" from your website":"your logo and details"};
+function claimSheet(){const g=S.ui.claimInfo;if(!g)return;S.ui.sheet={k:"claim"};S.ui.stack=[];
+  openSheet(`${sheetHead("Claim your gym")}<div class="stack-lg"><h1>Claim ${esc(g.name)}?</h1><p>You'll be its head coach, with ${esc(claimReady(g))} already in. Free for 3 months.</p></div>`,false,
+    {act:`<button class="btn primary grow" data-a="claimgo">Claim ${esc(g.name)}</button>`})}
+async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…"}
+  try{const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();const j=await api("POST","/me/claim-gym",{token:S.ui.claimGym,timezone:tz});
+    S.ui.claimGym=null;S.ui.claimInfo=null;API.me=j.me;setCoachMode("manage");hideSheet();coachGo("home");jfTrack("claim_gym",{});setTimeout(welcomeSheet,250)}
+  catch(e){toast(e.message);if(el){el.disabled=false;el.textContent="Claim gym"}}}

@@ -369,6 +369,47 @@ create index if not exists autopay_charges_open on autopay_charges(status) where
 alter table autopay_charges add column if not exists alloc jsonb;
 -- the last day the autopay job ran for a gym (once a day each)
 alter table gyms add column if not exists autopay_day text;
+-- Outreach: a private preview of a gym on JitsFlow, made from its public website, and the email to its owner (platform admins only).
+-- token: the preview's address (/try/<token>), unguessable. logo: stored like gyms.logo. accent: the website's colour (null: none found).
+create table if not exists prospects(
+  id bigserial primary key,
+  token text unique not null,
+  website text not null,
+  domain text not null,
+  name text not null default '',
+  profile jsonb not null default '{}',
+  logo bytea,
+  logo_type text,
+  accent text,
+  method text,
+  owner_name text not null default '',
+  owner_email text,
+  personal_line text not null default '',
+  subject text not null default '',
+  status text not null default 'draft' check (status in ('draft','sent','claimed','optedout')),
+  import_state text not null default 'running' check (import_state in ('running','done','failed')),
+  import_error text,
+  imported_at timestamptz,
+  views int not null default 0,
+  last_viewed_at timestamptz,
+  sent_at timestamptz,
+  sent_to text,
+  sent_by bigint references users(id) on delete set null,
+  followup_sent_at timestamptz,
+  claimed_at timestamptz,
+  claimed_gym_id bigint references gyms(id) on delete set null,
+  opted_out_at timestamptz,
+  created_by bigint references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists prospects_domain on prospects(domain);
+-- Never contact these again: a website's domain ("not my gym", or opted out) and an owner's email address (opted out).
+create table if not exists outreach_dnc(
+  kind text not null check (kind in ('domain','email')),
+  value text not null,
+  created_at timestamptz not null default now(),
+  primary key(kind, value)
+);
 `;
 
 // Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.

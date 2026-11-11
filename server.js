@@ -153,6 +153,8 @@ async function main() {
     roll(); setInterval(roll, 3600e3).unref();
     const api = makeApi(pool, { secureCookies: process.env.NODE_ENV === "production", build: BUILD });
     app.use("/api", gzipJson, api);
+    // Private previews of gyms on JitsFlow, for their owners (made by platform admins: see backend/outreach.js).
+    app.use("/try", require("./backend/outreach").makePublic(pool));
     // Every 15 minutes: automatic fee reminders (on each gym's due day and 7 days later) and "we miss you" notes. Safe on several servers.
     const jobs = () => api.jobs.run().catch((e) => console.warn("jobs:", e.message));
     jobs(); setInterval(jobs, 15 * 60e3).unref();

@@ -404,6 +404,9 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .mrow-main{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:2px}
 .mrow-main .nm{font-weight:600}.mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.mrow-side .btn{min-height:36px}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.outlist{display:grid}.outrow{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 2px;color:inherit;font:inherit;cursor:pointer;min-height:52px}
+.outname{display:grid;min-width:0}.outname b,.outname span{overflow-wrap:anywhere}.outrow .pill{flex:none}.outlogo{width:56px;height:56px;object-fit:contain;border-radius:10px;background:#fff;border:1px solid var(--line);flex:none}
+.pill.plain{background:var(--surface-2,var(--line));color:var(--ink)}.outsw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;border:1px solid var(--line)}
 .notices .notice{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--line);padding-left:10px}.notices .notice.cancelled{border-color:var(--bad)}.notices .notice.moved{border-color:var(--warn)}.notices .notice.new b::after{content:" · new";color:var(--blue);font-size:12px}
 .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;border-top:1px solid var(--line);padding-top:8px}.kv:first-child{border-top:0;padding-top:0}
 .kv>.small:first-child{grid-column:1/-1}.kv .mono{font-size:17px;word-break:break-all}.kv>span:last-child:empty{display:none}
@@ -2107,6 +2110,7 @@ function hideSheet(){hideTerm();const sh=document.getElementById("sheet");sh.hid
 function goBack(){const k=S.ui.sheet&&S.ui.sheet.k;
   if(k==="auth"&&REAUTH)return reauthDone(false);
   if(k==="onboard"||(k==="how"&&S.ui.sheet.step==="pick")){S.ui.fromHow=false;P().settings.onboarded=true;saveProgress();closeSheet();return}
+  if(k==="outpro"){OUT.delAsk=null;return outreachSheet()}
   if(k==="how"||(k==="auth"&&S.ui.fromHow&&!API.me))return howSheet(k==="auth"&&S.ui.authMode==="register"?"gym":"pick");
 const st=S.ui.stack||[];if(S.ui.sheet&&S.ui.sheet.k==="tech"&&st.length>1){st.pop();techSheet(st[st.length-1],true)}else closeSheet()}
 function closeSheet(){const o=S.ui.opener;S.ui.opener=null;hideSheet();render();if(API.stale)reloadIfIdle();const y=S.ui.backY||0;window.scrollTo(0,y);if(!y){try{document.getElementById("app").scrollIntoView({block:"start"})}catch(e){}}
@@ -2353,6 +2357,13 @@ document.addEventListener("click",e=>{
     case "student": studentSheet(v);break;
     case "paynew": paySheet(v||null);break;
     case "copy": copyText(v);break;
+    case "outopen": outreachSheet();break;
+    case "outpro": outPro(v);break;
+    case "outsend": outSend("send",el);break;
+    case "outfollow": outSend("followup",el);break;
+    case "outcopy": outAct("outcopy-"+v);break;
+    case "outre": case "outdel": outAct(a);break;
+    case "claimgo": claimGo(el);break;
     case "copytext": { const t=document.getElementById(v);if(t)copyText(t.value);break }
     case "wakind": S.ui.wa={kind:v};render();setTimeout(()=>{const p=document.getElementById("wa-panel");if(p)p.scrollIntoView({block:"start"})},0);break;
     case "theme": setTheme(v);render();toast(v==="system"?"Following your phone's light or dark setting.":v==="dark"?"Dark mode on.":"Light mode on.");break;
@@ -2567,7 +2578,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
-const FORMS=["authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform","kidform"];
+const FORMS=["outform","outedit","authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform","kidform"];
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
@@ -2582,6 +2593,8 @@ document.addEventListener("submit",async e=>{
 async function submitForm(fid,f){
   if(fid==="logform")return submitLog();
   if(fid==="kidform")return addKid(f);
+  if(fid==="outform")return outAdd(f);
+  if(fid==="outedit")return outSave();
   if(fid==="authform")return submitAuth(f);
   if(fid==="howcode")return howCode(f.querySelector("[name=code]").value.trim().toUpperCase());
   if(fid==="classform")return submitClass(f);

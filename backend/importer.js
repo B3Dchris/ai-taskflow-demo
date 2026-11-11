@@ -10,6 +10,7 @@ const net = require("net");
 const http = require("http");
 const https = require("https");
 const zlib = require("zlib");
+const brand = require("./brand");
 
 const UA = "Mozilla/5.0 (compatible; JitsFlowImporter/1.0; +https://jitsflow-app.onrender.com)";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -327,7 +328,12 @@ function plainTimetable(pages) {
       let coach = "";
       const cm = title.match(/\b(?:with|coach|instructor|sensei|prof(?:essor)?)\.?\s+([A-Z][\w'’.-]+(?:\s+[A-Z][\w'’.-]+)?)/);
       if (cm) { coach = cm[1].replace(/^(coach|prof(essor)?|sensei|instructor)\.?\s+/i, ""); title = title.replace(cm[0], " "); }
+      // A record from the page's data ("category: BOXING · title: BOXING LADIES GENTS · …"): its title or name is the class.
+      const named = line.match(/(?:^|·\s*)(?:title|name|class\s*name)\s*:\s*([^·|]+)/i);
+      if (named && /·/.test(line)) title = named[1];
       title = clip(title, 80) || "Class";
+      // ALL CAPS from a page builder reads as shouting: "BOXING LADIES GENTS" → "Boxing Ladies Gents" (short words like BJJ stay).
+      if (title.length > 5 && title === title.toUpperCase() && /[A-Z]{4}/.test(title)) title = title.toLowerCase().replace(/\b([a-z])([a-z]*)/g, (m, a, b, i) => (/^(to|of|and|the|for|on|in|at|by|with|vs)$/.test(m) && i > 0 ? m : m.length <= 3 && !/^(no|gi|kid|day|age|all|men|pro|fit|new|top|big|art|box|run|our|you|mat|gym|fun|bag|pad|tai|chi|one|two)$/.test(m) ? m.toUpperCase() : a.toUpperCase() + b));
       for (const d of days) {
         const k = d + start + title.toLowerCase(); if (key.has(k)) continue; key.add(k);
         rows.push({ day: DAYS[d], start, end, title, coach, level: "" });
@@ -630,8 +636,9 @@ function sniffImage(buf) {
   if (buf.length > 4 && buf[0] === 0 && buf[1] === 0 && buf[2] === 1 && buf[3] === 0) return "image/x-icon";
   return null; // SVG and anything else is refused: it could carry script.
 }
-async function fetchImage(url, maxBytes = 400000) {
-  const r = await safeGet(url, { maxBytes: maxBytes + 1, timeoutMs: 8000, accept: "image/png,image/jpeg,image/webp,image/gif,image/*;q=0.8" });
+// accept: what to ask the image host for. Email needs PNG or JPEG (Outlook shows no WebP), and many hosts send WebP only when asked.
+async function fetchImage(url, maxBytes = 400000, accept = "image/png,image/jpeg,image/webp,image/gif,image/*;q=0.8") {
+  const r = await safeGet(url, { maxBytes: maxBytes + 1, timeoutMs: 8000, accept });
   if (r.status !== 200 || r.truncated || r.body.length > maxBytes) return null;
   const type = sniffImage(r.body);
   return type ? { type, body: r.body } : null;
@@ -672,6 +679,8 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
   const home = await openFirst(rawUrl, "Enter your gym's website address.");
   if (!/html|xml|text\/plain/.test(home.type) && home.type) throw new ImportError("That address isn't a web page.");
   const pages = await crawl(parsePage(home.body.toString("utf8"), home.url), { maxPages, budgetMs: 40000 });
+  // The gym's colour, from the home page and its stylesheets: read alongside everything below, in its own few seconds.
+  const brandP = brand.fromSite(home.body.toString("utf8"), home.url, { get: safeGet }).catch(() => ({ accent: brand.JF_ACCENT, source: "default" }));
 
   const plain = cleanProfile(plainRead(pages));
   const logos = logoCandidates(pages);
@@ -712,6 +721,7 @@ async function importSite(rawUrl, { client, maxPages = Number(process.env.JF_IMP
   const previews = [];
   const imgs = await Promise.all(order.slice(0, 6).map((l) => fetchImage(l.url, 300000).catch(() => null)));
   order.slice(0, 6).forEach((l, i) => { const img = imgs[i]; if (!img || previews.length >= 3) return; const d = img.body.toString("base64"); if (!previews.some((x) => x.dataUrl.endsWith(d))) previews.push({ url: l.url, why: l.why, dataUrl: `data:${img.type};base64,${d}` }); });
+  profile.brand = await brandP;
   return { profile, logos: previews, method, aiError, dropped, pages: pages.map((p) => ({ url: p.url, title: p.title.slice(0, 120) })) };
 }
 

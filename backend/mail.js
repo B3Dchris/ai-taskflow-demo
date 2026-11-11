@@ -61,6 +61,22 @@ async function send({ to, subject, title, paras, button, preheader, replyTo }) {
   if (!r.ok) { const body = await r.text().catch(() => ""); throw new Error(`Resend ${r.status}: ${body.slice(0, 200)}`); }
   return { sent: true, id: (await r.json().catch(() => ({}))).id };
 }
+// An email made elsewhere (the outreach email to a gym owner): its own HTML and text, sent from a person ("Thabo from JitsFlow")
+// at the usual address, with replies going to that person. headers: extra headers such as List-Unsubscribe.
+async function sendRaw({ fromName, to, replyTo, subject, html, text, headers }) {
+  if (!mailOn()) return { sent: false, reason: "off" };
+  if (!to) return { sent: false, reason: "no address" };
+  const addr = ((FROM().match(/<([^<>\s]+@[^<>\s]+)>/) || [])[1] || FROM()).trim();
+  const name = String(fromName || "").replace(/["<>\\\r\n]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const r = await fetch(API_URL(), {
+    method: "POST",
+    headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({ from: name ? `"${name}" <${addr}>` : FROM(), to: [to], reply_to: replyTo || REPLY_TO(), subject, html, text, ...(headers ? { headers } : {}) }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!r.ok) { const body = await r.text().catch(() => ""); throw new Error(`Resend ${r.status}: ${body.slice(0, 200)}`); }
+  return { sent: true, id: (await r.json().catch(() => ({}))).id };
+}
 // Fire-and-forget for emails nobody waits on (welcome mails). Failures are logged, never shown.
 const sendLater = (msg) => { send(msg).catch((e) => console.warn("mail:", e.message)); };
 
@@ -157,6 +173,10 @@ const templates = {
   headCoach: (name, gym, by) => ({ subject: "You're now the head coach", title: "You're the head coach",
     paras: [`Hi ${name},`, `${by} made you the head coach of ${gym} on JitsFlow.`, "You now see the Money tab: fees, payments, bank details and PayFast. Payment emails come to you."],
     button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }),
+  // To the platform admins: a gym claimed its preview (see backend/outreach.js).
+  prospectClaimed: (gym, who, email, site) => ({ subject: `${gym} claimed JitsFlow`, title: `${gym} claimed JitsFlow`,
+    paras: [`${who} (${email}) claimed ${gym} from its preview${site ? ` (${site})` : ""}. They're its head coach now, with the timetable, coaches and prices from the preview.`, "Say hello: a quick welcome from a person goes a long way."],
+    button: { label: "Open Outreach", url: appUrl() + "/app/#me" } }),
   // Bank or PayFast details changed (to the head coach), or the coaches changed (to every active coach). Fixed subjects.
   gymChange: (kind, name, who, detail) => { const t = {
       bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],
@@ -167,4 +187,4 @@ const templates = {
       button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
 };
 
-module.exports = { send, sendLater, templates, mailOn, appUrl, layout };
+module.exports = { send, sendRaw, sendLater, templates, mailOn, appUrl, layout };

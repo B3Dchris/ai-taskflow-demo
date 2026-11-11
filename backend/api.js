@@ -11,6 +11,8 @@ const ai = require("./ai");
 const assistant = require("./assistant");
 const people = require("./people");
 const payfast = require("./payfast");
+const brand = require("./brand");
+const outreach = require("./outreach");
 const { LONGEST, rollTimetable } = require("./db");
 
 const COOKIE = "jf_s";
@@ -162,6 +164,8 @@ function makeApi(pool, { secureCookies, build }) {
   // A coach the gym has marked inactive (or removed) has no coach access.
   const isCoach = (u) => !!u && u.role === "coach" && !!u.gym_id && u.active !== false;
   const needCoach = (req) => { const u = needUser(req); if (!isCoach(u)) fail(403, "Only coaches can do that."); return u; };
+  // Platform admins: the people whose email is in JF_ADMIN_EMAILS. Everyone else gets 403.
+  const needAdmin = (req) => { const u = needUser(req); if (!outreach.isAdmin(loginOf(u).email)) fail(403, "Not allowed."); return u; };
 
   async function validTz(tz) { tz = clean(tz, 64); if (!tz) return null; try { await q("select now() at time zone $1", [tz]); return tz; } catch (e) { return null; } }
   async function startSession(res, userId) {
@@ -192,6 +196,7 @@ function makeApi(pool, { secureCookies, build }) {
     if (u.gym_id) { const b = u.brand || {}; out.gym.brand = /^#[0-9a-f]{6}$/i.test(b.accent || "") ? { accent: b.accent } : {}; if (isCoach(u)) out.gym.setup = u.setup || {}; }
     if (isCoach(u)) Object.assign(out.gym, { studentCode: u.student_code, coachCode: u.coach_code, head: isHead(u), headCoach: u.head_id ? { id: String(u.head_id), name: u.head_name } : null });
     if (isHead(u)) out.gym.monthlyFeeCents = u.gym_fee;
+    if (outreach.isAdmin(loginOf(u).email)) out.admin = true; // JitsFlow's own people (JF_ADMIN_EMAILS): the Outreach screen
     return out;
   }
   // Sign-ups and reset emails: every attempt counts, per address and per email.
@@ -249,24 +254,30 @@ function makeApi(pool, { secureCookies, build }) {
   const familyIds = (u) => (Array.isArray(u.family) ? u.family : []).map((f) => String(f.id));
 
   // ---------- accounts ----------
+  // prospect: the token of a gym's preview page (/try/<token>): the gym starts with what the preview showed (see claimProspect).
   api.post("/auth/start-gym", wrap(async (req, res) => {
     const b = req.body || {};
     checkSignIn(req, clean(b.email, 254).toLowerCase());
-    const gymName = clean(b.gym, 100);
-    if (!gymName) fail(400, "Enter your gym's name.");
     const perIp = "gym:" + clientIp(req); // new gyms per address per day (each one sends a welcome email)
     if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email hello@jitsflow.com.");
-    const tz = (await validTz(b.timezone)) || "Africa/Johannesburg";
-    const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz]);
-    let id;
-    try { id = await newUser({ ...b, role: "coach", gymId: g.rows[0].id }); }
-    catch (e) { await q("delete from gyms where id=$1", [g.rows[0].id]); throw e; }
-    await q("update gyms set head_coach_id=$1 where id=$2", [id, g.rows[0].id]);
+    const pro = b.prospect ? await takeProspect(b.prospect) : null;
+    let id, gymId;
+    try {
+      const gymName = clean(b.gym, 100) || (pro ? clean(outreach.nameOf(pro), 100) : "");
+      if (!gymName) fail(400, "Enter your gym's name.");
+      const tz = (await validTz(b.timezone)) || "Africa/Johannesburg";
+      const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz]);
+      gymId = g.rows[0].id;
+      try { id = await newUser({ ...b, role: "coach", gymId }); }
+      catch (e) { await q("delete from gyms where id=$1", [gymId]); throw e; }
+    } catch (e) { if (pro) await untakeProspect(pro); throw e; }
+    await q("update gyms set head_coach_id=$1 where id=$2", [id, gymId]);
     limited(perIp, Infinity, 24 * 3600e3);
     await startSession(res, id);
+    if (pro) await claimProspect(await loadMe(id), pro);
     const m = await loadMe(id);
     mail.sendLater({ to: m.email, ...mail.templates.welcomeCoach(m.name, m.gym_name, mail.appUrl() + "/app/?join=" + m.student_code) });
-    res.status(201).json({ me: me(m) });
+    res.status(201).json({ me: me(m), ...(pro ? { claimed: true } : {}) });
   }));
 
   api.post("/auth/register", wrap(async (req, res) => {
@@ -1958,7 +1969,14 @@ function makeApi(pool, { secureCookies, build }) {
   // keep what's saved now, and rows added since stay. calendar: false (unticked on the import review) keeps the new rows of this save
   // off the calendar; rows already there keep going. plans: true (head coach) makes the website's membership prices into plans.
   api.put("/coach/gym/profile", wrap(async (req, res) => {
-    const u = needCoach(req), b = req.body || {};
+    const u = needCoach(req);
+    const out = await applyProfile(u, req.body || {});
+    res.json({ me: me(await reMe(u)), ...out });
+  }));
+  // Saving a gym's details from a website import (or typed in): the coach's own review above, and a gym claimed from a preview
+  // (claimProspect), which passes the logo it already has (logo: { body, type }) instead of a logoUrl to download.
+  async function applyProfile(u, b, { logo } = {}) {
+    const site = b.profile && b.profile.brand && b.profile.brand.source === "site" && brand.isHex(b.profile.brand.accent) ? b.profile.brand.accent.toLowerCase() : null;
     const profile = importer.cleanProfile(b.profile);
     const name = profile.name || u.gym_name;
     let fee = u.gym_fee;
@@ -1970,14 +1988,17 @@ function makeApi(pool, { secureCookies, build }) {
     const classesAdded = await rollTimetable(pool, u.gym_id);
     const plansAdded = b.plans === true && isHead(u) ? await plansFromRates(u.gym_id, profile.rates) : 0;
     let logoNote = null;
-    if (b.logoUrl === null) await q("update gyms set logo=null, logo_type=null, logo_v=null where id=$1", [u.gym_id]);
+    if (logo && logo.body) await q("update gyms set logo=$1, logo_type=$2, logo_v=$3 where id=$4", [logo.body, logo.type, sha(logo.body.toString("base64")).slice(0, 10), u.gym_id]);
+    else if (b.logoUrl === null) await q("update gyms set logo=null, logo_type=null, logo_v=null where id=$1", [u.gym_id]);
     else if (typeof b.logoUrl === "string" && b.logoUrl) {
       let img = null; try { img = await importer.fetchImage(clean(b.logoUrl, 600)); } catch (e) { img = null; }
       if (img) await q("update gyms set logo=$1, logo_type=$2, logo_v=$3 where id=$4", [img.body, img.type, sha(img.body.toString("base64")).slice(0, 10), u.gym_id]);
       else logoNote = "Couldn't download that logo. Everything else is saved.";
     }
-    res.json({ me: me(await reMe(u)), feeSet: !u.gym_fee && fee ? fee : 0, logoNote, classesAdded, plansAdded, moved: tt.moved, held: tt.held });
-  }));
+    // The colour read from the website becomes the app's colour, unless the coach picked one already.
+    if (site) await q("update gyms set brand = brand || $1 where id=$2 and coalesce(brand->>'accent','')=''", [{ accent: site }, u.gym_id]);
+    return { feeSet: !u.gym_fee && fee ? fee : 0, logoNote, classesAdded, plansAdded, moved: tt.moved, held: tt.held };
+  }
   // ---------- the weekly timetable ----------
   const ttId = () => crypto.randomBytes(5).toString("hex");
   const TT_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -3258,6 +3279,144 @@ function makeApi(pool, { secureCookies, build }) {
     const row = await addProof({ u: { id: null, currency: g.currency, timezone: g.timezone }, gymId: g.id, read, source: "email", files, text,
       from: (parsed.from && parsed.from.text) || String(req.headers["x-jf-from"] || ""), subject: parsed.subject || "", method: "eft" });
     res.status(201).json({ ok: true, id: String(row.id) });
+  }));
+
+  // ---------- outreach: previews of gyms made from their websites, emailed to their owners (platform admins) ----------
+  // A gym claimed from its preview page. takeProspect marks it claimed first (one claim per token, even two at once); the gym is
+  // then made by the caller and filled in by claimProspect through applyProfile, the same save a coach's own website import uses.
+  async function takeProspect(token) {
+    const t = clean(token, 64);
+    const r = outreach.TOKEN_RE.test(t) ? await q(`update prospects set status='claimed', claimed_at=now() where token=$1 and claimed_at is null and status<>'optedout'
+      and import_state<>'running' and name<>'' returning *`, [t]) : { rows: [] };
+    if (r.rows[0]) return r.rows[0];
+    const x = outreach.TOKEN_RE.test(t) ? (await q("select claimed_at, status from prospects where token=$1", [t])).rows[0] : null;
+    if (x && x.claimed_at) fail(409, "This gym has been claimed already. If it's yours, sign in.");
+    fail(404, "That preview link isn't valid any more. Start your gym from scratch instead: it only takes a minute.");
+  }
+  const untakeProspect = (p) => q("update prospects set status=$2, claimed_at=null where id=$1 and claimed_gym_id is null", [p.id, p.sent_at ? "sent" : "draft"]);
+  async function claimProspect(u, p) {
+    await q("update prospects set claimed_gym_id=$2 where id=$1", [p.id, u.gym_id]);
+    try {
+      const profile = { ...(p.profile || {}), ...(p.accent ? { brand: { accent: p.accent, source: "site" } } : {}) };
+      await applyProfile(u, { profile, plans: true }, { logo: p.logo ? { body: p.logo, type: p.logo_type } : null });
+    } catch (e) { console.error("claim:", e.message); }
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.prospectClaimed(u.gym_name || outreach.nameOf(p), u.name, u.email, p.domain) });
+  }
+  // The claim screen's first look at a preview: the gym's name, logo and colour, and what's ready.
+  api.get("/prospects/:token", wrap(async (req, res) => {
+    if (limited("pro:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
+    const t = clean(req.params.token, 64), p = outreach.TOKEN_RE.test(t) ? (await q(`select ${outreach.LIST_COLS}, profile from prospects where token=$1`, [t])).rows[0] : null;
+    if (!p || p.status === "optedout" || p.import_state === "running" || !p.name) fail(404, "That preview link isn't valid any more.");
+    if (p.claimed_at) return res.json({ gym: { name: outreach.nameOf(p), claimed: true } });
+    const pr = p.profile || {};
+    res.json({ gym: { name: outreach.nameOf(p), logo: p.has_logo ? `/try/${p.token}/logo` : null, accent: p.accent || null, classes: (pr.timetable || []).length, coaches: (pr.coaches || []).length, prices: (pr.rates || []).length } });
+  }));
+  // Signed in with no gym of their own, they claim it straight away and become its head coach.
+  api.post("/me/claim-gym", wrap(async (req, res) => {
+    const u = needUser(req), lg = loginOf(u);
+    if (lg.gym_id || u.gym_id) fail(409, `You're already in ${u.gym_name || "a gym"}. To claim this gym, sign out and start it with another email.`);
+    const pro = await takeProspect(req.body?.token);
+    let gymId;
+    try {
+      const g = await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id",
+        [clean(outreach.nameOf(pro), 100), code(), code(), (await validTz(req.body?.timezone)) || "Africa/Johannesburg"]);
+      gymId = g.rows[0].id;
+      await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [gymId, lg.id]);
+      await q("update gyms set head_coach_id=$1 where id=$2", [lg.id, gymId]);
+    } catch (e) { if (gymId) await q("delete from gyms where id=$1", [gymId]).catch(() => {}); await untakeProspect(pro); throw e; }
+    await claimProspect(await loadMe(lg.id), pro);
+    res.status(201).json({ me: me(await loginMe(lg.id)), claimed: true });
+  }));
+
+  const outQueue = outreach.makeQueue(q, (m) => console.warn(m));
+  // Imports a restart cut short start again.
+  q("select id from prospects where import_state='running' order by id").then((r) => r.rows.forEach((x) => outQueue.add(x.id))).catch(() => {});
+  const proRow = async (id) => (await q(`select ${outreach.LIST_COLS} from prospects where id=$1`, [intOr(id, 0)])).rows[0] || fail(404, "Not found.");
+  const proFull = async (id) => (await q("select * from prospects where id=$1", [intOr(id, 0)])).rows[0] || fail(404, "Not found.");
+  const proOut = async (r) => outreach.prospectOut(r, { base: "", blocked: r.status !== "optedout" && (await outreach.blocked(q, r.domain, r.owner_email)) });
+  const adminOf = (u) => { const lg = loginOf(u); return { name: lg.name, email: lg.email }; };
+  api.get("/admin/prospects", wrap(async (req, res) => {
+    needAdmin(req);
+    const rows = (await q(`select ${outreach.LIST_COLS} from prospects order by created_at desc, id desc limit 300`)).rows;
+    res.json({ prospects: await Promise.all(rows.map(proOut)), mail: mail.mailOn(), followupDays: outreach.FOLLOWUP_DAYS });
+  }));
+  // Paste websites (one per line, optionally with the owner's name and email): each becomes a preview, read one at a time.
+  api.post("/admin/prospects", once(async (req, res) => {
+    const u = needAdmin(req), lines = outreach.parseLines(clean(req.body?.text, 20000)).slice(0, 25);
+    if (!lines.length) fail(400, "Paste at least one website.");
+    const added = [], skipped = [];
+    for (const l of lines) {
+      const tries = importer.siteCandidates(l.url), site = tries[0], domain = site ? outreach.domainOf(site) : "";
+      if (!site || !domain) { skipped.push({ line: l.line, why: "That doesn't look like a website." }); continue; }
+      const email = isEmail(l.email) ? l.email : null;
+      if (await outreach.blocked(q, domain, email)) { skipped.push({ line: l.line, why: `${domain} asked not to be contacted.` }); continue; }
+      if ((await q("select 1 from prospects where domain=$1 and status<>'optedout'", [domain])).rows[0]) { skipped.push({ line: l.line, why: `${domain} is on the list already.` }); continue; }
+      if (limited("out-imp:" + u.id, 60, 60 * 60e3)) { skipped.push({ line: l.line, why: "That's a lot of imports for one hour. Try the rest later." }); continue; }
+      const r = await q("insert into prospects(token,website,domain,owner_name,owner_email,created_by) values($1,$2,$3,$4,$5,$6) returning id", [outreach.newToken(), site, domain, clean(l.name, 80), email, u.id]);
+      added.push(String(r.rows[0].id)); outQueue.add(r.rows[0].id);
+    }
+    res.status(201).json({ added, skipped });
+  }));
+  api.get("/admin/prospects/:id", wrap(async (req, res) => {
+    const u = needAdmin(req), r = await proRow(req.params.id), full = await proFull(req.params.id);
+    const email = r.status === "optedout" || !r.name ? null : outreach.renderEmail(full, { admin: adminOf(u), base: mail.appUrl() });
+    const fu = email && r.status === "sent" && !r.followup_sent_at ? outreach.renderEmail(full, { admin: adminOf(u), base: mail.appUrl(), followup: true }) : null;
+    res.json({ prospect: await proOut(r), email, followup: fu, from: `${adminOf(u).name} from JitsFlow`, replyTo: adminOf(u).email });
+  }));
+  // The email as the owner would see it, for the admin to look at in a browser tab.
+  api.get("/admin/prospects/:id/email", wrap(async (req, res) => {
+    const u = needAdmin(req), p = await proFull(req.params.id);
+    if (p.status === "optedout" || !p.name) fail(404, "Nothing to show.");
+    res.type("html").send(outreach.renderEmail(p, { admin: adminOf(u), base: mail.appUrl(), followup: req.query.followup === "1" }).html);
+  }));
+  api.patch("/admin/prospects/:id", wrap(async (req, res) => {
+    needAdmin(req); const b = req.body || {}, p = await proRow(req.params.id);
+    if (p.status === "optedout") fail(409, "This gym opted out.");
+    const email = b.ownerEmail !== undefined ? clean(b.ownerEmail, 254).toLowerCase() : p.owner_email || "";
+    if (email && !isEmail(email)) fail(400, "That email address doesn't look right.");
+    const subject = b.subject !== undefined ? clean(b.subject, 150) : p.subject;
+    await q("update prospects set owner_name=$2, owner_email=$3, personal_line=$4, subject=$5 where id=$1", [p.id, b.ownerName !== undefined ? clean(b.ownerName, 80) : p.owner_name,
+      email || null, b.personalLine !== undefined ? clean(String(b.personalLine).replace(/\s+/g, " "), 300) : p.personal_line, subject || outreach.defaultSubject(await proFull(p.id))]);
+    res.json({ prospect: await proOut(await proRow(p.id)) });
+  }));
+  // Send (or the one follow-up). Each is claimed in the database before it goes, so a double tap or two admins at once send it once.
+  const sendOne = (followup) => once(async (req, res) => {
+    const u = needAdmin(req), p = await proFull(req.params.id), a = adminOf(u);
+    if (p.status === "claimed") fail(409, "This gym has claimed its page already.");
+    if (p.status === "optedout") fail(409, "This gym opted out. It won't be contacted.");
+    if (p.import_state === "running" || !p.name) fail(409, "Still reading their website. Try again in a minute.");
+    if (!p.owner_email || !isEmail(p.owner_email)) fail(400, "Add the owner's email first.");
+    if (await outreach.blocked(q, p.domain, p.owner_email)) fail(409, "This gym asked not to be contacted.");
+    if (!mail.mailOn()) fail(503, "Email isn't switched on. Copy the email and send it yourself.");
+    const took = followup
+      ? await q(`update prospects set followup_sent_at=now() where id=$1 and status='sent' and followup_sent_at is null and sent_at <= now() - ($2 || ' days')::interval returning *`, [p.id, String(outreach.FOLLOWUP_DAYS)])
+      : await q("update prospects set status='sent', sent_at=now(), sent_to=owner_email, sent_by=$2 where id=$1 and sent_at is null and status='draft' returning *", [p.id, u.id]);
+    if (!took.rows[0]) fail(409, followup ? (p.followup_sent_at ? "The follow-up has gone already. One is enough." : p.status !== "sent" ? "Send the first email before a follow-up." : `A follow-up can go ${outreach.FOLLOWUP_DAYS} days after the first email.`) : "This email has gone already. A follow-up can go after " + outreach.FOLLOWUP_DAYS + " days.");
+    const row = took.rows[0], e = outreach.renderEmail(row, { admin: a, base: mail.appUrl(), followup }), out = outreach.optoutUrl(row, mail.appUrl());
+    try {
+      await mail.sendRaw({ fromName: `${a.name} from JitsFlow`, to: followup ? row.sent_to || row.owner_email : row.owner_email, replyTo: a.email, subject: e.subject, html: e.html, text: e.text,
+        headers: { "List-Unsubscribe": `<${out}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+    } catch (err) {
+      console.warn("outreach send:", err.message);
+      await q(followup ? "update prospects set followup_sent_at=null where id=$1" : "update prospects set status='draft', sent_at=null, sent_to=null, sent_by=null where id=$1", [row.id]);
+      fail(502, "Couldn't send it just now. Try again in a minute.");
+    }
+    res.json({ prospect: await proOut(await proRow(row.id)) });
+  });
+  api.post("/admin/prospects/:id/send", sendOne(false));
+  api.post("/admin/prospects/:id/followup", sendOne(true));
+  api.post("/admin/prospects/:id/reimport", wrap(async (req, res) => {
+    const u = needAdmin(req), p = await proRow(req.params.id);
+    if (p.status === "optedout" || p.status === "claimed") fail(409, p.status === "claimed" ? "This gym has claimed its page already." : "This gym opted out.");
+    if (p.import_state === "running") return res.json({ prospect: await proOut(p) });
+    if (limited("out-imp:" + u.id, 60, 60 * 60e3)) fail(429, "That's a lot of imports for one hour. Try again later.");
+    await q("update prospects set import_state='running', import_error=null where id=$1", [p.id]); outQueue.add(p.id);
+    res.json({ prospect: await proOut(await proRow(p.id)) });
+  }));
+  api.delete("/admin/prospects/:id", wrap(async (req, res) => {
+    needAdmin(req); const p = await proRow(req.params.id);
+    await q("delete from prospects where id=$1", [p.id]);
+    res.json({ ok: true });
   }));
 
   api.use((req, res) => res.status(404).json({ error: "Not found." }));
