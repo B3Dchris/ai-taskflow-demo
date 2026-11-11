@@ -86,6 +86,7 @@ const FIRST_KID = (l) => `(select k.id from users k where k.parent_id=${l} and k
 const AS_USER = `coalesce((select k.id from users k where k.id=s.as_user and (k.id=s.user_id or (k.parent_id=s.user_id and k.gym_id is not null))), ${FIRST_KID("s.user_id")}, s.user_id)`;
 // The email that reaches someone: their own, or (a kid linked to a parent's login) their parent's.
 // Joining with a code of a gym that outreach built and nobody has claimed yet.
+const TEAM_CLAIM = "The JitsFlow team can't claim a gym from its link: only its owner can.";
 const NOT_YET = "This gym isn't on JitsFlow yet. Ask your coach for the invite link once they've set it up.";
 const EMAIL = (a) => `coalesce(${a}.email, (select pe.email from users pe where pe.id=${a}.parent_id))`;
 
@@ -303,6 +304,8 @@ function makeApi(pool, { secureCookies, build }) {
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     const perIp = "gym:" + clientIp(req); // new gyms per address per day (each one sends a welcome email)
     if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email hello@jitsflow.com.");
+    // The team looks at gyms through their links: a team address never claims one (only the owner does).
+    if (b.prospect && outreach.isAdmin(clean(b.email, 254))) fail(403, TEAM_CLAIM);
     const pro = b.prospect ? await takeProspect(b.prospect) : null;
     let id, gymId;
     try {
@@ -3433,6 +3436,7 @@ function makeApi(pool, { secureCookies, build }) {
   // Signed in with no gym of their own, they claim it straight away and become its head coach.
   api.post("/me/claim-gym", wrap(async (req, res) => {
     const u = needUser(req), lg = loginOf(u);
+    if (outreach.isAdmin(lg.email)) fail(403, TEAM_CLAIM);
     if (lg.gym_id || u.gym_id) fail(409, `You're already in ${u.gym_name || "a gym"}. To claim this gym, sign out and start it with another email.`);
     const pro = await takeProspect(req.body?.token);
     try {

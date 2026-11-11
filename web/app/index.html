@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="1331d89926";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="99bb5cdc30";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -7569,17 +7569,21 @@ function pvExit(){if(!API.preview)return;API.preview=null;API.me=API.real||null;
   COACH.roster=COACH.classes=COACH.payments=COACH.insights=COACH.money=null;COACH.packs=COACH.payInfo=COACH.pf=COACH.bill=COACH.beta=COACH.imp=undefined;}
 // A change in the preview: the claim (only straight after a tap, so a background refresh never pops it up).
 function pvAsk(){const ua=navigator.userActivation;if(!ua||ua.isActive)previewClaim()}
+// The JitsFlow team opening a gym's link ("Open their gym"): a look only. Only the owner can claim it (the server refuses the team too).
+const pvTeam=()=>!!(API.preview&&API.real&&API.real.admin);
 function previewClaim(){if(!API.preview)return;const g=API.preview.info,r=API.real;
+  if(pvTeam())return toast("Team preview: only the owner can claim this gym. Nothing here can be changed.");
   if(r&&!r.gym)return claimSheet();
   if(r&&r.gym){S.ui.sheet={k:"claim"};S.ui.stack=[];return openSheet(`${sheetHead("Claim your gym")}<div class="stack-lg"><h1>Claim ${esc(g.name)}</h1><p>You're signed in as <b>${esc(r.name)}</b>, who's in ${esc(r.gym.name)}. To claim ${esc(g.name)}, sign out and claim it with the gym's own email.</p></div>`,false,{act:`<button class="btn primary grow" data-a="pvsignout">Sign out and claim</button>`})}
   S.ui.authMode="gym";authSheet()}
 function pvBar(){const p=API.preview;if(!p)return "";const g=p.info;
+  if(pvTeam())return `<div class="pvbar team" id="pvbar" role="region" aria-label="Team preview of ${esc(g.name)}"><span><b>Team preview</b> — only the owner can claim ${esc(g.name)}.</span></div>`;
   return `<div class="pvbar" id="pvbar" role="region" aria-label="Preview of ${esc(g.name)}"><span>This is <b>${esc(g.name)}</b>, built from your website.</span><button class="btn primary sm" data-a="pvclaim">Claim it free →</button></div>`}
 // Home's first card in the preview: what JitsFlow does for them, in short.
 function pvHome(){const p=API.preview;if(!p)return "";const g=p.info;
   return `<section class="panel stack pvcard"><h2 class="label">Your gym, already set up</h2><p><b>Run ${esc(g.name)} from your phone</b>: less admin for you, and room to grow. ${esc(claimReady(g).replace(/^./,c=>c.toUpperCase()))} ${g.classes+g.coaches+g.prices>1?"are":"is"} in already.</p>
     <ul class="pvlist">${(g.pitch||[]).slice(0,3).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
-    <p class="small"><b>No obligation.</b> ${esc(g.deal||"")}</p><button class="btn primary" data-a="pvclaim">Claim ${esc(g.name)} free</button>
+    <p class="small"><b>No obligation.</b> ${esc(g.deal||"")}</p>${pvTeam()?`<p class="small muted">Team preview: only the owner can claim it.</p>`:`<button class="btn primary" data-a="pvclaim">Claim ${esc(g.name)} free</button>`}
     <p class="small muted">Look around: this is your real gym, ready to go. Nothing you tap here changes anything until it's yours.</p></section>`}
 document.addEventListener("click",e=>{if(!API.preview)return;const el=e.target.closest("[data-a],[data-wa],a.wa,a[href*='wa.me'],input[type=file],label");if(!el)return;
   if(el.matches("label")&&!el.querySelector("input[type=file]"))return;

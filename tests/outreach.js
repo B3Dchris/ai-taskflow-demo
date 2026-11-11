@@ -334,6 +334,12 @@ function startSite() {
     r = await anon("POST", "/auth/start-gym", { gym: "", name: "X", email: "kim@gym.test", password: "xpass12345", prospect: P4.token });
     const p4 = (await pool.query("select status, claimed_at, gym_id from prospects where id=$1", [P4.id])).rows[0];
     ok(r.s === 409 && p4.claimed_at === null && (await gym(p4.gym_id)).claim, "a sign-up that fails (email taken) leaves the gym built and claimable");
+    // The team looks at gyms through their links, but never claims one: only the owner does.
+    r = await admin("POST", "/me/claim-gym", { token: P4.token });
+    ok(r.s === 403 && /only its owner can/.test(r.j.error) && !(await admin("GET", "/me")).j.me.gym, "an admin signed in can't claim a gym from its link");
+    r = await anon("POST", "/auth/start-gym", { gym: "", name: "Second Admin", email: "Second@JitsFlow.test", password: "secondpass1", prospect: P4.token });
+    const p4b = (await pool.query("select status, claimed_at, gym_id from prospects where id=$1", [P4.id])).rows[0];
+    ok(r.s === 403 && /only its owner can/.test(r.j.error) && p4b.claimed_at === null && (await gym(p4b.gym_id)).claim && !(await pool.query("select 1 from users where email='second@jitsflow.test'")).rows[0], "nor sign up with a team address to claim it; the gym stays claimable");
     // The wrong person claimed it: the team unclaims it, or gives it to the right account.
     r = await admin("POST", `/admin/gyms/${gD}/unclaim`, {});
     const Dg = await gym(gD), leeMe = (await lee("GET", "/me")).j.me;
@@ -431,6 +437,14 @@ function startSite() {
     // The preview on a phone: the real app, their gym, the claim bar; a change asks them to claim.
     const F = await mk("Fifth Gym", "fifth.test", { rates: [{ name: "Unlimited", price: 800, currency: "ZAR", period: "month" }] }); await pool.query("update prospects set owner_email='owner@fifth.test' where id=$1", [F.id]);
     await admin("POST", `/admin/prospects/${F.id}/build`, {}); const gF = (await row(F.id)).gym_id;
+    // The team's "Open their gym": a team preview with no way to claim it.
+    { const p = await phone(admin.cookie()); await p.goto(`${BASE}/app/?gym=${F.token}`); await wait(2500);
+      const bar = await ev(p, () => (document.getElementById("pvbar") || {}).innerText || "");
+      ok(/Team preview — only the owner can claim Fifth Gym/.test(bar) && await ev(p, () => !document.querySelector('[data-a="pvclaim"]') && /Your gym, already set up/i.test(document.getElementById("app").innerText)), "an admin opening the link sees a team preview with no Claim button: " + JSON.stringify(bar));
+      await p.tap('nav.tabs [data-v="coach-gym"]'); await wait(1200); await p.tap('[data-a="copy"]'); await wait(400);
+      ok(await ev(p, () => document.getElementById("sheet").hidden && !!API.preview && API.real && API.real.admin), "a change there opens no claim (just a note), and the admin stays signed in as themselves");
+      ok((await row(F.id)).status === "draft" && (await gym(gF)).claim && (await row(F.id)).views === 0 && !p.errs.length, "nothing claimed, the team's view isn't counted, no script errors " + p.errs.join(", "));
+      await p.context().close(); }
     { const p = await phone(); const beacon = p.waitForRequest((q) => q.url().endsWith(`/try/${F.token}/view`) && q.method() === "POST", { timeout: 6000 }).catch(() => null);
       await p.goto(`${BASE}/try/${F.token}`); await wait(2500); const got = await beacon; await wait(400);
       ok(await ev(p, () => !!API.preview && !location.search && location.pathname === "/app/"), "the link opens the app and leaves the address bar clean");
