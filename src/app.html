@@ -578,7 +578,7 @@ details.more[open]>summary::after{transform:rotate(225deg) translate(-2px,-2px)}
 .empty{border-radius:var(--r-md)}
 
 /* buttons: one primary, a quiet secondary, a ghost */
-.btn{border-radius:12px;background:var(--surface-2);border-color:transparent;color:var(--ink);transition:transform .12s var(--ease),background-color .15s,box-shadow .15s}
+.btn{border-radius:12px;background:var(--surface-2);border-color:var(--edge);color:var(--ink);transition:transform .12s var(--ease),background-color .15s,box-shadow .15s}
 a.btn{color:var(--ink)}
 .panel .btn:not(.primary):not(.danger):not(.wa),.sheet .btn:not(.primary):not(.danger):not(.wa){background:var(--surface-2)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary);box-shadow:0 1px 2px rgba(13,20,36,.12),0 4px 14px rgba(13,20,36,.12)}
@@ -593,7 +593,7 @@ a.btn{color:var(--ink)}
 :focus-visible{outline-color:var(--blue)}
 
 /* chips and segments: selected = ink, not a heavy blue block */
-.chip{border-color:var(--line);background:var(--surface);min-height:40px;padding:6px 14px;font-weight:600}
+.chip{border-color:var(--line);background:var(--surface);min-height:44px;padding:6px 14px;font-weight:600}
 .chip[aria-pressed="true"],.seg button[aria-pressed="true"],.seg2 button[aria-pressed="true"],.seg3 button[aria-pressed="true"],.seg4 button[aria-pressed="true"],.seg5 button[aria-pressed="true"],.seg6 button[aria-pressed="true"],.seg7 button[aria-pressed="true"],.segrow button[aria-pressed="true"],.segpills button[aria-pressed="true"],.tchip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
 .seg button,.seg2 button,.seg3 button,.seg4 button,.seg5 button,.seg6 button,.seg7 button,.segrow button,.tchip,.segpills button{border-color:var(--line)}
 .beltchips button[aria-pressed="true"],.levels button[aria-pressed="true"],.qrlevels button[aria-pressed="true"]{border-color:var(--primary);background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--primary)}
@@ -639,7 +639,7 @@ nav.tabs button svg{margin-top:4px}
 .shead h1{color:#fff;font-size:36px}
 .shead .sheettitle{margin:0;min-height:0;color:var(--ink-2)}
 .shead .fromto{gap:6px}
-.shead .posbtn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#EEF2FA;min-height:36px;border-radius:10px}
+.shead .posbtn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#EEF2FA;min-height:44px;border-radius:10px}
 .shead>.ytm,.shead>.ytbox,.shead>.posfig,.shead>.posimg,.shead>.photo,.shead>.vid,.shead>.photoempty{border-radius:0;margin:0}
 .shead>.posfig{background:rgba(255,255,255,.04);padding:12px 16px 4px}
 .shead>.posfig svg{max-height:200px}
@@ -654,6 +654,11 @@ nav.tabs button svg{margin-top:4px}
 .ytposter::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.08) 50%,transparent 70%);background-size:220% 100%;animation:shimmer 1.6s linear infinite}
 .ytposter>.posfig,.ytposter>.posimg,.ytposter>.photo{position:absolute;inset:0;margin:0;padding:12% 14%;background:none;border-radius:0;display:grid;place-items:center}
 .ytposter>.posfig svg{max-height:100%;opacity:.55}
+.ytposter figcaption{display:none}
+.thumb img.ytthumb{position:absolute;inset:0}
+.chain button{min-height:44px;border-color:var(--line)}
+.tdef .linkbtn,.routesteps .linkbtn{min-height:44px;display:inline-flex;align-items:center}
+h1[tabindex="-1"]:focus,h2[tabindex="-1"]:focus,.sheettitle[tabindex="-1"]:focus{outline:none}
 .ytposter>.posimg img,.ytposter>.photo img{width:100%;height:100%;object-fit:cover;aspect-ratio:auto;border-radius:0;opacity:.7}
 .ytposter>.photo,.ytposter>.posimg{padding:0}
 .ytposter .ytthumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
@@ -699,14 +704,15 @@ nav.tabs button svg{margin-top:4px}
 .poshero .ptop .eyebrow b{color:#fff;font-weight:700}
 .poshero .ymedia>.posfig{background:rgba(255,255,255,.05);border-radius:var(--r-md);padding:10px}
 .poshero .ymedia>.posfig svg{max-height:170px}
+.poshero .pfig{flex:none;width:96px}.poshero .pfig>*{margin:0;padding:4px;border-radius:12px;background:rgba(255,255,255,.07)}.poshero .pfig svg{max-height:64px}.poshero .pfig img{border-radius:10px;aspect-ratio:4/3}
 .poshero .flip{align-self:flex-start;min-height:44px;font-size:14px}
 .crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .crumbs ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 2px;flex:1;min-width:0}
 .crumbs li{display:flex;align-items:center;gap:2px;min-width:0}
 .crumbs li+li::before{content:"›";color:var(--ink-2);font-size:16px;padding:0 4px}
-.crumbs ol button{border:0;background:rgba(255,255,255,.08);color:var(--ink);border-radius:999px;padding:0 12px;min-height:36px;font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs ol button{border:0;background:rgba(255,255,255,.08);color:var(--ink);border-radius:999px;padding:0 14px;min-height:44px;font-size:14px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crumbs ol button[aria-current="step"]{background:#fff;color:#0B1530}
-.crumbs .fin button,.crumbs .fin button[aria-current="step"]{background:var(--tap);color:#fff}
+.crumbs .fin button,.crumbs .fin button[aria-current="step"]{background:var(--tap);color:#0B1530}
 .crumbs .reset{border:0;background:none;color:var(--ink-2);font-weight:700;font-size:13px;min-height:44px;padding:0 4px;text-decoration:underline;text-underline-offset:3px}
 .crumbhead{display:flex;justify-content:space-between;align-items:center;flex-basis:100%;margin-bottom:-6px}
 .branchhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-inline:2px}
@@ -728,8 +734,7 @@ nav.tabs button svg{margin-top:4px}
 .bgo span{display:flex;flex-direction:column;min-width:0;line-height:1.2}
 .bgo small{font-size:12px;color:var(--ink-2);font-weight:600}
 .bgo b{font-size:16px;overflow-wrap:anywhere}
-.bgo i{font-style:normal;flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--bc);color:#fff;font-weight:800;font-size:18px;transition:transform .2s var(--spring)}
-.branch.d-up .bgo i{color:#fff}
+.bgo i{font-style:normal;flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--bc);color:var(--bg);font-weight:800;font-size:18px;transition:transform .2s var(--spring)}
 .bgo:hover i,.bgo:active i{transform:translateX(3px)}
 .bgo.tapgo b{color:var(--tap)}
 .finish{display:flex;flex-direction:column;gap:6px;border-radius:var(--r-lg);padding:14px 16px;background:var(--tap-soft);border:1px solid color-mix(in srgb,var(--tap) 30%,transparent)}
@@ -1392,11 +1397,12 @@ const ytThumb=(id,q)=>`https://i.ytimg.com/vi/${encodeURIComponent(id)}/${q||"hq
 /* Videos: poster first, never a black box.
    Website: YouTube's own player, lazy-loaded (one tap plays it on iPhone, no autoplay), over a soft poster that shows while it loads.
    Data saver or a 2G connection: just the poster; tapping it loads the player. Offline: the poster says the video needs internet.
-   claude.ai or a file opened from the phone (YouTube won't play embedded there): the poster opens the video on YouTube. */
+   claude.ai, a preview frame or a file opened from the phone (YouTube won't play embedded there): the poster opens the video on YouTube.
+   If the thumbnail can't load there, the position diagram underneath stays as the poster. */
 const netSlow=()=>{const c=navigator.connection;return !!(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))};
-const canEmbed=()=>!inClaude()&&/^https?:$/.test(location.protocol);
+const canEmbed=()=>{if(inClaude()||!/^https?:$/.test(location.protocol))return false;try{return window.top===window.self}catch(e){return false}}; // not inside someone else's frame (a preview) either
 function ytMedia(key,label,poster){const v=vidOf(key);if(!v)return "";const title=v.title||label;
-  const img=inClaude()?"":`<img class="ytthumb" src="${ytThumb(v.v,"hqdefault")}" alt="" loading="lazy" decoding="async">`;
+  const img=`<img class="ytthumb" src="${ytThumb(v.v,"hqdefault")}" alt="" loading="lazy" decoding="async">`;
   const back=`<span class="ytposter" aria-hidden="true">${poster||""}${img}<span class="ytshade"></span></span>`;
   const meta=`<span class="ytmeta"><b>${esc(title)}</b>${v.channel?`<small>${esc(v.channel)}${v.nogi===false?" · gi video":""}</small>`:""}</span>`;
   const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(title)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
@@ -1407,6 +1413,8 @@ function ytMedia(key,label,poster){const v=vidOf(key);if(!v)return "";const titl
 const ytPlayer=(key,label)=>ytMedia(key,label,"");
 // a thumbnail that can't load (offline, blocked) just goes, leaving the soft poster underneath
 document.addEventListener("error",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("ytthumb"))t.remove()},true);
+// back online: swap "Video needs internet" posters for the real thing
+addEventListener("online",()=>{if(!document.querySelector(".ytm.off"))return;if(S.ui.sheet&&S.ui.sheet.k==="tech")techSheet(S.ui.sheet.id,true);else if(!S.ui.sheet)render()});
 const inClaude=()=>!!(window.claude&&window.claude.use);
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
@@ -2076,7 +2084,7 @@ const POSQ={standing:"hand fighting stance",fhl_top:"front headlock attacks",fhl
 const ytName=n=>n.split(":")[0].replace(/\(.*?\)/g,"").replace(/\s+/g," ").trim();
 const ytURL=q=>"https://www.youtube.com/results?search_query="+encodeURIComponent(q+" no gi bjj");
 const ytBtn=(q,label)=>`<a class="btn yt" href="${ytURL(q)}" target="_blank" rel="noopener"><span class="ytplay" aria-hidden="true">▶</span>${esc(label||"Watch on YouTube")}</a>`;
-function techThumb(t){const v=(P().videos||{})[t.id];const ti=!v&&techImg(t.id);if(ti)return `<span class="thumb"><img src="${ti}" alt="" loading="lazy">${vidOf(t.id)?`<span class="play">▶</span>`:""}</span>`;const yv=!inClaude()&&!v&&vidOf(t.id);if(yv)return `<span class="thumb"><img src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
+function techThumb(t){const v=(P().videos||{})[t.id];const ti=!v&&techImg(t.id);if(ti)return `<span class="thumb"><img src="${ti}" alt="" loading="lazy">${vidOf(t.id)?`<span class="play">▶</span>`:""}</span>`;const yv=!v&&vidOf(t.id);if(yv)return `<span class="thumb">${posPic(t.f,"xs")}<img class="ytthumb" src="${ytThumb(yv.v,"mqdefault")}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v&&v.th)return `<span class="thumb"><img src="/_blob/${esc(v.th)}" alt="" loading="lazy"><span class="play">▶</span></span>`;if(v)return `<span class="thumb">${posPic(t.f,"xs")}<span class="play">▶</span></span>`;return posImg(t.f)?`<span class="thumb"><img src="${posImg(t.f)}" alt="" loading="lazy"></span>`:`<span class="thumb">${posPic(t.f,"xs")}</span>`}
 function tRow(t,extra){const b=beltOf(t);return `<button class="trow" data-a="open" data-v="${t.id}">${techThumb(t)}<span><span class="nm">${esc(t.n)}</span><span class="meta">${cat(t.c)}<span>${esc(POS[t.f].l)} → ${t.t==="sub"?"Tap":esc(POS[t.t].l)}</span>${b!=="blue"?`<span class="btag ${b}">${BELT[b].to}</span>`:""}${extra||""}</span></span>${stripes(lv(t.id))}</button>`}
 function beltSVG(pct,belt=goal()){
   const cur={blue:"white",purple:"blue",brown:"purple",black:"brown"}[belt];
@@ -2396,7 +2404,7 @@ function chainStage(sel,mx){const tr=trailNow(),cur=tr[tr.length-1],p=POS[cur.p]
   const media=vid?ytMedia("pos:"+cur.p,p.L,posVisual(cur.p)):posVisual(cur.p);
   const head=last?(cur.fin?`After ${esc(last.n)}`:`Via ${esc(last.n)}`):esc(TIERS[p.r]);
   const hero=`<section class="panel poshero dk" id="poshero" aria-labelledby="poshero-t">${crumbs}
-    <div class="ptop"><div class="hero-t"><span class="eyebrow">${head}</span><h2 id="poshero-t" tabindex="-1">${esc(p.L)}</h2></div></div>
+    <div class="ptop"><div class="hero-t"><span class="eyebrow">${head}</span><h2 id="poshero-t" tabindex="-1">${esc(p.L)}</h2></div>${vid?`<div class="pfig">${posVisual(cur.p,"xs")}</div>`:""}</div>
     <p class="pgo">${gl(p.g)}</p><div class="ymedia">${media}</div>
     ${OPP[cur.p]&&OPP[cur.p]!==cur.p?`<button class="btn flip" data-a="pos" data-v="${OPP[cur.p]}">See it from the other side: ${esc(POS[OPP[cur.p]].l)}</button>`:""}</section>`;
   const fin=cur.fin?`<div class="finish" role="status"><b>Tap</b><span>${esc(last.n)} finishes it.${br.reacts?" If they defend, switch:":" Start over, or step back along your path."}</span></div>`:"";

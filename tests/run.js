@@ -98,8 +98,8 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('.branch .bmove').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'tapping the move opens its steps and video');await p.tap('#sheetbar .back');
   ok(await ev(()=>S.ui.trail.length===2&&!!document.querySelector('.crumbs')),'closing the technique keeps your place in the chain');
   await p.locator('.chainstage .bgo').first().tap();await p.waitForTimeout(500);ok(await ev(()=>S.ui.trail.length===3),'and you can keep playing');
-  await ev(()=>history.back());await p.waitForTimeout(600);
-  ok(await ev(()=>S.ui.trail.length===2&&location.hash==='#learn-map'),"the phone's Back button steps back along the chain");
+  if(MODE==='local'){await ev(()=>history.back());await p.waitForTimeout(600); // claude.ai pages don't use the browser history
+    ok(await ev(()=>S.ui.trail.length===2&&location.hash==='#learn-map'),"the phone's Back button steps back along the chain");}
   await overflow('chain explorer');
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
   await p.tap('nav.tabs [data-v="home"]');await p.tap('.panel.accent button[data-a="qr"]');
