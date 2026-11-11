@@ -47,7 +47,7 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
   }
 
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists site_daily, site_visitors, site_salt, prospects, outreach_dnc, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists beta_feedback, site_daily, site_visitors, site_salt, prospects, outreach_dnc, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9100 + Math.floor(Math.random() * 600), BASE = `http://127.0.0.1:${port}`, base = BASE + "/api";
   let srv = start(port); await up(BASE);
   const page = (url, { ua = IPHONE, ip = "198.51.100.1", headers = {}, method = "GET" } = {}) =>
@@ -126,6 +126,9 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
     await pool.query("update gyms set created_at=now() - interval '300 days' where name='Late Gym'");
     await pool.query("insert into prospects(token, website, domain, status, sent_at, views) values('t1', 'http://a.test', 'a.test', 'sent', now(), 2), ('t2', 'http://b.test', 'b.test', 'sent', now(), 0), ('t3', 'http://c.test', 'c.test', 'claimed', now(), 5), ('t4', 'http://d.test', 'd.test', 'draft', null, 0), ('t5', 'http://e.test', 'e.test', 'optedout', now(), 1)");
 
+    // A gym outreach built that nobody has claimed: not a gym yet, just "built, not claimed" in the funnel.
+    const BG = (await pool.query(`insert into gyms(name, student_code, coach_code, claim) values('Built Gym', 'BLTS1', 'BLTC1', '{"prospectId":"x","builtAt":"2026-11-01T00:00:00Z"}') returning id`)).rows[0].id;
+    await pool.query("update prospects set gym_id=$1 where token='t4'", [BG]);
     r = await admin("GET", "/admin/overview?days=7");
     const d = r.j || {};
     ok(r.s === 200 && d.days === 7 && d.series.length === 7 && d.series[6].day === new Date().toISOString().slice(0, 10), "the admin gets the overview with 7 days of series");
@@ -148,7 +151,8 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
     ok(og.billing.state === "paying" && og.billing.lastPaidAt && late.billing.state === "due" && !og.head && og.members === 0, "billing: paying, and card needed once the free months are over");
     ok(!(await pool.query("select billing from gyms where id=$1", [G])).rows[0].billing.trialEnds, "the dashboard doesn't write to a gym's billing");
     ok(d.recent.length === 10 && d.recent.every((u) => u.at) && d.recent.find((u) => u.email === "boss@jitsflow.test").source.name === "Google Ads" && d.recent.find((u) => u.email === "kim@lions.test").role === "coach", "newest sign-ups with email, role and source");
-    ok(JSON.stringify(d.outreach) === JSON.stringify({ added: 5, sent: 4, opened: 3, claimed: 1, optedOut: 1 }), "outreach funnel: " + JSON.stringify(d.outreach));
+    ok(JSON.stringify(d.outreach) === JSON.stringify({ added: 5, built: 1, sent: 4, opened: 3, claimed: 1, optedOut: 1 }), "outreach funnel, with built but not claimed: " + JSON.stringify(d.outreach));
+    ok(!d.gyms.some((g) => g.name === "Built Gym") && d.series[6].gyms === 1, "an unclaimed gym isn't in the gym list, the totals or new gyms per day");
     ok(d.countingSince === new Date().toISOString().slice(0, 10), "the day visitor counting started");
     r = await admin("GET", "/admin/overview?days=90"); ok(r.j.series.length === 90 && r.j.days === 90, "90 days");
     r = await admin("GET", "/admin/overview?days=5000"); ok(r.j.days === 30, "other ranges fall back to 30 days");

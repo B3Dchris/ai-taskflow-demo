@@ -177,6 +177,13 @@ const templates = {
   prospectClaimed: (gym, who, email, site) => ({ subject: `${gym} claimed JitsFlow`, title: `${gym} claimed JitsFlow`,
     paras: [`${who} (${email}) claimed ${gym} from its preview${site ? ` (${site})` : ""}. They're its head coach now, with the timetable, coaches and prices from the preview.`, "Say hello: a quick welcome from a person goes a long way."],
     button: { label: "Open Outreach", url: appUrl() + "/app/#me" } }),
+  // To the platform admins: a gym applied for the beta, or a beta gym sent feedback (see the Beta section of the team's dashboard).
+  betaApplied: (gym, who, email, note) => ({ subject: `${gym} applied for the beta`, title: `${gym} applied for the beta`,
+    paras: [`${who} (${email}) applied for the JitsFlow beta for ${gym}.`, note ? `What they'd want built: ${note}` : "They didn't say what they'd want built.", "Accept or decline it in the Beta section of the dashboard."],
+    button: { label: "Open the dashboard", url: appUrl() + "/app/#me" } }),
+  betaFeedback: (gym, who, email, text, shot) => ({ subject: `Beta feedback from ${gym}`, title: `Feedback from ${gym}`,
+    paras: [`${who} (${email}) sent feedback${shot ? " with a screenshot" : ""}:`, text || "(No text, just the screenshot.)", "It's in the feedback inbox in the Beta section of the dashboard."],
+    button: { label: "Open the dashboard", url: appUrl() + "/app/#me" } }),
   // Bank or PayFast details changed (to the head coach), or the coaches changed (to every active coach). Fixed subjects.
   gymChange: (kind, name, who, detail) => { const t = {
       bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],

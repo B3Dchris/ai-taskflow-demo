@@ -795,6 +795,11 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .paytile.dark{background:#000;color:#fff;border-color:#000}.paytile .pill{position:absolute;top:-8px;right:-4px;font-size:10px}
 .apmark{font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:1px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
 .gpmark{display:flex;align-items:center;gap:3px;font-size:19px;font-weight:600;color:var(--ink-2)}
+.pvbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 12px;border-radius:14px;background:var(--night,#0e1a33);color:#fff;font-size:14px;line-height:1.3;box-shadow:0 6px 18px rgba(14,26,51,.18)}
+.pvbar span{flex:1;min-width:0;overflow-wrap:anywhere}.pvbar .btn,.pvbar .btn.primary{flex:none;white-space:nowrap;background:#fff;color:#0e1a33;border-color:#fff}
+.radrow{flex-wrap:nowrap!important;justify-content:flex-start!important;gap:8px!important}.radrow input{width:auto;flex:none;margin:0}
+.pvcard{border:2px solid var(--blue)}.pvlist{margin:0;padding-left:20px;display:grid;gap:4px}.pvlist li{line-height:1.4}.betapill{font-size:13px;vertical-align:6px;font-family:inherit;letter-spacing:0}
+.betatick input{flex:none}.fbrow.done{opacity:.6}
 .popzone{display:flex;flex-direction:column;gap:6px;align-items:flex-start;border:2px dashed var(--line);border-radius:12px;padding:14px}.popzone.over{border-color:var(--blue);background:var(--blue-soft)}
 </style>
 
@@ -4374,7 +4379,7 @@ const initials=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);ret
 function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
   const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
-  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${famBar()}${tipBar()}`}
+  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${pvBar()}${famBar()}${API.preview?"":tipBar()}`}
 /* First-visit tips: one line at the top of a tab saying what it's for. Each shows once: it's gone after you leave that tab
    (per person, on this phone). Closing any tip turns them all off, so they don't pop up again on every tab. */
 const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
@@ -5180,6 +5185,7 @@ document.addEventListener("click",e=>{
     case "reset": S.ui.confirmReset=true; settingsSheet(); break;
     case "resetno": S.ui.confirmReset=false; settingsSheet(); break;
     case "resetyes": { const st=P().settings;S.progress=blankProgress();S.progress.settings=st;saveProgress();S.ui.confirmReset=false;toast("Ratings and reviews cleared.");render();break }
+    default: moreAct(a,v,el);
   }
 });
 document.addEventListener("keydown",e=>{
@@ -5247,15 +5253,16 @@ const FORMS=["outform","outedit","authform","howcode","classform","studentform",
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
-  if(!FORMS.includes(fid))return;e.preventDefault();
+  if(!FORMS.includes(fid)&&!MORE_FORMS.includes(fid))return;e.preventDefault();
   if(fid==="authform"||fid==="astform")return submitForm(fid,f); // these handle their own button
   // One save at a time: the button is off (and says so) until this one is done, so a double tap doesn't add it twice.
   if(f.dataset.busy)return;f.dataset.busy="1";
   const btn=e.submitter||document.querySelector(`#sheetbar [type=submit][form="${fid}"]`)||f.querySelector("[type=submit]"),label=btn&&btn.innerHTML;
   if(btn){btn.disabled=true;btn.textContent="Saving…"}
-  try{await submitForm(fid,f)}finally{delete f.dataset.busy;if(btn){btn.disabled=false;btn.innerHTML=label}}
+  try{await submitForm(fid,f,e.submitter)}finally{delete f.dataset.busy;if(btn){btn.disabled=false;btn.innerHTML=label}}
 });
-async function submitForm(fid,f){
+async function submitForm(fid,f,submitter){
+  if(MORE_FORMS.includes(fid))return moreForm(fid,f,submitter);
   if(fid==="logform")return submitLog();
   if(fid==="kidform")return addKid(f);
   if(fid==="outform")return outAdd(f);
@@ -5307,11 +5314,15 @@ const COACH={view:"home",roster:null,classes:null,payments:null,loading:false,q:
 // key: one per opened form, so the server adds it once even if it arrives twice (formKey below).
 async function api(method,url,body,key){
   const h=method==="GET"?{}:{"content-type":"application/json","x-jf":"1"};if(key)h["x-jf-key"]=key;
+  // The preview of a gym outreach built (see previewInit): reads carry its link; a change asks them to claim it instead.
+  const pv=!!API.preview&&!PV_FREE.test(url);
+  if(pv){if(method!=="GET"){pvAsk();const err=new Error("Claim your gym first. It's free.");err.status=403;err.preview=true;throw err}h["x-jf-preview"]=API.preview.token}
   let r;try{r=await fetch("/api"+url,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin"})}
   catch(e){const err=new Error("No signal right now. Try again when you're back online.");err.offline=true;throw err}
   let j={};try{j=await r.json()}catch(e){}
   // Signed out while using the app: sign in on top of what's open, then send this again.
   if(r.status===401&&j.signedOut&&API.me&&!url.startsWith("/auth/"))return reauth().then(()=>api(method,url,body,key));
+  if(pv&&j.previewGone){pvExit();render()}
   if(!r.ok){const err=new Error(j.error||"Something went wrong. Try again.");err.status=r.status;err.data=j;throw err}
   return j;
 }
@@ -5347,7 +5358,7 @@ async function acctInit(){
     if(API.me)await startSync();else if(lsGet("rtb.owner")){if(pendingLogs().size){S.ui.authMode="login";S.ui.deep=true;setTimeout(()=>{authSheet();toast("Sign in to send the sessions saved on this phone to your account.")},50)}else wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone (unless it hasn't reached the account yet)
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
-  S.ui.deep=["signin","start","join","claim","reset","claimgym"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
+  S.ui.deep=["signin","start","join","claim","reset","claimgym","gym"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
   const rt=qs.get("reset");
@@ -5355,7 +5366,8 @@ async function acctInit(){
     if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
   const cl=qs.get("claim");if(cl)S.ui.claim=cl;
   // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
-  const cg=qs.get("claimgym");if(cg){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}if(API.on)setTimeout(()=>claimInit(cg),50);else setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
+  // The gym outreach built for them (the email's link, and the older preview page's Claim button): the app opens as a preview of it.
+  const cg=qs.get("gym")||qs.get("claimgym");if(cg){try{history.replaceState(null,"",location.pathname)}catch(e){}if(API.on)setTimeout(()=>previewInit(cg),50);else setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
   // Back from PayFast
   const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay");
   if(paid||bill||ap){try{const k=new URLSearchParams(location.search);k.delete("paid");k.delete("billing");k.delete("autopay");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
@@ -5425,19 +5437,21 @@ function authSheet(){
    <form id="authform" class="stack" novalidate><label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required value="${esc(API.me.email||"")}"></label>
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="current-password" minlength="8" required></label>
     <p class="small"><button type="button" class="linkbtn small" data-a="authmode" data-v="forgot">Forgot your password?</button></p></form></div>`,false,{back:"Cancel",act:`<button class="btn primary grow" type="submit" form="authform">Sign in</button>`});
-  const tabs=[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
-  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?"Claim your gym":m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
+  const CL=S.ui.claimGym&&S.ui.claimInfo,tabs=CL?[["gym","New account"],["login","Sign in to claim"]]:[["login","Sign in"],["register","Create account"],["gym","Start a gym"]];
+  openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${CL?`Claim ${esc(S.ui.claimInfo.name)}`:m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?"Claim your gym":m==="gym"?"Start your gym":m==="register"?"Create your account":"Sign in"}</h1>
    ${seg("Account","authmode",tabs,m)}
    ${m==="register"&&S.ui.authGym&&c?`<p class="panel accent small" id="a-joining">Joining <b>${esc(S.ui.authGym)}</b>.${kid?` Signing up for <b>${esc(kid)}</b>.`:""}</p>`:""}
-   ${S.ui.claimGym&&S.ui.claimInfo&&m!=="login"?`<div class="panel accent small" id="a-claiming"><div style="display:flex;flex-direction:row;align-items:center;gap:12px">${S.ui.claimInfo.logo?`<img src="${esc(S.ui.claimInfo.logo)}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#fff;flex:none">`:""}<span>Claiming <b>${esc(S.ui.claimInfo.name)}</b>: ${esc(claimReady(S.ui.claimInfo))} ${S.ui.claimInfo.classes+S.ui.claimInfo.coaches+S.ui.claimInfo.prices>1?"are":"is"} ready. Make your account and it's yours.</span></div></div>`:""}
+   ${S.ui.claimGym&&S.ui.claimInfo&&m!=="login"?`<div class="panel accent small" id="a-claiming"><div style="display:flex;flex-direction:row;align-items:center;gap:12px">${S.ui.claimInfo.logo?`<img src="${esc(S.ui.claimInfo.logo)}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#fff;flex:none">`:""}<span>Claiming <b>${esc(S.ui.claimInfo.name)}</b>: ${esc(claimReady(S.ui.claimInfo))} ${S.ui.claimInfo.classes+S.ui.claimInfo.coaches+S.ui.claimInfo.prices>1?"are":"is"} ready. Make your account and it's yours.</span></div></div>
+   <ul class="pvlist small">${(S.ui.claimInfo.pitch||[]).slice(0,3).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
    ${m==="login"&&S.ui.claimGym&&S.ui.claimInfo?`<p class="panel accent small" id="a-claiming"><span>Sign in to claim <b>${esc(S.ui.claimInfo.name)}</b>.</span></p>`:""}
    ${m==="login"&&S.ui.claim&&S.ui.authKid?`<p class="panel accent small" id="a-joining">Sign in to add <b>${esc(S.ui.authKid)}</b> to your login.</p>`:""}
-   <p class="muted">${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?"You'll be its head coach. Free for 3 months, no card needed.":m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
+   <p class="muted">${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?`You'll be its head coach. ${esc(S.ui.claimInfo.deal||"3 months free, no card needed.")}`:m==="gym"?"For coaches. You'll get an invite link to send your students.":m==="register"?"Save your progress online and use it on any device. Got a code from your coach? Add it to join your gym.":"Pick up where you left off on any device."}</p>
    <form id="authform" class="stack" novalidate>
     ${m==="gym"&&S.ui.claimGym&&S.ui.claimInfo?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required value="${esc(S.ui.claimInfo.name)}"></label>`:m==="gym"?`<label class="f">Gym name<input id="a-gym" name="gym" autocomplete="organization" required></label><label class="f">Your gym's website (optional)<input id="a-site" name="site" type="text" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="url" placeholder="yourgym.co.za"><span class="small muted">We'll read your timetable, prices, coaches and logo while you look around.</span></label>`:""}
     ${m!=="login"?`<label class="f">${kid?"Your name (parent)":"Your name"}<input id="a-name" name="name" autocomplete="name" required></label>`:""}
-    <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required></label>
+    <label class="f">Email<input id="a-email" name="email" type="email" autocomplete="email" required value="${esc(CL&&S.ui.claimInfo.email||"")}"></label>
     <label class="f">Password<input id="a-pass" name="password" type="password" autocomplete="${m==="login"?"current-password":"new-password"}" minlength="8" required></label>
+    ${CL?betaTick():""}
     ${m==="register"?`<label class="f">Gym code (optional)<input id="a-code" name="code" value="${esc(c)}" autocapitalize="characters" placeholder="From your coach"></label><label class="f">WhatsApp number (optional)<input id="a-wa" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="082 123 4567"><span class="small muted">Only your coaches see it.</span></label>`:""}
     ${m==="login"?`<p class="small"><button type="button" class="linkbtn small" data-a="authmode" data-v="forgot">Forgot your password?</button></p>`:""}
     ${m!=="login"?`<p class="small muted">Your name, email, training log and payments (if your gym uses them) are stored on JitsFlow's server so you and your coach can see them. You can delete your account and data any time in Me.</p>`:""}
@@ -5465,20 +5479,22 @@ async function submitAuth(form){
   const btn=document.querySelector('#sheetbar [type=submit]');if(btn){btn.disabled=true;btn.textContent="One moment…"}
   try{
     const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();
-    const claiming=m==="gym"&&S.ui.claimGym;
+    const claiming=m==="gym"&&S.ui.claimGym,wantBeta=!!(form.querySelector("[name=beta]")||{}).checked;if(S.ui.claimGym)S.ui.wantBeta=wantBeta?{note:""}:null;
     const j=m==="gym"?await api("POST","/auth/start-gym",{gym:v("gym"),name:v("name"),email:v("email"),password:v("password"),timezone:tz,source:signupSrc(),...(claiming?{prospect:S.ui.claimGym}:{})})
       :m==="register"?await api("POST","/auth/register",S.ui.regBody={name:v("name"),email:v("email"),password:v("password"),code:v("code"),phone:v("phone"),claim:S.ui.claim||undefined,source:signupSrc()})
       :await api("POST","/auth/login",{email:v("email"),password:v("password")});
     if(j.ask)return askSheet(j.ask);
+    if(API.preview){pvExit();API.me=null} // signed in or claimed: out of the preview, into their own account
     if(REAUTH){if(m==="login"&&String(j.me.id)===String(API.me.id)){API.me=j.me;reauthDone(true);return}reauthDone(false)} // someone else signed in: they get their own account
     jfTrack(m==="login"?"login":"sign_up",{method:"email",role:m==="gym"?"coach":j.me.role,with_gym:!!j.me.gym});
     await signedIn(j.me,{adopt:m!=="login"});
     // Signed in with a kid's invite link in hand (a parent with a login already): offer to add that kid now.
     if(m==="login"&&S.ui.claim&&S.ui.authKid&&!isCoach())kidAddSheet(S.ui.authKid,S.ui.authGym||j.me.gym&&j.me.gym.name||"your gym");
     if(m==="register"&&j.me.gym&&j.me.role==="student"){API.askPlan=true;loadMembership()}
-    if(m==="gym"){if(claiming){S.ui.claimGym=null;S.ui.claimInfo=null;jfTrack("claim_gym",{})}const site=v("site");if(site)await impStart(site);setTimeout(welcomeSheet,250)}
+    if(m==="gym"){if(claiming){S.ui.claimGym=null;S.ui.claimInfo=null;jfTrack("claim_gym",{});await betaAfterClaim()}const site=v("site");if(site)await impStart(site);setTimeout(welcomeSheet,250)}
     else if(m==="login"&&S.ui.claimGym&&API.me&&!API.me.gym)claimSheet();
-  }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}
+    else if(m==="login"&&S.ui.claimGym&&S.ui.claimInfo&&API.me&&API.me.gym){toast(`You're in ${API.me.gym.name} already. To claim ${S.ui.claimInfo.name}, sign out and claim it with another email.`);S.ui.claimGym=null;S.ui.claimInfo=null}
+  }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent=m==="gym"&&S.ui.claimGym?"Claim gym":m==="gym"?"Start gym":m==="register"?"Create account":"Sign in"}
     // A kid's link with an email that has an account already: straight to Sign in, email filled in. Signing in adds the kid.
     if(m==="register"&&S.ui.claim&&/Sign in to add/.test(e.message)){const em=v("email");S.ui.authMode="login";authSheet();const x=document.getElementById("a-email");if(x)x.value=em}}
 }
@@ -5604,7 +5620,7 @@ async function coachLoad(what,around){
 // Coach tabs: Home (today), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
 const COACH_VIEWS=["home","schedule","members","comps","money","gym"];
 const coachMode=()=>{try{return localStorage.getItem("jf.coachMode")==="study"?"study":"manage"}catch(e){return "manage"}};
-const managing=()=>isCoach()&&coachMode()!=="study";
+const managing=()=>isCoach()&&(!!API.preview||coachMode()!=="study");
 function setCoachMode(m){try{if(m==="study")localStorage.setItem("jf.coachMode","study");else localStorage.removeItem("jf.coachMode")}catch(e){}}
 function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","list"],insights:["members","insights"],payments:["money"]};const l=legacy[v];
   if(l){v=l[0];if(l[1])COACH.stuView=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
@@ -5615,7 +5631,7 @@ function viewCoach(){
   const v=COACH_VIEWS.includes(COACH.view)&&(COACH.view!=="money"||isHead())?COACH.view:"home";
   const title={home:"Home",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Your gym"}[v];
   const body=!COACH.roster&&!(v==="home"&&COACH.classes)?`<div class="empty">Loading your gym…</div>`:v==="schedule"?coachClasses():v==="members"||v==="comps"?coachMembers(v):v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
-  return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}</h1></div></div></section>${body}</div>`;
+  return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}${API.me.gym.beta==="accepted"?` <span class="pill ok betapill">Beta</span>`:""}</h1></div></div></section>${body}</div>`;
 }
 // Members: a switch between your members (roster or insights) and the competition team.
 function coachMembers(v){const up=API.comps?upcomingComps().length:0;
@@ -5784,7 +5800,7 @@ function coachToday(){
   impLoad();
   // Privates booked or cancelled, members who left: a notice on Home as well as the email.
   if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(S.ui.tab==="coach"&&COACH.view==="home"&&!S.ui.sheet)render()})}
-  return `${impBanner()}${setupCard()}${noticesCard()}<section class="stack"><div class="row between"><h2 class="label">${esc(fromYmd(t).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</h2><button class="btn sm" data-a="classnewday" data-v="${t}">+ Add</button></div>
+  return `${pvHome()}${dueBanner()}${impBanner()}${setupCard()}${noticesCard()}<section class="stack"><div class="row between"><h2 class="label">${esc(fromYmd(t).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</h2><button class="btn sm" data-a="classnewday" data-v="${t}">+ Add</button></div>
       ${todays.length?`<div class="calrows">${todays.map(calRow).join("")}</div>`:`<p class="small muted">No classes today.</p>`}</section>
     <section class="stack"><h2 class="label">Needs you</h2>${!COACH.roster?`<p class="small muted">Loading…</p>`:needs.length?needs.join(""):`<p class="small muted">Nothing waiting. ${isHead()?"Everyone's paid, nobody's":"Nobody's"} stuck on a waitlist, no requests.</p>`}</section>
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${COACH.roster?ppl.filter(p=>p.active).length:"…"}</b><span>Students</span></div></div></section>
@@ -6034,7 +6050,7 @@ function coachRoster(){
   return `<section class="stack"><div class="stats"><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div><div class="stat"><b>${ppl.filter(p=>p.attended30>0||p.n30>0).length}</b><span>Trained · 30d</span></div>${isHead()?`<div class="stat"><b>${due.length}</b><span>Fees due</span></div>`:`<div class="stat"><b>${ppl.filter(p=>p.active&&Date.now()-new Date(p.joined).getTime()<30*864e5).length}</b><span>New · 30d</span></div>`}</div>
     <div class="row" style="flex-wrap:nowrap"><input id="r-q" type="search" placeholder="Search students" value="${esc(COACH.q)}" aria-label="Search students" style="flex:1"><button class="btn" data-a="addstu">+ Add</button></div>
     <div class="list" id="roster-list">${list.map(p=>{const g=goalOf(p),r=readinessFor(p.mastery,g),paid=owing(p)?`<span class="pill due">Due</span>`:owesFees(p)?`<span class="pill ok">Paid</span>`:"";
-      const vs=p.visits||{};return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}${p.offline?` <span class="pill">Not on app</span>`:""}${p.sameAs?` <span class="pill due">Possible duplicate</span>`:""}</span><span class="meta">${p.parentName?`<span>Kid · ${esc(p.parentName==="Parent"?"parent":p.parentName)}</span>`:""}${beltChip(p.belt,p.stripes)}${vs.segment?`<span class="segtag ${vs.segment}">${esc(SEG[vs.segment][0])}</span>`:""}<span>${vs.d28||0} classes / 4 wks</span>${p.parentName?"":`<span>${r}% → ${BELT[g].to}</span>`}${p.planName?`<span>${esc(p.planName)}${p.planStatus&&p.planStatus!=="active"?" ("+esc(p.planStatus)+")":""}</span>`:""}${p.privatesLeft?`<span>${privN(p.privatesLeft)} left</span>`:""}</span></span>${paid}</button>`}).join("")||`<div class="empty">No students yet. Send your invite link from the Gym tab, or tap + Add for someone who isn't on the app.</div>`}</div></section>`;
+      const vs=p.visits||{};return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}${p.offline?` <span class="pill">Not on app</span>`:""}${p.sameAs?` <span class="pill due">Possible duplicate</span>`:""}</span><span class="meta">${p.parentName?`<span>Kid · ${esc(p.parentName==="Parent"?"parent":p.parentName)}</span>`:""}${beltChip(p.belt,p.stripes)}${vs.segment?`<span class="segtag ${vs.segment}">${esc(SEG[vs.segment][0])}</span>`:""}<span>${vs.d28||0} classes / 4 wks</span>${p.parentName?"":`<span>${r}% → ${BELT[g].to}</span>`}${p.planName?`<span>${esc(p.planName)}${p.planStatus&&p.planStatus!=="active"?" ("+esc(p.planStatus)+")":""}</span>`:""}${p.privatesLeft?`<span>${privN(p.privatesLeft)} left</span>`:""}</span></span>${paid}</button>`}).join("")||`<div class="empty">${API.preview?"Your members go here. Once it's yours: send your invite link (members join in a tap), bring everyone over from your WhatsApp group with a screenshot of it, or add people who aren't on the app with + Add.":"No students yet. Send your invite link from the Gym tab, or tap + Add for someone who isn't on the app."}</div>`}</div></section>`;
 }
 async function studentSheet(id){
   S.ui.sheet={k:"student",id};S.ui.stack=[];openSheet(`${sheetHead("Student")}<div class="empty">Loading…</div>`);
@@ -6351,7 +6367,7 @@ const splitTxt=(sp,cur)=>sp&&sp.length?` More than they owed, so ${sp.map(x=>`${
 function splitToast(msg,j){const sp=j&&j.split,cur=(COACH.roster||{}).currency;if(!sp||!sp.length)return toast(msg);
   toast(msg+splitTxt(sp,cur),{label:"Undo split",fn:async()=>{try{await api("POST",`/coach/payments/${j.payment.id}/unsplit`,{});await coachLoad();toast("Undone. It's all on one kid again.")}catch(e){toast(e.message)}}})}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back here with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
+  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back here with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel()+betaPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
@@ -7287,11 +7303,18 @@ async function pfRemove(){try{await api("DELETE","/coach/payfast");COACH.pf=unde
 // The gym's own JitsFlow plan.
 function planPanel(){
   if(COACH.bill===undefined){COACH.bill=null;api("GET","/coach/billing").then(j=>{COACH.bill=j.billing;if(S.ui.tab==="coach")render()}).catch(()=>{})}
-  const b=COACH.bill;if(!b)return "";const price=money(b.priceCents,"ZAR"),until=fmtDate(b.trialEnds),trial=todayK()<b.trialEnds;
-  const line=b.status==="active"?`${price} a month, on the card you added${trial?`, starting ${esc(until)}`:""}.`:b.status==="cancelled"?`Your plan was cancelled. Add a card to carry on after ${esc(until)}.`
-    :trial?`Free until <b>${esc(until)}</b>, then ${price} a month.${NATIVE()?"":" Add a card now; nothing is charged until then."}`:`Your free months ended on ${esc(until)}. Add a card to keep using JitsFlow for ${price} a month.`;
-  return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Card needed</span>`}</div>
-    <p class="small">${line}</p>${b.status==="active"?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+  const b=COACH.bill;if(!b)return "";const price=money(b.priceCents,"ZAR"),normal=money(b.normalCents||b.priceCents,"ZAR"),until=fmtDate(b.trialEnds),trial=todayK()<b.trialEnds,bt=b.beta;
+  // Nothing ever locks: past the free months with no card, JitsFlow keeps working and this just says how to keep it.
+  const line=b.status==="active"?`${price} a month, on the card you added${trial?`, starting ${esc(until)}`:""}.`:b.status==="cancelled"?`Your plan was cancelled. Add a card to keep JitsFlow for ${price} a month.`
+    :bt?`${esc(bt.line)}.`
+    :trial?`Free until <b>${esc(until)}</b>. After that ${normal}/month only if you want to keep going — no card needed to start, no contract, nothing charged unless you add a card.`
+    :`Your free months ended on ${esc(until)}. Keep JitsFlow for ${price}/month: add a card whenever you're ready. Everything keeps working in the meantime.`;
+  const needCard=b.status!=="active"&&b.priceCents>0;
+  return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:bt?`<span class="pill ok">Beta</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Free months over</span>`}</div>
+    <p class="small">${line}</p>${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+// Home, head coach only: the calm reminder once the free months are over and there's no card (never shown to members).
+function dueBanner(){if(!isHead()||API.preview)return "";const b=COACH.bill;if(b===undefined){planPanel();return ""}
+  if(!b||!b.due)return "";return `<div class="insight dueline"><div class="row between" style="flex-wrap:nowrap;gap:10px"><span>Your free months ended. Keep JitsFlow for ${money(b.priceCents,"ZAR")}/month.</span><button class="btn sm" data-a="coachgo" data-v="gym">See plan</button></div></div>`}
 async function billCard(){toast("Opening PayFast…");try{const c=await api("POST","/coach/billing/checkout",{});jfTrack("bill_card",{});payfastGo(c)}catch(e){toast(e.message)}}
 
 /* The whole address book in the App Store app: search and tick several people. */
@@ -7352,10 +7375,15 @@ async function outPro(id,keep){try{const j=await api("GET","/admin/prospects/"+e
     ${p.importError?`<p class="insight warn small">${esc(p.importError)}</p>`:""}
     ${p.blocked&&!gone?`<p class="insight warn small">This gym or address is on the do-not-contact list. It can't be emailed.</p>`:""}
     ${gone?`<p class="insight small">They opted out on ${outDay(p.optedOutAt||p.createdAt)||"their page"}. What we read is deleted and the gym won't be contacted again.</p>`:`
-    ${p.status==="claimed"?`<p class="insight good small"><b>Claimed on ${outDay(p.claimedAt)}.</b> They're on JitsFlow now.</p>`:""}
+    ${p.status==="claimed"?`<div class="insight good small"><p style="margin:0"><b>Claimed on ${outDay(p.claimedAt)}</b>${p.claimedBy?` by ${esc(p.claimedBy.name)} (<a href="mailto:${esc(p.claimedBy.email)}">${esc(p.claimedBy.email)}</a>)`:""}. They're on JitsFlow now.</p>
+      ${p.gym?`<p class="small muted" style="margin:0">Claimed by the wrong person? Anyone with the link can claim it first. Give it back to its link, or to the right account.</p>
+      <div class="row"><button class="btn sm" data-a="outunclaim">${OUT.unAsk===p.id?"Tap again to unclaim":"Unclaim"}</button></div>
+      <form id="reassignform" class="row" style="flex-wrap:nowrap" novalidate><input name="email" type="email" inputmode="email" autocapitalize="none" placeholder="Right person's email" aria-label="Right person's email" style="flex:1;min-width:0"><button class="btn sm" type="submit">Reassign</button></form>`:""}</div>`:""}
+    ${p.gym&&p.gym.unclaimed&&!gone?`<p class="small"><b>Gym built</b> ${outDay(p.gym.builtAt)}: their timetable, plans and logo are in, waiting to be claimed. The email's button opens it. Unclaimed gyms nobody opens go after 60 days.</p>`
+      :!gone&&p.status!=="claimed"&&!p.importing&&e?`<p class="small muted">No gym built yet.</p>`:""}
     ${!p.importing?`<p class="small">Found on their website: ${found}${p.accent?` · <span style="white-space:nowrap"><span class="outsw" style="background:${esc(p.accent)}"></span> their colour</span>`:" · no colour of its own (JitsFlow blue)"}</p>`:""}
     ${sent||seen||fu?`<p class="small">${sent}${seen} ${fu}</p>`:""}
-    ${e?`<div class="row"><a class="btn" href="${esc(p.previewUrl)}" target="_blank" rel="noopener">Open preview</a><a class="btn" href="/api/admin/prospects/${esc(p.id)}/email" target="_blank" rel="noopener">View email</a></div>`:""}
+    ${e?`<div class="row"><a class="btn" href="${esc(p.appUrl||p.previewUrl)}" target="_blank" rel="noopener">${p.appUrl?"Open their gym":"Open preview"}</a><a class="btn" href="/api/admin/prospects/${esc(p.id)}/email" target="_blank" rel="noopener">View email</a></div>`:""}
     ${p.status!=="claimed"?`<form id="outedit" class="panel stack" novalidate><h2 class="label">The email</h2>
       <label class="f">Owner's name<input name="ownerName" autocomplete="off" value="${esc(p.ownerName)}" placeholder="So the email says Hi JP"></label>
       <label class="f">Owner's email<input name="ownerEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off" value="${esc(p.ownerEmail)}" placeholder="From their website or Instagram"></label>
@@ -7365,7 +7393,7 @@ async function outPro(id,keep){try{const j=await api("GET","/admin/prospects/"+e
       <button class="btn" style="justify-self:start" type="submit">Save</button></form>`:""}
     ${e?`<div class="row"><button class="btn" data-a="outcopy" data-v="html">Copy email HTML</button><button class="btn" data-a="outcopy" data-v="text">Copy plain text</button></div>`:""}
     ${p.followupReady&&OUT.cur.followup&&!p.blocked?`<div class="panel stack"><h2 class="label">Follow-up</h2><p class="small">One short reminder, ${OUT.days||5} days or more after the first email. There's only ever one.</p><div class="row"><button class="btn primary" data-a="outfollow">Send follow-up</button><a class="btn" href="/api/admin/prospects/${esc(p.id)}/email?followup=1" target="_blank" rel="noopener">View it</a></div></div>`:""}`}
-    <div class="row">${!gone&&p.status!=="claimed"?`<button class="btn" data-a="outre">Re-import</button>`:""}<button class="btn danger" data-a="outdel">${OUT.delAsk===p.id?"Tap again to delete":"Delete"}</button></div></div>`,keep,
+    <div class="row">${!gone&&p.status!=="claimed"?`<button class="btn" data-a="outre">Re-import</button>`:""}${!gone&&p.status!=="claimed"&&!p.importing&&e?`<button class="btn" data-a="outbuild">${p.gym&&p.gym.unclaimed?"Rebuild gym":"Build gym"}</button>`:""}${p.gym&&p.gym.unclaimed&&!gone?`<button class="btn" data-a="outgymdel">Delete gym</button>`:""}<button class="btn danger" data-a="outdel">${OUT.delAsk===p.id?"Tap again to delete":"Delete"}</button></div></div>`,keep,
     {act:canSend?`<button class="btn primary grow" data-a="outsend">Send email</button>`:`<span class="grow small muted" style="align-self:center;text-align:center">${p.status==="sent"?"Sent":p.status==="claimed"?"Claimed":gone?"Opted out":p.importing?"Reading website…":p.blocked?"Do not contact":""}</span>`});
   if(p.importing)outLoad()}
 function outForm(){const f=document.getElementById("outedit");if(!f)return null;const v=n=>f.querySelector(`[name=${n}]`).value;return {ownerName:v("ownerName"),ownerEmail:v("ownerEmail").trim(),personalLine:v("personalLine"),subject:v("subject")}}
@@ -7375,8 +7403,12 @@ async function outSend(kind,el){const p=OUT.cur.prospect;if(kind==="send"){const
   if(el){el.disabled=true;el.textContent="Sending…"}OUT.key=OUT.key||Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   try{await api("POST",`/admin/prospects/${p.id}/${kind==="send"?"send":"followup"}`,{},OUT.key+kind);OUT.key=null;toast(kind==="send"?"Sent. You'll see here when they open it.":"Follow-up sent.");await outLoad();await outPro(p.id,true)}
   catch(e){toast(e.message);if(el){el.disabled=false;el.textContent=kind==="send"?"Send":"Send follow-up"}}}
-async function outAct(a){const p=OUT.cur&&OUT.cur.prospect;if(!p)return;
+async function outAct(a,f){const p=OUT.cur&&OUT.cur.prospect;if(!p)return;
   if(a==="outcopy-html"||a==="outcopy-text"){const e=OUT.cur.email;if(e)copyText(a==="outcopy-html"?e.html:`Subject: ${e.subject}\n\n${e.text}`);return}
+  if(a==="outbuild"){try{await api("POST",`/admin/prospects/${p.id}/build`,{});toast("Gym built from their website.");await outPro(p.id,true)}catch(e){toast(e.message)}return}
+  if(a==="outgymdel"){try{await api("DELETE",`/admin/prospects/${p.id}/gym`);toast("Gym deleted. Build it again any time.");await outPro(p.id,true)}catch(e){toast(e.message)}return}
+  if(a==="outunclaim"){if(OUT.unAsk!==p.id){OUT.unAsk=p.id;outPro(p.id,true);return}OUT.unAsk=null;try{await api("POST",`/admin/gyms/${p.gym.id}/unclaim`,{});toast("Unclaimed. Its link works again.");await outLoad();await outPro(p.id,true)}catch(e){toast(e.message)}return}
+  if(a==="outreassign"){const em=(f&&f.querySelector("[name=email]").value||"").trim();if(!em){toast("Type the right person's email.");return}try{await api("POST",`/admin/gyms/${p.gym.id}/reassign`,{email:em});toast("Reassigned.");await outLoad();await outPro(p.id,true)}catch(e){toast(e.message)}return}
   if(a==="outre"){try{await api("POST",`/admin/prospects/${p.id}/reimport`,{});toast("Reading their website again.");await outLoad();await outPro(p.id,true)}catch(e){toast(e.message)}return}
   if(a==="outdel"){if(OUT.delAsk!==p.id){OUT.delAsk=p.id;outPro(p.id,true);return}OUT.delAsk=null;try{await api("DELETE","/admin/prospects/"+p.id);OUT.list=(OUT.list||[]).filter(x=>x.id!==p.id);toast("Deleted.");outreachSheet()}catch(e){toast(e.message)}}}
 
@@ -7393,7 +7425,7 @@ const dAgo=iso=>{if(!iso)return "never";const m=Math.round((Date.now()-new Date(
 async function dashLoad(days){if(days)DASH.days=days;const want=DASH.days;DASH.busy=true;
   try{const j=await api("GET","/admin/overview?days="+want);if(want!==DASH.days)return;DASH.data=j;DASH.at=Date.now()}catch(e){toast(e.message)}
   DASH.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="dash")dashSheet(true)}
-function dashOpen(){if(!DASH.data||Date.now()-DASH.at>60000)dashLoad();dashSheet()}
+function dashOpen(){if(!DASH.data||Date.now()-DASH.at>60000)dashLoad();betaLoad();dashSheet()}
 // Bars per day. keys: [[field, colour, label]] stacked bottom-up. Tap a bar for its numbers (like the coach's visits chart).
 function dashChart(series,keys,what){
   const W=340,H=140,pad=20,n=series.length,slot=(W-8)/n,bw=Math.max(1.5,slot*(n>40?.7:.78)),tot=s=>keys.reduce((a,k)=>a+(s[k[0]]||0),0),max=Math.max(1,...series.map(tot));
@@ -7414,9 +7446,9 @@ const paidPill=r=>r.paid?` <span class="pill due">paid</span>`:"";
 const PAGE_NAMES={"/":"Home page","/coaches/":"For gyms page","/techniques/":"Techniques","/privacy/":"Privacy"};
 const pageName=p=>PAGE_NAMES[p]||p;
 const dCountry=c=>{if(!c)return "Unknown";try{return new Intl.DisplayNames(undefined,{type:"region"}).of(c)||c}catch(e){return c}};
-const BILL={trial:["plain","Free trial"],card:["ok","Card added"],paying:["ok","Paying"],due:["due","Card needed"],cancelled:["bad","Cancelled"]};
+const BILL={trial:["plain","Free trial"],card:["ok","Card added"],paying:["ok","Paying"],due:["due","Free months over"],cancelled:["bad","Cancelled"],beta:["ok","Beta, free"]};
 function billTxt(b){if(!b)return "";const until=dShort(b.trialEnds);
-  return b.state==="trial"?`Free until ${until}`:b.state==="card"?`Card added, first charge ${until}`:b.state==="paying"?`Paying${b.lastPaidAt?`, last paid ${outDay(b.lastPaidAt)}`:""}`:b.state==="due"?`Free months ended ${until}, no card yet`:`Plan cancelled (free until ${until})`}
+  return b.state==="trial"?`Free until ${until}`:b.state==="card"?`Card added, first charge ${until}`:b.state==="paying"?`Paying${b.lastPaidAt?`, last paid ${outDay(b.lastPaidAt)}`:""}`:b.state==="due"?`Free months ended ${until}, no card yet (still works)`:b.state==="beta"?"In the beta, nothing to pay right now":`Plan cancelled (free until ${until})`}
 function dashGyms(){const d=DASH.data;if(!d)return "";const q=DASH.q.trim().toLowerCase();
   const by={members:(a,b)=>b.members-a.members,active:(a,b)=>b.active7-a.active7||b.bookings7-a.bookings7,newest:(a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)),seen:(a,b)=>String(b.lastSeen||"").localeCompare(String(a.lastSeen||""))}[DASH.sort];
   const list=d.gyms.filter(g=>!q||[g.name,g.head&&g.head.name,g.head&&g.head.email].some(x=>String(x||"").toLowerCase().includes(q))).sort((a,b)=>by(a,b)||a.name.localeCompare(b.name));
@@ -7462,7 +7494,8 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
     <section class="panel stack"><h2 class="label">Countries</h2>${dashBars(d.countries,{name:r=>dCountry(r.code),empty:"No visitors in these days yet."})}</section>
     </div>
     <section class="panel stack"><h2 class="label">People</h2><div class="dppl">${ppl.map(([n,l])=>`<div><b class="mono">${nf(n)}</b><span>${esc(l)}</span></div>`).join("")}</div></section>
-    <section class="panel stack"><h2 class="label">Outreach</h2>${o.added?dashBars([{name:"Gyms added",n:o.added},{name:"Emailed",n:o.sent},{name:"Opened their preview",n:o.opened},{name:"Claimed their gym",n:o.claimed}])+(o.optedOut?`<p class="small muted">${nf(o.optedOut)} opted out.</p>`:""):`<p class="small muted">No outreach yet.</p>`}</section>
+    <section class="panel stack"><h2 class="label">Beta</h2><p class="small muted">Gyms that applied for the beta, their deal and features, and their feedback.</p><div id="dash-beta" class="dgyms">${betaAdmin()}</div></section>
+    <section class="panel stack"><h2 class="label">Outreach</h2>${o.added?dashBars([{name:"Gyms added",n:o.added},{name:"Built, not claimed",n:o.built||0},{name:"Emailed",n:o.sent},{name:"Opened their gym",n:o.opened},{name:"Claimed their gym",n:o.claimed}])+(o.optedOut?`<p class="small muted">${nf(o.optedOut)} opted out.</p>`:""):`<p class="small muted">No outreach yet.</p>`}</section>
     <p class="small muted">How visitors are counted: on JitsFlow's own server, without cookies, so it works whether or not someone allows Google Analytics. A visitor is one phone or computer on one day: the same person on two days counts twice. Bots and link previews aren't counted. No addresses are kept, and counts are kept for 13 months. Days run on UTC time (they start at 02:00 in South Africa). Counts update about once a minute.</p>
     </div>`,keep)}
 
@@ -7475,12 +7508,147 @@ async function claimInit(tok){S.ui.claimGym=tok;
   else{S.ui.claimGym=null;toast(`You're already in ${API.me.gym.name}. To claim ${j.gym.name}, sign out and start it with another email.`)}}
 const claimReady=g=>{const n=[g.classes?`${g.classes} class${g.classes===1?"":"es"}`:"",g.coaches?`${g.coaches} coach${g.coaches===1?"":"es"}`:"",g.prices?`${g.prices} price${g.prices===1?"":"s"}`:""].filter(Boolean);return n.length?n.join(", ").replace(/, ([^,]*)$/," and $1")+" from your website":"your logo and details"};
 function claimSheet(){const g=S.ui.claimInfo;if(!g)return;S.ui.sheet={k:"claim"};S.ui.stack=[];
-  openSheet(`${sheetHead("Claim your gym")}<div class="stack-lg"><h1>Claim ${esc(g.name)}?</h1><p>You'll be its head coach, with ${esc(claimReady(g))} already in. Free for 3 months.</p></div>`,false,
+  openSheet(`${sheetHead("Claim your gym")}<div class="stack-lg"><h1>Claim ${esc(g.name)}?</h1><p>You'll be its head coach, with ${esc(claimReady(g))} already in.</p>
+    <ul class="pvlist small">${(g.pitch||[]).slice(0,3).map(t=>`<li>${esc(t)}</li>`).join("")}</ul><p class="small">${esc(g.deal||"Free for 3 months.")}</p>${betaTick()}</div>`,false,
     {act:`<button class="btn primary grow" data-a="claimgo">Claim ${esc(g.name)}</button>`})}
+// "Also apply for the beta" on the claim: applied for them straight after.
+function betaTick(){return `<label class="row small betatick" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" name="beta" id="a-beta" style="margin-top:3px"> <span><b>Also apply for the JitsFlow beta</b>: features built for your gym and reduced or free fees (free for 6 months, then R49/month), in exchange for testing and feedback.</span></label>`}
+async function betaAfterClaim(){const w=S.ui.wantBeta;S.ui.wantBeta=null;if(!w||!isHead())return;try{const j=await api("POST","/coach/beta",{action:"apply",note:w.note||""});API.me.gym.beta=j.beta.status;COACH.beta=undefined}catch(e){}}
 async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…"}
+  const tick=document.getElementById("a-beta");S.ui.wantBeta=tick&&tick.checked?{note:""}:null;
   try{const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();const j=await api("POST","/me/claim-gym",{token:S.ui.claimGym,timezone:tz});
-    S.ui.claimGym=null;S.ui.claimInfo=null;API.me=j.me;setCoachMode("manage");hideSheet();coachGo("home");jfTrack("claim_gym",{});setTimeout(welcomeSheet,250)}
+    pvExit();S.ui.claimGym=null;S.ui.claimInfo=null;API.me=j.me;setCoachMode("manage");hideSheet();coachGo("home");jfTrack("claim_gym",{});await betaAfterClaim();setTimeout(welcomeSheet,250)}
   catch(e){toast(e.message);if(el){el.disabled=false;el.textContent="Claim gym"}}}
+
+/* ============ THE PREVIEW OF A GYM OUTREACH BUILT (the email's link: /app/?gym=<token>) ============ */
+/* The owner opens the real app as their gym's head coach would see it: Home, Schedule with their classes, Members, Money with
+   their plans, Gym. Nothing is saved: the server lets the link read that one gym and refuses every change ("Claim your gym first"),
+   and here every change (a form, a copy or share, a payment) opens the claim instead. The bar at the top claims it in one step.
+   Nothing about the preview is kept on the phone: no account data is synced, and the visitor's own progress stays as it was. */
+const PV_FREE=/^\/(auth\/|me\/claim-gym$|prospects\/)/; // calls that are about the visitor, not the preview
+const PV_BLOCK=new Set(["copy","rotate","signout","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
+async function previewInit(tok){
+  let g;try{g=(await api("GET","/prospects/"+encodeURIComponent(tok))).gym}catch(e){toast(e.message);return}
+  if(g.claimed){toast(`${g.name} has been claimed already. If it's yours, sign in.`);if(!API.me){S.ui.authMode="login";authSheet()}return}
+  if(!g.built)return claimInit(tok); // not built yet (its website is still being read): claim it straight away
+  API.real=API.me;API.preview={token:tok,info:g};S.ui.claimGym=tok;S.ui.claimInfo=g;
+  try{API.me=(await api("GET","/me")).me}catch(e){pvExit();toast(e.message);return}
+  COACH.view="home";hideSheet();go("coach-home",true);
+  // A view counts like the old preview page's: once it's on screen for a moment (never the team's own, robots or the same person again).
+  const beacon=()=>{if(document.visibilityState!=="visible"||!API.preview||API.preview.counted)return;API.preview.counted=1;
+    fetch(`/try/${encodeURIComponent(tok)}/view`,{method:"POST",headers:{"x-jf":"1"},credentials:"same-origin",keepalive:true}).catch(()=>{})};
+  setTimeout(beacon,1500);document.addEventListener("visibilitychange",()=>setTimeout(beacon,1500));
+}
+// Out of the preview (claimed, or signed in): what it loaded goes, so the real gym loads fresh.
+function pvExit(){if(!API.preview)return;API.preview=null;API.me=API.real||null;API.real=null;GYM.data=null;API.notices=undefined;API.comps=null;API.classes=null;
+  COACH.roster=COACH.classes=COACH.payments=COACH.insights=COACH.money=null;COACH.packs=COACH.payInfo=COACH.pf=COACH.bill=COACH.beta=COACH.imp=undefined;}
+// A change in the preview: the claim (only straight after a tap, so a background refresh never pops it up).
+function pvAsk(){const ua=navigator.userActivation;if(!ua||ua.isActive)previewClaim()}
+function previewClaim(){if(!API.preview)return;const g=API.preview.info,r=API.real;
+  if(r&&!r.gym)return claimSheet();
+  if(r&&r.gym){S.ui.sheet={k:"claim"};S.ui.stack=[];return openSheet(`${sheetHead("Claim your gym")}<div class="stack-lg"><h1>Claim ${esc(g.name)}</h1><p>You're signed in as <b>${esc(r.name)}</b>, who's in ${esc(r.gym.name)}. To claim ${esc(g.name)}, sign out and claim it with the gym's own email.</p></div>`,false,{act:`<button class="btn primary grow" data-a="pvsignout">Sign out and claim</button>`})}
+  S.ui.authMode="gym";authSheet()}
+function pvBar(){const p=API.preview;if(!p)return "";const g=p.info;
+  return `<div class="pvbar" id="pvbar" role="region" aria-label="Preview of ${esc(g.name)}"><span>This is <b>${esc(g.name)}</b>, built from your website.</span><button class="btn primary sm" data-a="pvclaim">Claim it free →</button></div>`}
+// Home's first card in the preview: what JitsFlow does for them, in short.
+function pvHome(){const p=API.preview;if(!p)return "";const g=p.info;
+  return `<section class="panel stack pvcard"><h2 class="label">Your gym, already set up</h2><p><b>Run ${esc(g.name)} from your phone</b>: less admin for you, and room to grow. ${esc(claimReady(g).replace(/^./,c=>c.toUpperCase()))} ${g.classes+g.coaches+g.prices>1?"are":"is"} in already.</p>
+    <ul class="pvlist">${(g.pitch||[]).slice(0,3).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
+    <p class="small"><b>No obligation.</b> ${esc(g.deal||"")}</p><button class="btn primary" data-a="pvclaim">Claim ${esc(g.name)} free</button>
+    <p class="small muted">Look around: this is your real gym, ready to go. Nothing you tap here changes anything until it's yours.</p></section>`}
+document.addEventListener("click",e=>{if(!API.preview)return;const el=e.target.closest("[data-a],[data-wa],a.wa,a[href*='wa.me'],input[type=file],label");if(!el)return;
+  if(el.matches("label")&&!el.querySelector("input[type=file]"))return;
+  if(el.dataset.a&&!PV_BLOCK.has(el.dataset.a)&&!el.matches("[data-wa]"))return;
+  e.preventDefault();e.stopImmediatePropagation();previewClaim()},true);
+document.addEventListener("submit",e=>{if(!API.preview||e.target.id==="authform")return;e.preventDefault();e.stopImmediatePropagation();previewClaim()},true);
+
+/* ============ THE BETA ("FOUNDING GYMS") ============ */
+// Head coach, in the Gym tab: apply in one tap (with what they'd want built), see where it stands, send feedback once in.
+function betaPanel(){if(!isHead())return "";
+  if(COACH.beta===undefined){COACH.beta=null;api("GET","/coach/beta").then(j=>{COACH.beta=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
+  const B=COACH.beta;if(!B)return "";const b=B.beta||{},st=b.status;
+  const pill=st==="accepted"?`<span class="pill ok">Beta</span>`:st==="applied"?`<span class="pill due">Applied</span>`:st==="declined"?`<span class="pill plain">Not this round</span>`:"";
+  const head=`<div class="row between"><h2 class="label">JitsFlow beta</h2>${pill}</div>`;
+  if(st==="accepted")return `<section class="panel stack betacard" id="betacard">${head}<p><b>You're in the beta.</b> ${esc(String(b.line||"").replace(/^Beta: (\w)/,(m,c)=>c.toUpperCase()))}.</p>
+    ${(b.features||[]).length?`<p class="small">Switched on for ${esc(API.me.gym.name)}: ${b.features.map(f=>`<span class="pill plain">${esc(f)}</span>`).join(" ")}</p>`:""}
+    <p class="small">Use it with your members and tell us what works and what doesn't. A short check-in comes once a month.</p>
+    <div class="row"><button class="btn primary" data-a="betafb">Send feedback</button><button class="linkbtn small" data-a="betaleave">${S.ui.betaLeave?"Tap again to leave the beta":"Leave the beta"}</button></div></section>`;
+  if(st==="applied")return `<section class="panel stack betacard" id="betacard">${head}<p>Thanks for applying. We read every application and reply within a few days.</p>${b.note?`<p class="small muted">You'd want: ${esc(b.note)}</p>`:""}</section>`;
+  if(st==="declined")return `<section class="panel stack betacard" id="betacard">${head}<p class="small">Not this round: the beta is full for now. Thanks for applying. We'll tell you when there's room.</p></section>`;
+  return `<form id="betaform" class="panel stack betacard" novalidate>${head}<p><b>Join the JitsFlow beta</b>: get features built for your gym and reduced or free fees in exchange for testing and feedback.</p>
+    <p class="small">The deal: ${esc(B.deal)}. You use JitsFlow with your members and answer a short monthly check-in.</p>
+    <label class="f">What would you want built? (optional)<textarea name="note" rows="2" maxlength="1000" placeholder="Grading sheets, a check-in kiosk, family discounts…"></textarea></label>
+    <button class="btn primary" style="justify-self:start" type="submit">Apply for the beta</button></form>`}
+async function betaApply(f){const note=f?(f.querySelector("[name=note]")||{}).value||"":"";
+  try{const j=await api("POST","/coach/beta",{action:"apply",note});COACH.beta=Object.assign(COACH.beta||{},{beta:j.beta});API.me.gym.beta=j.beta.status;toast("Applied. We'll be in touch soon.");render()}catch(e){toast(e.message)}}
+async function betaLeave(){if(!S.ui.betaLeave){S.ui.betaLeave=true;render();return}S.ui.betaLeave=false;
+  try{await api("POST","/coach/beta",{action:"leave"});COACH.beta=undefined;API.me.gym.beta="left";API.me.gym.features=[];COACH.bill=undefined;toast("You've left the beta.");render()}catch(e){toast(e.message)}}
+function fbSheet(){S.ui.sheet={k:"betafb"};S.ui.stack=[];S.ui.fbShot=null;
+  openSheet(`${sheetHead("JitsFlow beta")}<div class="stack-lg"><h1>Send feedback</h1><p class="muted">What works, what doesn't, what you'd want next. It goes straight to the JitsFlow team.</p>
+    <form id="fbform" class="stack" novalidate><label class="f">Your feedback<textarea id="fb-text" name="text" rows="5" maxlength="4000" placeholder="Paste a screenshot here too, if it helps."></textarea></label>
+    <div class="row"><label class="btn" for="fb-file">Add a screenshot</label><input id="fb-file" type="file" accept="image/*" hidden><span class="small muted" id="fb-shot">No screenshot</span></div></form></div>`,false,
+    {act:`<button class="btn primary grow" type="submit" form="fbform">Send feedback</button>`})}
+async function fbPick(file){if(!file||!/^image\//.test(file.type)){toast("Add a picture (a screenshot).");return}
+  try{S.ui.fbShot=await fileToProof(file);const s=document.getElementById("fb-shot");if(s)s.textContent="Screenshot added: "+(file.name||"pasted")}catch(e){toast(e.message)}}
+document.addEventListener("change",e=>{if(e.target.id==="fb-file"&&e.target.files[0])fbPick(e.target.files[0])});
+document.addEventListener("paste",e=>{if(!(S.ui.sheet&&S.ui.sheet.k==="betafb"))return;const f=[...((e.clipboardData&&e.clipboardData.files)||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();fbPick(f)}});
+async function fbSend(f){const text=(f.querySelector("[name=text]")||{}).value||"";if(!text.trim()&&!S.ui.fbShot){toast("Write what you'd like us to know.");return}
+  try{await api("POST","/coach/beta/feedback",{text,...(S.ui.fbShot?{file:{data:S.ui.fbShot.data,name:S.ui.fbShot.name}}:{})},formKey(f));S.ui.fbShot=null;closeSheet();toast("Thanks! The JitsFlow team has it.")}catch(e){toast(e.message)}}
+
+/* ============ THE TEAM'S BETA SECTION (dashboard) ============ */
+const BETA={data:null,open:null};
+async function betaLoad(){try{BETA.data=await api("GET","/admin/beta")}catch(e){toast(e.message)}const el=document.getElementById("dash-beta");if(el)el.innerHTML=betaAdmin()}
+const BSTAT={applied:["due","Applied"],accepted:["ok","In the beta"],declined:["plain","Declined"],left:["bad","Left"]};
+function betaAdmin(){const d=BETA.data;if(!d)return `<p class="small muted">Loading…</p>`;
+  const gyms=d.gyms,fb=d.feedback,dd=d.defaults,open=fb.filter(x=>!x.done).length;
+  const row=g=>{const b=g.beta||{},s=BSTAT[b.status]||["plain",b.status||""],ed=BETA.open===g.id;
+    return `<div class="dgym betarow" data-g="${esc(g.id)}"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><b class="dgname">${esc(g.name)}</b><span class="pill ${s[0]}">${esc(s[1])}</span></div>
+      <p class="small">${g.head?`${esc(g.head.name)} · <a href="mailto:${esc(g.head.email)}">${esc(g.head.email)}</a> · `:""}${g.members} member${g.members===1?"":"s"} · ${g.active7} active this week · ${g.classes7} classes last week</p>
+      ${b.note?`<p class="small">Wants: ${esc(b.note)}</p>`:""}${b.line?`<p class="small"><b>${esc(b.line)}</b></p>`:""}
+      ${(b.features||[]).length?`<p class="small">Features: ${b.features.map(f=>`<span class="pill plain">${esc(f)}</span>`).join(" ")}</p>`:""}${b.adminNote?`<p class="small muted">Note: ${esc(b.adminNote)}</p>`:""}
+      ${ed?`<form id="betaadm" class="stack" data-g="${esc(g.id)}" novalidate>
+        <fieldset class="stack" style="border:0;padding:0;margin:0"><legend class="small"><b>Fee while in the beta</b></legend>
+        <label class="row small radrow"><input type="radio" name="fee" value="default" checked> Default: free for ${dd.freeMonths} months, then ${money(dd.afterCents,"ZAR")}/month</label>
+        <label class="row small radrow"><input type="radio" name="fee" value="0"> Free for as long as they're in the beta</label>
+        <label class="row small radrow"><input type="radio" name="fee" value="4900"> ${money(4900,"ZAR")}/month</label>
+        <label class="row small radrow"><input type="radio" name="fee" value="custom"> Custom: <input name="amount" type="number" inputmode="decimal" min="0" step="1" placeholder="Rand a month" style="width:120px"></label>
+        <label class="f">Until (optional)<input name="until" type="date"></label></fieldset>
+        <label class="f">Features switched on (comma separated)<input name="features" value="${esc((b.features||[]).join(", "))}" autocapitalize="none" placeholder="kiosk, grading-sheets"></label>
+        <label class="f">Team note<input name="adminNote" value="${esc(b.adminNote||"")}"></label>
+        <div class="row">${b.status==="accepted"?`<button class="btn primary" type="submit" data-v="fee">Save</button>`:`<button class="btn primary" type="submit" data-v="accept">Accept</button>`}<button class="btn" type="button" data-a="betaclose">Cancel</button></div></form>`
+      :`<div class="row">${b.status!=="accepted"?`<button class="btn primary sm" data-a="betaopen" data-v="${esc(g.id)}">Accept…</button>`:`<button class="btn sm" data-a="betaopen" data-v="${esc(g.id)}">Fee and features</button>`}${b.status==="applied"?`<button class="btn sm" data-a="betaset" data-v="${esc(g.id)}:decline">Decline</button>`:""}${b.status==="accepted"?`<button class="btn sm danger" data-a="betaset" data-v="${esc(g.id)}:remove">Remove</button>`:""}</div>`}</div>`};
+  return `${gyms.length?gyms.map(row).join(""):`<p class="small muted">No gym has applied yet. Head coaches apply from the Gym tab.</p>`}
+    <h3 class="label dsub">Feedback${open?` · ${open} to read`:""}</h3>${fb.length?fb.map(x=>`<div class="drow fbrow${x.done?" done":""}"><div class="row between" style="flex-wrap:nowrap"><b class="dgname">${esc(x.gym)}</b><span class="small muted" style="white-space:nowrap">${esc(dAgo(x.at))}</span></div>
+      <span class="small" style="white-space:pre-wrap">${esc(x.text)}</span>${x.shot?`<a class="small" href="/api/admin/feedback/${esc(x.id)}/shot" target="_blank" rel="noopener">Open screenshot</a>`:""}
+      <span class="small muted">${esc(x.who||"")}${x.email?` · ${esc(x.email)}`:""}</span><button class="btn sm" style="justify-self:start" data-a="fbdone" data-v="${esc(x.id)}:${x.done?"0":"1"}">${x.done?"Mark not done":"Mark done"}</button></div>`).join(""):`<p class="small muted">No feedback yet.</p>`}`}
+async function betaAdminSave(f,action){const g=f.dataset.g,v=n=>(f.querySelector(`[name="${n}"]`)||{}).value||"",fee=(f.querySelector("[name=fee]:checked")||{}).value||"default";
+  const body={action,features:v("features"),adminNote:v("adminNote")};
+  if(fee!=="default"){body.feeCents=fee==="custom"?Math.round(Number(v("amount"))*100):Number(fee);if(fee==="custom"&&!(Number(v("amount"))>=0&&v("amount")!=="")){toast("Type the monthly amount in rand.");return}if(v("until"))body.feeUntil=v("until")}
+  try{await api("PATCH",`/admin/gyms/${g}/beta`,body);BETA.open=null;toast(action==="accept"?"Accepted. They'll see it in their Gym tab.":"Saved.");await betaLoad()}catch(e){toast(e.message)}}
+async function betaSet(v){const [g,action]=String(v).split(":");try{await api("PATCH",`/admin/gyms/${g}/beta`,{action});toast(action==="decline"?"Declined.":"Removed from the beta.");await betaLoad()}catch(e){toast(e.message)}}
+async function fbDone(v){const [id,d]=String(v).split(":");try{await api("POST",`/admin/feedback/${id}/done`,{done:d==="1"});await betaLoad()}catch(e){toast(e.message)}}
+
+// Actions and forms added here (app.html's click and submit handlers pass on what they don't know).
+function moreAct(a,v,el){switch(a){
+  case "pvclaim": previewClaim();break;
+  case "pvsignout": (async()=>{try{await fetch("/api/auth/logout",{method:"POST",headers:{"content-type":"application/json","x-jf":"1"},credentials:"same-origin",body:"{}"})}catch(e){}API.real=null;wipeLocal();previewClaim()})();break;
+  case "betafb": fbSheet();break;
+  case "betaleave": betaLeave();break;
+  case "betaopen": BETA.open=v;{const el2=document.getElementById("dash-beta");if(el2)el2.innerHTML=betaAdmin()}break;
+  case "betaclose": BETA.open=null;{const el2=document.getElementById("dash-beta");if(el2)el2.innerHTML=betaAdmin()}break;
+  case "betaset": betaSet(v);break;
+  case "fbdone": fbDone(v);break;
+  case "outbuild": outAct("outbuild");break;
+  case "outgymdel": outAct("outgymdel");break;
+  case "outunclaim": outAct("outunclaim");break;
+}}
+const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
+async function moreForm(fid,f,submitter){
+  if(fid==="betaform")return betaApply(f);
+  if(fid==="fbform")return fbSend(f);
+  if(fid==="betaadm")return betaAdminSave(f,(submitter&&submitter.dataset.v)||"accept");
+  if(fid==="reassignform")return outAct("outreassign",f);
+}
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;try{if(managing())return}catch(e){}/* coaches running the gym skip the study questions until they open My training */

@@ -795,6 +795,11 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .paytile.dark{background:#000;color:#fff;border-color:#000}.paytile .pill{position:absolute;top:-8px;right:-4px;font-size:10px}
 .apmark{font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:1px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
 .gpmark{display:flex;align-items:center;gap:3px;font-size:19px;font-weight:600;color:var(--ink-2)}
+.pvbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 12px;border-radius:14px;background:var(--night,#0e1a33);color:#fff;font-size:14px;line-height:1.3;box-shadow:0 6px 18px rgba(14,26,51,.18)}
+.pvbar span{flex:1;min-width:0;overflow-wrap:anywhere}.pvbar .btn,.pvbar .btn.primary{flex:none;white-space:nowrap;background:#fff;color:#0e1a33;border-color:#fff}
+.radrow{flex-wrap:nowrap!important;justify-content:flex-start!important;gap:8px!important}.radrow input{width:auto;flex:none;margin:0}
+.pvcard{border:2px solid var(--blue)}.pvlist{margin:0;padding-left:20px;display:grid;gap:4px}.pvlist li{line-height:1.4}.betapill{font-size:13px;vertical-align:6px;font-family:inherit;letter-spacing:0}
+.betatick input{flex:none}.fbrow.done{opacity:.6}
 .popzone{display:flex;flex-direction:column;gap:6px;align-items:flex-start;border:2px dashed var(--line);border-radius:12px;padding:14px}.popzone.over{border-color:var(--blue);background:var(--blue-soft)}
 </style>
 
@@ -2111,7 +2116,7 @@ const initials=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);ret
 function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
   const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
-  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${famBar()}${tipBar()}`}
+  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${pvBar()}${famBar()}${API.preview?"":tipBar()}`}
 /* First-visit tips: one line at the top of a tab saying what it's for. Each shows once: it's gone after you leave that tab
    (per person, on this phone). Closing any tip turns them all off, so they don't pop up again on every tab. */
 const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
@@ -2917,6 +2922,7 @@ document.addEventListener("click",e=>{
     case "reset": S.ui.confirmReset=true; settingsSheet(); break;
     case "resetno": S.ui.confirmReset=false; settingsSheet(); break;
     case "resetyes": { const st=P().settings;S.progress=blankProgress();S.progress.settings=st;saveProgress();S.ui.confirmReset=false;toast("Ratings and reviews cleared.");render();break }
+    default: moreAct(a,v,el);
   }
 });
 document.addEventListener("keydown",e=>{
@@ -2984,15 +2990,16 @@ const FORMS=["outform","outedit","authform","howcode","classform","studentform",
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
-  if(!FORMS.includes(fid))return;e.preventDefault();
+  if(!FORMS.includes(fid)&&!MORE_FORMS.includes(fid))return;e.preventDefault();
   if(fid==="authform"||fid==="astform")return submitForm(fid,f); // these handle their own button
   // One save at a time: the button is off (and says so) until this one is done, so a double tap doesn't add it twice.
   if(f.dataset.busy)return;f.dataset.busy="1";
   const btn=e.submitter||document.querySelector(`#sheetbar [type=submit][form="${fid}"]`)||f.querySelector("[type=submit]"),label=btn&&btn.innerHTML;
   if(btn){btn.disabled=true;btn.textContent="Saving…"}
-  try{await submitForm(fid,f)}finally{delete f.dataset.busy;if(btn){btn.disabled=false;btn.innerHTML=label}}
+  try{await submitForm(fid,f,e.submitter)}finally{delete f.dataset.busy;if(btn){btn.disabled=false;btn.innerHTML=label}}
 });
-async function submitForm(fid,f){
+async function submitForm(fid,f,submitter){
+  if(MORE_FORMS.includes(fid))return moreForm(fid,f,submitter);
   if(fid==="logform")return submitLog();
   if(fid==="kidform")return addKid(f);
   if(fid==="outform")return outAdd(f);

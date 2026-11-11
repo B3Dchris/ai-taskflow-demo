@@ -30,7 +30,8 @@ async function overview(q, { days = 30, bill } = {}) {
   const day = (col) => `to_char((${col} at time zone 'UTC')::date, 'YYYY-MM-DD')`;
   const P = [start];
   const [tot, signDays, gymDays, visDays, viewDays, pages, vSrc, camps, countries, sSrc, gyms, recent, out, first, last7] = await Promise.all([
-    q(`select (select count(*) from gyms) as gyms,
+    // Gyms outreach built that nobody has claimed aren't gyms yet: they're in the outreach funnel ("Built, not claimed").
+    q(`select (select count(*) from gyms where claim is null) as gyms,
         (select count(distinct gym_id) from users where gym_id is not null and last_seen > now() - interval '7 days') as gyms_active,
         count(*) filter (where role='coach' and gym_id is not null and active) as coaches,
         count(*) filter (where role='student' and gym_id is not null and active) as members,
@@ -47,7 +48,7 @@ async function overview(q, { days = 30, bill } = {}) {
       from users`),
     q(`select ${day("signed_up_at")} as d, count(*) filter (where role='coach') as coaches, count(*) filter (where role<>'coach') as students
       from users where pass_hash is not null and signed_up_at >= ${since} group by 1`, P),
-    q(`select ${day("created_at")} as d, count(*) as n from gyms where created_at >= ${since} group by 1`, P),
+    q(`select ${day("coalesce(claimed_at, created_at)")} as d, count(*) as n from gyms where claim is null and coalesce(claimed_at, created_at) >= ${since} group by 1`, P),
     q(`select to_char(day, 'YYYY-MM-DD') as d, count(*) filter (where ${VIS}) as visitors, count(*) filter (where app>0) as app_people
       from site_visitors where day >= $1::date group by day`, P),
     q(`select to_char(day, 'YYYY-MM-DD') as d, sum(views) filter (where path<>'/app/') as views, sum(views) filter (where path='/app/') as app_opens
@@ -59,7 +60,8 @@ async function overview(q, { days = 30, bill } = {}) {
     q(`select signup_source->>'ref' as ref, signup_source->>'utm_source' as utm_source, signup_source->>'utm_medium' as utm_medium,
         coalesce(signup_source ? 'click', false) as click, signup_source->>'via' as via, role, count(*) as n
       from users where pass_hash is not null and signed_up_at >= ${since} group by 1,2,3,4,5,6`, P),
-    q(`select g.id, g.name, g.created_at, g.billing, g.currency, h.name as head_name, h.email as head_email,
+    q(`select g.id, g.name, g.created_at, g.claimed_at, g.billing, g.beta, g.currency, h.name as head_name, h.email as head_email,
+        (select p.id from prospects p where p.gym_id=g.id limit 1) as prospect_id,
         coalesce(m.members,0) as members, coalesce(m.on_app,0) as on_app, coalesce(m.active7,0) as active7, coalesce(m.coaches,0) as coaches, m.last_seen,
         coalesce(c.n,0) as classes7, coalesce(b.n,0) as bookings7, coalesce(p.n,0) as pay_n, coalesce(p.cents,0) as pay_cents
       from gyms g
@@ -72,12 +74,13 @@ async function overview(q, { days = 30, bill } = {}) {
       left join (select gym_id, count(*) as n from classes where starts_at >= now() and starts_at < now() + interval '7 days' group by gym_id) c on c.gym_id=g.id
       left join (select k.gym_id, count(*) as n from attendance a join classes k on k.id=a.class_id where a.going and a.booked_at > now() - interval '7 days' group by k.gym_id) b on b.gym_id=g.id
       left join (select gym_id, count(*) as n, sum(amount_cents) as cents from payments where status='confirmed' and paid_on >= date_trunc('month', now())::date group by gym_id) p on p.gym_id=g.id
-      order by members desc, g.id`),
+      where g.claim is null order by members desc, g.id`),
     q(`select u.id, u.name, u.email, u.role, u.signed_up_at, u.signup_source, g.name as gym_name, u.parent_id is not null as kid,
         exists (select 1 from users k where k.parent_id=u.id) as parent
       from users u left join gyms g on g.id=u.gym_id where u.pass_hash is not null and u.signed_up_at is not null order by u.signed_up_at desc, u.id desc limit 50`),
     q(`select count(*) as added, count(*) filter (where sent_at is not null) as sent, count(*) filter (where views>0 and sent_at is not null) as opened,
-        count(*) filter (where status='claimed') as claimed, count(*) filter (where status='optedout') as optedout from prospects`).catch(() => ({ rows: [{}] })),
+        count(*) filter (where status='claimed') as claimed, count(*) filter (where status='optedout') as optedout,
+        count(*) filter (where status<>'claimed' and status<>'optedout' and exists (select 1 from gyms g where g.id=prospects.gym_id and g.claim is not null)) as built from prospects`).catch(() => ({ rows: [{}] })),
     q(`select to_char(min(day), 'YYYY-MM-DD') as d from site_daily`),
     // Visitors today and over the last 7 days (each person counted once a day), whatever the range.
     q(`select count(*) filter (where day=(now() at time zone 'UTC')::date) as today, count(*) as week
@@ -104,12 +107,12 @@ async function overview(q, { days = 30, bill } = {}) {
     campaigns: camps.rows.map((r) => ({ name: r.name, n: n(r.n), ads: !!r.ads })),
     countries: countries.rows.map((r) => ({ code: r.country || "", n: n(r.n) })),
     signupSources: bySource(sSrc.rows, (r) => (r.role === "coach" ? "coaches" : "students")),
-    gyms: gyms.rows.map((g) => ({ id: String(g.id), name: g.name, createdAt: iso(g.created_at), head: g.head_name ? { name: g.head_name, email: g.head_email } : null,
+    gyms: gyms.rows.map((g) => ({ id: String(g.id), name: g.name, createdAt: iso(g.claimed_at || g.created_at), outreach: !!g.prospect_id, beta: g.beta && g.beta.status ? g.beta.status : null, head: g.head_name ? { name: g.head_name, email: g.head_email } : null,
       members: n(g.members), onApp: n(g.on_app), active7: n(g.active7), coaches: n(g.coaches), lastSeen: iso(g.last_seen), classes7: n(g.classes7), bookings7: n(g.bookings7),
       payments: { n: n(g.pay_n), cents: n(g.pay_cents), currency: g.currency || "ZAR" }, billing: bill ? bill(g) : null })),
     recent: recent.rows.map((u) => ({ id: String(u.id), name: u.name, email: u.email, role: u.role, kid: !!u.kid, parent: !!u.parent, gym: u.gym_name || null,
       at: iso(u.signed_up_at), source: channel(u.signup_source || {}), campaign: (u.signup_source || {}).utm_campaign || null })),
-    outreach: { added: n(o.added), sent: n(o.sent), opened: n(o.opened), claimed: n(o.claimed), optedOut: n(o.optedout) },
+    outreach: { added: n(o.added), built: n(o.built), sent: n(o.sent), opened: n(o.opened), claimed: n(o.claimed), optedOut: n(o.optedout) },
   };
 }
 

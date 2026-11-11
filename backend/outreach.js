@@ -1,5 +1,6 @@
-// Outreach to gyms: a private preview of a gym on JitsFlow (made from its public website by the importer), the email that
-// introduces it to the gym's owner, and the public preview page at /try/<token> where the owner claims it in one step.
+// Outreach to gyms: the gym is built on JitsFlow from its public website (the importer reads it, api.js builds a real, unclaimed gym
+// from it), the email that introduces it to the gym's owner, and the link (/app/?gym=<token>, or the older /try/<token>) that opens
+// the real app as a read-only preview of their gym, where they claim it by signing up.
 // Platform admins (JF_ADMIN_EMAILS) make and send these from the app; the admin routes are in api.js.
 "use strict";
 const crypto = require("crypto");
@@ -7,6 +8,7 @@ const express = require("express");
 const brand = require("./brand");
 const payfast = require("./payfast");
 const importer = require("./importer");
+const beta = require("./beta");
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
@@ -23,6 +25,12 @@ const isAdmin = (email) => !!email && adminEmails().includes(String(email).trim(
 /* ---------------- small helpers ---------------- */
 const newToken = () => crypto.randomBytes(24).toString("base64url"); // 192 bits, 32 characters
 const TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
+// A prospect by its link's token: looked up by the token's hash, then compared in constant time. With its built gym's state.
+async function findToken(q, t) {
+  t = String(t || ""); if (!TOKEN_RE.test(t)) return null;
+  const p = (await q(`select p.*, (select g.claim is not null from gyms g where g.id=p.gym_id) as gym_unclaimed from prospects p where p.token_hash=$1`, [sha(t)])).rows[0];
+  return p && p.token.length === t.length && crypto.timingSafeEqual(Buffer.from(p.token), Buffer.from(t)) ? p : null;
+}
 function domainOf(u) { try { return new URL(/^https?:\/\//i.test(u) ? u : "https://" + u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } }
 const first = (n) => String(n || "").trim().split(/\s+/)[0] || "";
 const rand = (cents) => "R" + (cents % 100 ? (cents / 100).toFixed(2) : String(Math.round(cents / 100)));
@@ -104,45 +112,66 @@ const classLine = (r) => [r.level && !new RegExp(r.level.replace(/[.*+?^${}()|[\
 const initials = (n) => String(n || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
 
 /* ---------------- the email ---------------- */
-const BENEFITS = [
-  "Members book classes and check in on their phones. No more headcounts on WhatsApp.",
-  "Fees keep a running balance, and reminders go out by themselves.",
-  "Members send their EFT proof of payment in the app. You just tick it off.",
-  "Kids and families share one parent login.",
-  "Bring your members over from your WhatsApp group in a few taps.",
+// What the gym side of JitsFlow does for an owner, in plain words (the email, the preview's claim screen and the landing copy say the same).
+const PITCH = (p) => [
+  "Members book classes themselves, with waitlists and check-in at the door.",
+  "Fees are tracked for you, with automatic reminders and EFT references. Card, Apple Pay and Google Pay are coming soon.",
+  "Your timetable, kids and parents, and coaches all in one place.",
+  ttOf(p).length ? "Already set up from your website: your classes, prices and logo are in." : "Already set up from your website: your details and logo are in.",
+  "Helps you grow: invite links and WhatsApp bring members in, and members who stopped coming are flagged.",
 ];
+// The no-obligation promise, true in code: past the free months with no card, nothing locks (see billState in api.js).
+function noObligation() {
+  const m = payfast.TRIAL_MONTHS(), r = rand(payfast.PRICE_CENTS());
+  return `${m} month${m === 1 ? "" : "s"} free. After that ${r}/month only if you want to keep going — no card needed to start, no contract, nothing charged unless you add a card.`;
+}
+// The beta invitation (its default deal comes from backend/beta.js).
+const betaOffer = () => `We build features for your gym and you pay less: ${beta.dealLine(payfast.PRICE_CENTS())}. In exchange, you use it with your members and answer a short monthly check-in. Reply to this email, or tap Join the beta once you're in.`;
 const defaultSubject = (p) => `${nameOf(p)} is already set up on JitsFlow`;
+const appLink = (p, base) => `${base}/app/?gym=${p.token}`;
 const tryUrl = (p, base) => `${base}/try/${p.token}`;
 const optoutUrl = (p, base) => `${base}/try/${p.token}/optout`;
+// The sender: "Chris from JitsFlow" in the From line, the full name in the sign-off.
+const fromName = (admin) => `${first(admin && admin.name) || "The team"} from JitsFlow`;
 // One email, used for sending, copying and showing it to the admin. p: the prospect row; admin: { name, email }; base: the app's address.
 // followup: the one reminder sent 5 or more days later.
-function renderEmail(p, { admin = {}, base = "https://www.jitsflow.com", followup = false } = {}) {
-  const gym = nameOf(p), acc = accentOf(p), btn = brand.button(acc), onBand = brand.textOn(acc), inkAcc = brand.ink(acc), url = tryUrl(p, base), out = optoutUrl(p, base);
-  const sender = String(admin.name || "The JitsFlow team").trim(), who = first(p.owner_name), hi = who ? `Hi ${who},` : "Hi there,";
-  const personal = String(p.personal_line || "").trim(), price = priceLine(), classes = followup ? [] : sampleClasses(p, 6);
+function renderEmail(p, { admin = {}, base = "https://www.jitsflow.com", followup = false, now = new Date() } = {}) {
+  const gym = nameOf(p), acc = accentOf(p), btn = brand.button(acc), onBand = brand.textOn(acc), inkAcc = brand.ink(acc), url = appLink(p, base), out = optoutUrl(p, base);
+  const sender = String(admin.name || "").trim(), who = first(p.owner_name), hi = who ? `Hi ${who},` : "Hi there,";
+  const personal = String(p.personal_line || "").trim(), deal = noObligation(), tt = ttOf(p), pitch = PITCH(p);
   const subject = followup ? `Re: ${String(p.subject || "").trim() || defaultSubject(p)}` : String(p.subject || "").trim() || defaultSubject(p);
-  const headline = followup ? `Did you see ${gym} on JitsFlow?` : ttOf(p).length ? `${gym}, your timetable is already on JitsFlow` : `${gym}, your gym is already on JitsFlow`;
+  const headline = followup ? `Did you see ${gym} on JitsFlow?` : `${gym} is already set up on JitsFlow`;
   const intro = followup
-    ? [`A quick follow-up on my earlier email. The page I made for ${gym} is still there, with your classes in it.`, `It's ${price.main.charAt(0).toLowerCase() + price.main.slice(1, -1)}, and one step makes it yours. If it's not for you, no problem: I won't email again.`]
-    : [`I'm ${first(sender) || sender} from JitsFlow. I used ${ttOf(p).length ? "the classes" : "what's"} on your website to set ${gym} up on JitsFlow, so you can see what your members would get before you decide anything.`];
-  const preheader = followup ? `${gym}'s page is still there if you'd like a look.` : `Your classes are already in. Have a look: it takes a minute.`;
-  const F = "Arial,Helvetica,sans-serif", INK = "#111722", INK2 = "#4e5869", LINE = "#dfe4ec", BG = "#eef1f5";
+    ? [`A quick follow-up on my earlier email. ${gym} is still set up on JitsFlow, with your classes in it, waiting for you to have a look.`, "If it's not for you, no problem: I won't email again."]
+    : [`${sender ? `I'm ${first(sender)} from JitsFlow. ` : ""}JitsFlow lets you run ${gym} from your phone: less admin for you, and room to grow.`,
+      `I've already set ${gym} up from your website, so you can see it working before you decide anything.`];
+  const preheader = followup ? `${gym} is still set up on JitsFlow if you'd like a look.` : `Run ${gym} from your phone. It's already set up from your website.`;
+  const F = "Arial,Helvetica,sans-serif", INK = "#111722", INK2 = "#4e5869", LINE = "#dfe4ec", BG = "#eef1f5", TINT = brand.tint(acc, 0.09);
   const P = (t, extra = "") => `<p style="margin:0 0 14px;font-family:${F};font-size:16px;line-height:1.55;color:${INK};${extra}">${t}</p>`;
-  const box = p.logo ? logoBox(p, 52, 180) : null;
+  const box = p.logo ? logoBox(p, 52, 180) : null, logoUrl = `${esc(base)}/try/${esc(p.token)}/logo`;
   const logoCell = box ? `<td style="vertical-align:middle;padding:0 14px 0 0"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#ffffff" style="background:#ffffff;border-radius:10px;padding:5px;line-height:0;font-size:0">`
-    + `<img src="${esc(base)}/try/${esc(p.token)}/logo" width="${box.w}" height="${box.h}" alt="${esc(gym)}" style="display:block;width:${box.w}px;height:${box.h}px;border:0;border-radius:6px;outline:none;text-decoration:none"></td></tr></table></td>` : "";
-  const table = classes.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px;border:1px solid ${LINE};border-radius:10px;border-collapse:separate">
-<tr><td colspan="3" style="padding:12px 14px 8px;font-family:${F};font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${inkAcc}">On your timetable</td></tr>
-${classes.map((r, i) => `<tr><td style="padding:8px 0 8px 14px;border-top:1px solid ${LINE};font-family:${F};font-size:15px;color:${INK2};white-space:nowrap;width:44px">${esc(r.day)}</td><td style="padding:8px 10px;border-top:1px solid ${LINE};font-family:${F};font-size:15px;color:${INK2};white-space:nowrap;width:52px">${esc(r.start)}</td><td style="padding:8px 14px 8px 0;border-top:1px solid ${LINE};font-family:${F};font-size:15px;font-weight:700;color:${INK}">${esc(r.title)}${i === classes.length - 1 && ttOf(p).length > classes.length ? `<span style="font-weight:400;color:${INK2}"> and ${ttOf(p).length - classes.length} more</span>` : ""}</td></tr>`).join("\n")}
+    + `<img src="${logoUrl}" width="${box.w}" height="${box.h}" alt="${esc(gym)}" style="display:block;width:${box.w}px;height:${box.h}px;border:0;border-radius:6px;outline:none;text-decoration:none"></td></tr></table></td>` : "";
+  // A screenshot-like card of their own Classes screen: the coming week's days with a few of their classes (HTML only, no images).
+  const week = weekOf(now), picked = followup ? [] : sampleClasses(p, 6), rest = tt.length - picked.length;
+  const days = week.map((d) => ({ ...d, rows: picked.filter((r) => r.day === d.day) })).filter((d) => d.rows.length);
+  const td = (x, st = "") => `<td style="font-family:${F};${st}">${x}</td>`;
+  const card = days.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px;border:1px solid ${LINE};border-radius:14px;border-collapse:separate;background:#ffffff">
+<tr><td colspan="3" bgcolor="${acc}" style="background:${acc};border-radius:13px 13px 0 0;padding:10px 14px;font-family:${F};font-size:14px;font-weight:700;color:${onBand}">${esc(gym)} &middot; Classes</td></tr>
+${days.map((d) => `<tr><td colspan="3" style="padding:10px 14px 2px;font-family:${F};font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${inkAcc}">${esc(d.name)} ${esc(d.date)}</td></tr>
+${d.rows.map((r) => `<tr>${td(esc(r.start), `padding:7px 0 7px 14px;font-size:15px;font-weight:700;color:${INK};white-space:nowrap;width:48px;vertical-align:top`)}${td(`<b style="font-weight:700">${esc(r.title)}</b>${classLine(r) ? `<br><span style="font-size:13px;color:${INK2}">${esc(classLine(r))}</span>` : ""}`, `padding:7px 8px;font-size:15px;line-height:1.3;color:${INK}`)}${td(`<span style="display:inline-block;background:${TINT};color:${inkAcc};border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700">Book</span>`, "padding:7px 14px 7px 0;text-align:right;vertical-align:top;white-space:nowrap")}</tr>`).join("\n")}`).join("\n")}
+${rest > 0 ? `<tr><td colspan="3" style="padding:8px 14px 12px;font-family:${F};font-size:13px;color:${INK2}">and ${rest} more class${rest === 1 ? "" : "es"} on your timetable</td></tr>` : `<tr><td colspan="3" style="padding:0 0 8px"></td></tr>`}
 </table>` : "";
-  const benefits = followup ? "" : `${P("<b>Less admin for you:</b>", "margin-bottom:8px")}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px">
-${BENEFITS.map((b) => `<tr><td style="vertical-align:top;padding:3px 10px 5px 0;font-family:${F};font-size:16px;line-height:1.45;font-weight:700;color:${inkAcc}">&#10003;</td><td style="padding:3px 0 5px;font-family:${F};font-size:15px;line-height:1.45;color:${INK}">${esc(b)}</td></tr>`).join("\n")}
-</table>${P(`<b>${esc(price.main)}</b> No card needed to start.`)}`;
+  const list = followup ? "" : `${P(`<b>What JitsFlow does for ${esc(gym)}:</b>`, "margin-bottom:8px")}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px">
+${pitch.map((b) => `<tr><td style="vertical-align:top;padding:3px 10px 6px 0;font-family:${F};font-size:16px;line-height:1.45;font-weight:700;color:${inkAcc}">&#10003;</td><td style="padding:3px 0 6px;font-family:${F};font-size:15px;line-height:1.45;color:${INK}">${esc(b)}</td></tr>`).join("\n")}
+</table>`;
   const label = `See ${gym} on JitsFlow`, vmlW = Math.min(520, Math.max(260, Math.round(label.length * 9.4) + 56));
-  const button = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 22px"><tr><td align="center" bgcolor="${btn.bg}" style="border-radius:10px;background:${btn.bg}">
+  const button = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px"><tr><td align="center" bgcolor="${btn.bg}" style="border-radius:10px;background:${btn.bg}">
 <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${esc(url)}" style="height:50px;v-text-anchor:middle;width:${vmlW}px" arcsize="20%" stroke="f" fillcolor="${btn.bg}"><w:anchorlock/><center style="color:${btn.fg};font-family:${F};font-size:17px;font-weight:bold">${esc(label)}</center></v:roundrect><![endif]-->
 <!--[if !mso]><!--><a href="${esc(url)}" style="display:inline-block;padding:15px 24px;font-family:${F};font-size:17px;line-height:1.25;font-weight:700;color:${btn.fg};text-decoration:none;border-radius:10px;background:${btn.bg}">${esc(label)}</a><!--<![endif]-->
 </td></tr></table>`;
+  const dealHtml = P(`<b>No obligation.</b> ${esc(deal)}`, "font-size:15px");
+  const beta = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 20px"><tr><td bgcolor="${TINT}" style="background:${TINT};border-radius:12px;padding:14px 16px;font-family:${F};font-size:15px;line-height:1.5;color:${INK}"><b>Join the JitsFlow beta.</b> ${esc(betaOffer())}</td></tr></table>`;
+  const sign = `Thanks,<br>${esc(sender || "The JitsFlow team")}${sender ? "<br>and the JitsFlow team" : ""}`;
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting">
@@ -163,23 +192,27 @@ ${BENEFITS.map((b) => `<tr><td style="vertical-align:top;padding:3px 10px 5px 0;
  ${P(esc(hi))}
  ${personal ? P(esc(personal)) : ""}
  ${intro.map((t) => P(esc(t))).join("\n ")}
- ${table}
- ${benefits}
+ ${list}
+ ${card}
  ${button}
- ${P(`Thanks,<br>${esc(sender)}<br><span style="color:${INK2};font-size:14px">JitsFlow &middot; <a href="${esc(base)}/" style="color:${INK2}">jitsflow.com</a></span>`)}
+ ${dealHtml}
+ ${followup ? "" : beta}
+ ${P(sign)}
+ ${P(`<span style="color:${INK2};font-size:14px">JitsFlow &middot; <a href="${esc(base)}/" style="color:${INK2}">jitsflow.com</a></span>`)}
 </td></tr>
 <tr><td class="px" style="padding:16px 28px 8px;font-family:${F};font-size:12px;line-height:1.55;color:${INK2}">
- I found ${esc(gym)} on your public website (${esc(p.domain)}) and I'm writing to you directly. If you'd rather not hear from me, <a href="${esc(out)}" style="color:${INK2};text-decoration:underline">opt out here</a> and I'll delete the page I made.
+ I found ${esc(gym)} on your public website (${esc(p.domain)}) and I'm writing to you directly. If you'd rather not hear from me, <a href="${esc(out)}" style="color:${INK2};text-decoration:underline">opt out here</a> and I'll delete what I set up for ${esc(gym)}.
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
 </body></html>`;
   const text = [headline, "", hi, ...(personal ? ["", personal] : []), ...intro.flatMap((t) => ["", t]),
-    ...(classes.length ? ["", "On your timetable:", ...classes.map((r) => `${r.day} ${r.start}  ${r.title}`), ...(ttOf(p).length > classes.length ? [`and ${ttOf(p).length - classes.length} more`] : [])] : []),
-    ...(followup ? [] : ["", "Less admin for you:", ...BENEFITS.map((b) => "- " + b), "", `${price.main} No card needed to start.`]),
-    "", `${label}: ${url}`, "", "Thanks,", sender, `JitsFlow · ${base}`, "", "--",
-    `I found ${gym} on your public website (${p.domain}) and I'm writing to you directly. If you'd rather not hear from me, opt out here and I'll delete the page I made: ${out}`].join("\n");
+    ...(followup ? [] : ["", `What JitsFlow does for ${gym}:`, ...pitch.map((b) => "- " + b)]),
+    ...(picked.length ? ["", "Your classes on JitsFlow:", ...days.flatMap((d) => d.rows.map((r) => `${d.name} ${r.start}  ${r.title}`)), ...(rest > 0 ? [`and ${rest} more`] : [])] : []),
+    "", `${label}: ${url}`, "", `No obligation. ${deal}`, ...(followup ? [] : ["", `Join the JitsFlow beta. ${betaOffer()}`]),
+    "", "Thanks,", sender || "The JitsFlow team", ...(sender ? ["and the JitsFlow team"] : []), `JitsFlow · ${base}`, "", "--",
+    `I found ${gym} on your public website (${p.domain}) and I'm writing to you directly. If you'd rather not hear from me, opt out here and I'll delete what I set up for ${gym}: ${out}`].join("\n");
   return { subject, html, text, preheader };
 }
 
@@ -206,7 +239,7 @@ const notFoundPage = () => simplePage("Page not found · JitsFlow", "This page i
 // The preview: the gym's own look, what its members would see on their phones, and one button to claim it.
 function renderPreview(p, { base = "", now = new Date() } = {}) {
   const gym = nameOf(p), acc = accentOf(p), tt = ttOf(p), week = weekOf(now), price = priceLine(), prof = p.profile || {};
-  const claim = `${base}/app/?claimgym=${encodeURIComponent(p.token)}`, cta = `Claim ${gym}, free for ${price.months} month${price.months === 1 ? "" : "s"}`;
+  const claim = `${base}/app/?gym=${encodeURIComponent(p.token)}`, cta = `Claim ${gym}, free for ${price.months} month${price.months === 1 ? "" : "s"}`;
   const logo = p.logo ? `${base}/try/${esc(p.token)}/logo` : null, lb = p.logo ? logoBox(p, 40, 150) : null, lbs = p.logo ? logoBox(p, 32, 110) : null;
   const MAX = 10; let shown = 0;
   const days = week.map((d) => ({ ...d, rows: tt.filter((r) => r.day === d.day) })).filter((d) => d.rows.length);
@@ -218,7 +251,7 @@ function renderPreview(p, { base = "", now = new Date() } = {}) {
   const gets = [
     ["Bookings and check-ins", "Members book their classes and check in on their phones. You see who's coming before class starts."],
     ["Fees that keep track", "Running balances for every member, and payment reminders that go out by themselves."],
-    ["EFT proof of payment", "Members send their proof in the app. You tick it off; nothing to chase."],
+    ["EFT proof of payment", "Members pay by EFT with their own reference and send their proof in the app. Card, Apple Pay and Google Pay are coming soon."],
     ["Kids and families", "One parent login books and pays for all their kids."],
     ["Belt progress and moves", "Stripes and belts for every member, plus a library of moves to study between classes."],
     ["Import from WhatsApp", "Bring your members over from your WhatsApp group in a few taps."],
@@ -255,7 +288,7 @@ function renderPreview(p, { base = "", now = new Date() } = {}) {
 <main class="wrap grid">
  <section class="head"><p class="eyebrow">Made from ${esc(p.domain)}</p><h1>This is ${esc(gym)} on JitsFlow</h1>
   <p class="lead">We read ${esc(found)} on your website and set ${esc(gym)} up. This is what your members would see on their phones.</p>
-  <div class="cta"><a class="btn big" href="${esc(claim)}">${esc(cta)}</a><p class="small">Then ${esc(rand(payfast.PRICE_CENTS()))} a month. No card needed to start.</p></div></section>
+  <div class="cta"><a class="btn big" href="${esc(claim)}">${esc(cta)}</a><p class="small">${esc(noObligation())}</p></div></section>
  <aside class="phone" aria-label="What your members see"><div class="device"><div class="screen">
   <div class="ahead">${logo ? `<img src="${logo}" width="${lbs.w}" height="${lbs.h}" alt="">` : ""}<div><div class="aname">${esc(gym)}</div><div class="asub">Classes</div></div></div>
   <div class="mono">This week</div>
@@ -265,7 +298,7 @@ function renderPreview(p, { base = "", now = new Date() } = {}) {
   <nav class="atabs" aria-hidden="true"><span>Home</span><span class="on">Classes</span><span>Learn</span><span>Journal</span><span>Me</span></nav>
  </div></div></aside>
  <section class="gets"><h2>What you get</h2><ul class="getl">${gets.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join("")}</ul>
-  <div class="price"><b>${esc(price.main)}</b><p class="small">No card needed to start. ${esc(price.fee)}</p></div></section>
+  <div class="price"><b>${esc(price.main)}</b><p class="small">${esc(noObligation())} ${esc(price.fee)}</p></div></section>
  <section class="how"><h2>Claiming takes one step</h2><ol>
   <li>Make your account: your name, email and a password.</li>
   <li>${esc(gym)} is already filled in${tt.length ? ", with your timetable on the calendar" : ""}. Check it and change anything you like.</li>
@@ -281,13 +314,16 @@ setTimeout(v,1500);document.addEventListener("visibilitychange",function(){setTi
 }
 
 /* ---------------- stored rows ---------------- */
-const LIST_COLS = "id, token, website, domain, name, accent, owner_name, owner_email, personal_line, subject, status, import_state, import_error, method, views, last_viewed_at, sent_at, sent_to, followup_sent_at, claimed_at, claimed_gym_id, opted_out_at, created_at, logo is not null as has_logo, jsonb_array_length(coalesce(profile->'timetable','[]')) as n_classes, jsonb_array_length(coalesce(profile->'coaches','[]')) as n_coaches, jsonb_array_length(coalesce(profile->'rates','[]')) as n_rates";
+const LIST_COLS = `id, token, website, domain, name, accent, owner_name, owner_email, personal_line, subject, status, import_state, import_error, method, views, last_viewed_at, sent_at, sent_to, followup_sent_at, claimed_at, claimed_gym_id, opted_out_at, created_at, gym_id, claimed_by, logo is not null as has_logo,
+  (select g.claim is not null from gyms g where g.id=prospects.gym_id) as gym_unclaimed, (select g.claim->>'builtAt' from gyms g where g.id=prospects.gym_id) as built_at,
+  (select json_build_object('name', u.name, 'email', u.email) from users u where u.id=prospects.claimed_by) as claimer, jsonb_array_length(coalesce(profile->'timetable','[]')) as n_classes, jsonb_array_length(coalesce(profile->'coaches','[]')) as n_coaches, jsonb_array_length(coalesce(profile->'rates','[]')) as n_rates`;
 function label(r) {
   if (r.status === "claimed") return "Claimed";
   if (r.status === "optedout") return "Opted out";
   if (r.import_state === "running") return "Reading website…";
   if (r.import_state === "failed" && !r.name) return "Couldn't read site";
   if (r.views > 0) return `Viewed ${r.views}×`;
+  if (r.status === "draft" && r.gym_unclaimed) return "Gym built";
   return r.status === "sent" ? "Sent" : "Draft";
 }
 const followupAt = (r) => (r.sent_at ? new Date(new Date(r.sent_at).getTime() + FOLLOWUP_DAYS * 864e5) : null);
@@ -297,7 +333,9 @@ function prospectOut(r, { base = "", blocked = false } = {}) {
     views: r.views, lastViewedAt: r.last_viewed_at, sentAt: r.sent_at, sentTo: r.sent_to || null, followupSentAt: r.followup_sent_at, followupFrom: canFollow && fa ? fa.toISOString() : null, followupReady: !!(canFollow && fa && fa <= new Date()),
     claimedAt: r.claimed_at, optedOutAt: r.opted_out_at || null, claimedGymId: r.claimed_gym_id ? String(r.claimed_gym_id) : null, ownerName: r.owner_name || "", ownerEmail: r.owner_email || "", personalLine: r.personal_line || "", subject: r.subject || "",
     accent: r.accent || null, logo: r.has_logo && r.status !== "optedout" ? `${base}/try/${r.token}/logo` : null, previewUrl: r.status === "optedout" ? null : `${base}/try/${r.token}`, blocked: !!blocked,
-    counts: { classes: Number(r.n_classes) || 0, coaches: Number(r.n_coaches) || 0, rates: Number(r.n_rates) || 0 }, createdAt: r.created_at };
+    counts: { classes: Number(r.n_classes) || 0, coaches: Number(r.n_coaches) || 0, rates: Number(r.n_rates) || 0 }, createdAt: r.created_at,
+    gym: r.gym_id ? { id: String(r.gym_id), unclaimed: !!r.gym_unclaimed, builtAt: r.built_at || null } : null, claimedBy: r.claimer || null,
+    appUrl: r.status === "optedout" || !r.gym_unclaimed ? null : `${base}/app/?gym=${r.token}` };
 }
 // Is this gym (its website's domain) or this address on the do-not-contact list?
 async function blocked(q, domain, email) {
@@ -308,6 +346,8 @@ async function blocked(q, domain, email) {
 // Opted out ("don't email me") or removed ("not my gym"): what we read about the gym goes, the gym's name and domain stay so it's
 // never made again, and the domain (and the address, if we had one) go on the do-not-contact list.
 async function optOut(q, p, { withEmail }) {
+  // The gym built for them goes too (with its classes, plans and logo), unless someone claimed it.
+  await q("delete from gyms where id=(select gym_id from prospects where id=$1) and claim is not null", [p.id]);
   await q("insert into outreach_dnc(kind,value) values('domain',$1) on conflict do nothing", [p.domain]);
   if (withEmail && p.owner_email) await q("insert into outreach_dnc(kind,value) values('email',$1) on conflict do nothing", [String(p.owner_email).toLowerCase()]);
   await q(`update prospects set status=case when status='claimed' then status else 'optedout' end, profile='{}', logo=null, logo_type=null, owner_name='', owner_email=null, personal_line='', import_error=null, opted_out_at=now()
@@ -315,16 +355,20 @@ async function optOut(q, p, { withEmail }) {
 }
 
 /* ---------------- reading the gym's website (one at a time) ---------------- */
-function makeQueue(q, log = () => {}) {
+// built(id): called once a website is read, to build (or rebuild) the gym from it (see buildGym in api.js).
+function makeQueue(q, log = () => {}, built = async () => {}) {
   const waiting = []; let busy = false;
   async function run(id) {
     const p = (await q("select id, website, status from prospects where id=$1", [id])).rows[0]; if (!p || p.status === "optedout") return;
     try {
       const r = await importer.importSite(p.website, { log });
       const img = await pickLogo(r.logos), prof = { ...r.profile }, b = prof.brand || {}; delete prof.brand;
-      await q(`update prospects set name=$2, profile=$3, logo=$4, logo_type=$5, accent=$6, method=$7, import_state='done', import_error=null, imported_at=now(),
+      // Still "reading" until the gym is built from it too, so nobody acts on a half-built gym.
+      await q(`update prospects set name=$2, profile=$3, logo=$4, logo_type=$5, accent=$6, method=$7, import_error=null, imported_at=now(),
         subject=case when subject='' then $8 else subject end where id=$1 and status<>'optedout'`,
       [id, String(prof.name || "").slice(0, 100), prof, img ? img.body : null, img ? img.type : null, b.source === "site" && brand.isHex(b.accent) ? b.accent.toLowerCase() : null, r.method, defaultSubject({ profile: prof, name: prof.name, domain: "" })]);
+      try { await built(id); } catch (e) { log("outreach build: " + (e.message || e)); }
+      await q("update prospects set import_state='done' where id=$1", [id]);
     } catch (e) {
       const msg = e instanceof importer.ImportError ? e.message : "Couldn't read that site just now. Try Re-import in a minute.";
       if (!(e instanceof importer.ImportError)) log("outreach import: " + (e.message || e));
@@ -343,7 +387,7 @@ function makePublic(pool) {
   const r = express.Router(), q = (t, p) => pool.query(t, p);
   const seen = new Map(); // ip|token -> last counted view
   setInterval(() => { const now = Date.now(); for (const [k, t] of seen) if (now - t > 3600e3) seen.delete(k); }, 600e3).unref();
-  const byToken = async (t) => (TOKEN_RE.test(t || "") ? (await q("select * from prospects where token=$1", [t])).rows[0] : null);
+  const byToken = (t) => findToken(q, t);
   const page = (res, status, html) => res.status(status).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" }).send(html);
   const sessionEmail = async (req) => {
     const m = String(req.headers.cookie || "").match(/(?:^|;\s*)jf_s=([0-9a-f]{64})/); if (!m) return null;
@@ -357,6 +401,8 @@ function makePublic(pool) {
     const p = await byToken(req.params.token);
     if (!live(p)) return page(res, 404, notFoundPage());
     if (p.status === "claimed") return page(res, 200, simplePage(`${nameOf(p)} on JitsFlow`, `${nameOf(p)} is on JitsFlow`, ["This gym has been claimed. If it's yours, sign in to run it."], { accent: accentOf(p), extra: `<p><a class="btn" href="/app/?signin=1">Sign in</a></p>` }));
+    // The gym is built: the link opens the real app, as a preview of their gym.
+    if (p.gym_unclaimed) return res.status(302).set({ Location: `/app/?gym=${encodeURIComponent(p.token)}`, "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" }).end();
     page(res, 200, renderPreview(p));
   }));
   r.get("/:token/logo", wrap(async (req, res) => {
@@ -382,14 +428,14 @@ function makePublic(pool) {
     if (!p || p.status === "optedout") return page(res, 200, simplePage("Removed · JitsFlow", "This page is gone", ["We've deleted it and won't contact that website again."]));
     if (p.status === "claimed") return page(res, 409, simplePage("Claimed · JitsFlow", "This gym has been claimed", ["It belongs to an account now, so it can't be removed from here. Email hello@jitsflow.com if something's wrong."]));
     await optOut(q, p, { withEmail: false });
-    page(res, 200, simplePage("Removed · JitsFlow", "This page is gone", [`We've deleted the page and what we read from ${esc(p.domain)}, and we won't contact ${esc(p.domain)} again. Sorry for the bother.`]));
+    page(res, 200, simplePage("Removed · JitsFlow", "This page is gone", [`We've deleted the gym we set up and what we read from ${esc(p.domain)}, and we won't contact ${esc(p.domain)} again. Sorry for the bother.`]));
   }));
   // The email's opt-out link: a page with one button (a scanner opening the link mustn't opt anyone out); the email's
   // List-Unsubscribe-Post header lets mail apps do it in one tap.
   r.get("/:token/optout", wrap(async (req, res) => {
     const p = await byToken(req.params.token);
     if (!p || p.status === "optedout") return page(res, 200, simplePage("Opted out · JitsFlow", "You're opted out", ["You won't get any more emails from us about this gym."]));
-    page(res, 200, simplePage("Opt out · JitsFlow", "Stop emails from JitsFlow?", [`One tap and we won't email you about ${esc(nameOf(p))} again${p.status === "claimed" ? "" : ", and we'll delete the page we made"}.`],
+    page(res, 200, simplePage("Opt out · JitsFlow", "Stop emails from JitsFlow?", [`One tap and we won't email you about ${esc(nameOf(p))} again${p.status === "claimed" ? "" : ", and we'll delete the gym we set up for you"}.`],
       { accent: accentOf(p), extra: `<form method="post" action="/try/${esc(p.token)}/optout"><button class="btn" type="submit">Stop emails</button></form>` }));
   }));
   r.post("/:token/optout", wrap(async (req, res) => {
@@ -398,12 +444,12 @@ function makePublic(pool) {
       if (p.status === "claimed") { if (p.owner_email) await q("insert into outreach_dnc(kind,value) values('email',$1) on conflict do nothing", [String(p.owner_email).toLowerCase()]); }
       else await optOut(q, p, { withEmail: true });
     }
-    page(res, 200, simplePage("Opted out · JitsFlow", "You're opted out", ["You won't get any more emails from us about this gym, and the page we made is deleted. Sorry for the bother."]));
+    page(res, 200, simplePage("Opted out · JitsFlow", "You're opted out", ["You won't get any more emails from us about this gym, and what we set up for it is deleted. Sorry for the bother."]));
   }));
   // eslint-disable-next-line no-unused-vars
   r.use((err, req, res, next) => { console.error("try page:", err.message); page(res, 500, simplePage("JitsFlow", "Something went wrong", ["Try again in a minute."])); });
   return r;
 }
 
-module.exports = { adminEmails, isAdmin, newToken, TOKEN_RE, domainOf, parseLines, priceLine, imageSize, pickLogo, renderEmail, renderPreview, notFoundPage, defaultSubject,
-  prospectOut, LIST_COLS, label, blocked, optOut, makeQueue, makePublic, sampleClasses, weekOf, FOLLOWUP_DAYS, tryUrl, optoutUrl, nameOf };
+module.exports = { adminEmails, isAdmin, newToken, TOKEN_RE, findToken, domainOf, parseLines, priceLine, noObligation, PITCH, imageSize, pickLogo, renderEmail, renderPreview, notFoundPage, defaultSubject,
+  prospectOut, LIST_COLS, label, blocked, optOut, makeQueue, makePublic, sampleClasses, weekOf, FOLLOWUP_DAYS, tryUrl, appLink, optoutUrl, fromName, nameOf, accentOf, sha };
