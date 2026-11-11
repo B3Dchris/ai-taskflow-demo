@@ -1000,3 +1000,72 @@ Object.assign(VIDEO_PICKS,{
 "v": "FxxURexKrvk"
 }
 });
+/* The last 9 moves and 2 positions (each checked with YouTube oEmbed: exists and can be embedded). */
+Object.assign(VIDEO_PICKS,{
+"stance_motion": {
+"channel": "Emerge Jiu Jitsu",
+"nogi": false,
+"title": "Proper Stance Fighting Stance in BJJ",
+"v": "6eLMPEPa24Q"
+},
+"arm_tri_def": {
+"channel": "KD Grappling",
+"nogi": false,
+"title": "Kieran Davern | Head and Arm Choke Escape | Submission Defence",
+"v": "-BfFpK96CNY"
+},
+"bodylock_def": {
+"channel": "40 Plus BJJ",
+"nogi": false,
+"title": "Body Lock Pass Counter",
+"v": "xrcazXu2EFc"
+},
+"kimura_trap_def": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Kimura Escape from Top Half Guard by Craig Jones",
+"v": "i-GjsFQbziE"
+},
+"hw_guillotine": {
+"channel": "The B-Team",
+"nogi": true,
+"title": "Nicky Ryan Teaches High Wrist Guillotine | B-Team Technique",
+"v": "BP7uTM-nmxI"
+},
+"outside_heel_hook": {
+"channel": "London Grapple",
+"nogi": true,
+"title": "Ashi Garami to Outside Heel Hook - Aidan Woodhouse",
+"v": "LUpKj7TD-iE"
+},
+"duck_under": {
+"channel": "BJJ Fanatics",
+"nogi": true,
+"title": "Duck Under to Back Take by Felipe Costa",
+"v": "xaaT0f6eAWI"
+},
+"ezekiel_nogi": {
+"channel": "Profectus Jiu-Jitsu WilCo.",
+"nogi": true,
+"title": "No-Gi Ezekiel Choke - Mean Moves w/ Mean Mike",
+"v": "WbCrQhuKunA"
+},
+"seated_counter_wrestle": {
+"channel": "ZombieProofBJJ",
+"nogi": true,
+"title": "Guillotine/Snapdown Setup \"The Front Head Lock\" - ZombieProof Brazilian Jiu-Jitsu / Nogi Techniques",
+"v": "z-srqu_6HDw"
+},
+"pos:open_top": {
+"channel": "Bernardo Faria BJJ Fanatics",
+"nogi": true,
+"title": "5 Tips To Pass Any Guard No Gi by Lachlan Giles",
+"v": "Zp9O6YpHKeE"
+},
+"pos:bfly_bot": {
+"channel": "The B-Team",
+"nogi": true,
+"title": "An Introduction to Butterfly Guard with Nicky Ryan | B-Team Technique",
+"v": "9M0XeJN9dX4"
+}
+});
