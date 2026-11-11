@@ -3399,6 +3399,11 @@ Object.assign(VIDEO_PICKS,{
 const ADV=[["blue",typeof TECH_DEF_BLUE!=="undefined"?TECH_DEF_BLUE:[],typeof OV_DEF!=="undefined"?OV_DEF:{}],["purple",typeof TECH_DEF_PURPLE!=="undefined"?TECH_DEF_PURPLE:[],{}],["purple",typeof TECH_PURPLE!=="undefined"?TECH_PURPLE:[],typeof OV_PURPLE!=="undefined"?OV_PURPLE:{}],["brown",typeof TECH_BROWN!=="undefined"?TECH_BROWN:[],typeof OV_BROWN!=="undefined"?OV_BROWN:{}],["black",typeof TECH_BLACK!=="undefined"?TECH_BLACK:[],typeof OV_BLACK!=="undefined"?OV_BLACK:{}],
  ...(typeof TECH_EXTRA!=="undefined"?["blue","purple","brown","black"].map(b=>[b,TECH_EXTRA.filter(t=>EXTRA_BELT[t.id]===b),OV_EXTRA]):[])];
 ADV.forEach(([b,ts])=>ts.forEach(t=>{t.b=b;if(!TECH.some(x=>x.id===t.id))TECH.push(t)}));
+/* Moves that also start from a second position (each move is filed under one; these show on the map and in "from here" lists there too). */
+const ALSO_FROM={darce:["turtle_top"],anaconda:["turtle_top"]};TECH.forEach(t=>{if(ALSO_FROM[t.id])t.also=ALSO_FROM[t.id]});
+const darceT=TECH.find(t=>t.id==="darce"),anaT=TECH.find(t=>t.id==="anaconda");
+if(darceT)darceT.d=[...darceT.d,"From turtle: get beside their head. When their near arm posts or reaches, thread under it and around the neck, then drop to your side."];
+if(anaT)anaT.d=[...anaT.d,"From turtle: sprawl in front of their head. When an arm stays in by their head, shoot under the neck and out the far armpit, then roll."];
 const RANK={blue:1,purple:2,brown:3,black:4};
 ["single_leg_def","double_leg_def","knee_cut_def","bodylock_def"].forEach(id=>{const t=TECH.find(x=>x.id===id);if(t)t.c="defense"});
 const DEFFOR=Object.assign({heel_hook:"ashi_def",inside_heel_hook:"saddle_escape",outside_heel_hook:"saddle_escape",backside_5050_heel:"saddle_escape",kneebar:"kneebar_def",
@@ -3537,6 +3542,8 @@ const CHAINS={
    C("back_control","The first hook goes in"),
    C("truck_back","They block the hooks and stay square")),
   C("crucifix","One elbow comes off their knee"),
+  C("darce","You're beside their head and their near arm posts or reaches"),
+  C("anaconda","You're in front of their head and an arm stays in"),
   C("power_half","They flatten out and stay tight")],
  seated:[
   C("guard_retention","Start: frames up, feet active",
@@ -4074,7 +4081,7 @@ function stuckCounts(days){const c={};recent(days).forEach(s=>(s.stuck||[]).forE
 const byPos=(a,b)=>RANK[beltOf(a)]-RANK[beltOf(b)]||(a.p==="core"?0:1)-(b.p==="core"?0:1)||ORDER.indexOf(a.f)-ORDER.indexOf(b.f);
 const rateable=()=>TECH.filter(t=>t.p!=="plus"&&RANK[beltOf(t)]<=RANK[goal()]);
 function rateQueue(){const m=P().mastery;return rateable().filter(t=>!(t.id in m)).sort(byPos).map(t=>t.id)}
-function fromPos(p,max){return TECH.filter(t=>t.f===p&&(!max||RANK[beltOf(t)]<=max))}
+function fromPos(p,max,primary){return TECH.filter(t=>(t.f===p||!primary&&t.also&&t.also.includes(p))&&(!max||RANK[beltOf(t)]<=max))}
 function intoPos(p,max){return TECH.filter(t=>t.t===p&&t.f!==p&&(!max||RANK[beltOf(t)]<=max))}
 const flowMax=()=>RANK[S.ui.flowBelt||goal()]||1;
 function setGoal(g){if(!RANK[g])return;P().settings.goal=g;S.ui.belt=g;S.ui.flowBelt=null;saveProgress();render();toast("Goal set: "+BELT[g].to+" belt.")}
@@ -4252,7 +4259,7 @@ function lev(a,b,max){if(Math.abs(a.length-b.length)>max)return max+1;const d=[]
     if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);lo=Math.min(lo,d[i][j])}if(lo>max)return max+1}return d[a.length][b.length]}
 let SIDX=null;
 function searchIndex(){if(SIDX)return SIDX;const e=[];
-  TECH.forEach(t=>e.push({k:"t",id:t.id,label:t.n,sub:`${CATS[t.c]} · from ${POS[t.f].l.toLowerCase()}`,name:norm(t.n),text:norm(`${t.n} ${CATS[t.c]} ${POS[t.f].L} ${POS[t.f].l} ${t.t==="sub"?"submission":POS[t.t]?POS[t.t].L:""}`)}));
+  TECH.forEach(t=>e.push({k:"t",id:t.id,label:t.n,sub:`${CATS[t.c]} · from ${POS[t.f].l.toLowerCase()}`,name:norm(t.n),text:norm(`${t.n} ${CATS[t.c]} ${POS[t.f].L} ${POS[t.f].l} ${(t.also||[]).map(a=>POS[a].L+" "+POS[a].l).join(" ")} ${t.t==="sub"?"submission":POS[t.t]?POS[t.t].L:""}`)}));
   Object.entries(POS).forEach(([k,p])=>e.push({k:"p",id:k,label:p.L,sub:"Position",name:norm(p.L),text:norm(p.L+" "+p.l)}));
   GLOSS.forEach(g=>e.push({k:"g",id:g.k,label:g.k,sub:"Term",name:norm(g.k),text:norm(g.k)}));
   e.forEach(x=>{x.words=x.text.split(" ");x.compact=x.text.replace(/ /g,"");x.ncompact=x.name.replace(/ /g,"");x.initials=x.name.split(" ").map(w=>w[0]).join("")});
@@ -4313,7 +4320,7 @@ function learnGroups(){
   const ATT=["sub","sweep","pass","takedown","back"];
   const hit=q?searchTechIds(q):null;
   const match=t=>(hit?hit.has(t.id):beltOf(t)===bk)&&((u.kind||"all")==="all"||(u.kind==="def"?isDef(t):ATT.includes(t.c)))&&(u.filterP==="all"||t.p===u.filterP)&&(u.filterM==="all"||(u.filterM==="gaps"?lv(t.id)<3:lv(t.id)>=3));
-  const groups=ORDER.map(p=>({p,ts:fromPos(p).filter(match)})).filter(g=>g.ts.length);
+  const groups=ORDER.map(p=>({p,ts:fromPos(p,0,true).filter(match)})).filter(g=>g.ts.length);
   return `${groups.length?`<div class="stack">${groups.map(g=>{const open=q||u.filterP!=="all"||u.filterM!=="all"||(u.kind||"all")!=="all"||(S.ui.openG||{})[g.p];const solid=g.ts.filter(t=>lv(t.id)>=3).length;
     return `<details class="grp" data-g="${g.p}"${open?" open":""}><summary><span><b>${esc(POS[g.p].L)}</b><br><span class="small muted">${g.ts.length} technique${g.ts.length>1?"s":""} · ${solid} solid</span></span><span class="small muted mono">${solid}/${g.ts.length}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><p class="small muted" style="padding-bottom:6px">${gl((PD[g.p]||{}).d||"")}</p><div class="list">${g.ts.map(t=>tRow(t,`<span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)).join("")}</div><button class="linkbtn small" data-a="pos" data-v="${g.p}">Open in flow map ›</button></div></details>`}).join("")}</div>`:`<div class="empty">No techniques match${q?` “${esc(u.q.trim())}”`:""}. <button class="linkbtn" data-a="clearq">Clear search and filters</button></div>`}`;
 }
@@ -4561,7 +4568,7 @@ function techSheet(id,fromBack){
    <section class="stack"><h2 class="label">Your level</h2>
     <div class="levels">${LEVELS.map((L,i)=>`<button data-a="level" data-id="${id}" data-v="${i}" aria-pressed="${l===i}">${stripes(i)}<span>${L.n}</span></button>`).join("")}</div>
     ${c?`<p class="small muted">Next review ${esc(fmtDate(c.due))}</p>`:""}</section>
-   <section class="stack"><h2 class="label">Starting position: ${esc(POS[t.f].L)}</h2><p>${gl((PD[t.f]||{}).d||POS[t.f].g)}</p><button class="linkbtn small" data-a="pos" data-v="${t.f}">See all moves from here ›</button></section>
+   <section class="stack"><h2 class="label">Starting position: ${esc(POS[t.f].L)}</h2><p>${gl((PD[t.f]||{}).d||POS[t.f].g)}</p><button class="linkbtn small" data-a="pos" data-v="${t.f}">See all moves from here ›</button>${(t.also||[]).map(a=>`<p class="small">Also works from <button class="linkbtn small" data-a="pos" data-v="${a}">${esc(POS[a].L)} ›</button></p>`).join("")}</section>
    <section class="stack"><h2 class="label">Steps</h2><ol class="steps">${t.s.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></section>
    <section class="stack flowsec"><h2 class="label">How you get here</h2>${getHereHTML(t)}</section>
    <section class="stack flowsec"><h2 class="label">Where to from here</h2>${fromHereHTML(t)}</section>
