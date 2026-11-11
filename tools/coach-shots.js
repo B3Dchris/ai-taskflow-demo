@@ -83,6 +83,8 @@ const PEOPLE = [ // name, belt, stripes, plan, how many classes a week they usua
     await ctx.addInitScript(() => { localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); localStorage.setItem("jf.coachMode", "manage"); localStorage.setItem("jf.theme", "light"); });
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto(URL + "/app/#coach-today"); await p.waitForTimeout(2500);
+    // no first-visit tips in the pictures
+    await p.evaluate(() => { lsSet(tipStore(), Object.fromEntries(Object.keys(TIPS).map((k) => [k, -1]))); render(); });
     const clean = () => p.evaluate(() => { const t = document.getElementById("toast"); if (t) t.hidden = true; document.querySelectorAll(".fab").forEach((f) => f.remove()); });
     const shot = async (name, fn) => { await fn(); await p.waitForTimeout(1200); await clean(); await p.screenshot({ path: path.join(OUT, name + ".jpg"), type: "jpeg", quality: 82 }); };
     const scrollTo = (sel) => p.evaluate((s) => { const e = document.querySelector(s); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 12); }, sel);
