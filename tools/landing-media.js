@@ -72,10 +72,12 @@ async function screens(p) {
     lsSet(tipStore(), Object.fromEntries(Object.keys(TIPS).map((k) => [k, -1]))); // no first-visit tips in the pictures
     hideSheet(); render();
   });
+  const openFold = async () => { await p.evaluate(() => { const d = document.getElementById("flow-chains"); if (d && d.tagName === "DETAILS") d.open = true; else if (d) d.querySelector("summary,button")?.click(); }); await p.waitForTimeout(400); };
   const toHeading = (re) => p.evaluate((src) => { const h = [...document.querySelectorAll("h2.label")].find((x) => new RegExp(src).test(x.textContent)); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 14); }, re);
   const shots = {
-    chains: async () => { await p.evaluate(() => { S.ui.flowSel = "cg_bot"; go("learn-map"); }); await toHeading("Your attack chains"); },
-    defense: async () => { await p.evaluate(() => { S.ui.flowSel = "mount_bot"; go("learn-map"); }); await toHeading("Their attacks"); },
+    // The chain trees sit in a fold under the map: open it, then frame the tree.
+    chains: async () => { await p.evaluate(() => { S.ui.flowSel = "cg_bot"; go("learn-map"); }); await openFold(); await toHeading("Your attack chains"); },
+    defense: async () => { await p.evaluate(() => { S.ui.flowSel = "mount_bot"; go("learn-map"); }); await openFold(); await toHeading("Their attacks"); },
     belt: async () => { await p.evaluate(() => { S.ui.belt = "blue"; go("learn-belt"); }); },
     map: async () => { await p.evaluate(() => { S.ui.flowSel = "cg_bot"; go("learn-map"); }); },
   };
