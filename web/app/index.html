@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="92e9b8a4a2";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="a296842733";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -31,25 +31,42 @@ try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")documen
 <style>
 /* Layout: single-column phone app with a bottom tab bar. Motif: belt + tape stripes; four stripes = mastery levels. */
 :root{
-  --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E3E8EF; --ink:#111722; --ink-2:#4E5869; --line:#D3DAE4;
-  --blue:#1D4FB5; --blue-soft:#DCE5F8; --on-blue:#FFFFFF; --chart:#1D4FB5;
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#EAEEF4; --ink:#0D1424; --ink-2:#4F5A6E; --line:#D9DFE8;
+  --blue:#2350C2; --blue-soft:#E4EBFA; --on-blue:#FFFFFF; --chart:#2350C2;
   --belt:#FAFAF7; --belt-edge:#C9CED6; --belt-bar:#151515; --tape:#F4F4F0; --tape-off:#3A3A3A;
-  --good:#1D7748; --good-soft:#DDF1E6; --warn:#995A00; --warn-soft:#FBEBD2; --bad:#B42318; --bad-soft:#FBE1DE;
+  --good:#1B7345; --good-soft:#DDF1E6; --warn:#955700; --warn-soft:#FBEBD2; --bad:#B42318; --bad-soft:#FBE1DE;
+  --tap:#B3261E; --tap-soft:#FBE3E0; --primary:#101B36; --on-primary:#FFFFFF;
+  --navy:#0B1530; --navy-2:#15244D; --navy-glow:rgba(91,140,255,.22); --on-navy:#EEF2FA; --on-navy-2:#AEBAD0;
+  --edge:rgba(13,20,36,.07); --glass:rgba(255,255,255,.80);
+  --sh-1:0 1px 2px rgba(13,20,36,.05),0 2px 10px rgba(13,20,36,.04);
+  --sh-2:0 1px 2px rgba(13,20,36,.04),0 10px 30px rgba(13,20,36,.09);
+  --sh-3:0 -10px 40px rgba(13,20,36,.14);
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:24px;
+  --s1:4px; --s2:8px; --s3:16px; --s4:24px; --s5:32px;
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.2,1.2,.32,1);
   --f-display:"Saira Condensed","Arial Narrow",Impact,sans-serif;
   --f-body:"Source Sans 3",-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0C0F14; --surface:#151A22; --surface-2:#1F2631; --ink:#E8EBF1; --ink-2:#9AA5B8; --line:#2A323F;
-  --blue:#82A5FF; --blue-soft:#1B2949; --on-blue:#0C1220; --chart:#6B90F0;
+  --bg:#080C14; --surface:#111826; --surface-2:#1A2233; --ink:#E9EDF5; --ink-2:#9DA9BE; --line:#28324A;
+  --blue:#8AAAFF; --blue-soft:#18264A; --on-blue:#0A1020; --chart:#7097F5;
   --belt:#ECECE6; --belt-edge:#8E949D; --belt-bar:#0A0A0A; --tape:#F4F4F0; --tape-off:#333;
   --good:#52C78E; --good-soft:#15301F; --warn:#E6A84C; --warn-soft:#33260F; --bad:#F2786D; --bad-soft:#3A1916;
+  --tap:#FF8A80; --tap-soft:#3A1916; --primary:#E9EDF5; --on-primary:#0B1220;
+  --navy:#0E1A38; --navy-2:#172752; --navy-glow:rgba(91,140,255,.20); --on-navy:#EEF2FA; --on-navy-2:#AEBAD0;
+  --edge:rgba(255,255,255,.07); --glass:rgba(14,20,32,.80);
+  --sh-1:0 1px 2px rgba(0,0,0,.35); --sh-2:0 12px 32px rgba(0,0,0,.45); --sh-3:0 -10px 40px rgba(0,0,0,.5);
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0C0F14; --surface:#151A22; --surface-2:#1F2631; --ink:#E8EBF1; --ink-2:#9AA5B8; --line:#2A323F;
-  --blue:#82A5FF; --blue-soft:#1B2949; --on-blue:#0C1220; --chart:#6B90F0;
+  --bg:#080C14; --surface:#111826; --surface-2:#1A2233; --ink:#E9EDF5; --ink-2:#9DA9BE; --line:#28324A;
+  --blue:#8AAAFF; --blue-soft:#18264A; --on-blue:#0A1020; --chart:#7097F5;
   --belt:#ECECE6; --belt-edge:#8E949D; --belt-bar:#0A0A0A; --tape:#F4F4F0; --tape-off:#333;
   --good:#52C78E; --good-soft:#15301F; --warn:#E6A84C; --warn-soft:#33260F; --bad:#F2786D; --bad-soft:#3A1916;
+  --tap:#FF8A80; --tap-soft:#3A1916; --primary:#E9EDF5; --on-primary:#0B1220;
+  --navy:#0E1A38; --navy-2:#172752; --navy-glow:rgba(91,140,255,.20); --on-navy:#EEF2FA; --on-navy-2:#AEBAD0;
+  --edge:rgba(255,255,255,.07); --glass:rgba(14,20,32,.80);
+  --sh-1:0 1px 2px rgba(0,0,0,.35); --sh-2:0 12px 32px rgba(0,0,0,.45); --sh-3:0 -10px 40px rgba(0,0,0,.5);
   color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -486,145 +503,6 @@ textarea{min-height:76px;resize:vertical}
 .flowsvg .node.fin.dest rect{fill:var(--bad-soft);stroke-dasharray:none;stroke-width:2.2}.flowsvg .node.fin.dim{opacity:.5}
 @media (prefers-reduced-motion:reduce){.flowsvg .edge,.fsk-lines.anim .fl{animation:none}}
 
-/* JitsFlow premium exploration mode: clear hierarchy, generous touch targets, restrained colour. */
-.jf-modebar{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px}
-.jf-modebar button{min-height:46px;border:0;border-radius:10px;background:transparent;color:var(--ink-2);font-weight:700;letter-spacing:.01em}
-.jf-modebar button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.10)}
-.jf-intro{display:flex;flex-direction:column;gap:5px}.jf-intro h1{font-size:38px;letter-spacing:-.025em}
-.jf-guide{display:flex;flex-direction:column;gap:18px}
-.jf-hero{position:relative;overflow:hidden;border-radius:20px;padding:24px 21px 21px;background:linear-gradient(145deg,var(--surface),var(--surface-2));border:1px solid var(--line);box-shadow:0 8px 26px rgba(0,0,0,.07)}
-.jf-hero::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;background:var(--blue);border-radius:0 3px 3px 0}
-.jf-eyebrow{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.09em;color:var(--ink-2);font-weight:600}
-.jf-tag{display:inline-block;padding:4px 8px;margin-left:5px;border:1px solid var(--line);border-radius:20px;letter-spacing:0;color:var(--ink)}
-.jf-hero h2{margin:13px 0 9px;font-size:clamp(29px,7vw,41px);line-height:1.06;letter-spacing:-.02em}
-.jf-hero p{font-size:14px;color:var(--ink-2);max-width:50ch}
-.jf-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:19px}
-.jf-stats span{font-size:12px;color:var(--ink-2);border:1px solid var(--line);padding:5px 9px;border-radius:20px}
-.jf-sectionhead h3{font-size:25px;letter-spacing:-.01em;margin-top:5px}
-.jf-destinations{display:grid;gap:10px}
-.jf-destination{--jf-accent:var(--blue);border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden;box-shadow:0 3px 16px rgba(0,0,0,.035)}
-.jf-destination.jf-up{--jf-accent:var(--good)}.jf-destination.jf-fin{--jf-accent:var(--bad)}
-.jf-destination.jf-down{--jf-accent:var(--warn)}.jf-destination.jf-stay{--jf-accent:var(--ink-2)}
-.jf-destination summary{list-style:none;display:flex;align-items:center;gap:13px;min-height:90px;padding:14px;cursor:pointer;touch-action:manipulation}
-.jf-destination summary::-webkit-details-marker{display:none}
-.jf-desticon{width:46px;height:46px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:27px;background:var(--surface-2);color:var(--jf-accent);font-weight:700}
-.jf-destmain{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}
-.jf-destlabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--jf-accent);font-weight:700}
-.jf-destmain strong{font-size:19px;line-height:1.2}
-.jf-desthint{font-size:13px;color:var(--ink-2)}
-.jf-chevron{font-size:23px;color:var(--ink-2);transition:transform .18s ease}.jf-destination[open] .jf-chevron{transform:rotate(180deg)}
-.jf-destbody{padding:0 14px 16px 73px;display:grid;gap:10px}
-.jf-techlist{display:grid;gap:6px}
-.jf-tech{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);min-height:46px;padding:10px 12px;font-size:14px;font-weight:600}
-.jf-tech span:last-child{color:var(--blue)}
-.jf-next{width:100%;border:0;border-radius:10px;min-height:46px;padding:10px 12px;background:var(--blue-soft);color:var(--blue);font-weight:700;text-align:left;display:flex;align-items:center;justify-content:space-between}
-.jf-overview{border:1px solid var(--line);background:var(--surface);padding:14px 10px;border-radius:16px}
-.jf-overview .flowsvg{min-width:360px}
-.jf-support{margin-top:6px}
-@media(min-width:720px){.jf-destinations{grid-template-columns:1fr 1fr}.jf-guide{gap:22px}.jf-hero{padding:30px}}
-@media(prefers-reduced-motion:reduce){.jf-chevron{transition:none}}
-
-
-
-/* Three interactive full-map layouts: no connector ever passes behind a position card. */
-.jf-map-layout-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--line);border-radius:16px;background:var(--surface-2)}
-.jf-map-layout-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border:0;border-radius:12px;min-height:55px;background:transparent;color:var(--ink-2);font-weight:700}
-.jf-map-layout-tabs button span{font-size:15px}.jf-map-layout-tabs button small{font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase}
-.jf-map-layout-tabs button[aria-pressed=true]{color:var(--ink);background:var(--surface);box-shadow:0 3px 14px rgba(0,0,0,.10)}
-.jf-atlas-shell,.jf-map-route{background:var(--surface);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.045)}
-.jf-atlas-intro{padding:20px 18px 14px;display:flex;align-items:end;justify-content:space-between;gap:9px;flex-wrap:wrap}
-.jf-atlas-intro h3{font-size:23px;margin-top:5px}.jf-atlas-note{font-size:11px;color:var(--ink-2)}
-.jf-atlas-scroll{overflow:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;background:var(--bg);touch-action:pan-x pan-y}
-.jf-atlas-inner{width:730px;padding:12px}
-.jf-atlas-row{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 12px 13px;margin-bottom:9px}
-.jf-atlas-rowhead{font-family:var(--f-display);font-size:14px;letter-spacing:.11em;font-weight:700;text-transform:uppercase;color:var(--ink-2);display:flex;gap:10px;align-items:center;margin-bottom:8px}
-.jf-atlas-rowhead span{font-size:10px;font-family:var(--f-mono);color:var(--blue)}
-.jf-atlas-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:10px;max-width:100%}
-.jf-station{display:flex;gap:9px;align-items:center;text-align:left;padding:6px 10px 6px 5px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);min-height:70px;min-width:0;transition:border-color .18s,background .18s,box-shadow .18s}
-.jf-station.active{border:2px solid var(--blue);background:var(--blue-soft);box-shadow:0 3px 16px rgba(59,102,180,.15)}
-.jf-station.connected{border-color:var(--good)}.jf-station.inactive{opacity:.76}
-.jf-station .jf-pose{width:64px;min-width:44px;max-width:38%;height:49px}
-.jf-pose-you{color:#3C80E3}.jf-pose-gray{color:#9BA5B2}
-.jf-station-text{display:flex;flex-direction:column;min-width:0;gap:3px}
-.jf-station-text strong{font-size:13px;line-height:1.17;overflow-wrap:anywhere}.jf-station-text small{font-family:var(--f-mono);font-size:8px;line-height:1.2;letter-spacing:.02em;color:var(--ink-2)}
-.jf-station.active small{color:var(--blue)}
-.jf-atlas-hint{font-size:12px;color:var(--ink-2);padding:12px 16px;border-top:1px solid var(--line)}
-.jf-map-route{padding:20px 16px 22px}
-.jf-route-top{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
-.jf-route-top h3{font-size:26px;margin-top:5px}.jf-route-top p{font-size:13px;color:var(--ink-2);margin-top:5px}
-.jf-route-legend{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:700}
-.jf-route-legend span{display:flex;align-items:center;gap:4px}.jf-route-legend span:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--route,var(--blue))}
-.jf-up{--route:var(--good)}.jf-side{--route:var(--blue)}.jf-fin{--route:var(--bad)}.jf-down{--route:var(--warn)}.jf-stay{--route:var(--ink-2)}
-.jf-track-board{display:grid;grid-template-columns:minmax(104px,28%) minmax(35px,11%) minmax(0,1fr);position:relative;align-items:start;min-height:150px}
-.jf-track-source{grid-column:1;grid-row:1;position:relative;z-index:2;background:var(--blue-soft);border:2px solid var(--blue);border-radius:14px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px}
-.jf-track-source .jf-pose{width:90px;max-width:100%;height:60px}
-.jf-track-source span,.jf-hub-origin span{font-size:9px;font-family:var(--f-mono);letter-spacing:.06em;color:var(--blue)}
-.jf-track-source strong,.jf-hub-origin strong{font-size:16px;line-height:1.15}
-.jf-track-stops{grid-column:3;grid-row:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.jf-route-svg{position:absolute;z-index:1;inset:0;pointer-events:none;width:100%;height:100%;overflow:visible}
-.jf-route-svg path{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
-.jf-route-svg path.up{stroke:var(--good)}.jf-route-svg path.side{stroke:var(--blue)}.jf-route-svg path.fin{stroke:var(--bad)}.jf-route-svg path.down{stroke:var(--warn)}.jf-route-svg path.stay{stroke:var(--ink-2)}
-.jf-stop{--route:var(--blue);border:1px solid var(--line);border-left:4px solid var(--route);border-radius:12px;background:var(--surface);padding:12px 12px 10px;min-width:0}
-.jf-stop.jf-up,.jf-lane.jf-up{--route:var(--good)}.jf-stop.jf-side,.jf-lane.jf-side{--route:var(--blue)}.jf-stop.jf-fin,.jf-lane.jf-fin{--route:var(--bad)}.jf-stop.jf-down,.jf-lane.jf-down{--route:var(--warn)}.jf-stop.jf-stay,.jf-lane.jf-stay{--route:var(--ink-2)}
-.jf-stop-kicker{font-family:var(--f-mono);font-size:9px;letter-spacing:.03em;font-weight:600;color:var(--route);margin-bottom:3px}
-.jf-stop-name{font-family:var(--f-body);font-size:17px;line-height:1.2;font-weight:700;text-align:left;background:none;border:0;padding:0;min-height:30px;color:var(--ink)}
-.jf-stop-name span{color:var(--route)}.jf-stop-tech{display:flex;flex-direction:column;gap:3px;margin-top:8px}
-.jf-stop-tech button{border:0;background:var(--surface-2);border-radius:7px;text-align:left;padding:7px 8px;min-height:35px;font-size:12px;display:flex;justify-content:space-between;gap:8px}
-.jf-stop-more{font-size:11px;color:var(--ink-2)}
-.jf-hub-origin{margin:0 auto;max-width:270px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:12px;border:2px solid var(--blue);border-radius:17px;background:var(--blue-soft)}
-.jf-hub-origin .jf-pose{width:116px;height:70px}
-.jf-hub-stem{height:66px;position:relative;display:flex;align-items:center;justify-content:center}
-.jf-hub-stem:before{content:"";position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--blue)}
-.jf-hub-stem span{z-index:1;background:var(--surface);padding:4px 10px;font-size:10px;letter-spacing:.05em;color:var(--ink-2)}
-.jf-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;position:relative}
-.jf-hub-grid .jf-stop{box-shadow:0 4px 18px rgba(0,0,0,.045)}
-.jf-lane-groups{display:grid;gap:14px}
-.jf-lane{border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.jf-lane-head{border-left:5px solid var(--route);padding:13px;display:flex;justify-content:space-between;align-items:center;background:var(--surface-2)}
-.jf-lane-head span{font-family:var(--f-display);font-size:20px;font-weight:700;letter-spacing:.05em}
-.jf-lane-head p{font-size:12px;color:var(--ink-2)}.jf-lane-head strong{color:var(--route);font-size:19px}
-.jf-lane-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:10px}
-.jf-lane-list .jf-stop{border-radius:10px}
-@media(max-width:480px){.jf-map-route{padding:17px 11px}.jf-track-board{grid-template-columns:minmax(90px,29%) minmax(28px,10%) minmax(0,1fr)}.jf-track-source strong{font-size:13px}.jf-stop-name{font-size:14px}.jf-stop{padding:9px}.jf-stop-tech button{font-size:11px}.jf-hub-grid,.jf-lane-list{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.jf-station{transition:none}}
-
-/* Full map v2: designed at an accessible scale; on narrow screens it pans horizontally instead of shrinking text. */
-.jf-map-shell{border:1px solid var(--line);border-radius:20px;background:var(--surface);overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.06)}
-.jf-map-head{padding:18px 18px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
-.jf-map-head h2{font-size:23px}.jf-map-head p{font-size:13px;color:var(--ink-2);margin-top:4px}
-.jf-map-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.jf-map-tools button{font-size:12px;font-weight:700;min-height:40px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
-.jf-map-tools button[aria-pressed="false"]{color:var(--ink-2)}
-.jf-map-scroller{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;scrollbar-width:thin;scrollbar-color:var(--line) transparent;background:var(--bg)}
-.jf-map-canvas{width:740px;min-width:740px;transform-origin:top left}
-.jf-map-canvas .flowsvg{width:740px;height:auto;max-width:none;display:block}
-.jf-map-scroller:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
-.jf-fullsvg .jf-mapband rect{fill:var(--surface);stroke:var(--line);stroke-width:.7}
-.jf-fullsvg .jf-band-0 rect{fill:var(--bad-soft)}.jf-fullsvg .jf-band-1 rect{fill:var(--good-soft)}
-.jf-fullsvg .jf-band-5 rect,.jf-fullsvg .jf-band-6 rect{fill:var(--surface-2)}
-.jf-fullsvg .jf-mapband text{font-family:var(--f-display);font-size:15px;letter-spacing:.12em;font-weight:700;fill:var(--ink-2)}
-.jf-fullsvg .jf-mapband line{stroke:var(--line);stroke-width:1;opacity:.6}
-.jf-fullsvg .node .jf-card{fill:var(--surface);stroke:var(--line);stroke-width:1.5;filter:drop-shadow(0 3px 5px rgba(0,0,0,.05))}
-.jf-fullsvg .node .jf-accent{fill:var(--blue)}
-.jf-fullsvg .node.t0 .jf-accent{fill:var(--good)}.jf-fullsvg .node.t4 .jf-accent{fill:var(--warn)}.jf-fullsvg .node.t5 .jf-accent{fill:var(--bad)}
-.jf-fullsvg .node .jf-cardlabel{font-family:var(--f-body);font-size:15px;font-weight:700;fill:var(--ink)}
-.jf-fullsvg .node .jf-cardmeta{font-family:var(--f-mono);font-size:9px;letter-spacing:.02em;fill:var(--ink-2)}
-.jf-fullsvg .node.sel .jf-card{fill:var(--blue-soft);stroke:var(--blue);stroke-width:2.7;filter:drop-shadow(0 0 8px rgba(91,140,255,.18))}
-.jf-fullsvg .node.sel .jf-cardlabel{fill:var(--ink)}.jf-fullsvg .node.sel .jf-cardmeta{fill:var(--blue)}
-.jf-fullsvg .node.dest .jf-card{stroke:var(--good);stroke-width:2.2}.jf-fullsvg .node.dest.side .jf-card{stroke:var(--blue)}.jf-fullsvg .node.dest.down .jf-card{stroke:var(--warn)}
-.jf-fullsvg .node.dim{opacity:.72}.jf-fullsvg .node.dim .jf-cardlabel{fill:var(--ink)}
-.jf-fullsvg .jf-progressbg{fill:var(--line)}.jf-fullsvg .jf-progress{fill:var(--good)}
-.jf-fullsvg .node.sel .jf-progress{fill:var(--blue)}
-.jf-fullsvg .node.fin rect{fill:var(--surface);stroke:var(--bad);stroke-width:1.8}
-.jf-fullsvg .node.fin text{font-size:17px;letter-spacing:.08em}
-.jf-fullsvg .node.fin.dest rect{fill:var(--bad-soft);stroke-width:2.5}
-.jf-fullsvg .edge{opacity:.8;stroke-width:2.7;filter:drop-shadow(0 1px 2px rgba(0,0,0,.10))}
-.jf-map-foot{padding:13px 17px 17px;border-top:1px solid var(--line);display:grid;gap:9px}
-.jf-map-current{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
-.jf-map-current strong{font-size:16px}
-.jf-map-current .jf-tag{margin:0;color:var(--blue)}
-.jf-map-hint{font-size:12px;color:var(--ink-2)}
-@media(prefers-reduced-motion:reduce){.jf-map-scroller{scroll-behavior:auto}}
 /* "From here": lines run down the gutter into each destination */
 .fsk{position:relative;display:flex;flex-direction:column;gap:10px}
 .fsk-src{background:var(--blue);color:var(--on-blue);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column}
@@ -682,6 +560,249 @@ textarea{min-height:76px;resize:vertical}
 .progress i{display:block;height:100%;background:var(--blue)}
 @media (max-width:420px){.levels button{font-size:11px}.bignum{font-size:38px}}
 @media (prefers-reduced-motion: no-preference){.panel,.trow{transition:background-color .15s}}
+/* ============ DESIGN SYSTEM v2 ============
+   One visual language: deep-navy hero surfaces (the "dk" scope re-maps the colour tokens so anything inside adapts),
+   light elevated cards for lists, one quiet secondary button and one primary, soft layered shadows instead of outlines,
+   8-pt spacing, tabular numbers for stats. Motion is short and springy, and switched off under reduced motion. */
+body{font-feature-settings:"kern"}
+.mono,.stat b,.bignum,.cr-time,.cr-cap b,.refrow b{font-variant-numeric:tabular-nums}
+h1{letter-spacing:-.01em}
+h2.label{font-size:14px;letter-spacing:.08em}
+.app{padding-top:8px}
+.stack-lg{gap:var(--s4)}
+
+/* dark navy scope */
+.dk{color:var(--on-navy);--ink:#EEF2FA;--ink-2:#AEBAD0;--surface:#18264E;--surface-2:#1E2E5C;--line:rgba(255,255,255,.16);--bg:#0B1530;
+  --blue:#93B2FF;--blue-soft:rgba(147,178,255,.16);--on-blue:#0B1530;--chart:#93B2FF;--good:#5BD49A;--good-soft:rgba(91,212,154,.16);--warn:#F2B661;--warn-soft:rgba(242,182,97,.16);
+  --bad:#FF8F85;--bad-soft:rgba(255,143,133,.16);--tap:#FF8F85;--tap-soft:rgba(255,143,133,.16);--primary:#FFFFFF;--on-primary:#0B1530;--edge:rgba(255,255,255,.08)}
+.dk .muted,.dk .small.muted{color:var(--ink-2)}
+.hero{position:relative;border-radius:var(--r-xl);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3);min-width:0;overflow:hidden;isolation:isolate;
+  background:radial-gradient(120% 90% at 100% 0%,var(--navy-glow),transparent 62%),linear-gradient(170deg,var(--navy-2),var(--navy) 58%);box-shadow:var(--sh-2);border:1px solid rgba(255,255,255,.05)}
+.hero h1{font-size:34px;line-height:1.02;font-weight:700;color:#fff}
+.learnhero h1{font-size:30px}.learnhero .hero-t p{font-size:14px}.learnhero .hero-t{gap:4px}
+.eyebrow{display:block;font-family:var(--f-display);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.hero-t{display:flex;flex-direction:column;gap:6px}
+.hero-t p{color:var(--ink-2);font-size:15px}
+.beltwrap{background:radial-gradient(120% 90% at 100% 0%,var(--navy-glow),transparent 62%),linear-gradient(170deg,var(--navy-2),var(--navy) 58%);box-shadow:var(--sh-2);border-radius:var(--r-xl)}
+
+/* cards: elevation instead of outlines */
+.panel,details.grp,details.more,.classcard,.bookcard,.compcard,.calrows,.insight,.revealcard,.howbtn,.impban,.qsugg,.edrow,.ttday{border-color:var(--edge);box-shadow:var(--sh-1)}
+.panel{border-radius:var(--r-lg);padding:var(--s3)}
+details.grp,details.more,.classcard,.bookcard,.compcard,.calrows,.revealcard,.howbtn{border-radius:var(--r-lg)}
+.panel.accent{border-color:var(--edge);box-shadow:var(--sh-1),inset 3px 0 0 var(--blue)}
+.panel.warnp{border-color:var(--edge);box-shadow:var(--sh-1),inset 3px 0 0 var(--warn)}
+.bookcard.mine{box-shadow:var(--sh-1),inset 3px 0 0 var(--good)}
+.dk.panel,.dk .panel{box-shadow:none}
+details.more>summary,details.grp>summary{border-radius:inherit}
+details.more>summary{list-style:none;justify-content:space-between;gap:12px;min-height:44px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::after{content:"";flex:none;width:9px;height:9px;border-right:2px solid var(--ink-2);border-bottom:2px solid var(--ink-2);transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s var(--ease)}
+details.more[open]>summary::after{transform:rotate(225deg) translate(-2px,-2px)}
+.empty{border-radius:var(--r-md)}
+
+/* buttons: one primary, a quiet secondary, a ghost */
+.btn{border-radius:12px;background:var(--surface-2);border-color:transparent;color:var(--ink);transition:transform .12s var(--ease),background-color .15s,box-shadow .15s}
+a.btn{color:var(--ink)}
+.panel .btn:not(.primary):not(.danger):not(.wa),.sheet .btn:not(.primary):not(.danger):not(.wa){background:var(--surface-2)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary);box-shadow:0 1px 2px rgba(13,20,36,.12),0 4px 14px rgba(13,20,36,.12)}
+.btn.ghost{background:transparent;border-color:var(--line)}
+.btn.danger{background:transparent;border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.btn.yt{background:var(--surface);border-color:var(--edge);box-shadow:var(--sh-1)}
+.dk .btn{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.12);color:#F4F6FB}
+.dk .btn.primary{background:#fff;border-color:#fff;color:#0B1530}
+.linkbtn{color:var(--blue)}
+.btn:active,.chip:active,.trow:active,.tnode:active,.seg button:active,.seg3 button:active,.branch .bmove:active,.bgo:active,.howbtn:active,.classcard:active,.calrow:active,.wd:active{transform:scale(.98)}
+.trow,.tnode,.seg button,.seg3 button,.chip,.calrow,.wd,.classcard{transition:transform .12s var(--ease),background-color .15s}
+:focus-visible{outline-color:var(--blue)}
+
+/* chips and segments: selected = ink, not a heavy blue block */
+.chip{border-color:var(--line);background:var(--surface);min-height:40px;padding:6px 14px;font-weight:600}
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"],.seg2 button[aria-pressed="true"],.seg3 button[aria-pressed="true"],.seg4 button[aria-pressed="true"],.seg5 button[aria-pressed="true"],.seg6 button[aria-pressed="true"],.seg7 button[aria-pressed="true"],.segrow button[aria-pressed="true"],.segpills button[aria-pressed="true"],.tchip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.seg button,.seg2 button,.seg3 button,.seg4 button,.seg5 button,.seg6 button,.seg7 button,.segrow button,.tchip,.segpills button{border-color:var(--line)}
+.beltchips button[aria-pressed="true"],.levels button[aria-pressed="true"],.qrlevels button[aria-pressed="true"]{border-color:var(--primary);background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--primary)}
+/* segmented control on a navy hero: a track with a raised thumb */
+.dk .learnseg,.seg3.track{background:rgba(255,255,255,.08);border-radius:14px;padding:4px;gap:4px}
+.dk .learnseg button{min-height:44px;border:0;background:transparent;color:var(--ink-2);border-radius:10px;font-weight:700;transition:background-color .2s var(--ease),color .2s}
+.dk .learnseg button[aria-pressed="true"]{background:#fff;color:#0B1530;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.wday.sel,.mcell.sel{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}.wday.sel small,.wday.sel i{color:var(--on-primary)}
+
+/* tips */
+.tip{background:var(--surface);box-shadow:var(--sh-1);border:1px solid var(--edge);border-radius:var(--r-md);padding:8px 6px 8px 14px;color:var(--ink-2)}
+.tip::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.tip .tipx{width:44px;height:44px}
+
+/* header */
+.top{padding-block:4px 12px}
+.avatar{background:var(--primary);color:var(--on-primary)}
+
+/* bottom tab bar: frosted, with a soft active pill */
+nav.tabs{background:var(--glass);-webkit-backdrop-filter:saturate(1.8) blur(18px);backdrop-filter:saturate(1.8) blur(18px);border-top:1px solid var(--edge)}
+nav.tabs button{position:relative;text-transform:none;letter-spacing:.01em;font-size:12px;font-weight:600;padding:8px 2px 10px;gap:3px}
+nav.tabs .wrap[data-n="5"] button{font-size:11.5px;letter-spacing:0}
+nav.tabs button svg{position:relative;z-index:1;width:22px;height:22px;padding:0;stroke-width:1.9}
+nav.tabs button::before{content:"";position:absolute;top:5px;left:50%;width:54px;height:30px;margin-left:-27px;border-radius:15px;background:var(--blue-soft);transform:scale(.4);opacity:0;transition:transform .28s var(--spring),opacity .2s}
+nav.tabs button[aria-current="page"]{color:var(--ink)}
+nav.tabs button[aria-current="page"] svg{color:var(--blue)}
+nav.tabs button[aria-current="page"]::before{transform:scale(1);opacity:1}
+nav.tabs button svg{margin-top:4px}
+
+/* sheets: slide up with a little spring; the action bar is frosted */
+.sheetbar{background:var(--glass);-webkit-backdrop-filter:saturate(1.8) blur(18px);backdrop-filter:saturate(1.8) blur(18px);border-top:1px solid var(--edge)}
+.sheet.in>.wrap{animation:sheetin .42s var(--spring) both}
+.sheetbar.in{animation:barin .32s var(--ease) both}
+@keyframes sheetin{from{opacity:0;transform:translateY(36px)}to{opacity:1;transform:none}}
+@keyframes barin{from{transform:translateY(100%)}to{transform:none}}
+/* screens: a short fade-and-rise when you change tab (the View Transitions API handles the chain explorer) */
+#app.enter{animation:viewin .32s var(--ease) both}
+@keyframes viewin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* technique sheet header */
+.shead{border-radius:var(--r-xl);padding:0;gap:0}
+.shead .shead-t{padding:var(--s3);display:flex;flex-direction:column;gap:10px}
+.shead h1{color:#fff;font-size:36px}
+.shead .sheettitle{margin:0;min-height:0;color:var(--ink-2)}
+.shead .fromto{gap:6px}
+.shead .posbtn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#EEF2FA;min-height:36px;border-radius:10px}
+.shead>.ytm,.shead>.ytbox,.shead>.posfig,.shead>.posimg,.shead>.photo,.shead>.vid,.shead>.photoempty{border-radius:0;margin:0}
+.shead>.posfig{background:rgba(255,255,255,.04);padding:12px 16px 4px}
+.shead>.posfig svg{max-height:200px}
+.shead>.ytbox .ytcap{padding:10px 16px 0}
+.posfig{background:var(--surface-2)}
+
+/* video: poster first, a soft placeholder while it loads, never a black box */
+.ytm{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-md);overflow:hidden;color:#fff;text-decoration:none;background:var(--navy);isolation:isolate}
+.ytbox.ytm{aspect-ratio:auto;background:none;color:inherit;overflow:visible}
+.ytposter{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(80% 70% at 30% 20%,rgba(147,178,255,.28),transparent 60%),linear-gradient(160deg,#1B2B57,#0B1530)}
+.ytposter::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.08) 50%,transparent 70%);background-size:220% 100%;animation:shimmer 1.6s linear infinite}
+.ytposter>.posfig,.ytposter>.posimg,.ytposter>.photo{position:absolute;inset:0;margin:0;padding:12% 14%;background:none;border-radius:0;display:grid;place-items:center}
+.ytposter>.posfig svg{max-height:100%;opacity:.55}
+.ytposter>.posimg img,.ytposter>.photo img{width:100%;height:100%;object-fit:cover;aspect-ratio:auto;border-radius:0;opacity:.7}
+.ytposter>.photo,.ytposter>.posimg{padding:0}
+.ytposter .ytthumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.ytposter .ytshade{position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,rgba(5,10,24,0) 45%,rgba(5,10,24,.78))}
+@keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+.ytm .ytbig,.ytface .ytbig{z-index:3;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.94);color:#0B1530;font-size:22px;padding-left:4px;box-shadow:0 8px 24px rgba(0,0,0,.35);transition:transform .2s var(--spring)}
+.ytm:hover .ytbig,.ytm:active .ytbig,.ytface:active .ytbig{transform:translate(-50%,-50%) scale(1.06)}
+.ytmeta{position:absolute;z-index:3;left:14px;right:14px;bottom:12px;display:flex;flex-direction:column;gap:2px;text-align:left;font-size:14px;line-height:1.25;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.ytmeta b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.ytmeta small{font-size:12px;color:#D5DCEA}
+.ytout{position:absolute;z-index:3;top:10px;right:10px;font-size:12px;font-weight:700;background:rgba(5,10,24,.6);border-radius:999px;padding:4px 10px}
+.ytnote{position:absolute;z-index:3;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:700;font-size:14px;background:rgba(5,10,24,.7);border-radius:999px;padding:8px 14px;white-space:nowrap}
+.ytembed{background:none;border-radius:var(--r-md)}
+.ytembed iframe{z-index:2}
+.ytface{border-radius:var(--r-md)}
+.ytcap .ytplay{display:none}
+.ytcap{font-size:14px;color:var(--ink-2)}.ytcap b{color:var(--ink)}
+
+/* ============ CHAIN EXPLORER ============ */
+.mapnav{display:flex;flex-direction:column;gap:10px;margin-inline:-6px}
+.mapnav .flowsvg .node rect{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.18)}
+.mapnav .flowsvg .node.t0 rect{stroke:var(--good)}.mapnav .flowsvg .node.t1 rect{stroke:var(--blue)}.mapnav .flowsvg .node.t4 rect{stroke:var(--warn)}.mapnav .flowsvg .node.t5 rect{stroke:var(--bad)}
+.mapnav .flowsvg .node.sel rect{fill:#fff;stroke:#fff;filter:drop-shadow(0 0 10px rgba(147,178,255,.65))}
+.mapnav .flowsvg .node.sel text{fill:#0B1530}
+.mapnav .flowsvg .node.sel .kbar-bg{fill:rgba(11,21,48,.18)!important}.mapnav .flowsvg .node.sel .kbar{fill:#1B7345!important}
+.mapnav .flowsvg .node.dest.up rect:first-of-type{fill:rgba(91,212,154,.16)}.mapnav .flowsvg .node.dest.side rect:first-of-type{fill:rgba(147,178,255,.18)}.mapnav .flowsvg .node.dest.down rect:first-of-type{fill:rgba(242,182,97,.16)}
+.mapnav .flowsvg .node.fin rect{fill:transparent}.mapnav .flowsvg .node.fin.dest rect{fill:rgba(255,143,133,.18)}
+.mapnav .flowsvg .tier{stroke:var(--navy)}
+.mapnav .flowsvg .edge-halo{stroke:#0E1B3C}
+.mapnav .flowkey{padding-inline:6px;font-size:12.5px}
+.mapnav .flowkey,.mapnav .flowkey span{color:var(--ink-2)}
+.beltfilter{display:flex;align-items:center;gap:8px;padding-inline:6px}
+.beltfilter>span{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.beltfilter .chips{flex-wrap:nowrap;gap:6px;min-width:0;flex:1}
+.beltfilter .chip{flex:1 1 0;min-width:0;justify-content:center;padding:6px 4px;min-height:44px;font-size:13px;background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:var(--ink)}
+.beltfilter .chip i{width:14px;height:6px;border-radius:2px;flex:none;outline:1px solid rgba(255,255,255,.3)}
+.beltfilter .chip[aria-pressed="true"]{background:#fff;border-color:#fff;color:#0B1530}
+
+.chainstage{display:flex;flex-direction:column;gap:12px;view-transition-name:chainstage;scroll-margin-top:12px}
+.poshero{display:flex;flex-direction:column;gap:12px;border-radius:var(--r-xl);padding:var(--s3)}
+.poshero h2{font-family:var(--f-display);font-size:30px;line-height:1.05;color:#fff}
+.poshero .pgo{font-size:16px;line-height:1.4;color:var(--ink)}
+.poshero .ptop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.poshero .ptop .eyebrow b{color:#fff;font-weight:700}
+.poshero .ymedia>.posfig{background:rgba(255,255,255,.05);border-radius:var(--r-md);padding:10px}
+.poshero .ymedia>.posfig svg{max-height:170px}
+.poshero .flip{align-self:flex-start;min-height:44px;font-size:14px}
+.crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.crumbs ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 2px;flex:1;min-width:0}
+.crumbs li{display:flex;align-items:center;gap:2px;min-width:0}
+.crumbs li+li::before{content:"›";color:var(--ink-2);font-size:16px;padding:0 4px}
+.crumbs ol button{border:0;background:rgba(255,255,255,.08);color:var(--ink);border-radius:999px;padding:0 12px;min-height:36px;font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs ol button[aria-current="step"]{background:#fff;color:#0B1530}
+.crumbs .fin button,.crumbs .fin button[aria-current="step"]{background:var(--tap);color:#fff}
+.crumbs .reset{border:0;background:none;color:var(--ink-2);font-weight:700;font-size:13px;min-height:44px;padding:0 4px;text-decoration:underline;text-underline-offset:3px}
+.crumbhead{display:flex;justify-content:space-between;align-items:center;flex-basis:100%;margin-bottom:-6px}
+.branchhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-inline:2px}
+.branchhead h3{font-size:22px}
+.branchhead .small{white-space:nowrap}
+.branches{display:grid;gap:12px}
+.branch{--bc:var(--blue);position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--edge);border-radius:var(--r-lg);box-shadow:var(--sh-1);overflow:hidden}
+.branch.d-up{--bc:var(--good)}.branch.d-fin{--bc:var(--tap)}.branch.d-down{--bc:var(--warn)}.branch.d-stay{--bc:var(--ink-2)}
+.branch::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--bc)}
+.bcue{padding:14px 16px 0 18px;font-size:15px;line-height:1.35;color:var(--ink-2)}
+.bcue b{display:block;font-family:var(--f-display);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--bc);margin-bottom:2px}
+.bmove{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;align-items:center;text-align:left;background:none;border:0;padding:10px 16px 12px 18px;color:var(--ink);font:inherit;width:100%;min-height:76px;transition:transform .12s var(--ease)}
+.bmove .thumb{width:96px;height:60px;border-radius:10px}
+.bmove .thumb svg{max-height:56px}
+.bmove .thumb .play{right:auto;left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.92);color:#0B1530;font-size:11px;padding:0 0 0 2px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.bmove .bname{font-weight:700;font-size:18px;line-height:1.2;display:block;overflow-wrap:anywhere}
+.bmove .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.bgo{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;border:0;border-top:1px solid var(--edge);background:color-mix(in srgb,var(--bc) 7%,var(--surface));color:var(--ink);font:inherit;padding:8px 16px 8px 18px;text-align:left;transition:background-color .15s}
+.bgo span{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.bgo small{font-size:12px;color:var(--ink-2);font-weight:600}
+.bgo b{font-size:16px;overflow-wrap:anywhere}
+.bgo i{font-style:normal;flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--bc);color:#fff;font-weight:800;font-size:18px;transition:transform .2s var(--spring)}
+.branch.d-up .bgo i{color:#fff}
+.bgo:hover i,.bgo:active i{transform:translateX(3px)}
+.bgo.tapgo b{color:var(--tap)}
+.finish{display:flex;flex-direction:column;gap:6px;border-radius:var(--r-lg);padding:14px 16px;background:var(--tap-soft);border:1px solid color-mix(in srgb,var(--tap) 30%,transparent)}
+.finish b{font-family:var(--f-display);font-size:22px;letter-spacing:.04em;text-transform:uppercase;color:var(--tap)}
+.chainmore{display:flex;gap:8px;flex-wrap:wrap}
+.fold>summary{font-size:16px}
+.fold>summary small{display:block;font-weight:400;color:var(--ink-2);font-size:13px}
+.fold>.foldbody{padding-top:14px;display:flex;flex-direction:column;gap:var(--s4)}
+.chainstage.in-fwd{animation:slidefwd .38s var(--ease) both}.chainstage.in-back{animation:slideback .38s var(--ease) both}.chainstage.in-fade{animation:viewin .3s var(--ease) both}
+@keyframes slidefwd{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes slideback{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+::view-transition-old(chainstage){animation:.3s var(--ease) both vt-out}
+::view-transition-new(chainstage){animation:.38s var(--ease) both vt-in}
+html[data-dir="back"]::view-transition-old(chainstage){animation-name:vt-out-back}
+html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back}
+@keyframes vt-out{to{opacity:0;transform:translateX(-36px)}}@keyframes vt-in{from{opacity:0;transform:translateX(36px)}}
+@keyframes vt-out-back{to{opacity:0;transform:translateX(36px)}}@keyframes vt-in-back{from{opacity:0;transform:translateX(-36px)}}
+
+/* Home hero */
+.homehero{align-items:stretch;flex-wrap:nowrap}
+.homehero .hrow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.homehero .bignum{font-size:56px;color:#fff;letter-spacing:-.02em}
+.homehero .hrow{justify-content:flex-start;align-items:baseline;gap:10px}
+.homehero .hready{font-size:17px;color:var(--ink-2)}.homehero .hready b{color:#fff;font-weight:700}
+.homehero svg.belt{filter:drop-shadow(0 6px 16px rgba(0,0,0,.45))}
+.homehero .hbar{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}
+.homehero .hbar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#5B8CFF,#A9C3FF)}
+.homehero .hact{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px}
+.homehero .hact .btn{min-height:50px}
+.logbtn b{font-size:20px;line-height:1;font-weight:600}
+
+/* Moves: search + one Filter control */
+.searchrow{display:flex;gap:8px;align-items:flex-start}
+.searchrow .qwrap{flex:1;min-width:0}
+.searchrow input[type=search]{min-height:48px;border-radius:14px;background:var(--surface);border-color:var(--line);padding-left:40px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%237A869B' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3Cpath d='m13 13 4 4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px 50%}
+.filterbtn{min-height:48px;border-radius:14px;padding:0 14px;flex:none;background:var(--surface)!important;border:1px solid var(--line)!important}
+.filterbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.filterbtn .fcount{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:10px;background:var(--primary);color:var(--on-primary);font-size:12px;font-weight:700;padding:0 6px}
+.fsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--ink-2)}
+.fsum b{color:var(--ink);font-weight:600}
+.fsheet .stack{gap:10px}
+.fsheet .chips .chip{min-height:44px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .btn:active,.chip:active,.trow:active,.tnode:active,.branch .bmove:active,.bgo:active{transform:none}
+}
+@media (min-width:720px){.branches{grid-template-columns:1fr 1fr}.mapnav{margin-inline:0}}
+@media (max-width:359px){.bmove{grid-template-columns:72px minmax(0,1fr)}.bmove .thumb{width:72px;height:48px}.hero h1{font-size:30px}.homehero .bignum{font-size:46px}.beltfilter>span{display:none}}
 /* Pay sheet: how to pay (Apple Pay / Google Pay / card / EFT) and the proof-of-payment drop zone */
 .paytiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px}
 .paytile{position:relative;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;padding:8px 6px;cursor:pointer}
@@ -3487,13 +3608,24 @@ const VIDS=typeof VIDEO_PICKS!=="undefined"?VIDEO_PICKS:{};
 const vidOf=k=>{const v=VIDS[k];if(!v)return null;return typeof v==="string"?{v,title:"",channel:"",nogi:true}:(v.v?v:null)};
 const ytWatch=id=>"https://www.youtube.com/watch?v="+encodeURIComponent(id);
 const ytThumb=(id,q)=>`https://i.ytimg.com/vi/${encodeURIComponent(id)}/${q||"hqdefault"}.jpg`;
-/* website: thumbnail first, the player loads only when tapped. claude.ai: opens the picked video on YouTube. */
-function ytPlayer(key,label){const v=vidOf(key);if(!v)return "";
-  const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(v.title||label)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
-  if(inClaude())return `<a class="btn yt ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener">${cap}</a>`;
-  // YouTube's own player straight away (loaded when it scrolls into view): one tap plays it. A thumbnail that swaps in the
-  // player on tap needs a second tap on iPhone, because Safari won't start sound in a frame that was only just created.
-  return `<div class="ytbox"><div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.v)}?rel=0&playsinline=1" title="${esc(v.title||label)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>${cap}</div>`}
+/* Videos: poster first, never a black box.
+   Website: YouTube's own player, lazy-loaded (one tap plays it on iPhone, no autoplay), over a soft poster that shows while it loads.
+   Data saver or a 2G connection: just the poster; tapping it loads the player. Offline: the poster says the video needs internet.
+   claude.ai or a file opened from the phone (YouTube won't play embedded there): the poster opens the video on YouTube. */
+const netSlow=()=>{const c=navigator.connection;return !!(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))};
+const canEmbed=()=>!inClaude()&&/^https?:$/.test(location.protocol);
+function ytMedia(key,label,poster){const v=vidOf(key);if(!v)return "";const title=v.title||label;
+  const img=inClaude()?"":`<img class="ytthumb" src="${ytThumb(v.v,"hqdefault")}" alt="" loading="lazy" decoding="async">`;
+  const back=`<span class="ytposter" aria-hidden="true">${poster||""}${img}<span class="ytshade"></span></span>`;
+  const meta=`<span class="ytmeta"><b>${esc(title)}</b>${v.channel?`<small>${esc(v.channel)}${v.nogi===false?" · gi video":""}</small>`:""}</span>`;
+  const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(title)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
+  if(navigator.onLine===false)return `<div class="ytm off" role="img" aria-label="Video: ${esc(title)}. It needs internet.">${back}<span class="ytnote">Video needs internet</span>${meta}</div>`;
+  if(!canEmbed())return `<a class="ytm ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener" aria-label="Play on YouTube: ${esc(title)}">${back}<span class="ytbig" aria-hidden="true">▶</span>${meta}<span class="ytout" aria-hidden="true">YouTube ↗</span></a>`;
+  if(netSlow())return `<div class="ytbox"><button class="ytface ytm" data-a="ytplay" data-v="${esc(v.v)}" aria-label="${esc(title)}">${back}<span class="ytbig" aria-hidden="true">▶</span>${meta}</button></div>`;
+  return `<div class="ytbox"><div class="ytembed">${back}<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.v)}?rel=0&playsinline=1" title="${esc(title)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>${cap}</div>`}
+const ytPlayer=(key,label)=>ytMedia(key,label,"");
+// a thumbnail that can't load (offline, blocked) just goes, leaving the soft poster underneath
+document.addEventListener("error",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("ytthumb"))t.remove()},true);
 const inClaude=()=>!!(window.claude&&window.claude.use);
 const goal=()=>{const g=P().settings.goal;return RANK[g]?g:"blue"};
 const TM=Object.fromEntries(TECH.map(t=>[t.id,t]));
@@ -4188,7 +4320,8 @@ function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
   const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
   return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${famBar()}${tipBar()}`}
-/* First-visit tips: one line at the top of a tab saying what it's for. Shown on the first 3 visits (per person, on this phone) or until closed. */
+/* First-visit tips: one line at the top of a tab saying what it's for. Each shows once: it's gone after you leave that tab
+   (per person, on this phone). Closing any tip turns them all off, so they don't pop up again on every tab. */
 const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
   learn:"Every move, the flow map and your belt goals. Switch between them at the top.",journal:"Your training journal. Log each session and JitsFlow works out what to study next.",
   me:"Your account, payments, gym and settings.","coach-home":"What's on today and anything that needs you.","coach-schedule":"Add classes and private lessons. Students book them in the app.",
@@ -4196,10 +4329,10 @@ const TIPS={home:"Your next class, anything you owe and one thing to study today
 const TIP_SOLO="One thing to study today, your belt progress and your week plan."; // Home for someone with no gym: no classes or fees
 const tipKey=()=>S.ui.tab==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):S.ui.tab;
 const tipStore=()=>"jf.tips."+(API.me?API.me.id:"me");
-function tipVisit(){const k=tipKey();if(!TIPS[k])return;const t=lsGet(tipStore())||{};if(t[k]===-1||(t[k]||0)>3)return;t[k]=(t[k]||0)+1;lsSet(tipStore(),t)}
-function tipBar(){const k=tipKey(),t=lsGet(tipStore())||{};if(!TIPS[k]||t[k]===-1||(t[k]||0)>3)return "";
-  return `<p class="tip" role="note"><span>${esc(k==="home"&&!(API.me&&API.me.gym)?TIP_SOLO:TIPS[k])}</span><button class="tipx" data-a="tipx" data-v="${k}" aria-label="Hide this tip">×</button></p>`}
-function tipHide(k){const t=lsGet(tipStore())||{};t[k]=-1;lsSet(tipStore(),t);const el=document.querySelector(".tip");if(el)el.remove();const h=document.querySelector("#app h1,#app h2");if(h){h.tabIndex=-1;h.focus()}}
+function tipSeen(k){if(!TIPS[k]||!document.querySelector("#app .tip")||document.getElementById("app").hidden)return;const t=lsGet(tipStore())||{};if(t[k]!==-1){t[k]=-1;lsSet(tipStore(),t)}}
+function tipBar(){const k=tipKey(),t=lsGet(tipStore())||{};if(!TIPS[k]||t[k]===-1||t["*"]===-1)return "";
+  return `<p class="tip" role="note"><span>${esc(k==="home"&&!(API.me&&API.me.gym)?TIP_SOLO:TIPS[k])}</span><button class="tipx" data-a="tipx" data-v="${k}" aria-label="Hide tips">×</button></p>`}
+function tipHide(k){const t=lsGet(tipStore())||{};t[k]=-1;t["*"]=-1;lsSet(tipStore(),t);const el=document.querySelector(".tip");if(el)el.remove();const h=document.querySelector("#app h1,#app h2");if(h){h.tabIndex=-1;h.focus()}}
 
 /* ============ VIEWS ============ */
 function viewToday(){
@@ -4228,15 +4361,19 @@ function viewToday(){
   const inGym=!!(API.me&&API.me.gym);
   if(inGym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="home"&&!S.ui.sheet)render()})}
   const owes=API.pay&&(myOwed(API.pay)>0||API.pay.dueCents>API.pay.paidCents||(!API.pay.plan&&(API.pay.plans||[]).length));
+  const dname=new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  const hero=`<section class="hero dk homehero lprog" aria-label="Your progress"><span class="eyebrow">${esc(dname)}</span><div class="hrow"><span class="bignum mono">${pct}%</span><span class="hready">ready for <b>${G.to} belt</b></span></div>
+    ${beltSVG(pct)}<p class="small muted">${Math.round(hrs)} mat hours · ${weekStreak()} week streak</p>
+    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log a session</button><button class="btn" data-a="tab" data-v="learn-belt">Your belt</button></div></section>`;
   return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
+  ${hero}
   ${isCoach()?`<button class="btn primary managebtn" data-a="coachmode" data-v="manage">Manage ${esc(API.me.gym.name)}</button>`:""}
   ${typeof noticesCard==="function"?noticesCard():""}${nextClassCard()}${owes?feesCard():""}${lastClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
     ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
-    <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button><button class="btn ghost" data-a="lognew">Log a session</button></div></div></section>
+    <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button></div></div></section>
   ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what I know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what I know"}</button></section>`:""}
   ${weak}
-  <section class="panel lprog"><div><b class="mono">${pct}%</b> <span class="small">ready for ${G.to} belt</span><br><span class="small muted">${Math.round(hrs)} mat hours · ${weekStreak()} week streak</span></div><button class="btn" data-a="tab" data-v="learn-belt">Your belt</button></section>
   ${inGym?"":`<section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="me">Training days</button></div>
     <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="home"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>`}
   ${accountNudge()}
@@ -4252,36 +4389,43 @@ function viewToday(){
 
 /* Learn: Moves (every technique, by belt), Map (the flow map) and Belt (your progress and each belt's curriculum), behind one switch. */
 function viewLearnTab(){const lv=LEARNV.includes(S.ui.learnView)?S.ui.learnView:"moves";
-  return `${header()}<div class="stack-lg">${seg("Learn","tab",[["learn-moves","Moves"],["learn-map","Map"],["learn-belt","Belt"]],"learn-"+lv,"seg3 learnseg")}
-  ${lv==="map"?viewFlow():lv==="belt"?viewBelt():viewMoves()}</div>`}
+  const T={moves:["Every move","Every technique for a belt, grouped by position."],map:["Flow map","Tap a position, then play through what happens next."],belt:["Your belt","Readiness for your next belt and what coaches look for."]}[lv];
+  const v=lv==="map"?viewFlow():lv==="belt"?viewBelt():viewMoves();
+  return `${header()}<div class="stack-lg"><section class="hero dk learnhero${lv==="belt"?" beltwrap":""}" aria-label="Learn"><div class="hero-t"><span class="eyebrow">Learn</span><h1>${T[0]}</h1>${lv==="belt"?"":`<p>${T[1]}</p>`}</div>${seg("Learn","tab",[["learn-moves","Moves"],["learn-map","Map"],["learn-belt","Belt"]],"learn-"+lv,"seg3 learnseg")}${v.hero||""}</section>
+  ${v.body}</div>`}
+/* Moves: search and one Filter button. The filters (belt, priority, attack/defense, your level) live in a sheet, summed up in one line. */
+const FILTERS=[["filterP","Priority",[["all","All"],["core","Core"],["key","Key"],["plus","Bonus"]]],["kind","Type",[["all","All moves"],["def","Defense & escapes"],["att","Attacks"]]],["filterM","Your level",[["all","Any level"],["gaps","Needs work"],["solid","Solid"]]]];
+function filterSummary(){const u=S.ui,bk=u.belt||goal(),on=FILTERS.filter(([k])=>(u[k]||"all")!=="all");
+  return {n:on.length+(bk!==goal()?1:0),txt:[`${BELT[bk].to} belt`,...on.map(([k,,o])=>o.find(x=>x[0]===u[k])[1])].join(" · ")}}
 function viewMoves(){
-  const u=S.ui,bk=u.belt||goal();
-  const chip=(k,v,l)=>`<button class="chip" data-a="filter" data-k="${k}" data-v="${v}" aria-pressed="${u[k]===v}">${l}</button>`;
-  return `<section class="stack"><h1 style="font-size:34px">Moves</h1><p class="small muted">Every technique for a belt, grouped by position. Search finds any move.</p>
-   <div class="beltchips" role="group" aria-label="Belt">${BELTS.map(b=>`<button data-a="belt" data-v="${b.k}" aria-pressed="${bk===b.k}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></section>
-  <section class="stack">
-   <div class="qwrap"><input id="q" type="search" placeholder="Search moves, positions or terms (rnc, kimra, half guard…)" value="${esc(u.q)}" aria-label="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+  const u=S.ui,f=filterSummary();
+  return {body:`<section class="stack">
+   <div class="searchrow"><div class="qwrap"><input id="q" type="search" placeholder="Search moves, positions, terms…" value="${esc(u.q)}" aria-label="Search moves, positions or terms (rnc, kimra, half guard…)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
    <div id="qsugg" class="qsugg" role="listbox" aria-label="Suggestions">${u.q?suggestHTML(u.q):""}</div></div>
-   <div class="chips">${chip("filterP","all","All")}${chip("filterP","core","Core")}${chip("filterP","key","Key")}${chip("filterP","plus","Bonus")}</div>
-   <div class="chips">${chip("kind","all","All moves")}${chip("kind","def","Defense & escapes")}${chip("kind","att","Attacks")}</div>
-   <div class="chips">${chip("filterM","all","Any level")}${chip("filterM","gaps","Needs work")}${chip("filterM","solid","Solid")}</div>
-   <button class="btn" data-a="qr">Quick-rate techniques</button>
+   <button class="btn filterbtn" data-a="filters" aria-haspopup="dialog" aria-label="Filter: ${esc(f.txt)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>Filter${f.n?` <span class="fcount">${f.n}</span>`:""}</button></div>
+   <p class="fsum"><span>Showing <b>${esc(f.txt)}</b></span>${f.n?`<button class="linkbtn small" data-a="clearq">Reset</button>`:""}<button class="linkbtn small" data-a="qr" style="margin-left:auto">Quick-rate</button></p>
   </section>
-  <div id="learn-groups">${learnGroups()}</div>`;
+  <div id="learn-groups">${learnGroups()}</div>`};
 }
+function filtersSheet(keep){S.ui.sheet={k:"filters"};S.ui.stack=[];const u=S.ui,bk=u.belt||goal();
+  const chip=(k,v,l)=>`<button class="chip" data-a="filter" data-k="${k}" data-v="${v}" aria-pressed="${(u[k]||"all")===v}">${l}</button>`;
+  const n=document.querySelectorAll("#learn-groups .trow").length;
+  openSheet(`${sheetHead("Moves")}<div class="stack-lg fsheet"><h1>Filter moves</h1>
+   <section class="stack"><h2 class="label">Belt</h2><div class="beltchips" role="group" aria-label="Belt">${BELTS.map(b=>`<button data-a="belt" data-v="${b.k}" aria-pressed="${bk===b.k}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></section>
+   ${FILTERS.map(([k,l,o])=>`<section class="stack"><h2 class="label">${l}</h2><div class="chips" role="group" aria-label="${l}">${o.map(([v,t])=>chip(k,v,t)).join("")}</div></section>`).join("")}
+  </div>`,keep,{back:"Done",act:`<button class="btn primary grow" data-a="close">Show ${n} move${n===1?"":"s"}</button>`})}
 function viewBelt(){
   const g=goal(),bk=S.ui.belt||g,B=BELT[bk],pct=readiness(bk),st=P().settings,hrs=(st.priorHours||0)+hoursLogged();
   const stage=TECH.filter(t=>beltOf(t)===bk),rated=stage.filter(t=>t.p!=="plus"&&Object.prototype.hasOwnProperty.call(P().mastery,t.id)).length;
   const rateableStage=stage.filter(t=>t.p!=="plus"),rTotal=rateableStage.length,rDone=rated,rq=rateQueue(),comp=(P().comp||{})[bk]||[];
-  return `<section class="beltwrap" aria-label="Progress">
+  return {hero:`<div class="stack" style="gap:12px" aria-label="Progress">
     <div class="beltpath" role="group" aria-label="Select belt to view">${BELTS.map(b=>{const r=readiness(b.k),selected=b.k===bk;return `<button data-a="belt" data-v="${b.k}" class="bp ${selected?"now":""}" aria-pressed="${selected}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${r}%</span></button>`}).join("")}</div>
     ${beltSVG(pct,bk)}
     <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${B.to}-belt skill readiness (core + key techniques)</p></div>${bk===g&&!rq.length?`<button class="btn" data-a="qr">Re-rate</button>`:""}</div>
     <div class="stats"><div class="stat"><b>${Math.round(hrs)}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${rDone}/${rTotal}</b><span>Rated</span></div></div>
     ${(()=>{const a=areaScores(bk);const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>.</p>`:""})()}
-  </section>
-  <section class="stack"><h1 style="font-size:34px">${B.to} belt curriculum</h1>
-   <p class="small muted">The requirements for the selected belt are below. Change belts using the selector above.</p>
+  </div>`,body:`<section class="stack"><h2 style="font-size:30px">${B.to} belt curriculum</h2>
+   <p class="small muted">The requirements for the selected belt. Change belts with the selector above.</p>
   </section>
   <section class="panel bstage">${beltImg(bk)?`<img class="beltbanner" src="${beltImg(bk)}" alt="${B.to} belt" loading="lazy">`:""}<h2 class="label">${B.from} → ${B.to} belt</h2><p>${gl(B.about)}</p><p class="small muted">${esc(B.time)}</p>
    <div class="row between"><span class="small"><b class="mono">${readiness(bk)}%</b> ready · ${stage.length} techniques</span>${bk!==goal()?`<button class="btn" data-a="setgoal" data-v="${bk}">Make this my goal</button>`:`<span class="small muted">Your current goal</span>`}</div>
@@ -4290,7 +4434,7 @@ function viewBelt(){
      return `<details class="grp"><summary><span><b>Coach review list</b><br><span class="small muted">${done} of ${fl.length} checked with your coach</span></span><span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><p class="small muted" style="padding-bottom:6px">Details of these moves vary between coaches or weren't verified. Go through them with your coach and tick each one.</p><div class="list">${fl.map(t=>tRow(t,coachOK(t.id)?`<span class="btag ok">Checked</span>`:"")).join("")}</div></div></details>`})()}
    <details class="grp"><summary><span><b>How to get there faster</b></span><span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><ul class="plain" style="padding-bottom:10px">${B.how.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div></details>
   </section>
-`;
+`};
 }
 
 /* ============ SMART SEARCH ============
@@ -4377,89 +4521,6 @@ const FDIR={fin:"Submission",up:"To a better position",side:"Same level",down:"T
 function flowGroups(sel,mx){const g={};fromPos(sel,mx).forEach(t=>{(g[t.t]=g[t.t]||[]).push(t)});const flat=ROWS.flat();
   const rank=d=>d==="sub"?-1:d===sel?999:POS[d].r*100+flat.indexOf(d);
   return Object.keys(g).sort((a,b)=>rank(a)-rank(b)).map(d=>({d,dir:flowDir(sel,d),ts:g[d]}))}
-function flowGuide(sel){
-  const p=POS[sel],mx=flowMax(),groups=flowGroups(sel,mx);
-  const priority={up:0,side:1,fin:2,stay:3,down:4};
-  const ordered=[...groups].sort((a,b)=>(priority[a.dir]??5)-(priority[b.dir]??5));
-  const words={up:"Improve position",side:"Change position",fin:"Finish the fight",stay:"Keep control",down:"Defensive transition"};
-  const arrows={up:"↗",side:"→",fin:"◎",stay:"◉",down:"↘"};
-  const count=groups.reduce((n,g)=>n+g.ts.length,0);
-  return `<section class="jf-guide" aria-label="Explore from ${esc(p.l)}">
-    <div class="jf-hero">
-      <div class="jf-eyebrow">YOUR CURRENT POSITION <span class="jf-tag">${esc(TIERS[p.r])}</span></div>
-      <h2>${esc(p.L)}</h2>
-      <p>${gl((PD[sel]||{}).d||p.g)}</p>
-      <div class="jf-stats"><span>${count} technique${count===1?"":"s"}</span><span>${groups.length} destination${groups.length===1?"":"s"}</span></div>
-    </div>
-    <div class="jf-sectionhead"><div><span class="jf-eyebrow">YOUR NEXT MOVE</span><h3>Where do you go from here?</h3></div></div>
-    ${ordered.length?`<div class="jf-destinations">${ordered.map(g=>{
-      const destination=g.d==="sub"?"Submission":g.d===sel?"Maintain "+p.l:POS[g.d].L;
-      const title=g.ts.length===1?g.ts[0].n:g.ts.length+" techniques";
-      return `<details class="jf-destination jf-${g.dir}">
-        <summary><span class="jf-desticon" aria-hidden="true">${arrows[g.dir]}</span><span class="jf-destmain"><span class="jf-destlabel">${words[g.dir]}</span><strong>${esc(destination)}</strong><span class="jf-desthint">${esc(title)}</span></span><span class="jf-chevron" aria-hidden="true">⌄</span></summary>
-        <div class="jf-destbody"><p class="small muted">Choose a technique to see the steps and what comes next.</p>
-          <div class="jf-techlist">${g.ts.map(t=>`<button class="jf-tech" data-a="open" data-v="${esc(t.id)}"><span>${esc(t.n)}</span><span aria-hidden="true">↗</span></button>`).join("")}</div>
-          ${g.d!=="sub"&&g.d!==sel?`<button class="jf-next" data-a="pos" data-v="${g.d}">Explore ${esc(destination)} <span aria-hidden="true">→</span></button>`:""}
-        </div>
-      </details>`}).join("")}</div>`:`<div class="panel"><p class="muted">No techniques available at this belt filter. Choose a higher belt below to explore more options.</p></div>`}
-  </section>`;
-}
-function mapAnatomy(key){
-  const k=String(key||"").toLowerCase(),name=(POS[key]?.L||"").toLowerCase();
-  const shape=(color)=>`<g class="${color}" stroke-linecap="round" stroke-linejoin="round"><circle cx="0" cy="-20" r="7" fill="currentColor"/><rect x="-9" y="-11" width="18" height="25" rx="8" fill="currentColor"/><path d="M-8 -4 L-18 8 M8 -4 L18 8 M-5 13 L-11 29 M5 13 L11 29" fill="none" stroke="currentColor" stroke-width="6"/></g>`;
-  let first="translate(34 38) rotate(0)",second="translate(76 38) rotate(180)";
-  if(/standing|passing/.test(k+" "+name)){first="translate(33 37) rotate(-85)";second="translate(78 37) rotate(85)"}
-  else if(/back|rear/.test(k+" "+name)){first="translate(52 51) rotate(0)";second="translate(52 28) rotate(0)"}
-  else if(/side/.test(k+" "+name)){first="translate(52 43) rotate(90)";second="translate(50 37) rotate(0)"}
-  else if(/mount|mounted/.test(k+" "+name)){first="translate(53 43) rotate(0)";second="translate(53 28) rotate(0)"}
-  else if(/turtle|turtled/.test(k+" "+name)){first="translate(37 39) rotate(65)";second="translate(73 40) rotate(-30)"}
-  else if(/guard|butterfly|ashi|leg/.test(k+" "+name)){first="translate(44 44) rotate(-55)";second="translate(65 37) rotate(135)"}
-  else if(/headlock/.test(k+" "+name)){first="translate(42 39) rotate(-42)";second="translate(68 39) rotate(125)"}
-  return `<svg class="jf-pose" viewBox="0 0 110 76" aria-hidden="true" focusable="false"><ellipse cx="55" cy="39" rx="50" ry="34" fill="var(--surface-2)" opacity=".75"/><g class="jf-pose-them" transform="${second}">${shape("jf-pose-gray")}</g><g class="jf-pose-you" transform="${first}">${shape("jf-pose-blue")}</g></svg>`;
-}
-function mapStation(key,sel,links){
-  const p=POS[key],active=key===sel,d=links[key],k=posKnown(key,flowMax());
-  return `<button type="button" class="jf-station${active?" active":d?" connected":" inactive"}" data-a="mappos" data-v="${key}" aria-pressed="${active}" aria-label="${esc(p.L)}${d?", "+d.ts.length+" moves from "+POS[sel].L:""}">
-   ${mapAnatomy(key)}<span class="jf-station-text"><strong>${esc(p.l)}</strong><small>${active?"YOU ARE HERE":d?d.ts.length+" LINKED MOVE"+(d.ts.length===1?"":"S"):k!==null?Math.round(k*100)+"% STUDIED":"SELECT"}</small></span>
-  </button>`;
-}
-function mapAtlas(sel){
-  const links={};flowGroups(sel,flowMax()).forEach(g=>links[g.d]=g);
-  return `<section class="jf-atlas-shell">
-    <div class="jf-atlas-intro"><div><span class="jf-eyebrow">THE POSITIONAL ATLAS</span><h3>Choose your position.</h3></div><span class="jf-atlas-note">Blue = you &nbsp;·&nbsp; Grey = opponent · diagrams are schematic</span></div>
-    <div class="jf-atlas-scroll" tabindex="0" aria-label="Swipe horizontally to explore all positional cards">
-      <div class="jf-atlas-inner">${ROWS.map((row,i)=>`<div class="jf-atlas-row"><div class="jf-atlas-rowhead"><span>${String(i+1).padStart(2,"0")}</span>${esc(TIERS[i])}</div><div class="jf-atlas-grid" style="--cols:${row.length}">${row.map(p=>mapStation(p,sel,links)).join("")}</div></div>`).join("")}</div>
-    </div>
-    <div class="jf-atlas-hint">Swipe to see all positions. Tap any card to change the highlighted routes.</div>
-  </section>`;
-}
-function mapStop(g,sel,index){
-  const name=g.d==="sub"?"Submission finish":g.d===sel?"Maintain position":POS[g.d].L;
-  const tag={up:"ADVANCE",side:"TRANSITION",fin:"SUBMIT",stay:"CONTROL",down:"RISK"}[g.dir];
-  return `<article class="jf-stop jf-${g.dir}" data-mapstop="${index}">
-    <div class="jf-stop-heading"><div class="jf-stop-kicker">${index+1} / ${tag} · ${g.ts.length} move${g.ts.length===1?"":"s"}</div>
-    ${g.d!=="sub"&&g.d!==sel?`<button class="jf-stop-name" data-a="mappos" data-v="${g.d}">${esc(name)} <span aria-hidden="true">↗</span></button>`:`<strong class="jf-stop-name">${esc(name)}</strong>`}</div>
-    <div class="jf-stop-tech">${g.ts.slice(0,3).map(t=>`<button data-a="open" data-v="${esc(t.id)}">${esc(t.n)} <span aria-hidden="true">›</span></button>`).join("")}${g.ts.length>3?`<span class="jf-stop-more">+${g.ts.length-3} more in Explore</span>`:""}</div>
-  </article>`;
-}
-function mapHub(sel){
-  const groups=flowGroups(sel,flowMax());
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">01 / HUB</span><h3>One position. Every option.</h3><p>Your position stays central; follow one branch at a time.</p></div></div>
-    <div class="jf-hub-origin">${mapAnatomy(sel)}<span>CURRENT POSITION</span><strong>${esc(POS[sel].L)}</strong></div>
-    <div class="jf-hub-stem"><span>CHOOSE A ROUTE</span></div>
-    ${groups.length?`<div class="jf-hub-grid">${groups.map((g,i)=>mapStop(g,sel,i)).join("")}</div>`:`<p class="muted">No connected moves for the current belt filter.</p>`}`;
-}
-function mapLanes(sel){
-  const groups=flowGroups(sel,flowMax()),defs=[["up","ADVANCE","Reach a better position"],["side","TRANSITION","Move laterally"],["fin","SUBMISSION","Finish from here"],["stay","CONTROL","Maintain the position"],["down","RISK","Moves that concede position"]];
-  return `<div class="jf-route-top"><div><span class="jf-eyebrow">02 / LANES</span><h3>Connections by purpose.</h3><p>Organised by what each move achieves.</p></div></div>
-  <div class="jf-lane-groups">${defs.map(([key,title,description])=>{const members=groups.filter(g=>g.dir===key);return members.length?`<section class="jf-lane jf-${key}"><div class="jf-lane-head"><div><span>${title}</span><p>${description}</p></div><strong>${members.length}</strong></div><div class="jf-lane-list">${members.map((g,i)=>mapStop(g,sel,i)).join("")}</div></section>`:""}).join("")}</div>`;
-}
-function flowMapLayouts(sel){
- const mode=["hub","lanes"].includes(S.ui.mapLayout)?S.ui.mapLayout:"hub";
- return `<div class="jf-map-layout-tabs" role="group" aria-label="Full map layout">
-   ${[["hub","Hub","Focus"],["lanes","Lanes","Grouped"]].map(([id,name,sub])=>`<button type="button" data-a="maplayout" data-v="${id}" aria-pressed="${mode===id}"><span>${name}</span><small>${sub}</small></button>`).join("")}
-  </div>${mapAtlas(sel)}<section class="jf-map-route" aria-live="polite">${mode==="lanes"?mapLanes(sel):mapHub(sel)}</section>`;
-}
 function flowSVG(sel){
   // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
   const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
@@ -4518,30 +4579,81 @@ function routeFind(from,to,max){if(from===to)return [];const prev={[from]:null},
   return null}
 function routeBlock(sel){const mx=flowMax(),to=S.ui.routeTo&&POS[S.ui.routeTo]&&S.ui.routeTo!==sel?S.ui.routeTo:(sel==="back_top"?"mount_top":"back_top");
   const r=routeFind(sel,to,mx),opts=k=>ROWS.flat().map(p=>`<option value="${p}"${p===k?" selected":""}>${esc(POS[p].l)}</option>`).join("");
-  return `<section class="panel stack route"><h2 class="label">Find a route</h2>
+  return `<section class="stack route">
     <div class="grid2"><label class="f">From<select id="rt-from" data-route="from">${opts(sel)}</select></label><label class="f">To<select id="rt-to" data-route="to">${opts(to)}</select></label></div>
-    ${r===null?`<p class="small muted">No route using moves up to ${esc((BELT[Object.keys(RANK).find(k=>RANK[k]===mx)]||{to:"your"}).to)} belt. Pick a higher belt in "Every move from here".</p>`
+    ${r===null?`<p class="small muted">No route using moves up to ${esc((BELT[Object.keys(RANK).find(k=>RANK[k]===mx)]||{to:"your"}).to)} belt. Pick a higher belt in "Moves up to" on the map.</p>`
      :`<ol class="routesteps"><li class="rpos">${esc(POS[sel].l)}</li>${r.map(t=>`<li class="rmove"><button class="linkbtn" data-a="open" data-v="${t.id}">${esc(t.n)}</button><span class="small muted">${esc(CATS[t.c])}</span></li><li class="rpos">${esc(POS[t.t].l)}</li>`).join("")}</ol>
        <p class="small muted">${r.length} move${r.length===1?"":"s"}: the shortest chain in the curriculum${mx<4?` up to your filter`:""}. Tap a move to study it.</p>`}</section>`}
+/* ============ CHAIN EXPLORER ============
+   The heart of the map: where you are, then 3–5 "they do this → you do that" branches from the attack chains (and the
+   other moves that start there). "Go" takes a branch: you move to where it leads, or, after a submission, see what to
+   switch to when they defend. The path you've played builds up above; tap any step to jump back. Kept in S.ui.trail. */
+function chainAt(root,idx){let list=CHAINS[root]||[],n=null;for(const i of idx||[]){n=list[i];if(!n)return null;list=n.k||[]}return n}
+function trailNow(){const sel=S.ui.flowSel;let tr=S.ui.trail;if(!Array.isArray(tr)||!tr.length||tr[tr.length-1].p!==sel)tr=S.ui.trail=[{p:sel}];return tr}
+const DIRCUE={up:"Improve your position",side:"Change the angle",down:"Get to safety",stay:"Keep control",fin:"Go for the finish"};
+const DIRWORD={up:"Better position",side:"Transition",down:"Safety first",stay:"Control",fin:"Finish"};
+function branchesAt(step,mx){const p=step.p,out=[],seen=new Set(step.t?[step.t]:[]);
+  const add=(t,cue,k,kind)=>{if(!t||RANK[beltOf(t)]>mx||seen.has(t.id))return;seen.add(t.id);out.push({t,cue,k,kind})};
+  const n=step.root?chainAt(step.root,step.idx):null;
+  if(n)(n.k||[]).forEach((c,i)=>add(TM[c.t],c.w,step.root+":"+[...step.idx,i].join("."),"react"));
+  const reacts=out.length;
+  if(!(step.fin&&reacts))(CHAINS[p]||[]).forEach((c,i)=>{if(out.length<5)add(TM[c.t],c.w,p+":"+i,"chain")});
+  if(out.length<3){const pr={fin:0,up:1,side:2,stay:3,down:4};
+    const pp={core:0,key:1,plus:2};fromPos(p,mx).sort((a,b)=>pp[a.p]-pp[b.p]||pr[flowDir(p,a.t)]-pr[flowDir(p,b.t)]).forEach(t=>{if(out.length<4)add(t,"","","move")})}
+  return {list:out,reacts}}
+const goesTo=(t,p)=>t.t==="sub"?"Tap":t.t===p?"Keep going from "+POS[p].l:POS[t.t].L;
+function branchCard(b,p){const t=b.t,dir=flowDir(p,t.t),bl=beltOf(t),fin=t.t==="sub";
+  const when=b.kind==="react"?(/^(they|their)\b/i.test(b.cue)?"They react":"Then"):b.kind==="chain"?(/^start:/i.test(b.cue)?"Start here":"When"):DIRWORD[dir];
+  const cue=b.cue?b.cue.replace(/^Start:\s*/i,""):DIRCUE[dir];
+  return `<article class="branch d-${dir}"><p class="bcue"><b>${esc(when)}</b>${gl(cue[0].toUpperCase()+cue.slice(1))}</p>
+   <button class="bmove" data-a="open" data-v="${t.id}" aria-label="${esc(t.n)}: open the steps${vidOf(t.id)?" and video":""}">${techThumb(t)}<span><span class="bname">${esc(t.n)}</span><span class="meta">${cat(t.c)}${bl!=="blue"?`<span class="btag ${bl}">${BELT[bl].to}</span>`:""}${stripes(lv(t.id))}</span></span></button>
+   <button class="bgo${fin?" tapgo":""}" data-a="chaingo" data-v="${t.id}" data-k="${b.k}" aria-label="Go: ${esc(t.n)}, leads to ${esc(goesTo(t,p))}"><span><small>${fin?"Finishes with":"Leads to"}</small><b>${esc(goesTo(t,p))}</b></span><i aria-hidden="true">→</i></button></article>`}
+function chainStage(sel,mx){const tr=trailNow(),cur=tr[tr.length-1],p=POS[cur.p],last=cur.t&&TM[cur.t],br=branchesAt(cur,mx),all=fromPos(cur.p,mx).length;
+  const crumbs=tr.length>1?`<nav class="crumbs" aria-label="Your path"><div class="crumbhead"><span class="eyebrow">Your path</span><button class="reset" data-a="chainreset">Start over</button></div><ol>${tr.map((x,i)=>{const here=i===tr.length-1,lab=x.fin?"Tap":i&&x.p===tr[i-1].p&&TM[x.t]?TM[x.t].n:POS[x.p].l;
+      return `<li${x.fin?' class="fin"':""}><button data-a="crumb" data-v="${i}"${here?' aria-current="step"':""} aria-label="${esc(i?`${TM[x.t]?TM[x.t].n:""} to ${lab}`:`Start: ${lab}`)}${here?" (you are here)":", jump back here"}">${esc(lab)}</button></li>`}).join("")}</ol></nav>`:"";
+  const vid=vidOf("pos:"+cur.p);
+  const media=vid?ytMedia("pos:"+cur.p,p.L,posVisual(cur.p)):posVisual(cur.p);
+  const head=last?(cur.fin?`After ${esc(last.n)}`:`Via ${esc(last.n)}`):esc(TIERS[p.r]);
+  const hero=`<section class="panel poshero dk" id="poshero" aria-labelledby="poshero-t">${crumbs}
+    <div class="ptop"><div class="hero-t"><span class="eyebrow">${head}</span><h2 id="poshero-t" tabindex="-1">${esc(p.L)}</h2></div></div>
+    <p class="pgo">${gl(p.g)}</p><div class="ymedia">${media}</div>
+    ${OPP[cur.p]&&OPP[cur.p]!==cur.p?`<button class="btn flip" data-a="pos" data-v="${OPP[cur.p]}">See it from the other side: ${esc(POS[OPP[cur.p]].l)}</button>`:""}</section>`;
+  const fin=cur.fin?`<div class="finish" role="status"><b>Tap</b><span>${esc(last.n)} finishes it.${br.reacts?" If they defend, switch:":" Start over, or step back along your path."}</span></div>`:"";
+  return `<div class="chainstage" id="chainstage">${hero}${fin}
+   <section class="stack" aria-label="What happens next"><div class="branchhead"><h3>${cur.fin&&br.reacts?"If they defend":tr.length>1&&br.reacts?"They react, you switch":"Your options"}</h3><span class="small muted">${br.list.length} of ${all} move${all===1?"":"s"}</span></div>
+   ${br.list.length?`<div class="branches">${br.list.map(b=>branchCard(b,cur.p)).join("")}</div>`:`<div class="empty">No moves from here at this belt filter. Pick a higher belt above.</div>`}
+   <div class="chainmore">${all>br.list.length?`<button class="btn" data-a="flowall">All ${all} moves from here</button>`:""}${tr.length>1?`<button class="btn ghost" data-a="chainreset">Start over</button>`:""}</div></section></div>`}
+function chainGo(id,k){const t=TM[id];if(!t)return;const tr=trailNow(),cur=tr[tr.length-1];let root=null,idx=null;
+  if(k){const [r,ix]=k.split(":");if(CHAINS[r]&&ix!=null){root=r;idx=ix.split(".").map(Number)}}
+  const fin=t.t==="sub",p=fin||!POS[t.t]?cur.p:t.t;jfTrack("select_content",{content_type:"chain_step",item_id:id});
+  const n=tr.length+1;if(!inClaude())try{history.pushState({chain:n},"")}catch(e){}
+  chainMove(()=>{tr.push({p,t:id,fin,root,idx});S.ui.flowSel=p},1)}
+function chainJump(i){const tr=trailNow();if(i>=tr.length-1||i<0)return;chainMove(()=>{tr.length=i+1;S.ui.flowSel=tr[i].p},-1)}
+/* Slide to the next step: the View Transitions API where there is one, otherwise a CSS slide. The new step is drawn at once either way. */
+function chainMove(fn,dir){const top=()=>{const h=document.getElementById("chainstage");if(!h)return;const r=h.getBoundingClientRect();if(r.top<0||r.top>innerHeight*.45)window.scrollTo(0,window.scrollY+r.top-12);const t=document.getElementById("poshero-t");if(t)t.focus({preventScroll:true})};
+  const apply=()=>{fn();render();top()};
+  if(document.startViewTransition&&!reduceMotion()){document.documentElement.dataset.dir=dir>0?"fwd":"back";try{const vt=document.startViewTransition(apply);vt.finished.finally(()=>{delete document.documentElement.dataset.dir})}catch(e){apply()}return}
+  apply();if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add(dir>0?"in-fwd":"in-back")}}
 function viewFlow(){
-  const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),outs=fromPos(sel,mx),ins=intoPos(sel,mx);
-  return `
-  <section class="stack"><h1 style="font-size:34px">Flow map</h1><p class="muted small">Positions from best (top) to worst (bottom). Tap a position to see its connections.</p>
-  <div class="jf-classic-map">${flowSVG(sel)}</div>
-  ${(()=>{const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));return `<div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>`})()}</section>
-  <section class="stack" id="flow-from"><div class="row between"><h2 class="label">From ${esc(p.l.toLowerCase())}</h2><span class="small muted">${outs.length} move${outs.length===1?"":"s"}</span></div>
-  <div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${(S.ui.flowBelt||goal())===b.k}">Up to ${b.to}</button>`).join("")}</div>
-  ${flowFrom(sel)}
-  </section>
-  <section class="panel stack"><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${OPP[sel]?`<button class="btn" data-a="pos" data-v="${OPP[sel]}">See it from the other side: ${esc(POS[OPP[sel]].l)}</button>`:""}${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></section>
-  ${routeBlock(sel)}
-  ${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
-  ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}
-  <section class="panel stack">${(P().photos||{})[sel]?"":posImg(sel)?posImgFig(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):""):vidOf("pos:"+sel)&&!inClaude()?ytPlayer("pos:"+sel,p.L):posPic(sel)+(vidOf("pos:"+sel)?ytPlayer("pos:"+sel,p.L):"")}${photoBlock(sel)}</section>
-  ${ins.length?`<section class="stack"><h2 class="label">Ways in</h2><div class="list">${ins.map(t=>tRow(t)).join("")}</div></section>`:""}
-  <section class="stack"><h2 class="label">Starter game plans</h2><p class="small muted">Pick one A-game chain and run it every roll for a month. Being reliable at a few things gets people promoted.</p>
-  ${PLANS.map(pl=>`<div class="panel"><div><h3>${esc(pl.n)}</h3><p class="small muted">${esc(pl.d)}</p></div><div class="chain">${pl.ids.map((id,i)=>`${i?'<span class="arr">→</span>':""}<button data-a="open" data-v="${id}">${esc(TM[id].n)}</button>`).join("")}</div></div>`).join("")}
-  </section>`;
+  const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),ins=intoPos(sel,mx),outs=fromPos(sel,mx),fb=S.ui.flowBelt||goal();
+  const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));
+  const hero=`<div class="mapnav"><div class="jf-classic-map">${flowSVG(sel)}</div>
+    <div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>
+    <div class="beltfilter"><span>Moves up to</span><div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${fb===b.k}" aria-label="Up to ${b.to}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></div></div>`;
+  const og=S.ui.openG||{},fold=(g,title,sub,body)=>`<details class="more fold" id="${g}" data-g="${g}"${og[g]?" open":""}><summary><span>${title}${sub?`<small>${sub}</small>`:""}</span></summary><div class="foldbody">${body}</div></details>`;
+  return {hero,body:`
+  ${chainStage(sel,mx)}
+  <div class="stack" style="gap:12px">
+  ${fold("flow-all",`Every move from ${esc(p.l.toLowerCase())}`,`${outs.length} move${outs.length===1?"":"s"}, grouped by where they lead`,`<section class="stack" id="flow-from">${flowFrom(sel)}</section>`)}
+  ${fold("flow-more",`About ${esc(p.l.toLowerCase())}`,"Priorities, what to watch out for, videos",`<section class="panel stack"><div class="stack"><div><h2 class="label">${esc(TIERS[p.r])}</h2><h3>${esc(p.L)}</h3></div><p>${gl((PD[sel]||{}).d||p.g)}</p>${ytBtn(POSQ[sel]||ytName(p.L),vidOf("pos:"+sel)?"More videos of this position on YouTube":"Watch this position on YouTube")}${PD[sel]?`<div><h2 class="label" style="margin-bottom:6px">Your priorities</h2><ol class="steps qrsteps">${PD[sel].pr.map(x=>`<li><span>${gl(x)}</span></li>`).join("")}</ol></div><div><h2 class="label" style="margin-bottom:6px">Watch out for</h2><ul class="plain">${PD[sel].dn.map(x=>`<li>${gl(x)}</li>`).join("")}</ul></div>`:""}</div></section>
+    <section class="panel stack">${(P().photos||{})[sel]?"":posImg(sel)?posImgFig(sel):posPic(sel)}${photoBlock(sel)}</section>
+    ${ins.length?`<section class="stack"><h2 class="label">Ways in</h2><div class="list">${ins.map(t=>tRow(t)).join("")}</div></section>`:""}`)}
+  ${CHAINS[sel]||OPP[sel]&&CHAINS[OPP[sel]]?fold("flow-chains","The whole chain tree","Every branch at once, and their attacks with your defenses",`${CHAINS[sel]?`<section class="stack"><h2 class="label">Your attack chains</h2><p class="small muted">Start at the top. Each branch is what to switch to when they defend.</p>${chainTree(CHAINS[sel],"att",0)}</section>`:""}
+  ${OPP[sel]&&CHAINS[OPP[sel]]?`<section class="stack"><h2 class="label">Their attacks &amp; your defense</h2><p class="small muted">What they'll go for from ${esc(POS[OPP[sel]].L.toLowerCase())}, how to stop it, and what they switch to when you do.</p>${chainTree(CHAINS[OPP[sel]],"def",0)}</section>`:""}`):""}
+  ${fold("flow-route","Find a route","The shortest chain of moves between two positions",routeBlock(sel))}
+  ${fold("flow-plans","Starter game plans","One A-game chain to run every roll for a month",`<p class="small muted">Pick one A-game chain and run it every roll for a month. Being reliable at a few things gets people promoted.</p>
+  ${PLANS.map(pl=>`<div class="panel"><div><h3>${esc(pl.n)}</h3><p class="small muted">${esc(pl.d)}</p></div><div class="chain">${pl.ids.map((id,i)=>`${i?'<span class="arr">→</span>':""}<button data-a="open" data-v="${id}">${esc(TM[id].n)}</button>`).join("")}</div></div>`).join("")}`)}
+  </div>`};
 }
 
 function viewLog(){
@@ -4577,11 +4689,15 @@ function openSheet(html,keepScroll,bar){const sh=document.getElementById("sheet"
   sh.innerHTML=`<div class="wrap">${html}</div>`;app.hidden=true;sh.hidden=false;document.querySelector("nav.tabs").hidden=true;
   bar=bar||{};const backL=bar.back||((S.ui.stack||[]).length>1?"‹ Back":"Close");
   sb.innerHTML=`<div class="wrap">${bar.top||""}<div class="main"><button class="btn back" data-a="back">${backL}</button>${bar.act||'<span class="grow"></span>'}</div></div>`;sb.hidden=false;document.documentElement.classList.add("sheet-open");
+  if(fresh&&!reduceMotion()){sh.classList.remove("in");sb.classList.remove("in");void sh.offsetWidth;sh.classList.add("in");sb.classList.add("in")}
   const t=sh.querySelector("h1")||sh.querySelector(".sheettitle");if(t){t.id="sheet-t";t.tabIndex=-1} // focusable, also when a redraw puts focus back on it
   sh.setAttribute("role","dialog");sh.setAttribute("aria-modal","true");sh.setAttribute("aria-owns","sheetbar toast");if(t)sh.setAttribute("aria-labelledby","sheet-t");else sh.removeAttribute("aria-labelledby");
   if(!keepScroll){window.scrollTo(0,0);try{sh.scrollIntoView({block:"start"})}catch(e){}}
   const again=was&&(sh.querySelector(was)||sb.querySelector(was));
   if(again)again.focus({preventScroll:true});else if(t&&(fresh||!sh.contains(document.activeElement)&&!sb.contains(document.activeElement)))t.focus({preventScroll:true})}
+const reduceMotion=()=>{try{return matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){return false}};
+/* a new screen fades up into place (a class, not the View Transitions API, so the screen is there the moment you tap) */
+function screenIn(){const a=document.getElementById("app");if(!a||reduceMotion())return;a.classList.remove("enter");void a.offsetWidth;a.classList.add("enter");clearTimeout(screenIn._t);screenIn._t=setTimeout(()=>a.classList.remove("enter"),420)}
 function hideTerm(){const c=document.getElementById("termcard");if(c&&!c.hidden){c.hidden=true;c.innerHTML="";if(TERMCTL)TERMCTL.abort()}}
 function hideSheet(){hideTerm();const sh=document.getElementById("sheet");sh.hidden=true;sh.innerHTML="";["role","aria-modal","aria-owns","aria-labelledby"].forEach(a=>sh.removeAttribute(a));const sb=document.getElementById("sheetbar");sb.hidden=true;sb.innerHTML="";document.querySelector("nav.tabs").hidden=false;document.documentElement.classList.remove("sheet-open");document.getElementById("app").hidden=false;S.ui.sheet=null;S.ui.stack=[]}
 function goBack(){const k=S.ui.sheet&&S.ui.sheet.k;
@@ -4598,15 +4714,14 @@ function techSheet(id,fromBack){
   const t=TM[id];if(!fromBack&&t)jfTrack("select_content",{content_type:"technique",item_id:id});
   if(!fromBack){if(!S.ui.sheet||S.ui.sheet.k!=="tech")S.ui.stack=[];const st=S.ui.stack;if(st[st.length-1]!==id)st.push(id)}
   S.ui.sheet={k:"tech",id};const l=lv(id),c=P().srs[id];
-  openSheet(`${sheetHead(`${CATS[t.c]} · <span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)}
-  <div class="stack-lg">
-   <div class="stack"><h1>${esc(t.n)}</h1>
+  const media=(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):vidOf(t.id)?ytMedia(t.id,t.n,posVisual(t.f)):posVisual(t.f);
+  openSheet(`<div class="stack-lg">
+   <div class="stack"><header class="hero dk shead">${media}<div class="shead-t">${sheetHead(`${CATS[t.c]} · <span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)}<h1>${esc(t.n)}</h1>
     ${beltOf(t)!=="blue"?`<div><span class="btag ${beltOf(t)}">${BELT[beltOf(t)].from} → ${BELT[beltOf(t)].to}</span></div>`:""}
+    <div class="fromto"><button class="posbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].L)}</button><span>→</span>${t.t==="sub"?`<span class="cat" data-c="sub">Tap</span>`:`<button class="posbtn" data-a="pos" data-v="${t.t}">${esc(POS[t.t].L)}</button>`}</div></div></header>
     <p class="lead">${gl(OV[t.id]||"")}</p>
-    ${(P().videos||{})[t.id]||S.ui.vidUp===t.id?videoBlock(t):vidOf(t.id)?(inClaude()?posVisual(t.f)+ytPlayer(t.id,t.n):ytPlayer(t.id,t.n)):posVisual(t.f)}
     ${ytBtn(ytName(t.n),vidOf(t.id)?"More "+ytName(t.n)+" videos on YouTube":"Watch "+ytName(t.n)+" on YouTube")}
     ${inClaude()?"":waBtn(`${t.n} (no-gi), step by step with a video: https://www.jitsflow.com/techniques/${techSlug(t.id)}/`,"Send to a training partner",{kind:"technique"})}
-    <div class="fromto"><button class="posbtn" data-a="pos" data-v="${t.f}">${esc(POS[t.f].L)}</button><span>→</span>${t.t==="sub"?`<span class="cat" data-c="sub">Tap</span>`:`<button class="posbtn" data-a="pos" data-v="${t.t}">${esc(POS[t.t].L)}</button>`}</div>
     ${t.w?`<div class="warnbox">${esc(t.w)}</div>`:""}
     ${UNC.has(t.id)?`<div class="coachbox${coachOK(t.id)?" ok":""}"><b>${coachOK(t.id)?"Coach checked ✓":"Check with your coach"}</b><span class="small">${coachOK(t.id)?"You've gone through this one with your coach.":"Some details of this move vary between coaches or haven't been verified. Go through it with your coach before you drill it hard."}</span><button class="btn" data-a="coachok" data-v="${t.id}">${coachOK(t.id)?"Undo":"My coach checked this"}</button></div>`:""}
    </div>
@@ -4714,6 +4829,7 @@ const tabHash=()=>S.ui.tab==="coach"?"coach-"+COACH.view:S.ui.tab==="learn"&&S.u
 const isMap=()=>S.ui.tab==="learn"&&S.ui.learnView==="map";
 function render(){
   const app=document.getElementById("app");
+  app.querySelectorAll("details[data-g]").forEach(d=>{const o=S.ui.openG=S.ui.openG||{};if(d.open)o[d.dataset.g]=1;else delete o[d.dataset.g]}); // open folds stay open (the toggle event can come after a quick redraw)
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches training themselves) the study tabs.
@@ -4727,25 +4843,26 @@ function render(){
   document.querySelectorAll("nav.tabs [data-v]").forEach(b=>{b.hidden=!show[b.dataset.v];b.setAttribute("aria-current",b.dataset.v===cur?"page":"false")});
   {const b=document.querySelector(`nav.tabs [data-v="${cur}"]`);document.title=(b?b.textContent.trim()+" · ":"")+"JitsFlow"} // the screen reader and the phone's app switcher say which screen this is
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
-  const fab=v==="home"?`<button class="fab" data-a="lognew" aria-label="Log a session" title="Log a session">+</button>`:"";
-  app.innerHTML=(v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday())+fab;
-  if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines());if(S.ui.flowMode==="overview"&&!S.ui.mapHasFocused){S.ui.mapHasFocused=true;requestAnimationFrame(()=>{const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollLeft=Math.max(0,box.x+box.width/2-m.clientWidth/2)}})}}
+  app.innerHTML=v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday();
+  if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
-  const was=tabHash(),wasTab=tipKey();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
+  const was=tabHash(),wasTab=tipKey();if(r.tab!==S.ui.tab||r.cv&&r.cv!==COACH.view)tipSeen(wasTab);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
-  if(wasTab!==tipKey())tipVisit();render();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()}
+  render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()}
 // The phone's Back button closes the open sheet, else goes back to the previous tab. A step left by a sheet that was closed in the app
 // changes nothing on screen, so it's skipped: every press of Back does something, and Back from the first screen leaves the app.
 window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.getElementById("sheet");
   if(!sh.hidden){goBack();if(!sh.hidden)try{history.pushState({sheet:1},"")}catch(e){}return}
   const h=location.hash.slice(1),r=h?route(h):{tab:"home"};if(!r)return;
+  // Back on the map steps back along the chain you played (a step left by a closed sheet is skipped as below)
+  if(isMap()&&h==="learn-map"&&Array.isArray(S.ui.trail)&&S.ui.trail.length>1){const st=history.state||{};if(!st.sheet){const want=Math.max(1,st.chain||1);if(want<S.ui.trail.length){chainJump(want-1);return}}}
   if((h||"home")===tabHash()){history.back();return}
   go(r.tab==="learn"&&!r.lv?"learn-moves":h||"home",true)});
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;const wk=tipKey();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}if(wk!==tipKey())tipVisit();render()});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;const wk=tipKey();tipSeen(wk);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
@@ -4855,7 +4972,7 @@ document.addEventListener("click",e=>{
     case "ttapply": ttApply(el);break;
     case "bookusual": bookUsual(el);break;
     case "rotate": api("POST","/coach/codes/rotate",{which:v}).then(j=>{API.me=j.me;render();toast("New code made. The old link no longer works.")}).catch(e=>toast(e.message));break;
-    case "ytplay": { const box=el.closest(".ytbox");if(box){const t=el.getAttribute("aria-label")||"Video";box.querySelector(".ytface").outerHTML=`<div class="ytembed"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v)}?autoplay=1&rel=0&playsinline=1" title="${esc(t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`}break }
+    case "ytplay": { const box=el.closest(".ytbox");if(box){const t=el.getAttribute("aria-label")||"Video";const pst=el.querySelector(".ytposter");box.querySelector(".ytface").outerHTML=`<div class="ytembed">${pst?pst.outerHTML:""}<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v)}?autoplay=1&rel=0&playsinline=1" title="${esc(t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`}break }
     case "coachok": { const c=P().checked||(P().checked={});if(c[v])delete c[v];else c[v]=true;saveProgress();const y=window.scrollY;techSheet(v,true);window.scrollTo(0,y);toast(c[v]?"Marked as checked with your coach.":"Coach check removed.");break }
     case "obset": { S.ui.ob[el.dataset.k]=el.dataset.k==="pw"?Number(v):v;onboardSheet(true);break }
     case "obdone": finishOnboard(); break;
@@ -4949,15 +5066,15 @@ document.addEventListener("click",e=>{
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
-    case "maplayout": S.ui.mapLayout=["hub","lanes"].includes(v)?v:"hub";{const y=window.scrollY;render();window.scrollTo(0,y)}break;
-    case "mappos": {const y=window.scrollY,x=document.querySelector(".jf-atlas-scroll")?.scrollLeft||0;S.ui.flowSel=v;render();const atlas=document.querySelector(".jf-atlas-scroll");if(atlas)atlas.scrollLeft=x;window.scrollTo(0,y)}break;
-    case "maplines": S.ui.mapLines=S.ui.mapLines===false;{const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y)}break;
-    case "mapfocus": {const m=document.querySelector(".jf-map-scroller"),n=m?.querySelector(".node.sel");if(m&&n){const box=n.getBBox();m.scrollTo({left:Math.max(0,box.x+box.width/2-m.clientWidth/2),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}break;}
-    case "flowmode": S.ui.flowMode=v==="overview"?"overview":"guide";S.ui.mapHasFocused=false;{const y=window.scrollY;render();window.scrollTo(0,y)}break;
-    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY,x=document.querySelector(".jf-map-scroller")?.scrollLeft||0;S.ui.flowSel=v;render();const m=document.querySelector(".jf-map-scroller");if(m)m.scrollLeft=x;window.scrollTo(0,y);break} // tapping the map: stay where you are
+    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add("in-fade")}break} // tapping the map: stay where you are
     case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("learn-map"); break;
-    case "filter": S.ui[el.dataset.k]=v; render(); break;
-    case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";render();break;
+    case "chaingo": chainGo(v,el.dataset.k); break;
+    case "crumb": chainJump(Number(v)); break;
+    case "chainreset": chainJump(0); break;
+    case "flowall": {const d=document.getElementById("flow-all");if(d){d.open=true;d.scrollIntoView({behavior:reduceMotion()?"auto":"smooth",block:"start"})}break}
+    case "filter": S.ui[el.dataset.k]=v; render(); if(S.ui.sheet&&S.ui.sheet.k==="filters")filtersSheet(true); break;
+    case "filters": filtersSheet(); break;
+    case "clearq": S.ui.q="";S.ui.filterP="all";S.ui.filterM="all";S.ui.kind="all";S.ui.belt=null;render();break;
     case "review": S.ui.review={q:dueList(),i:0,shown:false}; reviewSheet(); break;
     case "reveal": S.ui.review.shown=true; reviewSheet(); break;
     case "revprev": { const r=S.ui.review;if(r&&r.i>0){r.i--;r.shown=false;reviewSheet()}break }
@@ -4977,7 +5094,7 @@ document.addEventListener("click",e=>{
     case "stuck": { const f=S.ui.form;f.stuck=f.stuck.includes(v)?f.stuck.filter(x=>x!==v):[...f.stuck,v];logSheet(true);break }
     case "phdel": S.ui.phConfirm=v; render(); break;
     case "openbelt": S.ui.belt=v;S.ui.filterP="all";S.ui.filterM="all";S.ui.q="";go("learn-belt");break;
-    case "belt": S.ui.belt=v;S.ui.filterP="all";S.ui.filterM="all";S.ui.q="";render();break;
+    case "belt": S.ui.belt=v;if(!(S.ui.sheet&&S.ui.sheet.k==="filters")){S.ui.filterP="all";S.ui.filterM="all";S.ui.q=""}render();if(S.ui.sheet&&S.ui.sheet.k==="filters")filtersSheet(true);break;
     case "setgoal": setGoal(v);break;
     case "flowbelt": S.ui.flowBelt=v;render();break;
     case "comp": { const k=el.dataset.k,i=Number(v);const c=P().comp||(P().comp={});const a=c[k]||[];c[k]=a.includes(i)?a.filter(x=>x!==i):[...a,i];saveProgress();render();break }
@@ -7403,7 +7520,7 @@ async function askAI(id,q){const t=TM[id];if(!SAMPLE||!t||S.ui.aiBusy)return;
   sh.addEventListener("touchend",e=>{if(!ok)return;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(dx>90&&Math.abs(dy)<60&&Date.now()-st<700)goBack()},{passive:true});
 })();
 /* remember which curriculum groups are open */
-document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){S.ui.openG=S.ui.openG||{};if(d.open)S.ui.openG[d.dataset.g]=1;else delete S.ui.openG[d.dataset.g]}},true);
+document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){S.ui.openG=S.ui.openG||{};if(d.open)S.ui.openG[d.dataset.g]=1;else delete S.ui.openG[d.dataset.g];if(d.dataset.g==="flow-all"&&d.open)drawFlowLines(true)}},true);
 
 /* ============ SWIPE ROWS: swipe right to edit, left to delete (both reveal a button; nothing happens until it's tapped) ============ */
 /* The public page for a technique (matches tools/seo.js: name-based address, id added only when two names clash). */
@@ -7433,7 +7550,7 @@ function confirmSheet(title,text,yes,label){S.ui.sheet={k:"confirm"};S.ui.stack=
 (function boot(){
   if(!lsGet("rtb.progress"))lsSet("rtb.progress",S.progress);
   {const h=location.hash.slice(1),r=route(h)||{tab:"home"};S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h&&h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}}
-  tipVisit();render();setSync(S.sync,"");connect();
+  render();setSync(S.sync,"");connect();
   // Links from the technique pages: /app/?t=kimura opens that technique.
   try{const qs=new URLSearchParams(location.search),t=qs.get("t");if(t){qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash);if(TM[t])setTimeout(()=>{techSheet(t);jfTrack("select_content",{content_type:"technique",item_id:t,from:"web_page"})},60)}}catch(e){}
 })();
