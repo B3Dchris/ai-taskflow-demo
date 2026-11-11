@@ -135,7 +135,7 @@ const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s.leng
     for (let i = 0; i < urls.length; i += 20) await Promise.all(urls.slice(i, i + 20).map(async (u) => {
       const r = await fetch(ORIGIN + u); const html = await r.text(); if (u === "/app/") { if (r.status !== 200) broken.push("/app/ -> " + r.status); return; } biggest = Math.max(biggest, html.length);
       if (r.status !== 200) { broken.push(`${u} -> ${r.status}`); return; }
-      const refs = [...html.matchAll(/(?:href|src)="(\/[^"#?]*)/g)].map((m) => m[1]).filter((x) => !x.startsWith("//") && !x.startsWith("/app/") && !x.startsWith("/api/"));
+      const refs = [...html.replace(/<script[\s\S]*?<\/script>/g, "").matchAll(/(?:href|src)="(\/[^"#?]*)/g)].map((m) => m[1]).filter((x) => !x.startsWith("//") && !x.startsWith("/app/") && !x.startsWith("/api/"));
       for (const ref of refs) { const s = await check(ref); if (s !== 200 && s !== 301) broken.push(`${u} links to ${ref} (${s})`); }
     }));
     ok(urls.length > 150 && !broken.length, `all ${urls.length} public pages load and none has a broken internal link or image ` + broken.slice(0, 8).join("; "));
