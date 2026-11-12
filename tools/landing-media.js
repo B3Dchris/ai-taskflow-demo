@@ -5,12 +5,12 @@
 // Needs Playwright and ffmpeg. Reads web/app/index.html, so run python3 build.py first.
 // Writes (all committed, served as they are):
 //   web/img/fig/<position>.svg       the app's own position figure, coloured for the navy cards (you blue, partner grey)
-//   web/img/screens/<name>.webp      app screens at 2x (iPhone 13 size): chains, defense, belt, map
-//   web/img/thumbs/<move>.webp       560 px thumbnails of the technique photos in web/img/techniques/
+//   web/img/screens/<name>.webp      app screens (iPhone 13 size, 480 px wide): map-walk, technique, belt
+//   web/img/thumbs/<move>.webp       400x225 (16:9) card pictures of the technique photos in web/img/techniques/
 //   web/video/<name>.mp4 + .webp     the phone screen cut out of a social reel: 600 px wide, H.264, no sound, poster frame
-//   web/img/coach/<name>.webp        still coach screens from the same reels
-//   web/data/chains-demo.json        the app's attack chains, with the moves and positions they name (build.py typesets
-//                                    the home page's closed guard notebook and picks the chain lit up on its position map)
+//   web/img/coach/<name>.webp        still coach screens from the same reels (and sm/<name>.webp, 320 px, for the home page)
+//   web/data/chains-demo.json        the app's attack chains, with the moves and positions they name (a reference copy;
+//                                    the home page no longer typesets them)
 "use strict";
 const { chromium, devices } = require("playwright");
 const { spawn, execFileSync } = require("child_process");
@@ -67,28 +67,36 @@ async function figures(p) {
   console.log(`figures: ${Object.keys(svgs).length} in web/img/fig/`);
 }
 
+// The home page's "how it works" screens, in the app's current look with its demo data: a chain walked from standing
+// (the path trail on top, their reactions below), a technique with its video, and the belt screen. The video's title strip
+// (the creator's title and channel) is hidden, as in the social kit; the thumbnail itself stays.
+const WALK = ["snapdown", "fhl_go_behind"]; // standing, snap-down to the front headlock, go behind to their turtle
 async function screens(p) {
   const out = mk("img", "screens"), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jf-shots-"));
   await p.evaluate(() => {
     const st = P().settings; st.onboarded = true; st.goal = "blue"; st.perWeek = 2; st.days = [1, 3];
     TECH.forEach((t, i) => { if (beltOf(t) === "blue" && i % 7 !== 3) { P().mastery[t.id] = [1, 2, 2, 3, 1, 4, 2][i % 7]; ensureCard(t.id); } });
+    // two classes a week for the last eight weeks, so the belt screen has a streak (shown only, not saved)
+    S.sessions = Array.from({ length: 16 }, (_, i) => ({ id: "demo" + i, date: addDays(today(), -(Math.floor(i / 2) * 7 + (i % 2) * 2)), mins: 90 }));
     lsSet(tipStore(), Object.fromEntries(Object.keys(TIPS).map((k) => [k, -1]))); // no first-visit tips in the pictures
     hideSheet(); render();
   });
-  const openFold = async () => { await p.evaluate(() => { const d = document.getElementById("flow-chains"); if (d && d.tagName === "DETAILS") d.open = true; else if (d) d.querySelector("summary,button")?.click(); }); await p.waitForTimeout(400); };
-  const toHeading = (re) => p.evaluate((src) => { const h = [...document.querySelectorAll("h2.label")].find((x) => new RegExp(src).test(x.textContent)); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 14); }, re);
+  await p.addStyleTag({ content: ".ytmeta,.ytcap,.ytout{visibility:hidden!important}" });
   const shots = {
-    // The chain trees sit in a fold under the map: open it, then frame the tree.
-    chains: async () => { await p.evaluate(() => { S.ui.flowSel = "cg_bot"; go("learn-map"); }); await openFold(); await toHeading("Your attack chains"); },
-    defense: async () => { await p.evaluate(() => { S.ui.flowSel = "mount_bot"; go("learn-map"); }); await openFold(); await toHeading("Their attacks"); },
-    belt: async () => { await p.evaluate(() => { S.ui.belt = "blue"; go("learn-belt"); }); },
-    map: async () => { await p.evaluate(() => { S.ui.flowSel = "cg_bot"; go("learn-map"); }); },
+    "map-walk": async () => {
+      await p.evaluate(() => { S.ui.trail = null; S.ui.flowSel = "standing"; go("learn-map"); });
+      for (const id of WALK) { await p.waitForTimeout(300); await p.evaluate((id) => document.querySelector(`.bgo[data-v="${id}"]`).click(), id); }
+      await p.waitForTimeout(400);
+      await p.evaluate(() => { const r = document.getElementById("chainstage").getBoundingClientRect(); window.scrollTo(0, window.scrollY + r.top - 12); });
+    },
+    technique: async () => { await p.evaluate(() => { window.scrollTo(0, 0); techSheet("triangle"); }); },
+    belt: async () => { await p.evaluate(() => { hideSheet(); S.ui.belt = "blue"; go("learn-belt"); window.scrollTo(0, 0); }); },
   };
   for (const [k, fn] of Object.entries(shots)) {
-    await fn(); await p.waitForTimeout(500);
+    await fn(); await p.waitForTimeout(800);
     await p.evaluate(() => { const t = document.getElementById("toast"); if (t) t.hidden = true; document.querySelectorAll(".fab").forEach((f) => f.remove()); });
     const png = path.join(tmp, k + ".png"); await p.screenshot({ path: png });
-    const dst = path.join(out, k + ".webp"); ff("-i", png, "-vf", "scale=660:-2:flags=lanczos", "-c:v", "libwebp", "-quality", "78", "-compression_level", "6", dst);
+    const dst = path.join(out, k + ".webp"); ff("-i", png, "-vf", "scale=480:-2:flags=lanczos", "-c:v", "libwebp", "-quality", "72", "-compression_level", "6", dst);
     console.log(`screen ${k}: ${kb(dst)}`);
   }
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -112,11 +120,14 @@ async function chains(p) {
   console.log(`chains: ${Object.keys(data.chains).length} positions, ${Object.keys(data.tech).length} moves, ${kb(out)}`);
 }
 
+// The founder's photos as small 16:9 card pictures (the same shape as a YouTube thumbnail), cropped to the action.
+const CROP_Y = { back_control: 0.04, duck_under: 0, hw_guillotine: 0.02, stance_motion: 0.06 }; // top of the crop, as a share of the height; others centred
 function thumbs() {
   const src = path.join(WEB, "img", "techniques"), out = mk("img", "thumbs");
   for (const f of fs.readdirSync(src).filter((f) => f.endsWith(".jpg"))) {
-    const dst = path.join(out, f.replace(/\.jpg$/, ".webp"));
-    ff("-i", path.join(src, f), "-vf", "scale=560:560:flags=lanczos", "-c:v", "libwebp", "-quality", "74", "-compression_level", "6", dst);
+    const id = f.replace(/\.jpg$/, ""), dst = path.join(out, id + ".webp"), y = CROP_Y[id];
+    const crop = y == null ? "crop=iw:iw*9/16" : `crop=iw:iw*9/16:0:ih*${y}`;
+    ff("-i", path.join(src, f), "-vf", `${crop},scale=400:225:flags=lanczos`, "-c:v", "libwebp", "-quality", "74", "-compression_level", "6", dst);
     console.log(`thumb ${f}: ${kb(dst)}`);
   }
 }
@@ -135,7 +146,10 @@ function reels() {
   for (const [reel, t, name] of STILLS) {
     const dst = path.join(cd, name + ".webp");
     ff("-ss", String(t), "-i", path.join(REELS, reel + ".mp4"), "-frames:v", "1", "-vf", `${SCREEN},scale=480:-2:flags=lanczos`, "-c:v", "libwebp", "-quality", "78", "-compression_level", "6", dst);
-    console.log(`coach still ${name}: ${kb(dst)}`);
+    // and a small one for the home page's gyms band, where they show 160 px wide
+    const sm = path.join(mk("img", "coach", "sm"), name + ".webp");
+    ff("-i", dst, "-vf", "scale=320:-2:flags=lanczos", "-c:v", "libwebp", "-quality", "74", "-compression_level", "6", sm);
+    console.log(`coach still ${name}: ${kb(dst)}, small ${kb(sm)}`);
   }
 }
 
@@ -151,6 +165,16 @@ function reels() {
     const b = await chromium.launch();
     const ctx = await b.newContext({ ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: "light", serviceWorkers: "block" });
     const p = await ctx.newPage();
+    if (ONLY.includes("screens")) {
+      // Videos as the app shows them on data saver: the poster with a play button, not YouTube's player (which the pictures can't use).
+      await p.addInitScript(() => { try { Object.defineProperty(navigator, "connection", { get: () => ({ saveData: true, effectiveType: "4g", addEventListener() {} }) }); } catch (e) {} });
+      // Thumbnails and fonts fetched by Node (it follows HTTPS_PROXY with NODE_USE_ENV_PROXY=1); the browser goes straight there otherwise.
+      await p.route(/i\.ytimg\.com|fonts\.(googleapis|gstatic)\.com/, async (r) => {
+        try { const x = await fetch(r.request().url(), { headers: { "user-agent": r.request().headers()["user-agent"] } }); if (!x.ok) throw new Error(x.status);
+          await r.fulfill({ status: 200, contentType: x.headers.get("content-type") || "", body: Buffer.from(await x.arrayBuffer()), headers: { "access-control-allow-origin": "*" } }); } catch (e) { await r.continue(); }
+      });
+      await p.route(/youtube(-nocookie)?\.com/, (r) => r.abort());
+    }
     await p.goto(`http://localhost:${port}/app/`); await p.waitForFunction(() => typeof SCENES !== "undefined" && typeof render === "function"); await p.waitForTimeout(500);
     if (ONLY.includes("figs")) await figures(p);
     if (ONLY.includes("chains")) await chains(p);

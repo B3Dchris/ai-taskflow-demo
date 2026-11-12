@@ -99,37 +99,19 @@ def images(app):
     return {"pos": pos, "belts": belts, "hero": have("hero.jpg"), "names": names, "tech": tech}
 
 
-ROLE = {"back_top": "You're behind", "ashi": "You're attacking", "open_top": "You're passing", "standing": "Neutral", "back_bot": "They're behind", "ashi_def": "Defending your leg", "fhl_bot": "Defending"}
-
-
 def fill_landing(landing, img):
-    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     hero = '<img class="heroart" src="/img/hero.jpg" alt="" aria-hidden="true">' if img["hero"] else ""
-    belts = ""
-    if len(img["belts"]) == 4:
-        belts = '<div class="beltcards">' + "".join(
-            '<img src="/img/belts/%s.jpg" alt="%s belt" loading="lazy" width="300" height="300">' % (b, b.capitalize()) for b in img["belts"]) + "</div>"
-    gallery = ""
-    if len(img["pos"]) >= 6:
-        cards = "".join(
-            '<figure><img src="/img/positions/%s.jpg" alt="%s" loading="lazy" width="600" height="600"><figcaption>%s<span>%s</span></figcaption></figure>'
-            % (k, esc(img["names"].get(k, k)), esc(img["names"].get(k, k)), ROLE.get(k, "You on top" if k.endswith("_top") else "You underneath"))
-            for k in img["pos"])
-        gallery = ('<section class="block wrap" id="positions" style="padding-top:0"><div class="intro"><p class="eyebrow">Every position</p>'
-                   '<h2>Know where you are.</h2><p class="muted">%d positions, from best to worst, each with your goals, the dangers, '
-                   'and every move that starts there.</p></div><div class="gallery">%s</div></section>') % (len(img["pos"]), cards)
-    return (landing.replace("@@NIGHT_CLASS@@", " has-art" if img["hero"] else "").replace("@@HERO_ART@@", hero)
-            .replace("@@BELT_CARDS@@", belts).replace("@@POS_GALLERY@@", gallery))
+    return landing.replace("@@NIGHT_CLASS@@", " has-art" if img["hero"] else "").replace("@@HERO_ART@@", hero)
 
 
-# Home page technique gallery: moves with a photo come first (in this order), then well-known moves shown with the
-# app's drawing of the position they start from. Any move in the library can be listed; unknown ids are skipped.
+# Home page technique row: moves with a photo come first (in this order), then well-known moves shown with their
+# video's thumbnail. Any move in the library can be listed; unknown ids are skipped.
 GALLERY_TECH = ["back_control", "hw_guillotine", "duck_under", "arm_tri_def", "stance_motion", "kimura_trap_def", "bodylock_def",
                 "triangle", "double_leg", "armbar_cg", "knee_cut", "hip_bump", "rnc", "kimura_sc", "elbow_knee", "darce", "omoplata",
                 "smash_pass", "xguard_sweep", "japanese_necktie", "berimbolo", "mounted_guillotine", "back_handfight"]
 GALLERY_MAX = 22
 BELT_HEX = {"white": "#F4F4F0", "blue": "#1F4FB0", "purple": "#5E2D8C", "brown": "#6A4326", "black": "#151515"}
-TIERS = ["Winning", "Advantage", "Neutral · top", "Neutral · bottom", "Defending", "Danger"]
+TIERS = ["Winning", "Advantage", "Neutral", "Neutral", "Defending", "Danger"]  # the position cards' label, best to worst
 
 
 def video_picks():
@@ -151,10 +133,14 @@ def site_index():
     return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {"tech": [], "pos": {}}
 
 
+TIER_HEX = ["#1D7748", "#3C9A6A", "#1D4FB5", "#6B7FA8", "#C27A12", "#B3261E"]
+
+
 def media_html(idx):
-    """The picture galleries on the home page: technique cards (each with its video's thumbnail, or the founder's photo
-    of it, and a play badge) and the position map (each position's video thumbnail), linking to their pages, where the
-    video plays. Thumbnails load lazily from YouTube; they're all below the fold, so the headline stays the first paint."""
+    """The two picture rows on the home page, built from one small card: a 16:9 thumbnail (the move's YouTube video, or
+    the founder's photo of it) with a play badge and the video's channel, then the name and a coloured dot (the belt for
+    a technique, how good the position is for a position). Each links to its page, where the video plays. Thumbnails
+    load lazily from YouTube; they're all below the fold, so the headline stays the first paint."""
     esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     have = lambda *p: os.path.exists(os.path.join(ROOT, "web", *p))
     tech = {t["id"]: t for t in idx["tech"]}
@@ -163,97 +149,39 @@ def media_html(idx):
     photo = lambda i: have("img", "thumbs", i + ".webp")
     play = '<span class="playb" aria-hidden="true"></span>'
     credit = lambda v: '<span class="vcred">Video: %s</span>' % esc(v["channel"]) if v.get("channel") else ""
-    order = {t["id"]: n + 1 for n, t in enumerate(idx["tech"])}  # the card's number: its place in the library, white to black
+    yt = lambda v, alt: '<img src="%s" alt="%s" width="320" height="180" loading="lazy" decoding="async">' % (YT_THUMB % v["v"], esc(alt))
+
+    def card(href, pic, name, dot, meta, cls=""):
+        return ('<li><a class="card%s" href="%s"><span class="thumb">%s</span><span class="cbody"><b>%s</b>'
+                '<span class="cmeta"><i class="dot" style="--bc:%s" aria-hidden="true"></i>%s</span></span></a></li>') % (cls, href, pic, esc(name), dot, esc(meta))
     picks = [i for i in GALLERY_TECH if i in tech and (photo(i) or i in vids)]
     picks = ([i for i in picks if photo(i)] + [i for i in picks if not photo(i)])[:GALLERY_MAX]
     cards = []
     for i in picks:
         t, v = tech[i], vids.get(i, {})
-        belt = t["belt"]
         if photo(i):
-            pic = '<img src="/img/thumbs/%s.webp" alt="Photo: %s, shown by two grapplers" width="560" height="560" loading="lazy" decoding="async">' % (i, esc(t["n"]))
+            pic = '<img src="/img/thumbs/%s.webp" alt="Photo: %s, shown by two grapplers" width="400" height="225" loading="lazy" decoding="async">' % (i, esc(t["n"]))
         else:
-            pic = '<img src="%s" alt="%s video thumbnail" width="320" height="180" loading="lazy" decoding="async">' % (YT_THUMB % v["v"], esc(t["n"]))
+            pic = yt(v, t["n"] + " video thumbnail")
         if v:
             pic += play + credit(v)
-        cards.append('<li><a class="tcard" href="/techniques/%s/"><span class="tno" aria-hidden="true">No. %03d</span><span class="tpic">%s</span><span class="tmeta" style="--bc:%s">'
-                     '<span class="tcat">%s · %s belt</span><b>%s</b></span></a></li>' % (t["slug"], order[i], pic, BELT_HEX.get(belt, "#1F4FB0"), esc(t["cat"]), belt.capitalize(), esc(t["n"])))
-    cards.append('<li><a class="tcard more" href="/techniques/"><span>See all %d techniques</span><b aria-hidden="true">&rarr;</b></a></li>' % len(idx["tech"]))
-    gallery = '<ul class="tgal" id="tgal" role="list">%s</ul>' % "".join(cards)
-    chain = map_chain()
-    tiers = []
-    for r, name in enumerate(TIERS):
-        ks = [k for k, v in pos.items() if v["r"] == r and (("pos:" + k) in vids or have("img", "fig", k + ".svg"))]
-        if not ks:
-            continue
-        items = []
-        for k in ks:
+        cards.append(card("/techniques/%s/" % t["slug"], pic, t["n"], BELT_HEX.get(t["belt"], "#1F4FB0"), t["belt"].capitalize() + " belt"))
+    cards.append('<li><a class="card more" href="/techniques/"><span class="thumb"><span>All %d</span></span><span class="cbody"><b>See every technique</b>'
+                 '<span class="cmeta">Technique library &rarr;</span></span></a></li>' % len(idx["tech"]))
+    gallery = '<ul class="cards row" id="tgal" role="list">%s</ul>' % "".join(cards)
+    items = []
+    for r, name in enumerate(TIERS):  # best to worst
+        for k in [k for k, v in pos.items() if v["r"] == r]:
             v = vids.get("pos:" + k)
-            fig = '<img src="/img/fig/%s.svg" alt="" width="400" height="300" loading="lazy" decoding="async">' % k if have("img", "fig", k + ".svg") else ""
-            if v:  # the video's thumbnail, with the app's drawing of the position (you in blue) in the corner
-                pic = ('<img src="%s" alt="%s video thumbnail" width="320" height="180" loading="lazy" decoding="async">%s<span class="pfig" aria-hidden="true">%s</span>'
-                       % (YT_THUMB % v["v"], esc(pos[k]["l"]), play, fig))
+            if v:
+                pic = yt(v, pos[k]["l"] + " video thumbnail") + play
+            elif have("img", "fig", k + ".svg"):  # no video yet: the app's drawing of the position (you in blue)
+                pic = '<img class="fig" src="/img/fig/%s.svg" alt="Diagram of %s, you in blue" width="400" height="300" loading="lazy" decoding="async">' % (k, esc(pos[k]["L"]))
             else:
-                pic = fig.replace('alt=""', 'alt="Diagram of %s, you in blue"' % esc(pos[k]["L"]))
-            step = ' data-step="%d"%s' % (chain.index(k) + 1, " data-tap" if k == chain[-1] else "") if k in chain else ""
-            items.append('<li><a class="pcard%s" href="/positions/%s/"%s>%s<span class="pname">%s</span></a></li>' % ("" if v else " fig", pos[k]["slug"], step, pic, esc(pos[k]["l"])))
-        tiers.append('<div class="tier t%d"><p class="tname">%s</p><ul role="list">%s</ul></div>' % (r, esc(name), "".join(items)))
-    posmap = '<div class="posmap">%s</div>' % "".join(tiers) if tiers else ""
-    counts = {b: sum(1 for t in idx["tech"] if t["belt"] == b) for b in ["blue", "purple", "brown", "black"]}
-    return gallery, posmap, counts
-
-
-def map_chain():
-    """The position map's lit chain (numbered cards): one of the app's attack chains from
-    standing, the branch that goes through the most positions before a submission, at most 4 reactions deep. Today:
-    standing, front headlock, turtle, back control, then the tap."""
-    path = os.path.join(ROOT, "web", "data", "chains-demo.json")
-    if not os.path.exists(path):
-        return []
-    d = json.load(open(path, encoding="utf-8"))
-    chains, moves, best = d["chains"], d["tech"], []
-
-    def carry_on(p):  # a move that ends in a new position goes on with that position's chains ("Start:" setups opened)
-        out = []
-        for r in chains.get(p, []):
-            out += r[2:] if r[1].startswith("Start:") else [r]
-        return out
-
-    def walk(raw, ps, depth, seen):
-        m = moves.get(raw[0])
-        if not m:
-            return
-        ps = ps if ps and ps[-1] == m["f"] else ps + [m["f"]]
-        if m["c"] == "sub":
-            if len(ps) > len(best):
-                best[:] = ps
-            return
-        if depth >= 4:
-            return
-        for k in raw[2:] or ([] if m["t"] == "sub" else carry_on(m["t"])):
-            if k[0] not in seen:
-                walk(k, ps, depth + 1, seen | {k[0]})
-    for r in chains.get("standing", []):
-        walk(r, [], 0, {r[0]})
-    return best if len(best) >= 3 else []
-
-
-def notebook_html(idx):
-    """The closed guard chain tree, typeset like a page of a coach's notebook, two branches deep, each move linking to its page."""
-    path = os.path.join(ROOT, "web", "data", "chains-demo.json")
-    chains = json.load(open(path, encoding="utf-8"))["chains"].get("cg_bot", [])
-    site = {t["id"]: t for t in idx["tech"]}
-    esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
-
-    def line(r, depth):
-        t = site.get(r[0])
-        if not t:
-            return ""
-        w = re.sub(r"^Start:\s*", "", r[1])
-        kids = "".join(line(k, depth + 1) for k in r[2:]) if depth < 2 else ""
-        return '<li><span class="nb-if%s">%s</span> <a href="/techniques/%s/">%s</a>%s</li>' % (
-            " start" if r[1].startswith("Start:") else "", esc(w[:1].lower() + w[1:]), t["slug"], esc(t["n"]), '<ol>%s</ol>' % kids if kids else "")
-    return '<ol class="notebook" aria-label="Attack chains from closed guard">%s</ol>' % "".join(line(r, 0) for r in chains)
+                continue
+            items.append(card("/positions/%s/" % pos[k]["slug"], pic, pos[k]["l"], TIER_HEX[r], name))
+    posmap = '<ul class="cards grid" id="posgrid" role="list">%s</ul>' % "".join(items) if items else ""
+    return gallery, posmap
 
 
 def landing_ld(landing):
@@ -294,15 +222,11 @@ def build_web(app):
     html = html.replace("@BUILD@", hashlib.sha256(html.encode()).hexdigest()[:10])
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
-    gallery, posmap, belts = media_html(site_index())
+    gallery, posmap = media_html(site_index())
     landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap)
-    assert os.path.exists(os.path.join(ROOT, "web", "data", "chains-demo.json")), "no chains for the home page: run node tools/landing-media.js --only chains"
-    landing = landing.replace("@@NOTEBOOK@@", notebook_html(site_index()))
     counts = json.load(open(os.path.join(ROOT, "dist", "counts.json")))
-    landing = landing.replace("@@NPOS@@", str(counts["positions"])).replace("@@NTERMS@@", str(counts["terms"]))
-    for b, n in belts.items():
-        landing = landing.replace("@@N_%s@@" % b.upper(), str(n))
-    landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))
+    landing = landing.replace("@@NPOS@@", str(counts["positions"])).replace("@@NTECH@@", str(counts["techniques"]))
+    landing = landing.replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     # Coaches page: same look as the landing page (its stylesheet is shared), own copy and FAQ.
