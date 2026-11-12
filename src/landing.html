@@ -337,30 +337,7 @@ footer .footlinks{line-height:2.6}
 }
 @media (prefers-reduced-motion: no-preference){.tcard{transition:transform .15s,box-shadow .15s}.tcard:hover{transform:translateY(-3px) rotate(0);box-shadow:0 22px 34px -22px rgba(17,23,34,.55)}}
 
-/* The belt. Each numbered page has a belt in its margin, white in the hero to black and tied at the end (.beltslot: a
-   drawing, so the page looks finished without WebGL, with reduced motion or Save-Data, or with no JavaScript). Where WebGL
-   runs, web/js/belt.js draws one cloth belt on a single fixed canvas that sits between the page's backgrounds and its text,
-   flows from slot to slot as you scroll, takes its stripes and changes colour on the way, and ties itself by the last call.
-   Slots are absolutely placed or have a fixed size, so nothing moves when the canvas takes over. */
-#beltgl{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;z-index:1;pointer-events:none;opacity:0;transition:opacity .6s}
-.gl #beltgl{opacity:1}
-main>section,footer{position:relative;z-index:2}
-main>.gyms,main>.final,main>#map{z-index:auto}
-.gyms>.wrap,.final>.wrap,#map>.intro,#map>.seeall{position:relative;z-index:2}
-.gl .night{background-image:none}
-.beltslot{pointer-events:none}
-.beltslot svg{display:block;width:100%;height:100%;overflow:visible;transition:opacity .5s}
-.gl .beltslot svg{opacity:0}
-.bs-hero{height:58px;margin-top:2px}
-.intro{position:relative}
-.bs-sec{position:absolute;left:0;right:0;bottom:calc(100% + 10px);height:54px;max-width:420px}
-.bs-final{width:min(100%,300px);height:150px;margin:6px 0 -18px}
-@media (min-width:760px){.bs-hero{height:180px;margin-top:14px}}
-@media (min-width:1100px){
-  .bs-side{left:calc(100% + 48px);right:auto;bottom:auto;top:0;width:calc(min(1080px,100vw - 40px) - 100% - 60px);max-width:none;height:170px}
-  .bs-final{position:absolute;right:20px;top:50%;width:330px;height:270px;margin:-135px 0 0}
-}
-/* the map's lit chain: one of the app's chains, standing to the tap (numbered by build.py; web/js/belt.js draws the line) */
+/* the map's lit chain: one of the app's chains, standing to the tap (numbered by build.py) */
 .pcard{position:relative}
 .pcard[data-step]{box-shadow:inset 0 0 0 2px #5B8CFF}
 .pcard[data-step]::before{content:attr(data-step) / "";position:absolute;left:8px;top:8px;min-width:24px;height:24px;border-radius:12px;background:#5B8CFF;color:#07101F;font:600 13px/24px var(--f-mono);text-align:center}
@@ -369,10 +346,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-<symbol id="jf-belt" viewBox="0 0 400 80"><g fill="none"><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" stroke="rgba(10,16,32,.16)" stroke-width="15" transform="translate(3 6)"/><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" stroke="rgba(10,16,32,.32)" stroke-width="16.5"/><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" style="stroke:var(--bc)" stroke-width="15"/><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" stroke="rgba(255,255,255,.13)" stroke-width="9.5"/><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" stroke="rgba(0,0,0,.09)" stroke-width="4.5"/><path d="M8 50C60 18 118 16 168 42S262 70 318 40 382 24 394 32" pathLength="100" style="stroke:var(--bar)" stroke-width="15" stroke-dasharray="0 4 15 81"/></g></symbol>
-<symbol id="jf-knot" viewBox="0 0 260 220"><g fill="none" stroke-width="17"><path d="M24 72C24 50 72 34 130 34S236 50 236 72" stroke="#0B0B0C"/><path d="M118 104C104 136 88 168 66 210" stroke="#151515"/><path d="M118 104C104 136 88 168 66 210" pathLength="100" stroke="#B3261E" stroke-dasharray="0 52 30 18"/><path d="M140 104C152 138 170 170 198 206" stroke="#151515"/><path d="M24 72C24 94 72 106 130 106S236 94 236 72" stroke="#1C1C1E"/><path d="M24 72C24 94 72 106 130 106S236 94 236 72" stroke="rgba(255,255,255,.1)" stroke-width="9"/><rect x="108" y="84" width="44" height="38" rx="7" fill="#151515" stroke="#0B0B0C" stroke-width="3" transform="rotate(-8 130 103)"/><path d="M116 92l28-4M117 103l28-4M118 114l28-4" stroke="rgba(255,255,255,.12)" stroke-width="2"/></g></symbol>
-</defs></svg>
 <div class="night@@NIGHT_CLASS@@">
 @@HERO_ART@@
 <header class="wrap top">
@@ -387,7 +360,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
         <h1 id="hero-h"><span>Know what to do</span> <span>when <em>they react.</em></span></h1>
         <p class="lede">Your first move rarely works. JitsFlow maps what comes next from every position, across @@NTECH@@ techniques from white to black belt, each with a video. Free for students, and for gym owners it runs the timetable, bookings and fees.</p>
         <div class="cta"><a class="btn primary" href="/app/">Open JitsFlow</a><a class="btn" href="/coaches/">For gyms</a></div>
-        <div class="beltslot bs-hero" data-belt="white" data-pose="lie" aria-hidden="true"><svg style="--bc:#F4F4F0;--bar:#151515" focusable="false"><use href="#jf-belt"/></svg></div>
       </div>
       <figure class="clip heroclip">
         <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
@@ -429,7 +401,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
   <section class="block" id="techniques" aria-labelledby="tech-h" style="padding-bottom:40px">
     <div class="wrap railhead">
       <div class="intro">
-      <div class="beltslot bs-sec bs-side" data-belt="blue" data-pose="wave" aria-hidden="true"><svg style="--bc:#1F4FB0;--bar:#151515" focusable="false"><use href="#jf-belt"/></svg></div>
         <p class="pageno"><b>01</b><span class="beltrule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>The deck</p>
         <h2 id="tech-h">@@NTECH@@ techniques, white to black belt</h2>
         <p class="muted">One card per move: takedowns, guards, passes, sweeps, escapes and submissions across @@NPOS@@ positions, each with steps, the details that make it work, common mistakes, a drill and a video, and @@NTERMS@@ jargon terms you can tap to define.</p>
@@ -442,7 +413,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 
   <section class="block wrap" id="why" aria-labelledby="why-h" style="padding-top:32px">
     <div class="intro">
-      <div class="beltslot bs-sec bs-side" data-belt="purple" data-pose="curl" aria-hidden="true"><svg style="--bc:#5E2D8C;--bar:#151515" focusable="false"><use href="#jf-belt"/></svg></div>
       <p class="pageno"><b>02</b><span class="beltrule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>The chains</p>
       <h2 id="why-h">For the days between classes</h2>
       <p class="muted">You learn an armbar on Tuesday and it's gone by Thursday. Or you know five techniques but not which one to use, or what to do when the first one fails. JitsFlow lays out every position with its options and the usual reactions, so you can go over it at home instead of working it out mid-roll.</p>
@@ -470,7 +440,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 
   <section class="block wrap" id="map" aria-labelledby="map-h" style="padding-top:0">
     <div class="intro">
-      <div class="beltslot bs-sec bs-side" data-belt="brown" data-pose="wave2" aria-hidden="true"><svg style="--bc:#6A4326;--bar:#151515" focusable="false"><use href="#jf-belt"/></svg></div>
       <p class="pageno"><b>03</b><span class="beltrule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>The map</p>
       <h2 id="map-h">Every position, mapped</h2>
       <p class="muted">From back control down to being stuck under mount. Each position has your goal, the dangers, every move that starts there and the ways in.</p>
@@ -515,7 +484,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 
   <section class="block wrap sa" id="sa" aria-labelledby="sa-h">
     <div class="intro">
-      <div class="beltslot bs-sec" data-belt="black" data-pose="flat" aria-hidden="true"><svg style="--bc:#151515;--bar:#B3261E" focusable="false"><use href="#jf-belt"/></svg></div>
       <p class="pageno"><b>05</b><span class="beltrule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Made here</p>
       <h2 id="sa-h">Built in Johannesburg for South African gyms</h2>
       <p class="muted">Made for the way gyms here already run: bank transfers, WhatsApp groups and phones on the mat.</p>
@@ -560,7 +528,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
       <h2>Know what to do next, every roll.</h2>
       <p style="font-size:20px;max-width:32em;color:#C9D3E6">Open JitsFlow, rate what you already know in about five minutes, and see what to do when they react, from every position.</p>
       <div class="go"><a class="btn" href="/app/">Open JitsFlow</a><a class="btn ghost" href="/coaches/">JitsFlow for gyms</a></div>
-      <div class="beltslot bs-final" data-belt="black" data-pose="knot" aria-hidden="true"><svg focusable="false"><use href="#jf-knot"/></svg></div>
     </div>
   </section>
 </main>
@@ -596,14 +563,6 @@ main>.gyms,main>.final,main>#map{z-index:auto}
 /* Technique deck arrows (wide screens; phones swipe). */
 (function(){var r=document.getElementById("tgal");if(!r)return;var smooth=!matchMedia("(prefers-reduced-motion: reduce)").matches;
   [].forEach.call(document.querySelectorAll("[data-rail]"),function(b){b.addEventListener("click",function(){r.scrollBy({left:Number(b.dataset.rail)*r.clientWidth*.8,behavior:smooth?"smooth":"auto"})})})})();
-</script>
-<script id="belt-js">
-/* The WebGL belt (web/js/belt.js): fetched once the page has loaded and the browser is idle, so it never holds up the
-   headline. Not at all with reduced motion, Save-Data or no WebGL: the drawings in the .beltslot boxes stay instead. */
-(function(){var c=navigator.connection;if(matchMedia("(prefers-reduced-motion: reduce)").matches||c&&c.saveData||!window.WebGLRenderingContext||!window.IntersectionObserver)return;
-  function go(){var s=document.createElement("script");s.type="module";s.src="/js/belt.js?v=@@BELT_V@@";document.body.appendChild(s)}
-  function idle(){if(window.requestIdleCallback)requestIdleCallback(go,{timeout:2000});else setTimeout(go,200)}
-  if(document.readyState==="complete")idle();else addEventListener("load",idle)})();
 </script>
 <script>
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}

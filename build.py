@@ -204,7 +204,7 @@ def media_html(idx):
 
 
 def map_chain():
-    """The position map's lit chain (numbered cards; web/js/belt.js draws the line): one of the app's attack chains from
+    """The position map's lit chain (numbered cards): one of the app's attack chains from
     standing, the branch that goes through the most positions before a submission, at most 4 reactions deep. Today:
     standing, front headlock, turtle, back control, then the tap."""
     path = os.path.join(ROOT, "web", "data", "chains-demo.json")
@@ -303,8 +303,6 @@ def build_web(app):
     for b, n in belts.items():
         landing = landing.replace("@@N_%s@@" % b.upper(), str(n))
     landing = landing.replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"])).replace("@@LDJSON@@", landing_ld(landing))
-    # The home page's WebGL belt (web/js/belt.js, served as is): its hash goes in the address so a new version is fetched at once.
-    landing = landing.replace("@@BELT_V@@", hashlib.sha256(open(os.path.join(ROOT, "web", "js", "belt.js"), "rb").read()).hexdigest()[:10])
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
     # Coaches page: same look as the landing page (its stylesheet is shared), own copy and FAQ.
