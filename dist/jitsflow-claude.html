@@ -5364,6 +5364,10 @@ async function acctInit(){
   const rt=qs.get("reset");
   if(rt){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
+  // The link in a "confirm your email" email: confirmed in the background, whoever (if anyone) is signed in on this phone.
+  const vt=qs.get("verify");
+  if(vt){try{const k=new URLSearchParams(location.search);k.delete("verify");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
+    if(API.on)api("POST","/auth/verify",{token:vt}).then(j=>{if(j.me)API.me=j.me;render();toast("Your email is confirmed. Thanks!")}).catch(e=>toast(e.message))}
   const cl=qs.get("claim");if(cl)S.ui.claim=cl;
   // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
   // The gym outreach built for them (the email's link, and the older preview page's Claim button): the app opens as a preview of it.
@@ -5515,16 +5519,16 @@ function askSheet(a){S.ui.sheet={k:"authask"};S.ui.stack=[];
   openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${a.kid?`Signing up for ${esc(a.name)}?`:`Are you ${esc(a.name)}?`}</h1>
    <p>Your coach already has <b>${esc(a.name)}</b> on their list. ${a.kid?"If you're signing up for them":"If that's you"}, we'll link your account to it, so the plan, payments and classes carry over.</p></div>`,false,
    {act:`<button class="btn grow" data-a="authlink" data-v="no">${a.kid?"No":"No, that's not me"}</button><button class="btn primary grow" data-a="authlink" data-v="${esc(a.id)}">${a.kid?`Yes, link ${esc(first(a.name))}`:"Yes, that's me"}</button>`})}
-// The number they signed up with (or a kid's own link) matches several kids: ask once which of them train here. They all go on this one
-// login. a.claim: the kid whose link it is (always on). a.id: a member with their name (the parent trains too).
-function kidsAsk(a){const me=a.id&&!a.kid,cl=a.claim,k0=first(a.kids[0].name);
+// An invite link whose record the coach has with the same number as some kids: ask once which of them train here. They all go on this
+// one login. a.claim: whose link it is (always on). a.id: a member's own link (the parent trains too).
+function kidsAsk(a){const me=a.id&&!a.kid,cl=!me&&a.claim,k0=first(a.kids[0].name);
   const box=(n,v,on,lock,label)=>`<label class="row kidpick" style="flex-wrap:nowrap;gap:10px"><input type="checkbox" name="${n}" value="${esc(v)}"${on?" checked":""}${lock?" disabled":""}><span>${label}</span></label>`;
   openSheet(`${sheetHead("Your account")}<form id="kidsform" class="stack-lg" novalidate><h1>${cl?`Signing up for ${esc(k0)}`:me?`Are you ${esc(a.name)}?`:"Which of your kids train here?"}</h1>
-    ${me?box("self",a.id,true,false,`I'm <b>${esc(a.name)}</b>, and I train here too`):""}
+    ${me?box("self",a.id,true,!!a.claim,`I'm <b>${esc(a.name)}</b>, and I train here too`):""}
     <p>${cl?`Your coach also has these kids with your number. Which of them train here?`:me?"Your coach also has these kids with your number. Which of them are yours?":"Your coach has these kids with your number. Tick the ones that are yours."}</p>
     <div class="stack" style="gap:8px">${a.kids.map(k=>box("kid",k.id,true,cl&&k.id===a.claim,`<b>${esc(k.name)}</b>`)).join("")}</div>
     <p class="small muted">They all go on this one login. You book, pay and keep a journal for each of them, and switch with Booking for at the top.</p></form>`,false,
-   {act:`<button class="btn grow" data-a="authkids" data-v="none">${cl?`Just ${esc(k0)}`:"None of them"}</button><button class="btn primary grow" data-a="authkids" data-v="go">Continue</button>`})}
+   {act:`<button class="btn grow" data-a="authkids" data-v="none">${cl?`Just ${esc(k0)}`:me&&a.claim?"Just me":"None of them"}</button><button class="btn primary grow" data-a="authkids" data-v="go">Continue</button>`})}
 async function authKids(v){const b=S.ui.regBody,f=document.getElementById("kidsform");if(!b||!f)return authSheet();
   const kids=v==="none"?[]:[...f.querySelectorAll("[name=kid]:checked")].map(x=>x.value),self=f.querySelector("[name=self]"),body={...b,kids};
   if(self)body.link=v!=="none"&&self.checked?self.value:"no";
@@ -5563,13 +5567,23 @@ async function kidClaim(btn){if(btn)btn.disabled=true;if(!(await sendFirst())){i
 async function authLink(v){const b=S.ui.regBody;if(!b)return authSheet();document.querySelectorAll('#sheetbar button').forEach(x=>x.disabled=true);
   try{const j=await api("POST","/auth/register",{...b,link:v});S.ui.regBody=null;jfTrack("sign_up",{method:"email",role:j.me.role,with_gym:!!j.me.gym});await signedIn(j.me,{adopt:true})}
   catch(e){toast(e.message);document.querySelectorAll('#sheetbar button').forEach(x=>x.disabled=false)}}
+// Coaches (their gym's emails go out once it's confirmed) and the JitsFlow team (the team tools open once it's confirmed) are asked,
+// gently, to confirm their email. Members aren't: nothing they do needs it.
+function verifyLine(){const me=API.me;if(!me||me.emailVerified||!(me.adminVerify||me.role==="coach"))return "";
+  return `<div class="insight" id="verifyline"><p class="small">${me.adminVerify?"<b>Verify your email to open the team tools.</b> ":"<b>Confirm your email</b> so your gym can email your members (invites and messages). "}We'll send a link: one tap and you're done.</p><button class="btn sm" data-a="verifysend">Send the link</button></div>`}
+// A gym email waiting on the coach's email check: one tap sends the link. WhatsApp works as before meanwhile.
+function verifySheet(msg){S.ui.sheet={k:"verify"};S.ui.stack=[];
+  openSheet(`${sheetHead("Confirm your email")}<div class="stack-lg"><h1>Confirm your email</h1><p>${esc(msg)}</p><p class="small muted">The link goes to ${esc((API.me.account||API.me).email||"your email")}.</p></div>`,false,
+   {act:`<button class="btn grow" data-a="close">Not now</button><button class="btn primary grow" data-a="verifysend">Send the link</button>`})}
+async function verifySend(){try{const j=await api("POST","/me/verify-email",{});if(S.ui.sheet&&S.ui.sheet.k==="verify")hideSheet();if(j.me)API.me=j.me;render();
+  toast(j.already?"Your email is confirmed already.":`Sent. Open the email to ${j.email} and tap the link.`)}catch(e){toast(e.message)}}
 function accountSection(){
   if(inClaude()||!API.on)return "";
   if(!API.me)return `<section class="panel accent"><h2 class="label">Your account</h2><p>Save your progress online so it's safe and on every device. Coaches can start a gym and invite students.</p>
     <div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button><button class="btn" data-a="auth" data-v="gym">Start a gym</button></div></section>`;
   const g=API.me.gym;
   const ac=API.me.account||API.me,fam=API.me.family;
-  return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(ac.name)}</b><br><span class="small muted">${esc(ac.email||"")}</span></div>
+  return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(ac.name)}</b><br><span class="small muted">${esc(ac.email||"")}</span></div>${verifyLine()}
     <form id="phoneform" class="row" style="flex-wrap:nowrap"><input id="a-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="WhatsApp number (optional)" value="${esc(API.me.phone||"")}" aria-label="WhatsApp number" style="flex:1"><button class="btn" type="submit">Save</button></form>
     <p class="small muted" style="margin-top:-6px">${API.me.role==="coach"?"Shown to nobody; used for your own WhatsApp links.":"Lets your coach message you on WhatsApp. Only coaches see it."}</p>
     ${fam?`<div class="stack" style="gap:6px"><h3 class="label">On this login</h3>${fam.map(x=>`<div class="row between" style="flex-wrap:nowrap"><span>${esc(x.name)}${x.login?` <span class="small muted">(login)</span>`:""}</span>${x.id===API.me.id?`<span class="pill ok">Booking for</span>`:`<button class="linkbtn small" data-a="famswitch" data-v="${esc(x.id)}">Book for ${esc(first(x.name))}</button>`}</div>`).join("")}${kidForm()}</div>`
@@ -6060,7 +6074,7 @@ async function studentSheet(id){
   const stuck=Object.entries(s.stuck||{}).filter(([k])=>POS[k]).sort((a,b)=>b[1]-a[1]).slice(0,3),tapped=Object.entries(s.tapped||{}).filter(([k])=>TM[k]).sort((a,b)=>b[1]-a[1]).slice(0,3);
   openSheet(`${sheetHead(s.role==="coach"?"Coach":"Student")}<div class="stack-lg"><div><h1>${esc(s.name)}${s.head?` <span class="pill ok">Head coach</span>`:""}</h1><p class="muted small">${s.parentName?`Kid${s.parentName==="Parent"?"":` · parent ${esc(s.parentName)}`}${s.parentAccount?" (on the app)":""}${s.email?" · ":""}`:""}${esc(s.email)}${s.offline?`${s.email?" · ":""}<span class="pill">Not on the app</span>`:""}</p>
       ${s.parentAccount?`<p class="small muted">On ${esc(s.parentAccount)}'s login. <button class="linkbtn small" data-a="unlinkask" data-v="${esc(id)}">Unlink from this login</button></p>`:""}</div>
-    ${dup?`<section class="panel accent stack"><p class="small"><b>Possible duplicate.</b> ${s.offline?`${esc(dup.name)} signed up on the app with the same name or number.`:`You also added ${esc(dup.name)}, who isn't on the app, with the same name or number.`} If it's the same person, merge them so their payments and classes are in one place.</p><button class="btn" style="justify-self:start" data-a="mergeask" data-v="${esc(s.offline?id:dup.id)},${esc(s.offline?dup.id:id)}">Merge</button></section>`:""}
+    ${dup?`<section class="panel accent stack"><p class="small"><b>Possible duplicate.</b> ${s.offline?`${esc(dup.name)} signed up on the app with the same name or number.`:`You also added ${esc(dup.name)}, who isn't on the app, with the same name or number.`} If it's the same person, ${isHead()?"merge them so their payments and classes are in one place.</p>":"ask your head coach to merge them, so their payments and classes are in one place.</p>"}${isHead()?`<button class="btn" style="justify-self:start" data-a="mergeask" data-v="${esc(s.offline?id:dup.id)},${esc(s.offline?dup.id:id)}">Merge</button>`:""}</section>`:""}
     ${s.offline?`<section class="panel stack"><p class="small">${esc(first(s.name))} isn't on the app yet. Their invite link signs them straight into this record, so their plan, payments and classes carry over.</p>${claim?`<div class="row">${s.phone?waBtn(`Hi ${hiName(s)}, join ${gymName()} on JitsFlow to book classes${s.parentName?` for ${first(s.name)}`:""}, see your membership and pay your fees: ${claim}`,"Invite on WhatsApp",{phone:s.phone,kind:"claim_invite"}):""}<input id="claim-url" value="${esc(claim)}" hidden><button class="btn" data-a="copytext" data-v="claim-url">Copy invite link</button></div>`:""}<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))}</button></section>`:""}
     <section class="beltwrap"><div class="row between"><div><div class="bignum mono">${readinessFor(s.mastery,g)}%</div><p class="muted small">Ready for ${BELT[g].to} belt</p></div>${beltChip(s.belt,s.stripes)}</div>
       <div class="areas">${ar.map(x=>`<div class="area"><span>${esc(x.n)}</span><span class="track"><span class="fill" style="width:${x.pct}%"></span></span><span class="mono">${x.pct}%</span></div>`).join("")}</div>
@@ -6085,7 +6099,7 @@ async function studentSheet(id){
     ${(j.classes||[]).length?`<section class="stack"><h2 class="label">Recent classes</h2><div class="list">${j.classes.slice(0,8).map(x=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:6px"><span>${x.kind==="private"?"🔒 ":""}${esc(x.title)}</span><span class="small muted">${esc(fmtWhen(x.startsAt))}${x.attended?" · ✓":""}</span></div>`).join("")}</div></section>`:""}
     ${!s.offline&&s.role==="student"?`<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))} from your gym</button>`:""}
     <section class="stack"><h2 class="label">Recent sessions</h2>${j.logs.length?j.logs.slice(0,8).map(l=>`<div class="sess"><b>${esc(fmtDate(l.date))} · ${esc(l.type||"Class")}</b><span class="small muted">${Number(l.mins)||0} min · ${Number(l.rolls)||0} rolls${(l.tapped||[]).filter(i=>TM[i]).length?" · tapped by "+l.tapped.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", "):""}</span>${l.fix?`<span class="small">Fix: ${esc(l.fix)}</span>`:""}</div>`).join(""):`<div class="empty">No sessions logged yet.</div>`}</section>
-  </div>`,false,{act:`<button class="btn primary grow" type="submit" form="studentform">Save</button>`});
+  </div>`,false,{act:s.role==="coach"&&!isHead()&&String(s.id)!==String(API.me.id)?`<p class="small muted grow">Only the head coach can change another coach's details.</p>`:`<button class="btn primary grow" type="submit" form="studentform">Save</button>`});
 }
 async function submitStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value;const id=S.ui.sheet.id;
   const fees=isHead()?{feeCents:v("fee")===""?null:Math.round(Number(v("fee"))*100),planId:v("plan")||null,planStatus:v("pstatus")||"active",planStarted:v("pstarted")||null}:{};
@@ -6374,7 +6388,7 @@ function coachGym(){const g=API.me.gym;
         <span class="small muted">${g.waPhoneSet?"Students' \"Ask for a time\" button opens a chat with this number.":"Not saved yet: students' \"Ask for a time\" button opens WhatsApp without a contact until you save one."}</span></form></div>
     ${gymImportPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
       <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
-    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2><p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
+    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2>${verifyLine()}<p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
     <div class="panel stack"><h2 class="label">Coaches</h2>${headLine()}<p class="small">Only share this with coaches: it gives access to classes and the roster. Fees and payments stay with the head coach.</p><div class="row"><span class="mono"><b>${esc(g.coachCode)}</b></span><button class="btn" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button></div>${coachesPanel()}</div>
     <form id="gymform" class="panel stack"><h2 class="label">Gym details</h2><label class="f">Gym name<input id="g-name" name="name" value="${esc(g.name)}"></label>
       ${isHead()?`<label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label>`:""}<button class="btn primary" type="submit">Save gym</button></form>
@@ -6399,8 +6413,8 @@ async function makeHead(id){try{const j=await api("POST","/coach/head",{userId:i
   toast(`${first((j.me.gym.headCoach||{}).name||"They")} is the head coach now.`)}catch(e){toast(e.message)}}
 async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
   try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";if(j.sent)jfTrack("share",{method:"email",content_type:"gym_invite",count:j.sent});
-    toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")}.`:""}`)}
-  catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
+    toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")} today: share your invite link on WhatsApp instead.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} asked not to get your gym's emails.`:""}`)}
+  catch(e){if(e.data&&e.data.verify)verifySheet(e.message);else toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
 async function copyText(t){if(/[?&]join=/.test(t))jfTrack("share",{method:"copy",content_type:"gym_invite"});try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ----- gym profile: import from the gym's website, timetable, coaches, rates ----- */
@@ -6747,15 +6761,15 @@ const MSG={risk:["Missed you on the mats","Hey! We haven't seen you at training 
 function msgSheet(kind,ids){
   const ppl=(COACH.insights?COACH.insights.students:[]).concat(COACH.roster?COACH.roster.people:[]);const by={};ppl.forEach(p=>by[p.id]=p);
   S.ui.msg={ids:ids.filter(i=>by[i]),kind};const m=MSG[kind]||MSG.blank;S.ui.sheet={k:"msg"};S.ui.stack=[];
-  openSheet(`${sheetHead("Email students")}<form id="msgform" class="stack-lg" novalidate>
+  openSheet(`${sheetHead("Email students")}<form id="msgform" class="stack-lg" novalidate>${verifyLine()}
     <div class="stack"><span class="small muted">To</span><div class="chips">${S.ui.msg.ids.map(i=>`<span class="chip">${esc(by[i].name)}</span>`).join("")}</div><p class="small muted">Each person gets their own email. Replies come to ${esc(API.me.email)}.</p></div>
     <label class="f">Subject<input id="m-sub" name="subject" value="${esc(m[0])}"></label>
     <label class="f">Message<textarea id="m-text" name="text" rows="8">${esc(m[1])}</textarea></label></form>`,false,{act:`<button class="btn primary grow" type="submit" form="msgform">Send ${S.ui.msg.ids.length} email${S.ui.msg.ids.length===1?"":"s"}</button>`});
 }
 async function sendMsg(form){const btn=document.querySelector('#sheetbar [type=submit]');if(btn)btn.disabled=true;
   try{const j=await api("POST","/coach/message",{userIds:S.ui.msg.ids,subject:form.querySelector("[name=subject]").value,text:form.querySelector("[name=text]").value});
-    jfTrack("coach_message",{kind:S.ui.msg.kind,count:j.sent});hideSheet();render();toast(`Sent ${j.sent} email${j.sent===1?"":"s"}.${j.failed.length?" Couldn't send to "+j.failed.join(", ")+".":""}${(j.noEmail||[]).length?` No email for ${j.noEmail.join(", ")}: use WhatsApp.`:""}`)}
-  catch(e){toast(e.message);if(btn)btn.disabled=false}}
+    jfTrack("coach_message",{kind:S.ui.msg.kind,count:j.sent});hideSheet();render();toast(`Sent ${j.sent} email${j.sent===1?"":"s"}.${j.failed.length?" Couldn't send to "+j.failed.join(", ")+" today.":""}${(j.noEmail||[]).length?` No email for ${j.noEmail.join(", ")}: use WhatsApp.`:""}${(j.held||[]).length?` ${j.held.join(", ")} ${j.held.length>1?"aren't":"isn't"} on the app: use WhatsApp for now (email reaches them once your gym is a week old).`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} asked not to get your gym's emails.`:""}`)}
+  catch(e){if(e.data&&e.data.verify){verifySheet(e.message);return}toast(e.message);if(btn)btn.disabled=false}}
 
 /* ----- coach: membership plans ----- */
 function plansPanel(){const ps=(COACH.roster&&COACH.roster.plans)||[],cur=API.me.gym.currency,ed=S.ui.planEdit;
@@ -7645,6 +7659,7 @@ function moreAct(a,v,el){switch(a){
   case "outbuild": outAct("outbuild");break;
   case "outgymdel": outAct("outgymdel");break;
   case "outunclaim": outAct("outunclaim");break;
+  case "verifysend": verifySend();break;
 }}
 const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
 async function moreForm(fid,f,submitter){
