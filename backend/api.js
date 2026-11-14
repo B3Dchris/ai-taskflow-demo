@@ -2174,10 +2174,17 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: clean(m.text, 2000) })).filter((m) => m.content);
     if (!msgs.length || msgs[msgs.length - 1].role !== "user") fail(400, "Say what you'd like to do.");
     while (msgs.length && msgs[0].role !== "user") msgs.shift();
-    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths } })
+    const out = await assistant.run({ u, q, msgs, helpers: astHelpers(u) })
       .catch((e) => { if (e.code === "AI_BUDGET") fail(503, "The assistant is paused for today. Make the change in the app, or try again tomorrow."); throw e; });
     await q("update gyms set setup = setup || $1 where id=$2", [{ assistantUsed: true }, u.gym_id]);
     res.json(out);
+  }));
+  const astHelpers = (u) => ({ ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths });
+  // The coach tapped Confirm on a change the assistant proposed (money or contact details): only now is it saved.
+  api.post("/coach/assistant/confirm", wrap(async (req, res) => {
+    const u = needCoach(req);
+    try { res.json(await assistant.confirm({ u, q, id: clean(req.body?.id, 64), helpers: astHelpers(u) })); }
+    catch (e) { if (e instanceof assistant.ProposalGone) fail(409, e.message); if (e instanceof HttpError) throw e; if (e && e.code) throw e; fail(400, String(e.message || e).slice(0, 300)); }
   }));
   api.post("/coach/import", wrap(async (req, res) => {
     const u = needCoach(req);

@@ -1787,7 +1787,16 @@ const micBtn=id=>`<button type="button" class="btn mic" data-a="dictate" data-v=
 /* ============ COACH ASSISTANT: "update my bank details", "add Thabo, blue belt…" ============ */
 const AST={msgs:[],busy:false};
 const AST_EXAMPLES=["Update my bank details","Add a student","Thabo paid R650 cash","Add a class every Monday at 18:00 for 8 weeks","Note for Ana: great guard retention today","Move Sipho to blue belt"];
-function astBubble(m){return `<div class="bub ${m.role==="user"?"me":"ai"}"><div>${esc(m.text)}</div>${(m.actions||[]).map(a=>`<span class="ltag ok">✓ ${esc(a.summary)}</span>`).join("")}</div>`}
+// A change to money or contact details the assistant proposed: nothing is saved until the coach taps Confirm on its card.
+const astCard=p=>`<div class="insight stack astcard" style="gap:6px"><b>${esc(p.summary)}</b>${(p.lines||[]).length?`<span class="small" style="white-space:pre-line">${p.lines.map(esc).join("\n")}</span>`:""}
+  ${p.done?`<span class="ltag ok">✓ Saved</span>`:p.dropped?`<span class="small muted">Not changed</span>`:`<div class="row" style="gap:8px"><button class="btn sm primary" data-a="astok" data-v="${esc(p.id)}">Confirm</button><button class="btn sm" data-a="astno" data-v="${esc(p.id)}">Cancel</button></div>`}</div>`;
+function astBubble(m){return `<div class="bub ${m.role==="user"?"me":"ai"}"><div>${esc(m.text)}</div>${(m.proposals||[]).map(astCard).join("")}${(m.actions||[]).map(a=>`<span class="ltag ok">✓ ${esc(a.summary)}</span>`).join("")}</div>`}
+const astProp=id=>{for(const m of AST.msgs)for(const p of m.proposals||[])if(p.id===id)return p;return null};
+async function astConfirm(id,yes){const p=astProp(id);if(!p||p.done||p.dropped||p.busy)return;
+  if(!yes){p.dropped=true;assistantSheet();return}
+  p.busy=true;try{const j=await api("POST","/coach/assistant/confirm",{id});p.done=true;await astRefresh(j.refresh||[]);toast(`Saved: ${p.summary}.`)}
+  catch(e){toast(e.message);if(/expired|already/.test(e.message))p.dropped=true}
+  p.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="ast")assistantSheet()}
 function assistantSheet(){S.ui.sheet={k:"ast"};S.ui.stack=[];
   const intro=AST.msgs.length?"":`<div class="stack"><p>Tell me what to change, in your own words. Type it, or tap the mic and say it. I'll ask if I need anything else.</p><div class="chips">${AST_EXAMPLES.map(x=>`<button class="chip" data-a="astsay" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`;
   openSheet(`${sheetHead("Assistant")}<div class="stack-lg"><h1>Ask JitsFlow</h1>${intro}<div class="astlog" id="astlog">${AST.msgs.map(astBubble).join("")}${AST.busy?`<div class="bub ai"><span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span></div>`:""}</div></div>`,true,
@@ -1796,7 +1805,7 @@ function assistantSheet(){S.ui.sheet={k:"ast"};S.ui.stack=[];
 async function astSend(text){text=String(text||"").trim();if(!text||AST.busy)return;
   AST.msgs.push({role:"user",text});AST.busy=true;assistantSheet();
   try{const j=await api("POST","/coach/assistant",{messages:AST.msgs.slice(-12).map(m=>({role:m.role,text:m.text}))});
-    AST.msgs.push({role:"assistant",text:j.reply,actions:j.actions||[]});if(API.me.gym.setup)API.me.gym.setup.assistantUsed=true;await astRefresh(j.refresh||[]);jfTrack("assistant",{actions:(j.actions||[]).length})}
+    AST.msgs.push({role:"assistant",text:j.reply,actions:j.actions||[],proposals:j.proposals||[]});if(API.me.gym.setup)API.me.gym.setup.assistantUsed=true;await astRefresh(j.refresh||[]);jfTrack("assistant",{actions:(j.actions||[]).length})}
   catch(e){AST.msgs.push({role:"assistant",text:e.message})}
   AST.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="ast")assistantSheet()}
 async function astRefresh(kinds){if(!kinds.length)return;
