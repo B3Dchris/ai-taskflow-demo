@@ -46,18 +46,25 @@ function cookies(req) {
   return out;
 }
 
-// Simple in-memory limiter for sign-in attempts (per IP and per email).
-const hits = new Map();
+// Simple in-memory limiter for sign-in attempts (per IP and per email). It never holds more than HITS_MAX keys: when full, the
+// ones that ran out go, then the oldest (so a flood of made-up emails can't run the server out of memory).
+const hits = new Map(), HITS_MAX = 100000;
+function pruneHits(now) {
+  for (const [k, h] of hits) if (h.reset < now) hits.delete(k);
+  if (hits.size >= HITS_MAX) { let drop = hits.size - Math.floor(HITS_MAX * 0.9); for (const k of hits.keys()) { if (drop-- <= 0) break; hits.delete(k); } }
+}
 function limited(key, max, windowMs) {
   const now = Date.now();
   const h = hits.get(key);
-  if (!h || h.reset < now) { hits.set(key, { n: 1, reset: now + windowMs }); return false; }
+  if (!h || h.reset < now) { if (!h && hits.size >= HITS_MAX) pruneHits(now); hits.set(key, { n: 1, reset: now + windowMs }); return false; }
   h.n++;
   return h.n > max;
 }
-setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (h.reset < now) hits.delete(k); }, 60000).unref();
+setInterval(() => pruneHits(Date.now()), 60000).unref();
 // Has this key already used up its allowance? (Doesn't count this call: pair with limited() to count only what should count.)
 const over = (key, max) => { const h = hits.get(key); return !!h && h.reset >= Date.now() && h.n >= max; };
+// Takes back one counted attempt (counted up front, before anything is awaited, so attempts sent at once can't all get through).
+const refund = (key) => { const h = hits.get(key); if (h && h.n > 0) h.n--; };
 
 // Cloudflare's published ranges (cloudflare.com/ips). Only a request that reaches us from one of these can set cf-connecting-ip.
 const CLOUDFLARE = new net.BlockList();
@@ -72,6 +79,14 @@ function clientIp(req) {
   const peer = plainIp(req.ip || req.socket.remoteAddress), cf = plainIp(String(req.headers["cf-connecting-ip"] || "").trim());
   return (cf && net.isIP(cf) && fromCloudflare(peer) ? cf : peer) || "?";
 }
+// The address rate limits count against. One IPv6 connection usually has a whole /64 to itself (billions of addresses), so
+// IPv6 addresses count per /64; IPv4 addresses count one by one.
+function v6net(ip) {
+  const [head, tail] = String(ip).split("%")[0].toLowerCase().split("::"), part = (x) => (x ? x.split(":") : []).flatMap((g) => (g.includes(".") ? ["0", "0"] : [g]));
+  const h = part(head), t = tail === undefined ? [] : part(tail), all = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return all.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(":") + "::/64";
+}
+function limitIp(req) { const ip = clientIp(req); return net.isIPv6(ip) ? v6net(ip) : ip; }
 
 // Who's signed in, with their gym and its head coach (only while that coach is still an active coach there).
 const ME_COLS = `u.*, g.name as gym_name, g.student_code, g.coach_code, g.monthly_fee_cents as gym_fee, g.currency, g.logo_v, g.timezone, g.show_attendees, g.students_invite, g.wa_phone, g.brand, g.setup,
@@ -246,14 +261,25 @@ function makeApi(pool, { secureCookies, build }) {
   }
   // Sign-ups and reset emails: every attempt counts, per address and per email.
   function checkSignIn(req, email) {
-    if (limited("ip:" + clientIp(req), 30, 15 * 60e3) || limited("su:" + email, 10, 15 * 60e3)) fail(429, "Too many attempts. Wait 15 minutes and try again.");
+    if (limited("ip:" + limitIp(req), 30, 15 * 60e3) || limited("su:" + email, 10, 15 * 60e3)) fail(429, "Too many attempts. Wait 15 minutes and try again.");
   }
   // Sign-in: only wrong passwords count. Per email they count per address, so someone else guessing can't lock the owner out;
-  // a much higher ceiling per email still stops guessing spread over many addresses.
+  // a much higher ceiling per email still stops guessing spread over many addresses. Every attempt is counted before the password
+  // is checked (so many sent at once can't all be tried); the right password gives its attempt back (the function returned).
   function checkLogin(req, email) {
-    const ip = clientIp(req), keys = [["ip:" + ip, 30], ["em:" + email + "|" + ip, 10], ["em:" + email, 100]];
+    const ip = limitIp(req), keys = [["ip:" + ip, 30], ["em:" + email + "|" + ip, 10], ["em:" + email, 100]];
     if (keys.some(([k, max]) => over(k, max))) fail(429, "Too many attempts. Wait 15 minutes and try again.");
-    return () => keys.forEach(([k]) => limited(k, Infinity, 15 * 60e3));
+    keys.forEach(([k]) => limited(k, Infinity, 15 * 60e3));
+    return () => keys.forEach(([k]) => refund(k));
+  }
+  // A password that's checked when there's no account (or no password) for the email, so a wrong email takes as long as a wrong password.
+  const DUMMY_HASH = bcrypt.hash(crypto.randomBytes(16).toString("hex"), 11);
+  // A link that verifies this login's email (24 hours, once; only the newest one works). x: the login's users row.
+  async function verifyUrl(x) {
+    const tok = crypto.randomBytes(32).toString("hex");
+    await q("delete from email_verifications where user_id=$1", [x.id]);
+    await q("insert into email_verifications(token_hash,user_id,email,expires_at) values($1,$2,$3,now()+interval '24 hours')", [sha(tok), x.id, x.email]);
+    return mail.appUrl() + "/app/?verify=" + tok;
   }
   // source: where they came from before signing up (signup_source; see visits.signupSource).
   async function newUser({ name, email, password, role, gymId, phone, source }) {
@@ -304,12 +330,13 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/auth/start-gym", wrap(async (req, res) => {
     const b = req.body || {};
     checkSignIn(req, clean(b.email, 254).toLowerCase());
-    const perIp = "gym:" + clientIp(req); // new gyms per address per day (each one sends a welcome email)
+    const perIp = "gym:" + limitIp(req); // new gyms per address per day (each one sends a welcome email)
     if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email hello@jitsflow.com.");
     // The team looks at gyms through their links: a team address never claims one (only the owner does).
     if (b.prospect && outreach.isAdmin(clean(b.email, 254))) fail(403, TEAM_CLAIM);
-    const pro = b.prospect ? await takeProspect(b.prospect) : null;
-    let id, gymId;
+    limited(perIp, Infinity, 24 * 3600e3); // counted now, before anything is awaited (several sent at once can't all get past the check)
+    let pro, id, gymId;
+    try { pro = b.prospect ? await takeProspect(b.prospect) : null; } catch (e) { refund(perIp); throw e; }
     try {
       const gymName = clean(b.gym, 100) || (pro ? clean(outreach.nameOf(pro), 100) : "");
       if (!gymName) fail(400, "Enter your gym's name.");
@@ -321,9 +348,8 @@ function makeApi(pool, { secureCookies, build }) {
       try { id = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); }
       catch (e) { if (!pro) await q("delete from gyms where id=$1", [gymId]); throw e; }
       if (pro) await claimBuilt(gymId, id, { name: gymName, tz });
-    } catch (e) { if (pro) await untakeProspect(pro); throw e; }
+    } catch (e) { refund(perIp); if (pro) await untakeProspect(pro); throw e; }
     if (!pro) await q("update gyms set head_coach_id=$1 where id=$2", [id, gymId]);
-    limited(perIp, Infinity, 24 * 3600e3);
     await startSession(res, id);
     if (pro) await claimProspect(await loadMe(id), pro);
     const m = await loadMe(id);
@@ -395,10 +421,11 @@ function makeApi(pool, { secureCookies, build }) {
 
   api.post("/auth/login", wrap(async (req, res) => {
     const email = clean(req.body?.email, 254).toLowerCase();
-    const failed = checkLogin(req, email);
+    const right = checkLogin(req, email);
     const r = await q("select id, pass_hash from users where email=$1", [email]);
-    const ok = r.rows[0] && r.rows[0].pass_hash && (await bcrypt.compare(String(req.body?.password || ""), r.rows[0].pass_hash));
-    if (!ok) { failed(); fail(401, "That email and password don't match."); }
+    const hash = r.rows[0] && r.rows[0].pass_hash, ok = await bcrypt.compare(String(req.body?.password || ""), hash || (await DUMMY_HASH));
+    if (!ok || !hash) fail(401, "That email and password don't match.");
+    right();
     await startSession(res, r.rows[0].id);
     res.json({ me: me(await loginMe(r.rows[0].id)) });
   }));
@@ -409,14 +436,15 @@ function makeApi(pool, { secureCookies, build }) {
     if (!isEmail(email)) fail(400, "Enter the email you signed up with.");
     checkSignIn(req, "reset:" + email);
     if (!mail.mailOn()) fail(503, "Password reset by email isn't switched on yet. Ask your coach or email hello@jitsflow.com.");
-    const r = await q("select id, name from users where email=$1", [email]);
-    if (r.rows[0]) {
+    // The same answer, just as fast, whether or not the email has an account: the email is made and sent after answering.
+    (async () => {
+      const r = await q("select id, name from users where email=$1", [email]);
+      if (!r.rows[0]) return;
       const tok = crypto.randomBytes(32).toString("hex");
       await q("delete from password_resets where user_id=$1", [r.rows[0].id]);
       await q("insert into password_resets(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 hour')", [sha(tok), r.rows[0].id]);
-      try { await mail.send({ to: email, ...mail.templates.reset(r.rows[0].name, mail.appUrl() + "/app/?reset=" + tok) }); }
-      catch (e) { console.warn("mail:", e.message); fail(502, "Couldn't send the email just now. Try again in a minute."); }
-    }
+      await mail.send({ to: email, ...mail.templates.reset(r.rows[0].name, mail.appUrl() + "/app/?reset=" + tok) });
+    })().catch((e) => console.warn("reset mail:", e.message));
     res.json({ ok: true });
   }));
   api.post("/auth/reset", wrap(async (req, res) => {
@@ -532,10 +560,17 @@ function makeApi(pool, { secureCookies, build }) {
 
   api.post("/me/join", wrap(async (req, res) => {
     // A parent booking for a kid: it's the login that joins or moves (and books for itself again).
-    const u = loginOf(needUser(req)); if (req.user.login) await setAs(req, null);
+    const u = loginOf(needUser(req));
+    // Wrong codes are limited per account and per address (a code is all it takes to join, and a coach code makes you a coach).
+    // Each try counts before the code is looked up; the right code gives it back.
+    const keys = ["join-u:" + u.id, "join-ip:" + limitIp(req)];
+    if (over(keys[0], 10) || over(keys[1], 30)) fail(429, "That's a lot of wrong codes. Try again in a few minutes, or ask your coach for the invite link.");
+    keys.forEach((k) => limited(k, Infinity, 15 * 60e3));
+    if (req.user.login) await setAs(req, null);
     const c = clean(req.body?.code, 20).toUpperCase();
     const g = await q("select id, (coach_code=$1) as coach, claim is not null as unclaimed from gyms where student_code=$1 or coach_code=$1", [c]);
     if (!g.rows[0]) fail(404, "That gym code isn't right. Check it with your coach.");
+    keys.forEach(refund);
     if (g.rows[0].unclaimed) fail(404, NOT_YET);
     if (!(String(u.gym_id) === String(g.rows[0].id) && g.rows[0].coach)) await handOverFirst(u);
     if (String(u.gym_id) !== String(g.rows[0].id)) { if (u.gym_id && u.role === "student") await tellLeaving(u); await leaveGym(u, g.rows[0].id, g.rows[0].coach ? "coach" : "student"); }
@@ -1966,7 +2001,7 @@ function makeApi(pool, { secureCookies, build }) {
   // The first screen checks a gym code before sign-up ("Joining Lions BJJ"). Just the name; an unknown code is { gym: null }.
   // With a kid's own invite link (claim), also the kid's name, so the parent sees who they're signing up for.
   api.get("/gyms/by-code/:code", wrap(async (req, res) => {
-    if (limited("code:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
+    if (limited("code:" + limitIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
     const c = clean(req.params.code, 20).toUpperCase(), claim = clean(req.query.claim, 40);
     const g = c ? (await q("select id, name, (coach_code=$1) as coach from gyms where (student_code=$1 or coach_code=$1) and claim is null", [c])).rows[0] : null;
     const kid = g && claim ? (await q("select name from users where claim_token=$1 and gym_id=$2 and pass_hash is null and parent_id is null and parent_name<>''", [claim, g.id])).rows[0] : null;
@@ -3427,7 +3462,7 @@ function makeApi(pool, { secureCookies, build }) {
     and not exists (select 1 from prospects p where p.gym_id=g.id and p.last_viewed_at > now() - interval '14 days')`).then((r) => r.rowCount);
   // The claim screen's first look at a gym: its name, logo and colour, and what's ready.
   api.get("/prospects/:token", wrap(async (req, res) => {
-    if (limited("pro:" + clientIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
+    if (limited("pro:" + limitIp(req), 30, 15 * 60e3)) fail(429, "Too many tries. Wait 15 minutes and try again.");
     const x = await outreach.findToken(q, clean(req.params.token, 64)), p = x ? (await q(`select ${outreach.LIST_COLS}, profile from prospects where id=$1`, [x.id])).rows[0] : null;
     if (!p || p.status === "optedout" || p.import_state === "running" || !p.name) fail(404, "That link isn't valid any more.");
     if (p.claimed_at) return res.json({ gym: { name: outreach.nameOf(p), claimed: true } });
@@ -3684,4 +3719,4 @@ function makeApi(pool, { secureCookies, build }) {
   return api;
 }
 
-module.exports = { makeApi, clientIp };
+module.exports = { makeApi, clientIp, limitIp, v6net };
