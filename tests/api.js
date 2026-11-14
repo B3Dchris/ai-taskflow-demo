@@ -520,7 +520,8 @@ function client(base) {
       ok(r.s === 200 && told.length === 1 && told[0].to[0] === "coach@example.com" && /Coach JP changed the bank details/.test(told[0].text), "when the bank details change, only the head coach gets the email");
       m0 = sink.mails.length; r = await coach("PATCH", "/coach/gym/pay", { holder: "Bad Coach", bank: "Capitec", account: "1234567890", branch: "470010", type: "Savings", note: "New note" }); await wait();
       ok(r.s === 200 && !sink.mails.slice(m0).some((m) => /bank details changed/.test(m.subject)), "a change that leaves the bank account alone sends nothing");
-      m0 = sink.mails.length; r = await coach("PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }); await wait();
+      r = await coach("PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12" }); ok(r.s === 400 && /passphrase/.test(r.j.error), "a PayFast account needs its passphrase: " + (r.j && r.j.error));
+      m0 = sink.mails.length; r = await coach("PUT", "/coach/payfast", { merchantId: "12345678", merchantKey: "abcdefghijk12", passphrase: "gym pass" }); await wait();
       told = sink.mails.slice(m0).filter((m) => m.subject === "Your gym's PayFast account changed");
       ok(r.s === 200 && told.length === 1 && told[0].to[0] === "coach@example.com" && /Merchant ID 12345678/.test(told[0].text), "connecting a PayFast account emails the head coach only");
       m0 = sink.mails.length; r = await stu2("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 20000 }); await wait();
@@ -993,7 +994,7 @@ function client(base) {
           ok(!(await db.query("select 1 from payments where reference='PayFast 2000002'")).rows[0], "a test-account payment notification is ignored once live");
           r = await live("GET", "/coach/billing"); ok(r.j.billing.status === "trial" && r.j.billing.card === false, "a card added in test mode has to be added again once live: " + JSON.stringify(r.j.billing));
           await db.end(); }
-        r = await live("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12" }); ok(r.s === 200, "their own account is fine");
+        r = await live("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: "live gym pass" }); ok(r.s === 200, "their own account is fine");
         // New gyms: 10 a day from one address (each sends a welcome email).
         let codes = []; for (let i = 0; i < 9; i++) codes.push((await client(base2)("POST", "/auth/start-gym", { gym: "Spam " + i, name: "S", email: `spam${i}@example.com`, password: "spampass1" }, ipx)).s);
         r = await client(base2)("POST", "/auth/start-gym", { gym: "Spam 9", name: "S", email: "spam9@example.com", password: "spampass1" }, ipx);

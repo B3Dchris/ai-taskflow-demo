@@ -3373,7 +3373,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }
   api.get("/coach/payfast", wrap(async (req, res) => {
     const u = needHead(req), raw = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]), p = pfLive(raw);
-    res.json({ payfast: { connected: !!p, needsReconnect: !!(raw && raw.broken), merchantId: p ? p.id : raw && raw.broken ? raw.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
+    res.json({ payfast: { connected: !!p, needsReconnect: !!(raw && raw.broken), merchantId: p ? p.id : raw && raw.broken ? raw.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox,
+      // connected before a passphrase was needed: asked to add one (PayFast checks it on every payment)
+      needsPassphrase: !!(p && !p.sandbox && !p.pass) } });
   }));
   api.put("/coach/payfast", wrap(async (req, res) => {
     const u = needHead(req), b = req.body || {};
@@ -3384,6 +3386,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!/^\d{8}$/.test(id)) fail(400, "Your PayFast Merchant ID is 8 digits. Find it in PayFast under Settings, Developer settings.");
     if (!/^[a-z0-9]{13}$/i.test(key)) fail(400, "Your PayFast Merchant Key is 13 letters and numbers, from the same page.");
     if (pass.length > 100) fail(400, "That passphrase is too long.");
+    // Without a passphrase anyone who sees a checkout (every member paying) could sign one of their own for another amount: a real
+    // PayFast account needs one. (PayFast's public test account has its own, filled in above.)
+    if (!pass) fail(400, "Add your PayFast passphrase too. Set one in PayFast under Settings, Developer settings (Salt passphrase), then type the same one here.");
     // Saved cards belong to the old account and need its passphrase: a new account, or no passphrase now, stops them (cancelled
     // there), and the members who saved them are told. They save their card again once it's back.
     const was = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
@@ -3585,6 +3590,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     }
     const c = a.charge, ref = clean(d.pf_payment_id, 40);
     if (d.payment_status !== "COMPLETE" || !(gross > 0)) return autoFailed(c.id, "the bank declined it");
+    if (gross !== c.amount_cents && !sandbox && !["paid", "left"].includes(c.status)) await pfFlag(c.gym_id, "autopay-amount", { ref: "PayFast " + ref, expected: c.amount_cents, got: gross,
+      note: `An automatic card charge (PayFast ${ref}) was for ${fmtMoney(gross)}, but JitsFlow asked for ${fmtMoney(c.amount_cents)}. It's recorded as ${fmtMoney(gross)}.` });
     // The head coach said it went through (Money) before this came: it's recorded already. PayFast's reference goes on it, and the receipt goes now.
     if (c.status === "paid") {
       if (!(await q("update autopay_charges set error='', updated_at=now() where id=$1 and status='paid' and error=$2 returning id", [c.id, CHECKED])).rowCount) return;

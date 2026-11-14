@@ -71,7 +71,10 @@ const GYM_PASS = "gym pass phrase";
     // --- hidden until it can work
     ok((await pay(S.amy)).autopay === null, "no PayFast account: nothing about autopay on the Pay sheet");
     r = await S.amy("POST", "/me/autopay", {}); ok(r.s === 400, "and the server refuses to set it up");
-    await coach("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12" });
+    r = await coach("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12" }); ok(r.s === 400 && /passphrase/.test(r.j.error), "a PayFast account can't be connected without its passphrase");
+    // (one connected before a passphrase was needed)
+    await pool.query("update gyms set payfast=$2 where id=$1", [gym, { merchantId: "10000105", key: pfm.seal("abcdefghijk12"), pass: pfm.seal("") }]);
+    ok((await coach("GET", "/coach/payfast")).j.payfast.needsPassphrase === true, "a gym connected without one is asked to add it");
     ok((await pay(S.amy)).autopay === null, "a PayFast account with no passphrase (PayFast needs one for saved cards): still hidden");
     r = await S.amy("POST", "/me/autopay", {}); ok(r.s === 400, "and refused");
     r = await S.amy("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: GYM_PASS }); ok(r.s === 403, "a member can't change the gym's PayFast account");
@@ -435,13 +438,13 @@ const GYM_PASS = "gym pass phrase";
         ok(!errs.length, "no page errors: " + errs.join(" | "));
       } finally { await b.close(); } }
 
-    // --- 10. The head coach clears the passphrase: saved cards stop (and are cancelled), with the members told
+    // --- 10. The head coach can't clear the passphrase (PayFast needs it): saved cards keep working
     const gus2 = await add("Gus Lee", { email: "gus2@auto.test" }); await card(gus2, "tok-gs");
-    m0 = sink.mails.length; await z("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: "" }); await wait(500);
-    ok(!(await pool.query("select 1 from autopay where gym_id=$1", [gym2])).rows[0], "no passphrase now: the gym's saved cards stop");
-    ok(cancels("tok-gs").length === 1 && cancels("tok-gs")[0].signed && to("gus2@auto.test", m0).filter((x) => x.subject === "Automatic card payments stopped").length === 1, "each is cancelled with PayFast (with the old passphrase), and Gus is told");
-    // A card still saved while the gym can't take them (say JitsFlow's PayFast is switched): hidden from Money, but Gus can still stop it.
-    await card(gus2, "tok-gs2"); const gus = await asUser(gus2);
+    r = await z("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: "" }); await wait(300);
+    ok(r.s === 400 && (await pool.query("select 1 from autopay where gym_id=$1", [gym2])).rows[0] && !cancels("tok-gs").length, "clearing the passphrase is refused, and the saved cards stay");
+    // A card still saved while the gym can't take them (a gym connected without a passphrase before one was needed): hidden from Money,
+    // but Gus can still stop it.
+    await pool.query("update gyms set payfast = payfast || $2 where id=$1", [gym2, { pass: pfm.seal("") }]); const gus = await asUser(gus2);
     let gp2 = (await gus("GET", "/me/pay")).j.pay.autopay;
     ok(gp2 && gp2.on === true && (await row2(gus2)).autopay === false, "a card still saved: Gus sees it on and can stop it; Money doesn't claim it pays");
     r = await gus("DELETE", "/me/autopay"); ok(r.s === 200 && r.j.stopped === 1, "Stop works");
