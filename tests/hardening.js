@@ -78,8 +78,10 @@ const healthMs = async (root) => { const t = Date.now(); await new Promise((ok) 
     const S = { port, root: `http://127.0.0.1:${port}`, base: `http://127.0.0.1:${port}/api`, logs, stop: () => new Promise((r) => { p.on("exit", r); p.kill(); }) };
     servers.push(S); await wait(300); return S;
   };
+  // Admins and coaches who email on a gym's behalf confirm their address first (see tests/security.js); here it's done directly.
+  const verifyEmail = (email) => pool.query("update users set email_verified_at=now(), email_verified_for=email where lower(email)=lower($1)", [email]);
   const gymOn = async (S, k) => { const c = client(S.base), r = await c("POST", "/auth/start-gym", { gym: `${k} BJJ`, name: `Coach ${k}`, email: `coach-${k.toLowerCase()}@hard.test`, password: "coachpass1", timezone: "Africa/Johannesburg" });
-    if (r.s !== 201) throw new Error("start-gym " + r.s + " " + r.t); c.gym = r.j.me.gym; return c; };
+    if (r.s !== 201) throw new Error("start-gym " + r.s + " " + r.t); c.gym = r.j.me.gym; await verifyEmail(`coach-${k.toLowerCase()}@hard.test`); return c; };
   const studentOf = async (S, coach, k) => { const c = client(S.base), r = await c("POST", "/auth/register", { code: coach.gym.studentCode, name: `${k} Student`, email: `${k.toLowerCase()}@hard.test`, password: "studentpass1" });
     if (r.s !== 201) throw new Error("register " + r.s + " " + r.t); c.id = r.j.me.id; return c; };
   const to = (addr, from = 0) => sink.mails.slice(from).filter((m) => (m.to || [])[0] === addr);
@@ -240,7 +242,7 @@ const healthMs = async (root) => { const t = Date.now(); await new Promise((ok) 
     ok(B.logs.join("").includes("AI budget: today's limit"), "and the server log says so once");
     const usage = (await pool.query("select scope, calls from ai_usage order by scope")).rows;
     ok(usage.find((u) => u.scope === "all").calls === 4, "use is counted in the database (shared by every server): " + JSON.stringify(usage));
-    const admin = client(B.base); await admin("POST", "/auth/register", { name: "Boss", email: "boss@jitsflow.test", password: "bosspass12" });
+    const admin = client(B.base); await admin("POST", "/auth/register", { name: "Boss", email: "boss@jitsflow.test", password: "bosspass12" }); await verifyEmail("boss@jitsflow.test");
     r = await admin("GET", "/admin/overview"); ok(r.s === 200 && r.j.system && r.j.system.ai.paused === true && r.j.system.ai.calls === 4 && r.j.system.secretOk === false, "the team's dashboard shows AI paused, today's use, and that JF_SECRET isn't set: " + JSON.stringify(r.j.system));
     await B.stop();
 
