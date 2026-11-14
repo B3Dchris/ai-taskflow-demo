@@ -125,6 +125,13 @@ const templates = {
   message: (name, coach, gym, subject, text, stop) => ({ subject, title: subject,
     paras: [`Hi ${name},`, ...String(text).split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean), `${coach}, ${gym}`, ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
     preheader: String(text).slice(0, 120), button: { label: "Open JitsFlow", url: appUrl() + "/app/#book" } }),
+  // A reset asked for an email a coach added to someone in their gym who has no login yet: it names the gym, since setting a password
+  // joins it. signup: where to sign up on their own instead.
+  resetJoin: (name, gym, url, signup) => ({ subject: "Set your JitsFlow password", title: "Set a password",
+    paras: [`Hi ${name},`, `There's no JitsFlow login for this email yet: ${gym} added you to JitsFlow as a member with it.`,
+      `If you train at ${gym}, tap the button to set a password. You'll be on the app as a member of ${gym}. The link works once and expires in 1 hour.`,
+      `Not a member of ${gym}? Don't use the button. Sign up on your own instead (${gym} won't see your account): ${signup}`, "If you didn't ask for this, ignore this email."],
+    button: { label: `Set a password and join ${gym}`, url } }),
   reset: (name, url) => ({ subject: "Reset your JitsFlow password", title: "Reset your password",
     paras: [`Hi ${name},`, "Someone asked to reset the password for your JitsFlow account. If it was you, tap the button. The link works once and expires in 1 hour.", "If it wasn't you, ignore this email. Your password stays the same."],
     button: { label: "Choose a new password", url } }),
@@ -204,7 +211,7 @@ const templates = {
     paras: [`Hi ${name},`, `${gym} changed how it takes card payments, so your saved card is no longer charged automatically.`, "To keep paying automatically, open Pay in the app and save your card again."],
     button: { label: "Open JitsFlow", url: appUrl() + "/app/#me" } }),
   // To a coach: a private booked or cancelled, a member left, or a new member picked their plan. Fixed subjects; the line says who and when.
-  coachNews: (kind, name, line) => { const t = { booked: "A private lesson was booked", cancelled: "A private lesson was cancelled", left: "A member left your gym", joined: "A new member picked a plan", resumed: "A member is training again", kidask: "A parent asked to add a kid", unlinked: "A parent deleted their login", duplicate: "A new member may be on your list already" }[kind];
+  coachNews: (kind, name, line) => { const t = { booked: "A private lesson was booked", cancelled: "A private lesson was cancelled", left: "A member left your gym", joined: "A new member picked a plan", resumed: "A member is training again", kidask: "A parent asked to add a kid", unlinked: "A parent deleted their login", duplicate: "A new member may be on your list already", ownaccount: "A member made their own JitsFlow account" }[kind];
     return { subject: t, title: t, paras: [`Hi ${name},`, line], button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
   privateBooked: (name, gym, when) => ({ subject: "Your private lesson is booked", title: "Private lesson booked",
     paras: [`Hi ${name},`, `You're booked for a private lesson at ${gym}: ${when}.`, "It's free to cancel in the app until it starts."],

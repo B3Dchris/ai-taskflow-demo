@@ -328,11 +328,16 @@ function client(base) {
     r = await coach("GET", "/coach/roster"); ok(r.j.people.find((p) => p.id === nomsa).offline === false, "and they no longer show as not on the app");
     r = await client(base)("POST", "/auth/register", { code: new URL(claimUrl).searchParams.get("join"), claim: claimTok, name: "Someone", email: "someone@example.com", password: "somepass11" });
     ok(r.s === 201 && r.j.me.id !== nomsa, "a used invite link doesn't take over the record again");
-    const pieterApp = client(base); r = await pieterApp("POST", "/auth/register", { code: (await coach("GET", "/me")).j.me.gym.studentCode, name: "Pieter B", email: "PIETER@example.com", password: "pieterpass1" });
-    ok(r.s === 409 && /invite link/.test(r.j.error) && !(await pieterApp("GET", "/me")).j.me, "typing the email the coach added doesn't take over the record (it could be anyone)");
-    r = await client(base)("POST", "/auth/register", { name: "Pieter B", email: "pieter@example.com", password: "pieterpass1" }); ok(r.s === 409, "nor does signing up with no gym code");
-    r = await client(base)("POST", "/auth/register", { code: (await other("GET", "/me")).j.me.gym.studentCode, name: "Pieter B", email: "pieter@example.com", password: "pieterpass1" }); ok(r.s === 409, "nor with another gym's code");
-    r = await coach("GET", "/coach/roster"); { const pr = r.j.people.find((p) => p.id === pieter); ok(pr && pr.offline && pr.email === "pieter@example.com", "the record stays in the gym, not on the app"); }
+    const pieterApp = client(base);
+    { // Typing an email a coach added proves nothing (it could be anyone): it makes a new account, never the record. The email is the
+      // account's now: the record keeps its name and history without it, and the coach is told (Merge, if it's them).
+      const th = (await coach("POST", "/coach/students", { name: "Thandi Mokoena", email: "thandi@example.com" })).j.id, m0 = sink.mails.length;
+      const thApp = client(base); r = await thApp("POST", "/auth/register", { code: (await coach("GET", "/me")).j.me.gym.studentCode, name: "Thandi M", email: "THANDI@example.com", password: "thandipass1" });
+      ok(r.s === 201 && r.j.me.id !== String(th) && r.j.me.gym, "typing the email the coach added makes a new account, not the record: " + r.s);
+      const tr = (await coach("GET", "/coach/roster")).j.people.find((p) => p.id === String(th)); await wait();
+      ok(tr && tr.offline && !tr.email && tr.name === "Thandi Mokoena", "the record stays in the gym, not on the app, with its name and without the email");
+      ok(sink.mails.slice(m0).some((m) => m.to[0] === "coach@example.com" && /may be on your list already/.test(m.subject) && /thandi@example\.com/.test(m.text) && /Merge/.test(m.text)), "the coach is asked whether to merge them");
+      r = await coach("POST", `/coach/students/${th}/merge`, { into: r.j.me.id }); ok(r.s === 200, "and can"); }
     r = await coach("POST", `/coach/students/${pieter}/claim-link`); r = await pieterApp("POST", "/auth/register", { code: new URL(r.j.url).searchParams.get("join"), claim: new URL(r.j.url).searchParams.get("claim"), name: "Pieter B", email: "PIETER@example.com", password: "pieterpass1" });
     ok(r.s === 201 && r.j.me.id === pieter, "the coach's invite link signs them into it");
     // --- added by the coach, then signs up with the gym's code (not their own link): a new account, and the coach is told.

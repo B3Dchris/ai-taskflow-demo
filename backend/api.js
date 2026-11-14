@@ -305,16 +305,33 @@ function makeApi(pool, { secureCookies, build }) {
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
     if (password.length > 200) fail(400, "That password is too long.");
     const hash = await bcrypt.hash(password, 11);
-    // A coach added this person with this email before they had the app. Typing the email doesn't prove it's theirs,
-    // so that record is only taken over through the coach's invite link (claim) or a password reset email.
-    if ((await q("select 1 from users where email=$1 and pass_hash is null", [email])).rows[0]) fail(409, "Your coach already added you with this email. Ask them for your invite link and sign up from that.");
+    // A coach (any coach, in any gym) may have added this email to someone who isn't on the app. That never stops the owner of the
+    // email signing up: the email comes off that record (which keeps its name, payments and history), the new account is theirs, and
+    // that gym's head coach is told (tellDetached). Typing an email proves nothing, so nobody is ever put into that record here: it's
+    // only taken over through its own invite link (claim) or a reset email that names its gym.
+    const db = await pool.connect(); let id, off = null;
     try {
-      const r = await q("insert into users(gym_id,role,name,email,pass_hash,phone,signup_source,signed_up_at) values($1,$2,$3,$4,$5,$6,$7,now()) returning id", [gymId, role, name, email, hash, cleanPhone(phone), source || null]);
-      return r.rows[0].id;
+      await db.query("begin");
+      off = (await db.query("select id, gym_id, name, parent_name from users where email=$1 and pass_hash is null for update", [email])).rows[0] || null;
+      if (off) await db.query("update users set email=null where id=$1", [off.id]);
+      id = (await db.query("insert into users(gym_id,role,name,email,pass_hash,phone,signup_source,signed_up_at) values($1,$2,$3,$4,$5,$6,$7,now()) returning id", [gymId, role, name, email, hash, cleanPhone(phone), source || null])).rows[0].id;
+      await db.query("commit");
     } catch (e) {
+      await db.query("rollback").catch(() => {});
       if (e.code === "23505") fail(409, "An account with that email already exists. Sign in instead.");
       throw e;
-    }
+    } finally { db.release(); }
+    return { id, off: off && off.gym_id ? off : null };
+  }
+  // Someone signed up with an email a coach had added to a record of someone not on the app (off: that record, as it was). Joining that
+  // same gym with its code: it may be them, so the head coach is asked to merge (Members shows "Possible duplicate"), as with a name
+  // or number that matches. Another gym (or none): its head coach hears the email is theirs now, and can merge if they join later.
+  async function tellDetached(off, acct) {
+    if (limited("detach:" + off.gym_id, 20, 24 * 3600e3)) return;
+    const head = await headCoach(off.gym_id), kid = !!off.parent_name, who = kid ? `${off.name}'s parent (${off.parent_name})` : off.name;
+    if (String(off.gym_id) === String(acct.gymId || "")) return tellCoach(off.gym_id, head, "duplicate", `${acct.name} signed up with your gym's code, using ${acct.email}: the email you added for ${who}, who isn't on the app. ${kid ? `If ${acct.name} is ${first(off.name)}'s parent, send ${first(off.name)}'s invite link so they can add ${first(off.name)} to their login.` : `If it's the same person, open ${first(acct.name)} in Members and tap Merge.`} If not, there's nothing to do.`);
+    const g = (await q("select name from gyms where id=$1", [off.gym_id])).rows[0]; if (!g) return;
+    await tellCoach(off.gym_id, head, "ownaccount", `${acct.name} made their own JitsFlow account with ${acct.email}, the email you added for ${who}. ${off.name} stays on your list as before, with their payments and history, without that email: you can still WhatsApp them. ${kid ? `To bring them onto the app, send ${first(off.name)}'s invite link.` : `If they join ${g.name} in the app, open them in Members and tap Merge.`}`);
   }
   // Students the coach added who aren't on the app, matching a name or phone number someone typed.
   const phoneKey = (v) => String(v || "").replace(/\D/g, "").slice(-9);
@@ -351,7 +368,7 @@ function makeApi(pool, { secureCookies, build }) {
     // The team looks at gyms through their links: a team address never claims one (only the owner does).
     if (b.prospect && outreach.isAdmin(clean(b.email, 254))) fail(403, TEAM_CLAIM);
     limited(perIp, Infinity, 24 * 3600e3); // counted now, before anything is awaited (several sent at once can't all get past the check)
-    let pro, id, gymId;
+    let pro, id, gymId, detached = null;
     try { pro = b.prospect ? await takeProspect(b.prospect) : null; } catch (e) { refund(perIp); throw e; }
     try {
       const gymName = clean(b.gym, 100) || (pro ? clean(outreach.nameOf(pro), 100) : "");
@@ -360,8 +377,8 @@ function makeApi(pool, { secureCookies, build }) {
       // Claiming the gym outreach built for them: the account joins that gym (built now if it wasn't yet).
       gymId = pro ? await buildGym(pro.id, { claiming: true }) : null;
       if (pro && !gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email hello@jitsflow.com.");
-      if (!gymId) gymId = (await q("insert into gyms(name,student_code,coach_code,timezone,bill_start) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date) returning id", [gymName, code(), code(), tz])).rows[0].id;
-      try { id = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); }
+      if (!gymId) gymId = (await q("insert into gyms(name,student_code,coach_code,timezone,bill_start,pop_token) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date,$5) returning id", [gymName, code(), code(), tz, popToken()])).rows[0].id;
+      try { const nu = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); id = nu.id; detached = nu.off; }
       catch (e) { if (!pro) await q("delete from gyms where id=$1", [gymId]); throw e; }
       if (pro) await claimBuilt(gymId, id, { name: gymName, tz });
     } catch (e) { refund(perIp); if (pro) await untakeProspect(pro); throw e; }
@@ -369,6 +386,7 @@ function makeApi(pool, { secureCookies, build }) {
     await startSession(res, id);
     if (pro) await claimProspect(await loadMe(id), pro);
     const m = await loadMe(id);
+    if (detached) await tellDetached(detached, { name: m.name, email: m.email, gymId }).catch((e) => console.warn("detach:", e.message));
     // The welcome is also the email check: its button verifies the address (the gym can email its members once it's verified).
     mail.sendLater({ to: m.email, ...mail.templates.welcomeCoach(first(m.name), mail.appUrl() + "/app/?join=" + m.student_code, await verifyUrl(m)) });
     res.status(201).json({ me: me(m), ...(pro ? { claimed: true } : {}) });
@@ -385,14 +403,15 @@ function makeApi(pool, { secureCookies, build }) {
       if (g.rows[0].unclaimed) fail(404, NOT_YET);
       gymId = g.rows[0].id; role = g.rows[0].coach ? "coach" : "student";
     }
-    let id;
+    let id, detached = null;
     const email = clean(b.email, 254).toLowerCase(), password = String(b.password || "");
     const checkNew = async (preId) => {
       if (!clean(b.name, 80)) fail(400, "Enter your name.");
       if (!isEmail(email)) fail(400, "Enter a valid email address.");
       if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
       if (password.length > 200) fail(400, "That password is too long.");
-      const taken = (await q("select id from users where email=$1 and id<>$2", [email, preId])).rows[0];
+      // (someone else a coach added with this email, not on the app, doesn't count: the email comes off their record, see newUser)
+      const taken = (await q("select id from users where email=$1 and id<>$2 and pass_hash is not null", [email, preId])).rows[0];
       // A parent with a login already, opening another kid's link: signing in adds the kid (the app offers it straight after).
       if (taken) fail(409, claim && pre && pre.parent_name ? `You already have an account with that email. Sign in to add ${first(pre.name)} to it.` : "An account with that email already exists. Sign in instead.");
     };
@@ -419,15 +438,19 @@ function makeApi(pool, { secureCookies, build }) {
       .map((k) => cands.find((x) => String(x.id) === k) || fail(409, "We couldn't link one of those kids. Ask your coach for their invite link.")) : [];
     if (pre) {
       await checkNew(pre.id);
+      const other = (await q("update users o set email=null from (select id, gym_id, name, parent_name from users where email=$1 and id<>$2 and pass_hash is null for update) x where o.id=x.id returning x.*", [email, pre.id])).rows[0];
+      if (other && other.gym_id && !kids.some((k) => String(k.id) === String(other.id))) detached = other; // (a kid they're linking now: nothing to tell)
       // A kid's record (it has a parent's name): the parent signs up for them. The kid keeps their name; the parent's goes in as the parent.
       await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
         email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now()) where id=$4`,
         [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code")]);
       id = pre.id;
       if (kids.length) await linkKids(id, kids.map((x) => x.id), clean(b.name, 80));
-    } else id = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) });
+    } else { const nu = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) }); id = nu.id; detached = nu.off; }
     await startSession(res, id);
     const m = await loadMe(id);
+    // The email was on a record a coach added: that coach hears (one note: it covers a name or number that matches too).
+    if (detached) { await tellDetached(detached, { name: m.name, email: m.email, gymId: pre ? null : gymId }).catch((e) => console.warn("detach:", e.message)); if (String(detached.gym_id) === String(gymId)) dup = null; }
     if (dup && !limited("dup:" + gymId, 20, 24 * 3600e3)) await tellCoach(gymId, await headCoach(gymId), "duplicate", `${m.name} signed up with your gym's code. You added ${dup.name}, who isn't on the app, with the same name or number. If it's the same person, open ${first(m.name)} in Members and tap Merge. If not, there's nothing to do.`);
     if (m.role === "student") mail.sendLater({ to: m.email, ...mail.templates.welcomeStudent(m.name, m.gym_name) });
     res.status(201).json({ me: me(m) });
@@ -452,12 +475,15 @@ function makeApi(pool, { secureCookies, build }) {
     if (!mail.mailOn()) fail(503, "Password reset by email isn't switched on yet. Ask your coach or email hello@jitsflow.com.");
     // The same answer, just as fast, whether or not the email has an account: the email is made and sent after answering.
     (async () => {
-      const r = await q("select id, name from users where email=$1", [email]);
+      const r = await q("select u.id, u.name, u.parent_name, u.pass_hash is null as offline, g.name as gym from users u left join gyms g on g.id=u.gym_id where u.email=$1", [email]);
       if (!r.rows[0]) return;
-      const tok = crypto.randomBytes(32).toString("hex");
-      await q("delete from password_resets where user_id=$1", [r.rows[0].id]);
-      await q("insert into password_resets(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 hour')", [sha(tok), r.rows[0].id]);
-      await mail.send({ to: email, ...mail.templates.reset(r.rows[0].name, mail.appUrl() + "/app/?reset=" + tok) });
+      const x = r.rows[0], tok = crypto.randomBytes(32).toString("hex"), url = mail.appUrl() + "/app/?reset=" + tok;
+      await q("delete from password_resets where user_id=$1", [x.id]);
+      await q("insert into password_resets(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 hour')", [sha(tok), x.id]);
+      // No login yet: a coach added this email to someone in their gym. Setting a password joins that gym, so the email says which
+      // gym, and how to sign up on their own instead (which takes the email off that record: see newUser). Never silently.
+      if (x.offline && x.gym) await mail.send({ to: email, ...mail.templates.resetJoin(first(x.parent_name || x.name), x.gym, url, mail.appUrl() + "/app/#me") });
+      else await mail.send({ to: email, ...mail.templates.reset(x.name, url) });
     })().catch((e) => console.warn("reset mail:", e.message));
     res.json({ ok: true });
   }));
