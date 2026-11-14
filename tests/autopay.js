@@ -182,7 +182,9 @@ const GYM_PASS = "gym pass phrase";
     const lerato = (await coach("POST", "/coach/students", { name: "Lerato Dlamini", parentName: "Thandi", phone: "082 555 1234" })).j.id;
     const sipho = (await coach("POST", "/coach/students", { name: "Sipho Dlamini", parentName: "Thandi", phone: "082 555 1234" })).j.id;
     for (const id of [lerato, sipho]) await coach("PATCH", `/coach/students/${id}`, { planId: plan });
-    const mom = client(base); r = await mom("POST", "/auth/register", { code, name: "Thandi Dlamini", email: "thandi@auto.test", password: "thandipass1", phone: "082 555 1234", kids: [lerato, sipho] });
+    // (Lerato's invite link: a gym code with the parent's number links nobody. See tests/security.js.)
+    const ltok = new URL((await coach("POST", `/coach/students/${lerato}/claim-link`)).j.url).searchParams.get("claim");
+    const mom = client(base); r = await mom("POST", "/auth/register", { code, claim: ltok, name: "Thandi Dlamini", email: "thandi@auto.test", password: "thandipass1", phone: "082 555 1234", kids: [lerato, sipho] });
     ok(r.s === 201 && r.j.me.id === lerato, "Thandi signs in for Lerato and Sipho");
     await mom("POST", "/me/as", { id: sipho });
     r = await mom("POST", "/me/autopay", {}); ok(r.j.fields.custom_int1 === lerato && r.j.fields.custom_int3 === sipho && r.j.fields.email_address === "thandi@auto.test", "from Sipho's Pay sheet, the card is Thandi's (her login)");
@@ -273,7 +275,8 @@ const GYM_PASS = "gym pass phrase";
     const row2 = async (id) => (await z("GET", "/coach/money")).j.students.find((s) => s.id === String(id));
     const cancels = (tok) => calls.filter((c) => c.what === "cancel" && c.token === tok);
     const fam = async (kids, parent, phone, email) => { const ids = []; for (const k of kids) ids.push(await add(k, { parentName: parent, phone }));
-      const c = client(base); const x = await c("POST", "/auth/register", { code: code2, name: parent + " Parent", email, password: "parentpass1", phone, kids: ids }); ok(x.s === 201, "a parent signs up for " + kids.join(" and ")); return [c, ...ids]; };
+      const claim = new URL((await z("POST", `/coach/students/${ids[0]}/claim-link`)).j.url).searchParams.get("claim"); // the first kid's invite link
+      const c = client(base); const x = await c("POST", "/auth/register", { code: code2, claim, name: parent + " Parent", email, password: "parentpass1", phone, kids: ids }); ok(x.s === 201, "a parent signs up for " + kids.join(" and ")); return [c, ...ids]; };
 
     // --- 1. A kid taken off a parent's login: the parent's card stops paying for them
     const [lindiMom, lindi, sizwe] = await fam(["Lindi Mokoena", "Sizwe Mokoena"], "Thembi", "082 555 2000", "thembi@auto.test");
