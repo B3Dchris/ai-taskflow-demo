@@ -20,7 +20,7 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7);
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink();
   let pfValid = "VALID"; const pfSrv = require("http").createServer((q, r) => { q.on("data", () => {}); q.on("end", () => r.end(pfValid)); }).listen(0);
   const port = 9300 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;

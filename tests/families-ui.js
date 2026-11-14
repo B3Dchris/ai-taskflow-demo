@@ -8,7 +8,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink();
   const port = 9500 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });

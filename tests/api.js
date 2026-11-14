@@ -18,7 +18,7 @@ function client(base) {
 
 (async () => {
   const pool = new Pool({ connectionString: DB });
-  await pool.query("drop table if exists autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
+  await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   await pool.end();
   const port = 9900 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const site = await startGymSite(), sink = await startMailSink();
