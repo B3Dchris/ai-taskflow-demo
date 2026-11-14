@@ -10,7 +10,9 @@ const net = require("net");
 const http = require("http");
 const https = require("https");
 const zlib = require("zlib");
+const { AsyncLocalStorage } = require("async_hooks");
 const brand = require("./brand");
+const scan = require("./htmlscan");
 
 const UA = "Mozilla/5.0 (compatible; JitsFlowImporter/1.0; +https://jitsflow-app.onrender.com)";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -112,29 +114,65 @@ const decode = (s) => String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) 
   if (e[0] === "#") { const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(n); } catch (x) { return m; } }
   return ENT[e.toLowerCase()] ?? m;
 });
-function attrs(tag) {
-  const out = {}, re = /([\w:-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>"']+))/g; let m;
-  while ((m = re.exec(tag))) out[m[1].toLowerCase()] = decode(m[3] ?? m[4] ?? m[5] ?? "");
+// A tag's attributes ({ href, class, ... }), read without backtracking (see htmlscan.js). Takes the text after the tag's name.
+const attrs = (attr) => scan.attrs(attr, decode);
+const squash = (s) => s.replace(/[ \t\f\v ​]+/g, " ").trim();
+// The text between tokens a and b of a page read by scan.tokens (tags in between become sep). Scripts, styles and comments are left out.
+function textBetween(T, a, b, sep = " ") {
+  const { s, list } = T; let out = "";
+  for (let x = a; x < b; x++) { const t = list[x]; if (t.kind === "tag" && x > a) out += sep; if (t.kind !== "raw" && t.kind !== "comment") out += s.slice(t.j, list[x + 1].i); }
   return out;
 }
-const squash = (s) => s.replace(/[ \t\f\v ​]+/g, " ").trim();
+const isOpen = (t, name) => t.kind === "tag" && !t.close && (name === undefined || t.name === name);
 // A timetable table flattened to "15h30 | — | Kids | — | Kids" loses which day each class is on. Keep the headings:
 // "Time: 15h30-16h15 · Tuesday: Kids Class 5-8 yrs · Thursday: Kids Class 5-8 yrs".
-function tableToText(t) {
-  const cell = (h) => squash(decode(h.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ")));
-  const rows = [...t.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi)].map((r) => [...r[1].matchAll(/<t([dh])\b([^>]*)>([\s\S]*?)<\/t[dh]\s*>/gi)].flatMap((c) => { const span = Math.min(7, Number((c[2].match(/colspan="?(\d+)/i) || [])[1]) || 1); return Array(span).fill(cell(c[3])); }));
+// T: the page's tokens; a and b: the table's opening and closing tags. Each row runs to its first </tr>, each cell to its first
+// </td> or </th> (rows and cells with none are left out), as the patterns this replaces read them, but in one pass.
+function tableToText(T, a, b) {
+  const { list } = T, cell = (x, y) => squash(decode(textBetween(T, x, y)));
+  const isCellClose = (t) => t.kind === "tag" && t.close && (t.name === "td" || t.name === "th");
+  // the nearest </tr> and </td>/</th> to the right of each token, inside the table
+  const nextTr = new Array(b - a).fill(-1), nextCell = new Array(b - a).fill(-1); let tr = -1, cl = -1;
+  for (let k = b - 1; k > a; k--) { const t = list[k]; nextTr[k - a] = tr; nextCell[k - a] = cl; if (t.kind === "tag" && t.close && t.name === "tr") tr = k; if (isCellClose(t)) cl = k; }
+  const rows = [];
+  for (let k = a + 1; k < b; k++) {
+    if (!isOpen(list[k], "tr")) continue;
+    const c = nextTr[k - a]; if (c < 0) break; // no </tr> after this one: none after the next one either
+    const row = [];
+    for (let m = k + 1; m < c; m++) {
+      const t = list[m]; if (!(isOpen(t, "td") || isOpen(t, "th"))) continue;
+      const e = nextCell[m - a]; if (e < 0 || e > c) break;
+      const span = Math.min(7, Number((t.attr.match(/colspan="?(\d+)/i) || [])[1]) || 1);
+      row.push(...Array(span).fill(cell(m, e))); m = e;
+    }
+    rows.push(row); k = c;
+  }
   if (rows.length < 2) return "\n" + rows.map((r) => r.join(" | ")).join("\n") + "\n";
   const head = rows[0], empty = (v) => !v || /^[-–—x·.]+$/i.test(v);
   if (head.length < 3 || head.filter(Boolean).length < 3) return "\n" + rows.map((r) => r.join(" | ")).join("\n") + "\n";
   return "\n" + head.join(" | ") + "\n" + rows.slice(1).map((r) => r.map((v, i) => (empty(v) ? "" : (head[i] ? head[i] + ": " : "") + v)).filter(Boolean).join(" · ")).filter(Boolean).join("\n") + "\n";
 }
-function htmlToText(html) {
-  let s = html.replace(/<!--[\s\S]*?-->/g, " ").replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1\s*>/gi, " ");
-  s = s.replace(/<table\b[\s\S]*?<\/table\s*>/gi, (t) => tableToText(t).replace(/</g, " "));
-  s = s.replace(/<\/(td|th)\s*>/gi, " | ").replace(/<br\s*\/?>/gi, "\n").replace(/<\/?(p|div|li|ul|ol|h[1-6]|tr|table|section|article|header|footer|nav|main|aside|dd|dt|figure|figcaption|blockquote|form|label|button)\b[^>]*>/gi, "\n");
-  s = decode(s.replace(/<[^>]+>/g, " "));
+const HIDDEN = ["noscript", "svg", "template", "iframe"]; // left out of the text with what's in them (scripts and styles always are)
+const BLOCK = new Set("p div li ul ol h1 h2 h3 h4 h5 h6 tr table section article header footer nav main aside dd dt figure figcaption blockquote form label button".split(" "));
+function htmlToText(html, T = scan.tokens(html)) {
+  const { s, list } = T, closeAt = scan.closers(list, [...HIDDEN, "table"]), out = [];
+  let pos = 0;
+  for (let k = 0; k < list.length; k++) {
+    const t = list[k];
+    out.push(s.slice(pos, t.i)); pos = t.j;
+    if (t.kind !== "tag") { out.push(" "); continue; } // a comment, or a script's or style's content
+    if (!t.close && (HIDDEN.includes(t.name) || t.name === "table")) {
+      const c = closeAt.get(k);
+      if (c > k) { out.push(t.name === "table" ? tableToText(T, k, c).replace(/</g, " ") : " "); pos = list[c].j; k = c; continue; }
+    }
+    if (t.close && (t.name === "td" || t.name === "th")) out.push(" | ");
+    else if (t.name === "br" && !t.close) out.push("\n");
+    else out.push(BLOCK.has(t.name) ? "\n" : " ");
+  }
+  out.push(s.slice(pos));
+  const text = decode(out.join(""));
   const lines = []; let prev = "";
-  for (const raw of s.split("\n")) { const l = squash(raw).replace(/^\|\s*/, "").replace(/\s*\|\s*$/, ""); if (l && l !== prev) { lines.push(l); prev = l; } }
+  for (const raw of text.split("\n")) { const l = squash(raw).replace(/^\|\s*/, "").replace(/\s*\|\s*$/, ""); if (l && l !== prev) { lines.push(l); prev = l; } }
   return lines.join("\n");
 }
 /* ---------------- content that isn't in the page's visible HTML ---------------- */
@@ -149,59 +187,71 @@ function recordLine(pairs) { // [[key, value], ...] → "key: value · …", or 
     .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v).trim()}`);
   return parts.length >= 2 && parts.some((p) => wordy(p.slice(p.indexOf(": ") + 2))) ? parts.slice(0, 14).join(" · ").slice(0, 1200) : null;
 }
-function hiddenData(html, max = 16000) {
+function hiddenData(T, max = 16000) {
   const out = [], seen = new Set(); let size = 0;
   const add = (line) => { if (line && !seen.has(line) && size < max) { seen.add(line); out.push(line); size += line.length; } };
   const walk = (o, depth) => { if (!o || typeof o !== "object" || depth > 30 || size >= max) return;
     if (Array.isArray(o)) { o.forEach((x) => walk(x, depth + 1)); return; }
     add(recordLine(Object.entries(o))); for (const v of Object.values(o)) if (v && typeof v === "object") walk(v, depth + 1); };
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
-    const at = m[1], body = m[2];
-    if (/ld\+json/i.test(at) || /\bsrc=/i.test(at)) continue;
-    if (/application\/json/i.test(at) || /__NEXT_DATA__/.test(at)) { try { walk(JSON.parse(body), 0); } catch (e) {} continue; }
+  T.list.forEach((t, k) => {
+    if (t.kind !== "raw" || t.name !== "script") return;
+    const at = T.list[k - 1].attr, body = t.text;
+    if (/ld\+json/i.test(at) || /\bsrc=/i.test(at)) return;
+    if (/application\/json/i.test(at) || /__NEXT_DATA__/.test(at)) { try { walk(JSON.parse(body), 0); } catch (e) {} return; }
     // A small hand-written script holding a list of things: { name:'Boyd Allen', role:'Head MMA Coach', … }
     if (body.length < 60000 && /\b(name|title|role|price|time|day|coach|plan|bio)\s*:/i.test(body)) {
-      for (const chunk of body.split("{")) { const pairs = [...chunk.split("}")[0].matchAll(/([A-Za-z_][\w]*)\s*:\s*(['"`])((?:\\.|(?!\2)[^\\])*)\2/g)].map((x) => [x[1], x[3].replace(/\\(['"`])/g, "$1")]); add(recordLine(pairs)); }
+      // (a record is short: each one is cut at 3,000 characters, so the pattern below can't run long)
+      for (const chunk of body.split("{")) { const pairs = [...chunk.split("}")[0].slice(0, 3000).matchAll(/([A-Za-z_][\w]*)\s*:\s*(['"`])((?:\\.|(?!\2)[^\\])*)\2/g)].map((x) => [x[1], x[3].replace(/\\(['"`])/g, "$1")]); add(recordLine(pairs)); }
     }
-  }
+  });
   return out.join("\n");
 }
 // Wix "embed HTML" blocks and iframes on the same site: separate little pages the browser loads into this one.
-function embedSources(html, base) {
-  const out = new Set();
-  for (const m of html.matchAll(/<iframe\b[^>]*\bsrc="([^"]+)"/gi)) { try { const u = new URL(m[1].replace(/&amp;/g, "&"), base); if (u.origin === new URL(base).origin || /\.filesusr\.com$/i.test(u.hostname)) out.add(u.href); } catch (e) {} }
-  const wix = [...html.matchAll(/https:\/\/siteassets\.parastorage\.com\/pages\/pages\/thunderbolt\?[^"\s]*module=thunderbolt-features[^"\s]*/g)].map((m) => m[0].replace(/&amp;/g, "&"));
-  const fileHost = (html.match(/staticHTMLComponentUrl=([^&"]+)/) || [])[1];
+function embedSources(T, base) {
+  const out = new Set(), html = T.s;
+  for (const t of T.list) { if (!isOpen(t, "iframe")) continue; const src = attrs(t.attr).src; if (!src) continue; try { const u = new URL(src, base); if (u.origin === new URL(base).origin || /\.filesusr\.com$/i.test(u.hostname)) out.add(u.href); } catch (e) {} }
+  const wix = [...html.matchAll(/https:\/\/siteassets\.parastorage\.com\/pages\/pages\/thunderbolt\?[^"\s]{0,3000}?module=thunderbolt-features[^"\s]{0,3000}/g)].map((m) => m[0].replace(/&amp;/g, "&"));
+  const fileHost = (html.match(/staticHTMLComponentUrl=([^&"]{1,500})/) || [])[1];
   return { frames: [...out], wixData: [...new Set(wix)].slice(0, 3), wixFiles: fileHost ? decodeURIComponent(fileHost) : "" };
 }
 const TEMPLATE_FILLER = /info@mysite\.com|123-456-7890|lorem ipsum|your (business|company) name here/i;
 
+// One page: its title, meta tags, links, pictures, icons, structured data and text. Pages are read up to 300 KB, in linear
+// time whatever they hold (see htmlscan.js); the whole import also runs in a worker that's stopped if it ever stalls (runImport).
 function parsePage(html, base) {
-  const title = decode((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "").replace(/\s+/g, " ").trim();
+  const T = scan.tokens(html), { s, list } = T;
+  const firstOpen = (name, from = 0) => { for (let k = from; k < list.length; k++) if (isOpen(list[k], name)) return k; return -1; };
+  const nextClose = (name, from) => { for (let k = from + 1; k < list.length; k++) { const t = list[k]; if (t.kind === "tag" && t.close && t.name === name) return k; } return -1; };
+  const ti = firstOpen("title"), tc = ti < 0 ? -1 : nextClose("title", ti);
+  const title = tc < 0 ? "" : decode(s.slice(list[ti].j, list[tc].i)).replace(/\s+/g, " ").trim();
   const meta = {};
-  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) { const a = attrs(m[0]); const k = (a.property || a.name || a.itemprop || "").toLowerCase(); if (k && a.content && !meta[k]) meta[k] = a.content.trim(); }
+  for (const t of list) if (isOpen(t, "meta")) { const a = attrs(t.attr); const k = (a.property || a.name || a.itemprop || "").toLowerCase(); if (k && a.content && !meta[k]) meta[k] = a.content.trim(); }
   const abs = (h) => { try { return new URL(h, base).href; } catch (e) { return null; } };
-  const links = [];
-  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi)) { const a = attrs("<a " + m[1]); if (!a.href) continue; links.push({ href: a.href.trim(), abs: abs(a.href.trim()), text: squash(decode(m[2].replace(/<[^>]+>/g, " "))), label: a["aria-label"] || a.title || "" }); }
-  const imgs = [];
-  for (const m of html.matchAll(/<img\b[^>]*>/gi)) { const a = attrs(m[0]); const src = a.src || a["data-src"] || a["data-image"] || (a.srcset || "").split(/\s+/)[0]; if (src && !/^data:/i.test(src)) imgs.push({ src: abs(src), alt: a.alt || "", cls: (a.class || "") + " " + (a.id || "") }); }
-  const icons = [];
-  for (const m of html.matchAll(/<link\b[^>]*>/gi)) { const a = attrs(m[0]); const rel = (a.rel || "").toLowerCase(); if (/icon/.test(rel) && a.href) icons.push({ href: abs(a.href), rel, size: parseInt((a.sizes || "0").split("x")[0], 10) || 0 }); }
-  const ld = [];
-  for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-    try { const j = JSON.parse(m[1].trim()); const walk = (o) => { if (!o || typeof o !== "object") return; if (Array.isArray(o)) return o.forEach(walk); if (o["@graph"]) walk(o["@graph"]); if (o["@type"]) ld.push(o); }; walk(j); } catch (e) { /* skip bad JSON-LD */ }
+  const links = [], aClose = scan.closers(list, ["a"]);
+  for (let k = 0; k < list.length; k++) { // each <a> runs to the first </a> after it (one inside another is part of it)
+    if (!isOpen(list[k], "a")) continue; const c = aClose.get(k); if (c < 0) continue;
+    const a = attrs(list[k].attr); if (a.href) links.push({ href: a.href.trim(), abs: abs(a.href.trim()), text: squash(decode(textBetween(T, k, c))), label: a["aria-label"] || a.title || "" });
+    k = c;
   }
+  const imgOf = (t, srcset) => { const a = attrs(t.attr); const src = a.src || a["data-src"] || a["data-image"] || (srcset ? (a.srcset || "").split(/\s+/)[0] : ""); return src && !/^data:/i.test(src) ? { src: abs(src), alt: a.alt || "", cls: (a.class || "") + " " + (a.id || "") } : null; };
+  const imgs = list.filter((t) => isOpen(t, "img")).map((t) => imgOf(t, true)).filter(Boolean);
+  const icons = [];
+  for (const t of list) { if (!isOpen(t, "link")) continue; const a = attrs(t.attr); const rel = (a.rel || "").toLowerCase(); if (/icon/.test(rel) && a.href) icons.push({ href: abs(a.href), rel, size: parseInt((a.sizes || "0").split("x")[0], 10) || 0 }); }
+  const ld = [];
+  list.forEach((t, k) => {
+    if (t.kind !== "raw" || t.name !== "script" || !/^application\/ld\+json$/i.test((attrs(list[k - 1].attr).type || "").trim())) return;
+    try { const j = JSON.parse(t.text.trim()); const walk = (o) => { if (!o || typeof o !== "object") return; if (Array.isArray(o)) return o.forEach(walk); if (o["@graph"]) walk(o["@graph"]); if (o["@type"]) ld.push(o); }; walk(j); } catch (e) { /* skip bad JSON-LD */ }
+  });
   // Header area first: logos usually sit there.
-  const headerHtml = (html.match(/<header\b[\s\S]*?<\/header>/i) || [""])[0];
-  const headerImgs = [];
-  for (const m of headerHtml.matchAll(/<img\b[^>]*>/gi)) { const a = attrs(m[0]); const src = a.src || a["data-src"] || a["data-image"]; if (src && !/^data:/i.test(src)) headerImgs.push({ src: abs(src), alt: a.alt || "", cls: (a.class || "") + " " + (a.id || "") }); }
+  const hi = firstOpen("header"), hc = hi < 0 ? -1 : nextClose("header", hi);
+  const headerImgs = hc < 0 ? [] : list.slice(hi, hc).filter((t) => isOpen(t, "img")).map((t) => imgOf(t, false)).filter(Boolean);
   // A blog post, by the site's own page type (SEO plugins label ordinary pages "article" with dates too, so those don't count).
-  const bodyCls = (html.match(/<body\b[^>]*class="([^"]*)"/i) || [])[1] || "";
+  const bi = firstOpen("body"), bodyCls = bi < 0 ? "" : attrs(list[bi].attr).class || "";
   const isPost = /\bsingle-post\b/.test(bodyCls) || (/collection-type-blog/.test(bodyCls) && /view-item/.test(bodyCls));
-  const hidden = hiddenData(html);
-  let text = htmlToText(html) + (hidden ? "\n[Data on this page]\n" + hidden : "");
+  const hidden = hiddenData(T);
+  let text = htmlToText(s, T) + (hidden ? "\n[Data on this page]\n" + hidden : "");
   if (TEMPLATE_FILLER.test(text)) text = text.split("\n").filter((l) => !TEMPLATE_FILLER.test(l)).join("\n") + "\n[This page contains website-builder sample content; its plans and prices may not be real.]";
-  return { url: base, title, meta, links, imgs, headerImgs, icons, ld, isPost, embeds: embedSources(html, base), text };
+  return { url: base, title, meta, links, imgs, headerImgs, icons, ld, isPost, embeds: embedSources(T, base), text };
 }
 
 /* ---------------- finding the useful pages ---------------- */
@@ -385,7 +435,7 @@ function plainCoaches(pages) {
     if (!/coach|instructor|team|about|staff/i.test(p.url + " " + p.title)) continue;
     const lines = p.text.split("\n");
     lines.forEach((line, i) => {
-      const nameLike = /^[A-Z][a-zA-Z'’.-]+(?:\s+(?:[A-Z][a-zA-Z'’.-]+|de|da|dos|van|von|du)){1,3}$/.test(line) && line.length <= 40 && !RANK_RE.test(line) && !DAY_RE.test(line);
+      const nameLike = line.length <= 40 && /^[A-Z][a-zA-Z'’.-]+(?:\s+(?:[A-Z][a-zA-Z'’.-]+|de|da|dos|van|von|du)){1,3}$/.test(line) && !RANK_RE.test(line) && !DAY_RE.test(line);
       DAY_RE.lastIndex = 0;
       if (!nameLike) return;
       const next = lines[i + 1] || "", rm = next.match(RANK_RE);
@@ -442,7 +492,8 @@ function plainRead(pages) {
   let phone = clip(ld.telephone || (tel ? decodeURIComponent(tel.href.slice(4)) : ""), 40);
   let email = clip(ld.email || (mail ? decodeURIComponent(mail.href.slice(7).split("?")[0]) : ""), 120).replace(/^mailto:/i, "");
   const all = pages.map((p) => p.text).join("\n");
-  if (!email) { const m = all.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}\b/i); if (m) email = m[0]; }
+  // An address in the text: looked for around each "@" (a pattern run over the whole text backtracks on long runs of letters).
+  if (!email) { for (let i = all.indexOf("@"), n = 0; i >= 0 && !email && n < 200; i = all.indexOf("@", i + 1), n++) { const m = all.slice(Math.max(0, i - 64), i + 200).match(/\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,190}\.[A-Z]{2,24}\b/i); if (m) email = m[0]; } }
   if (!phone) { const m = all.match(/(?:tel|phone|call|cell|mobile|whats ?app)[^\d+]{0,12}(\+?\d[\d ()-]{7,16}\d)/i); if (m) phone = clip(m[1], 40); }
   let address = addrText(ld.address);
   if (!address) {

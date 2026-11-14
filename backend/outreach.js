@@ -49,12 +49,13 @@ function priceLine() {
 function parseLines(text) {
   const out = [];
   for (const raw of String(text || "").split(/\r?\n/)) {
-    const line = raw.trim(); if (!line) continue;
+    // A line is cut at 300 characters before the patterns below run (they'd take seconds on a 20,000-character line).
+    const line = raw.trim().slice(0, 300); if (!line) continue;
     const email = (line.match(/[^\s,;<>()"']+@[^\s,;<>()"']+\.[a-z]{2,24}/i) || [""])[0];
     const rest = line.replace(email, " ");
     const url = (rest.match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,24}(?::\d+)?(?:\/[^\s,;]*)?|https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/[^\s,;]*)?/i) || [""])[0];
     const name = rest.replace(url, " ").replace(/[<>()"'|\t,;]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-    out.push({ line: line.slice(0, 300), url, name, email: email.toLowerCase() });
+    out.push({ line, url, name, email: email.toLowerCase() });
   }
   return out;
 }
