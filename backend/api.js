@@ -93,6 +93,7 @@ const EMAIL = (a) => `coalesce(${a}.email, (select pe.email from users pe where 
 function makeApi(pool, { secureCookies, build }) {
   const api = express.Router();
   const q = (text, params) => pool.query(text, params);
+  ai.useStore(ai.dbStore(q)); // the daily AI budget is kept in the database, shared by every server (see ai.take)
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
   // Adding something from a form (a payment, a class, a student): the app sends one key per opened form, so the same form sent twice
   // (a double tap, or sent again after the answer got lost on bad signal) gets the first answer back instead of adding it twice.
@@ -1476,8 +1477,8 @@ function makeApi(pool, { secureCookies, build }) {
       if (!type || !/^image\/(jpeg|png|webp|gif)$/.test(type)) fail(400, "Those need to be screenshots (pictures)."); if (data.length > 4 * 1024 * 1024) fail(413, "One of those pictures is too big."); return { type, data }; });
     if (limited("ppl:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of screenshots. Try again in a while.");
     let rows;
-    try { rows = await people.readPeople({ client, images }); }
-    catch (e) { console.error("read-people:", e.message); fail(502, "Couldn't read those screenshots just now. Try again, or paste the names."); }
+    try { rows = await people.readPeople({ client, images, meter: { gymId: u.gym_id, feature: "screenshots" } }); }
+    catch (e) { if (e.code === "AI_BUDGET") fail(503, "Reading screenshots is paused for today. Paste the names instead, or try again tomorrow."); console.error("read-people:", e.message); fail(502, "Couldn't read those screenshots just now. Try again, or paste the names."); }
     const { seenPh, sameName, digits } = await whoIsIn(u.gym_id);
     res.json({ people: rows.map((r) => ({ ...r, already: !!((r.name && sameName(r.name, r.phone, "")) || (!r.parentName && r.phone && seenPh.has(digits(r.phone)))) })) });
   }));
@@ -1803,7 +1804,7 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/coach/competitions/import", wrap(async (req, res) => {
     const u = needCoach(req);
     if (limited("cimp:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
-    try { res.json(await importer.importEvent(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    try { res.json(await importer.runImport("event", clean(req.body?.url, 500), { meter: { gymId: u.gym_id, feature: "competition" }, log: (m) => console.warn(m) })); }
     catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
   }));
   api.post("/coach/competitions", wrap(async (req, res) => {
@@ -1991,7 +1992,8 @@ function makeApi(pool, { secureCookies, build }) {
     await q("update gyms set import_job=$1 where id=$2", [job, u.gym_id]);
     const run = (async () => {
       let done;
-      try { const r = await importer.importSite(url, { log: (m) => console.warn(m) }); done = { ...job, status: "done", finishedAt: new Date().toISOString(), result: r }; }
+      // In a worker with a deadline (importer.runImport): an import that runs too long ends as failed, and frees the gym's slot.
+      try { const r = await importer.runImport("site", url, { meter: { gymId: u.gym_id, feature: "import" }, log: (m) => console.warn(m) }); done = { ...job, status: "done", finishedAt: new Date().toISOString(), result: r }; }
       catch (e) { done = { ...job, status: "error", finishedAt: new Date().toISOString(), error: e instanceof importer.ImportError ? e.message : "Couldn't read that site just now. Try again in a minute." }; if (!(e instanceof importer.ImportError)) console.error("import job:", e.message); }
       await q("update gyms set import_job=$1 where id=$2", [done, u.gym_id]).catch(() => {});
     })().finally(() => jobs.delete(u.gym_id));
@@ -2015,14 +2017,15 @@ function makeApi(pool, { secureCookies, build }) {
       .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: clean(m.text, 2000) })).filter((m) => m.content);
     if (!msgs.length || msgs[msgs.length - 1].role !== "user") fail(400, "Say what you'd like to do.");
     while (msgs.length && msgs[0].role !== "user") msgs.shift();
-    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths } });
+    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths } })
+      .catch((e) => { if (e.code === "AI_BUDGET") fail(503, "The assistant is paused for today. Make the change in the app, or try again tomorrow."); throw e; });
     await q("update gyms set setup = setup || $1 where id=$2", [{ assistantUsed: true }, u.gym_id]);
     res.json(out);
   }));
   api.post("/coach/import", wrap(async (req, res) => {
     const u = needCoach(req);
     if (limited("imp:" + u.gym_id, 12, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
-    try { res.json(await importer.importSite(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    try { res.json(await importer.runImport("site", clean(req.body?.url, 500), { meter: { gymId: u.gym_id, feature: "import" }, log: (m) => console.warn(m) })); }
     catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
   }));
   // Save the gym's details. The weekly timetable is what the calendar is made from: rows keep their ids, a changed row moves its
@@ -2453,7 +2456,7 @@ function makeApi(pool, { secureCookies, build }) {
     const c = aiClient();
     setImmediate(async () => {
       try {
-        const read = await pop.readPop({ client: c, files: [file] });
+        const read = await pop.readPop({ client: c, files: [file], meter: { gymId: u.gym_id, feature: "proof" } });
         const amount = row.amount_cents || read.amountCents || 0, mismatch = row.amount_cents && read.amountCents && read.amountCents !== row.amount_cents;
         const otherRef = pop.refsIn(read.reference).find((r) => r !== (u.pay_ref || "")) || null;
         const paidOn = on || read.date || row.paid_on;

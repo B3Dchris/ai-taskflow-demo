@@ -362,7 +362,7 @@ function makeQueue(q, log = () => {}, built = async () => {}) {
   async function run(id) {
     const p = (await q("select id, website, status from prospects where id=$1", [id])).rows[0]; if (!p || p.status === "optedout") return;
     try {
-      const r = await importer.importSite(p.website, { log });
+      const r = await importer.runImport("site", p.website, { meter: { gymId: null, feature: "outreach" }, log });
       const img = await pickLogo(r.logos), prof = { ...r.profile }, b = prof.brand || {}; delete prof.brand;
       // Still "reading" until the gym is built from it too, so nobody acts on a half-built gym.
       await q(`update prospects set name=$2, profile=$3, logo=$4, logo_type=$5, accent=$6, method=$7, import_error=null, imported_at=now(),

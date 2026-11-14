@@ -459,6 +459,19 @@ create table if not exists site_salt(day date primary key, salt text not null);
 -- Where someone came from before signing up (the app sends it; see backend/visits.js signupSource), and when they made their login.
 alter table users add column if not exists signup_source jsonb;
 alter table users add column if not exists signed_up_at timestamptz;
+-- The most a saved card is charged at once without the member saying so (twice their monthly fee when they saved it; see autoCap).
+alter table autopay add column if not exists cap_cents int;
+-- Claude use per day (UTC): scope 'all' is everything, 'gym:<id>' one gym. backend/ai.js keeps both under the daily budget.
+create table if not exists ai_usage(
+  day date not null,
+  scope text not null,
+  calls int not null default 0,
+  tokens bigint not null default 0,
+  primary key(day, scope)
+);
+-- Each proof file's size, for the per-gym storage quota and the daily upload budget (see api.js proofRoom).
+alter table pop_files add column if not exists size int generated always as (octet_length(data)) stored;
+create index if not exists pop_files_created on pop_files(created_at);
 `;
 
 // Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.
@@ -529,7 +542,8 @@ const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not e
   and ${LONGEST("g.id")} is not null`;
 
 // Proofs a coach marked "not a payment" leave the coach's list after 30 days. Delete them then (their files go with them).
-const purgeRejected = (pool) => pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
+// AI use is kept 90 days (the admin overview shows today's).
+const purgeRejected = async (pool) => { await pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'"); await pool.query("delete from ai_usage where day < current_date - 90"); };
 
 // Pauses that have run out end on their own: the member is active again and the head coach (and they) get a note on Home.
 // Safe to run any number of times, on any number of servers at once: one statement ends each pause once, and only the
