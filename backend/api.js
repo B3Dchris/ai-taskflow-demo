@@ -1023,6 +1023,8 @@ function makeApi(pool, { secureCookies, build }) {
     const db = await pool.connect();
     try {
       await db.query("begin");
+      // Like a booking: the member first (so a weekly limit can't be beaten by checking in to several classes at once), then the class.
+      await db.query("select id from users where id=$1 for update", [u.id]);
       const c = (await db.query("select * from classes where id=$1 and gym_id=$2 for update", [intOr(req.params.id, 0), u.gym_id])).rows[0];
       if (!c) fail(404, "That class doesn't exist.");
       const start = new Date(c.starts_at).getTime(), now = Date.now();
@@ -1594,7 +1596,8 @@ function makeApi(pool, { secureCookies, build }) {
     return `${mail.appUrl()}/app/?join=${u.student_code}&claim=${tok}`;
   }
   // Two records for one person (added by the coach, then signed up on their own): fold the one that isn't on the app
-  // into their account. Payments, classes, competitions and the coach's plan and notes move over.
+  // into their account. Payments, classes, competitions and the coach's plan and notes move over. Only the head coach merges:
+  // it moves payments and sets the account's plan and fee.
   api.post("/coach/students/:id/merge", wrap(async (req, res) => {
     const u = needCoach(req); if (!isHead(u)) fail(403, "Only the head coach can merge members: it moves their payments and plan. Ask them to do it.");
     const o = await ownStudent(u, req.params.id), a = await ownStudent(u, req.body?.into);
@@ -1668,6 +1671,8 @@ function makeApi(pool, { secureCookies, build }) {
   const PLAN_STATUS = ["active", "trial", "paused", "cancelled"];
   api.patch("/coach/students/:id", wrap(async (req, res) => {
     const u = needCoach(req), st = await ownStudent(u, req.params.id), b = req.body || {};
+    // Another coach's record (the head coach's too) is the head coach's to change: other coaches change only their own.
+    if (!isHead(u) && st.role === "coach" && String(st.id) !== String(u.id)) fail(403, "Only the head coach can change another coach's details.");
     if (!isHead(u) && ["feeCents", "planId", "planStatus", "planStarted", "pauseMonths"].some((k) => b[k] !== undefined)) fail(403, "Only the head coach can change plans and fees.");
     const belt = b.belt !== undefined ? (BELTS.includes(b.belt) ? b.belt : fail(400, "Pick a belt.")) : st.belt;
     const stripes = b.stripes !== undefined ? Math.min(4, Math.max(0, intOr(b.stripes, 0))) : st.stripes;
@@ -1775,6 +1780,15 @@ function makeApi(pool, { secureCookies, build }) {
     if (!(await canPick(u, owed))) return [];
     return (await q("select * from plans where gym_id=$1 and active order by price_cents, name", [u.gym_id])).rows.filter((p) => realPlan(p) && !PRIV_RATE.test(p.name)).map(planOut);
   }
+  // A plan a member picks for themselves starts as a free trial: one per gym in 90 days. Someone who had one there and left and
+  // joined again since is on the plan for real (fees start). A coach can still give anyone a trial (Members).
+  async function selfTrial(u) {
+    if (u.plan_status === "trial") return;
+    const again = (await q("select trial_gym_id=$2 and trial_at > current_date - 90 as again from users where id=$1", [u.id, u.gym_id])).rows[0];
+    if (again && again.again) return setStatus(u, u, "active");
+    await setStatus(u, u, "trial");
+    await q("update users set trial_gym_id=$2, trial_at=current_date where id=$1", [u.id, u.gym_id]);
+  }
   // A new member picks their plan (when they join, or from their membership card). It starts as a trial: free for 14 days or until
   // the coach confirms their first payment, when it becomes active.
   api.post("/me/plan", wrap(async (req, res) => {
@@ -1782,7 +1796,7 @@ function makeApi(pool, { secureCookies, build }) {
     const ps = await pickablePlans(u); if (!ps.length) fail(400, "You're already on a plan. Ask your coach to change it.");
     const p = ps.find((x) => x.id === String(req.body?.planId)); if (!p) fail(404, "That plan isn't on offer.");
     await q("update users set plan_id=$1, plan_started=$2 where id=$3", [p.id, await todayIn(u), u.id]);
-    await setStatus(u, u, "trial");
+    await selfTrial(u);
     tellCoach(u.gym_id, await headCoach(u.gym_id), "joined", `${u.name} picked the ${p.name} plan. They're on a free trial until you confirm their first payment.`).catch(() => {});
     res.json({ ok: true, plan: p, me: me(await reMe(u)) });
   }));
@@ -2562,7 +2576,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     // "What's it for?" can be a plan, for a new member joining it: they're on it as a trial now, and for real once the coach confirms this.
     const plan = !pack && b.planId ? (await pickablePlans(u)).find((x) => x.id === String(b.planId)) || fail(404, "That plan isn't on offer.") : null;
     if (plan && String(u.plan_id) !== plan.id) { await q("update users set plan_id=$1, plan_started=$2 where id=$3", [plan.id, await todayIn(u), u.id]); u.plan_id = plan.id; }
-    if (plan && u.plan_status !== "trial") await setStatus(u, u, "trial");
+    if (plan && u.plan_status !== "trial") await selfTrial(u);
     const typed = intOr(b.amountCents, 0) || (pack ? pack.price_cents : 0) || (plan ? plan.priceCents : 0), on = isDay(b.paidOn) ? b.paidOn : "";
     const row = await addProof({ u, gymId: u.gym_id, userId: u.id, read: { amountCents: typed > 0 && typed < 1e8 ? typed : 0, date: on, reference: await payRef(u.id), reading: true }, source: "student", files: [file], note: b.note, method: "eft", pack, planId: plan ? plan.id : null });
     res.status(201).json({ payment: payOut(row) });

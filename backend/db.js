@@ -574,6 +574,14 @@ async function tick(pool) {
             split_part(b.name,' ',1) || '''s pause ended, so they''re active again. Their fees start again from ' || b.from_day || '.'
           from back b join gyms g on g.id=b.gym_id where g.head_coach_id is not null)
         insert into notices(gym_id,user_id,kind,title,body) select gym_id, id, 'resumed', 'Welcome back', 'Your pause is over and your membership is active again. You can book classes.' from back`);
+      // Free trials that have run out end on their own: the member is on their plan for real and its fees start. The trial keeps the
+      // months it already made free, up to the month before the one it ran out in (like a coach making them active: see setStatus).
+      await db.query(`with t as (select u.id, u.gym_id, (date_trunc('month', u.trial_ends + 1) - interval '1 month')::date as until from users u join gyms g on g.id=u.gym_id
+            where u.plan_status='trial' and u.trial_ends is not null and u.trial_ends < (now() at time zone g.timezone)::date),
+          gone as (delete from plan_breaks b using t where b.user_id=t.id and b.gym_id=t.gym_id and b.kind='trial' and b.ended_at is null and b.from_month > t.until returning b.id),
+          kept as (update plan_breaks b set until_month=least(coalesce(b.until_month, t.until), t.until), ended_at=now() from t
+            where b.user_id=t.id and b.gym_id=t.gym_id and b.kind='trial' and b.ended_at is null and b.from_month <= t.until returning b.id)
+        update users u set plan_status='active' from t where u.id=t.id`);
     }
     await db.query("commit");
   } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
