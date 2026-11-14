@@ -7,6 +7,7 @@ const visits = require("./backend/visits");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const crypto = require("crypto");
 
 const ROOT = path.join(__dirname, "web");
 const PORT = Number(process.env.PORT) || 10000;
@@ -30,7 +31,7 @@ const COMPRESS = new Set([".html", ".js", ".json", ".webmanifest", ".css", ".svg
 // Google Analytics 4: only when GA_ID looks like a real measurement ID. analytics.js waits for the visitor's consent.
 const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_ID || "") ? process.env.GA_ID : null;
 // The file's hash goes in the address, so Cloudflare and browsers fetch a new copy whenever it changes.
-const GA_VER = (() => { try { return require("crypto").createHash("sha256").update(fs.readFileSync(path.join(ROOT, "analytics.js"))).digest("hex").slice(0, 8); } catch (e) { return "1"; } })();
+const GA_VER = (() => { try { return crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, "analytics.js"))).digest("hex").slice(0, 8); } catch (e) { return "1"; } })();
 const GA_TAG = GA_ID ? `<script>window.JF_GA="${GA_ID}"</script><script src="/analytics.js?v=${GA_VER}" defer></script>` : "";
 // Where a visitor first came from (utm tags, a Google Ads click id, or the site that linked here), kept in this browser for 30 days
 // and sent with their sign-up only (see signupSource in backend/visits.js). No cookie, nothing sent anywhere else, so no consent needed.
@@ -42,27 +43,17 @@ if(r)o.ref=r.slice(0,100);if(!n&&!r)return;var s=null;try{s=JSON.parse(localStor
 if(s&&Date.now()-s.t<30*864e5&&(!n||s.utm_source||s.gclid||s.gbraid||s.wbraid))return;
 o.land=L.pathname.slice(0,120);o.t=Date.now();localStorage.setItem(K,JSON.stringify(o))}catch(e){}})();</script>`;
 
+const { cspFor, scriptHashes } = require("./backend/csp");
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
-  "Content-Security-Policy": [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://i.ytimg.com https://*.google-analytics.com https://www.googletagmanager.com",
-    "media-src 'self' blob:",
-    "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
-    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
-    "manifest-src 'self'",
-    "worker-src 'self'",
-    "base-uri 'self'",
-    "form-action 'self' https://www.payfast.co.za https://sandbox.payfast.co.za",
-    "frame-ancestors 'self'",
-  ].join("; "),
+  "X-Frame-Options": "SAMEORIGIN",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  // Browsers remember to use HTTPS for a year (the live site only: tests and local runs are plain http).
+  ...(process.env.NODE_ENV === "production" ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+  "Content-Security-Policy": cspFor(),
 };
-
 // Load every file once at startup (the whole site is under 1 MB), with a gzip copy for text.
 const files = new Map();
 (function load(dir) {
@@ -74,7 +65,7 @@ const files = new Map();
     let body = fs.readFileSync(full);
     if (ext === ".html") body = Buffer.from(body.toString("utf8").replace("</head>", SRC_TAG + GA_TAG + "\n</head>"));
     files.set(rel, { body, gz: COMPRESS.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null, ext,
-      type: TYPES[ext] || "application/octet-stream" });
+      type: TYPES[ext] || "application/octet-stream", sec: ext === ".html" ? { ...SECURITY, "Content-Security-Policy": cspFor(scriptHashes(body.toString("utf8"))) } : SECURITY });
   }
 })(ROOT);
 
@@ -137,7 +128,7 @@ function serveStatic(req, res) {
   const rel = files.has(pathname) ? pathname : pathname.startsWith("/app/") && !path.extname(pathname) ? "/app/index.html" : null;
   if (!rel) {
     const nf = files.get("/404.html");
-    if (nf && !path.extname(pathname)) { res.writeHead(404, { "Content-Type": nf.type, "Cache-Control": "no-cache", ...SECURITY }); return res.end(req.method === "HEAD" ? undefined : nf.body); }
+    if (nf && !path.extname(pathname)) { res.writeHead(404, { "Content-Type": nf.type, "Cache-Control": "no-cache", ...nf.sec }); return res.end(req.method === "HEAD" ? undefined : nf.body); }
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY });
     return res.end("Not found");
   }
@@ -157,7 +148,7 @@ function serveStatic(req, res) {
   }
   const gzip = f.gz && /\bgzip\b/.test(req.headers["accept-encoding"] || "");
   const body = gzip ? f.gz : f.body;
-  const headers = { "Content-Type": f.type, "Content-Length": body.length, "Cache-Control": cacheFor(rel), Vary: "Accept-Encoding", ...SECURITY };
+  const headers = { "Content-Type": f.type, "Content-Length": body.length, "Cache-Control": cacheFor(rel), Vary: "Accept-Encoding", ...f.sec };
   if (gzip) headers["Content-Encoding"] = "gzip";
   res.writeHead(200, headers);
   res.end(req.method === "HEAD" ? undefined : body);
@@ -186,7 +177,8 @@ async function main() {
     const roll = () => rollAll(pool).catch((e) => console.warn("timetable:", e.message));
     roll(); setInterval(roll, 3600e3).unref();
     const api = makeApi(pool, { secureCookies: process.env.NODE_ENV === "production", build: BUILD });
-    app.use("/api", gzipJson, api);
+    // API answers are for this site's own pages only: no other site can embed them (an image, a script) in its pages.
+    app.use("/api", (req, res, next) => { res.set("Cross-Origin-Resource-Policy", "same-origin"); next(); }, gzipJson, api);
     // Private previews of gyms on JitsFlow, for their owners (made by platform admins: see backend/outreach.js).
     app.use("/try", require("./backend/outreach").makePublic(pool));
     // Every 15 minutes: automatic fee reminders (on each gym's due day and 7 days later) and "we miss you" notes. Safe on several servers.

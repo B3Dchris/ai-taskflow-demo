@@ -3,6 +3,7 @@
 // the real app as a read-only preview of their gym, where they claim it by signing up.
 // Platform admins (JF_ADMIN_EMAILS) make and send these from the app; the admin routes are in api.js.
 "use strict";
+const { cspFor, nonce } = require("./csp");
 const crypto = require("crypto");
 const express = require("express");
 const brand = require("./brand");
@@ -223,13 +224,14 @@ const BASE_CSS = `*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}bod
 a{color:var(--ink-acc)}.wrap{max-width:1080px;margin:0 auto;padding:0 16px}h1,h2{font-family:'Saira Condensed','Arial Narrow',Arial,sans-serif;font-weight:800;line-height:1.05;margin:0;letter-spacing:.005em}
 .btn{display:inline-block;background:var(--btn);color:var(--on);font-weight:700;font-size:18px;line-height:1.25;text-decoration:none;padding:16px 22px;border-radius:12px;border:0;cursor:pointer;text-align:center;font-family:inherit}
 .btn:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--ink-acc);outline-offset:3px}.small{font-size:15px;color:#4e5869}.muted{color:#4e5869}`;
-function shell({ title, accent, body, extraCss = "", script = "" }) {
+// nonce: the response's script nonce (its policy allows only that inline script; see csp.js).
+function shell({ title, accent, body, extraCss = "", script = "", nonce = "" }) {
   const acc = brand.isHex(accent) ? accent : brand.JF_ACCENT, b = brand.button(acc);
   return `<!doctype html><html lang="en-ZA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="${acc}">
 <title>${esc(title)}</title><link rel="icon" href="/icons/icon-192.png">${FONTS}
 <style>:root{--acc:${acc};--btn:${b.bg};--on:${b.fg};--on-acc:${brand.textOn(acc)};--ink-acc:${brand.ink(acc)};--tint:${brand.tint(acc, 0.09)};color-scheme:light}${BASE_CSS}${extraCss}</style></head>
-<body>${body}${script ? `<script>${script}</script>` : ""}</body></html>`;
+<body>${body}${script ? `<script${nonce ? ` nonce="${esc(nonce)}"` : ""}>${script}</script>` : ""}</body></html>`;
 }
 const SIMPLE_CSS = `.simple{max-width:560px;margin:12vh auto 0;padding:0 16px}.simple h1{font-size:40px;margin-bottom:12px}.simple p{margin:0 0 16px}.simple form{margin:20px 0}`;
 function simplePage(title, h1, paras, { accent, extra = "" } = {}) {
@@ -238,7 +240,7 @@ function simplePage(title, h1, paras, { accent, extra = "" } = {}) {
 const notFoundPage = () => simplePage("Page not found · JitsFlow", "This page isn't here", ["The link may be old, or the page was removed. If you were sent it about your gym, reply to that email and we'll sort it out."]);
 
 // The preview: the gym's own look, what its members would see on their phones, and one button to claim it.
-function renderPreview(p, { base = "", now = new Date() } = {}) {
+function renderPreview(p, { base = "", now = new Date(), nonce = "" } = {}) {
   const gym = nameOf(p), acc = accentOf(p), tt = ttOf(p), week = weekOf(now), price = priceLine(), prof = p.profile || {};
   const claim = `${base}/app/?gym=${encodeURIComponent(p.token)}`, cta = `Claim ${gym}, free for ${price.months} month${price.months === 1 ? "" : "s"}`;
   const logo = p.logo ? `${base}/try/${esc(p.token)}/logo` : null, lb = p.logo ? logoBox(p, 40, 150) : null, lbs = p.logo ? logoBox(p, 32, 110) : null;
@@ -311,7 +313,7 @@ function renderPreview(p, { base = "", now = new Date() } = {}) {
   // A view counts once the page is open and on screen for a moment (email scanners that only fetch the link don't count).
   const script = `(function(){var s=0;function v(){if(s||document.visibilityState!=="visible")return;s=1;try{fetch(${JSON.stringify(`${base}/try/${p.token}/view`)},{method:"POST",headers:{"x-jf":"1"},credentials:"same-origin",keepalive:true})}catch(e){}}
 setTimeout(v,1500);document.addEventListener("visibilitychange",function(){setTimeout(v,1500)})})();`;
-  return shell({ title: `${gym} on JitsFlow`, accent: acc, body, extraCss: css, script });
+  return shell({ title: `${gym} on JitsFlow`, accent: acc, body, extraCss: css, script, nonce });
 }
 
 /* ---------------- stored rows ---------------- */
@@ -389,7 +391,9 @@ function makePublic(pool) {
   const seen = new Map(); // ip|token -> last counted view
   setInterval(() => { const now = Date.now(); for (const [k, t] of seen) if (now - t > 3600e3) seen.delete(k); }, 600e3).unref();
   const byToken = (t) => findToken(q, t);
-  const page = (res, status, html) => res.status(status).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" }).send(html);
+  // n: the nonce of the page's own script, if it has one (no other inline script runs).
+  const page = (res, status, html, n = "") => res.status(status).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": cspFor(n ? `'nonce-${n}'` : "") }).send(html);
   const sessionEmail = async (req) => {
     const m = String(req.headers.cookie || "").match(/(?:^|;\s*)jf_s=([0-9a-f]{64})/); if (!m) return null;
     const x = (await q("select u.email from sessions s join users u on u.id=s.user_id where s.token_hash=$1 and s.expires_at>now()", [sha(m[1])])).rows[0];
@@ -404,7 +408,7 @@ function makePublic(pool) {
     if (p.status === "claimed") return page(res, 200, simplePage(`${nameOf(p)} on JitsFlow`, `${nameOf(p)} is on JitsFlow`, ["This gym has been claimed. If it's yours, sign in to run it."], { accent: accentOf(p), extra: `<p><a class="btn" href="/app/?signin=1">Sign in</a></p>` }));
     // The gym is built: the link opens the real app, as a preview of their gym.
     if (p.gym_unclaimed) return res.status(302).set({ Location: `/app/?gym=${encodeURIComponent(p.token)}`, "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" }).end();
-    page(res, 200, renderPreview(p));
+    const n = nonce(); page(res, 200, renderPreview(p, { nonce: n }), n);
   }));
   r.get("/:token/logo", wrap(async (req, res) => {
     const p = await byToken(req.params.token);

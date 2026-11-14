@@ -211,7 +211,9 @@ function startSite() {
     ok(r.s === 200 && /This is Green Lions BJJ on JitsFlow/.test(t) && /No-Gi Fundamentals/.test(t) && /Thabo Nkosi/.test(t) && /R850 a month/.test(t), "not built: the page shows the gym's name, classes, coaches and prices");
     ok(t.includes(`src="/try/${S0.token}/logo"`) && t.includes("--acc:#1b7f3b"), "page: their logo and colour");
     ok(/<meta name="robots" content="noindex/.test(t) && /noindex/.test(r.h.get("x-robots-tag") || "") && r.h.get("cache-control") === "no-store", "page: noindex (tag and header), never cached");
-    ok(/default-src 'self'/.test(csp) && /script-src 'self' 'unsafe-inline'/.test(csp) && !/<script[^>]+src=/.test(t) && ![...t.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].some((m) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(m[1])), "page: the site's security policy, and nothing loaded from elsewhere but fonts");
+    const nonceM = csp.match(/script-src 'self' 'nonce-([A-Za-z0-9+/=]+)'/);
+    ok(nonceM && !/unsafe-inline'[^;]*;?\s*style/.test(csp.split("style-src")[0]) && [...t.matchAll(/<script\b([^>]*)>/g)].every((m) => m[1].includes(`nonce="${nonceM[1]}"`)), "page: its one inline script runs by this response's nonce, and no other inline script would: " + csp.slice(0, 120));
+    ok(/default-src 'self'/.test(csp) && !/<script[^>]+src=/.test(t) && ![...t.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].some((m) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(m[1])), "page: the site's security policy, and nothing loaded from elsewhere but fonts");
     ok(!/googletagmanager|analytics/.test(t), "page: no analytics");
     ok(t.includes(`/app/?gym=${S0.token}`) && /Claim Green Lions BJJ, free for 3 months/.test(t) && /R99\/month only if you want to keep going/.test(t) && /Apple Pay and Google Pay are coming soon/.test(t) && !/2% fee/.test(t), "page: the claim button, the no-obligation line, payments coming soon");
     await pool.query("delete from prospects where id=$1", [S0.id]);
