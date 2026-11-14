@@ -48,14 +48,15 @@ function layout(title, paras, button, preheader) {
   return { html, text };
 }
 
-async function send({ to, subject, title, paras, button, preheader, replyTo }) {
+// headers: extra headers such as List-Unsubscribe (emails a gym sends: see stopLink in api.js).
+async function send({ to, subject, title, paras, button, preheader, replyTo, headers }) {
   if (!mailOn()) return { sent: false, reason: "off" };
   if (!to) return { sent: false, reason: "no address" };
   const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ from: FROM(), to: [to], reply_to: replyTo || REPLY_TO(), subject, html, text }),
+    body: JSON.stringify({ from: FROM(), to: [to], reply_to: replyTo || REPLY_TO(), subject, html, text, ...(headers ? { headers } : {}) }),
     signal: AbortSignal.timeout(10000),
   });
   if (!r.ok) { const body = await r.text().catch(() => ""); throw new Error(`Resend ${r.status}: ${body.slice(0, 200)}`); }
@@ -112,8 +113,9 @@ const templates = {
   cancelled: (name, gym, cls, when) => ({ subject: `Cancelled: ${cls}`, title: "Class cancelled",
     paras: [`Hi ${name},`, `${gym} has cancelled ${cls} on ${when}. Your booking has been removed.`, "Have a look for another class to book."],
     button: { label: "Book another class", url: appUrl() + "/app/#book" } }),
-  message: (name, coach, gym, subject, text) => ({ subject, title: subject,
-    paras: [`Hi ${name},`, ...String(text).split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean), `${coach}, ${gym}`],
+  // stop: the link that stops this gym's emails to this address (emails a gym sends: messages and invites).
+  message: (name, coach, gym, subject, text, stop) => ({ subject, title: subject,
+    paras: [`Hi ${name},`, ...String(text).split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean), `${coach}, ${gym}`, ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
     preheader: String(text).slice(0, 120), button: { label: "Open JitsFlow", url: appUrl() + "/app/#book" } }),
   reset: (name, url) => ({ subject: "Reset your JitsFlow password", title: "Reset your password",
     paras: [`Hi ${name},`, "Someone asked to reset the password for your JitsFlow account. If it was you, tap the button. The link works once and expires in 1 hour.", "If it wasn't you, ignore this email. Your password stays the same."],

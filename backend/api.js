@@ -34,8 +34,9 @@ const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d)
 // "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && (() => { const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; })();
 
-class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
-const fail = (status, msg) => { throw new HttpError(status, msg); };
+// extra: more fields for the answer (e.g. verify: true, when the app should offer to send a verification email).
+class HttpError extends Error { constructor(status, msg, extra) { super(msg); this.status = status; this.extra = extra; } }
+const fail = (status, msg, extra) => { throw new HttpError(status, msg, extra); };
 
 function cookies(req) {
   const out = {};
@@ -132,7 +133,8 @@ function makeApi(pool, { secureCookies, build }) {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
     // (PayFast's payment notifications come from PayFast's servers and are checked separately.)
-    if (req.method !== "GET" && req.headers["x-jf"] !== "1" && req.path !== "/payfast/notify") return res.status(403).json({ error: "Request blocked." });
+    // (So do mail apps' one-tap "unsubscribe" from a gym's emails: it changes nothing but that one address's choice.)
+    if (req.method !== "GET" && req.headers["x-jf"] !== "1" && req.path !== "/payfast/notify" && !/^\/gym-mail\/stop\/[A-Za-z0-9_-]{24}$/.test(req.path)) return res.status(403).json({ error: "Request blocked." });
     next();
   });
 
@@ -1598,7 +1600,8 @@ function makeApi(pool, { secureCookies, build }) {
   // Two records for one person (added by the coach, then signed up on their own): fold the one that isn't on the app
   // into their account. Payments, classes, competitions and the coach's plan and notes move over.
   api.post("/coach/students/:id/merge", wrap(async (req, res) => {
-    const u = needCoach(req), o = await ownStudent(u, req.params.id), a = await ownStudent(u, req.body?.into);
+    const u = needCoach(req); if (!isHead(u)) fail(403, "Only the head coach can merge members: it moves their payments and plan. Ask them to do it.");
+    const o = await ownStudent(u, req.params.id), a = await ownStudent(u, req.body?.into);
     if (o.pass_hash || o.parent_id || o.role !== "student") fail(400, "Only a student who isn't on the app can be merged.");
     if (!(a.pass_hash || a.parent_id) || a.role !== "student" || a.id === o.id) fail(400, "Pick the student's own account to merge into.");
     const db = await pool.connect();
@@ -1931,23 +1934,74 @@ function makeApi(pool, { secureCookies, build }) {
     res.json({ ok: true, status: "withdrawn" });
   }));
 
+  // ---------- email a gym sends: coach messages and invites ----------
+  // Gyms are free to start, so these could carry anyone's words to anyone's inbox from JitsFlow's address. So they go only from a
+  // coach whose own email is verified (WhatsApp works without it), to at most NEW_GYM_CAP people a day while a gym is new (its first
+  // NEW_GYM_DAYS days, or until 3 members have signed up themselves), and every one carries a link (and a List-Unsubscribe header) that
+  // stops that gym's emails to that address. Messages reach people the coach added who aren't on the app only once the gym is past
+  // its first NEW_GYM_DAYS days.
+  const NEW_GYM_DAYS = 7, NEW_GYM_CAP = 30;
+  const VERIFY_FIRST = "Confirm your email first, so your members know these emails really come from you. It takes one tap: we'll email you a link. WhatsApp works as before in the meantime.";
+  const needVerified = (u) => { if (!verifiedEmail(loginOf(u))) fail(403, VERIFY_FIRST, { verify: true }); };
+  async function gymMailState(gymId) {
+    const g = (await q(`select coalesce(g.claimed_at, g.created_at) < now() - ($2 || ' days')::interval as old,
+      (select count(*)::int from users x where x.gym_id=g.id and x.role='student' and x.pass_hash is not null) as members from gyms g where g.id=$1`, [gymId, String(NEW_GYM_DAYS)])).rows[0];
+    return { old: !!g.old, young: !g.old || g.members < 3 };
+  }
+  // Takes one of today's places for an email from this gym, or says it's over (keys: [key, max] pairs, each a day long).
+  const mailSlot = (keys) => { if (keys.some(([k, max]) => over(k, max))) return false; keys.forEach(([k]) => limited(k, Infinity, 24 * 3600e3)); return true; };
+  // The "stop emails from this gym" link for an address (made the first time the gym emails it), or null when they've stopped them.
+  async function stopLink(gymId, email) {
+    const r = (await q(`insert into gym_mail_stops(gym_id,email,token) values($1,$2,$3) on conflict(gym_id,email) do update set gym_id=excluded.gym_id returning token, stopped_at`,
+      [gymId, String(email).toLowerCase(), crypto.randomBytes(18).toString("base64url")])).rows[0];
+    return r.stopped_at ? null : mail.appUrl() + "/api/gym-mail/stop/" + r.token;
+  }
+  const stopHeaders = (url) => ({ "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+  const stopPage = (title, line, form) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>${title} · JitsFlow</title><style>body{font:17px/1.5 -apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#EEF1F5;color:#111722;margin:0;padding:40px 16px}main{max-width:460px;margin:0 auto;background:#fff;border:1px solid #D3DAE4;border-radius:16px;padding:24px}
+h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background:#1D4FB5;color:#fff;border:0;border-radius:12px;padding:12px 20px}</style></head>
+<body><main><h1>${title}</h1><p>${line}</p>${form || ""}</main></body></html>`;
+  const escH = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const stopRow = async (t) => (/^[A-Za-z0-9_-]{24}$/.test(t) ? (await q("select s.*, g.name as gym_name from gym_mail_stops s join gyms g on g.id=s.gym_id where s.token=$1", [t])).rows[0] : null);
+  // The link opens a page with one button (a mail scanner opening the link mustn't stop anything); mail apps' one-tap unsubscribe POSTs.
+  api.get("/gym-mail/stop/:token", wrap(async (req, res) => {
+    const r = await stopRow(req.params.token);
+    res.type("html");
+    if (!r) return res.status(404).send(stopPage("Link not found", "This link isn't valid any more."));
+    if (r.stopped_at) return res.send(stopPage("You're unsubscribed", `You won't get emails from ${escH(r.gym_name)} through JitsFlow any more.`));
+    res.send(stopPage("Stop these emails?", `One tap and ${escH(r.gym_name)} can't email ${escH(r.email)} through JitsFlow any more.`,
+      `<form method="post" action="/api/gym-mail/stop/${escH(r.token)}"><button type="submit">Stop emails from ${escH(r.gym_name)}</button></form>`));
+  }));
+  api.post("/gym-mail/stop/:token", wrap(async (req, res) => {
+    const r = await stopRow(req.params.token);
+    res.type("html");
+    if (!r) return res.status(404).send(stopPage("Link not found", "This link isn't valid any more."));
+    await q("update gym_mail_stops set stopped_at=coalesce(stopped_at, now()) where token=$1", [r.token]);
+    res.send(stopPage("You're unsubscribed", `You won't get emails from ${escH(r.gym_name)} through JitsFlow any more.`));
+  }));
+
   // ---------- coach: email students ----------
+  // stopped: people who stopped this gym's emails. held: people the coach added who aren't on the app, while the gym is new.
   api.post("/coach/message", wrap(async (req, res) => {
-    const u = needCoach(req), b = req.body || {};
+    const u = needCoach(req), b = req.body || {}, lg = loginOf(u);
     if (!mail.mailOn()) fail(503, "Email isn't switched on yet.");
+    needVerified(u);
     const subject = clean(b.subject, 140), text = String(b.text || "").trim().slice(0, 4000);
     if (!subject || !text) fail(400, "Write a subject and a message.");
     const ids = (Array.isArray(b.userIds) ? b.userIds : []).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 200);
-    const to = (await q(`select id, name, ${EMAIL("u")} as email from users u where id = any($1) and gym_id=$2`, [ids, u.gym_id])).rows;
+    const to = (await q(`select id, name, ${EMAIL("u")} as email, (u.pass_hash is null and u.parent_id is null) as offline from users u where id = any($1) and gym_id=$2`, [ids, u.gym_id])).rows;
     if (!to.length) fail(400, "Pick who to send it to.");
-    let sent = 0; const failed = [], noEmail = [];
+    const st = await gymMailState(u.gym_id), cap = st.young ? NEW_GYM_CAP : 300;
+    let sent = 0; const failed = [], noEmail = [], held = [], stopped = [];
     for (const p of to) {
       if (!p.email) { noEmail.push(p.name); continue; }
-      if (limited("msg:" + u.gym_id, 300, 24 * 3600e3)) { failed.push(p.name); continue; }
-      try { await mail.send({ to: p.email, replyTo: u.email, ...mail.templates.message(p.name, u.name, u.gym_name, subject, text) }); sent++; }
+      if (p.offline && !st.old) { held.push(p.name); continue; }
+      const stop = await stopLink(u.gym_id, p.email); if (!stop) { stopped.push(p.name); continue; }
+      if (!mailSlot([["gm:" + u.gym_id, cap], ["gm-c:" + lg.id, cap]])) { failed.push(p.name); continue; }
+      try { await mail.send({ to: p.email, replyTo: u.email, headers: stopHeaders(stop), ...mail.templates.message(p.name, u.name, u.gym_name, subject, text, stop) }); sent++; }
       catch (e) { console.warn("mail:", e.message); failed.push(p.name); }
     }
-    res.json({ sent, failed, noEmail });
+    res.json({ sent, failed, noEmail, held, stopped });
   }));
 
   // The head coach closes the gym. Everything it kept goes: classes and bookings, plans, payments and proofs, competitions, notices,
@@ -1984,8 +2038,9 @@ function makeApi(pool, { secureCookies, build }) {
   }));
 
   api.post("/coach/invite", wrap(async (req, res) => {
-    const u = needCoach(req);
+    const u = needCoach(req), lg = loginOf(u);
     if (!mail.mailOn()) fail(503, "Email isn't switched on yet. Copy the invite link and send it yourself.");
+    needVerified(u);
     const raw = Array.isArray(req.body?.emails) ? req.body.emails : String(req.body?.emails || "").split(/[\s,;]+/);
     const emails = [...new Set(raw.map((e) => clean(e, 254).toLowerCase()).filter(Boolean))];
     const bad = emails.filter((e) => !isEmail(e));
@@ -1993,17 +2048,19 @@ function makeApi(pool, { secureCookies, build }) {
     if (!emails.length) fail(400, "Add at least one email address.");
     if (emails.length > 30) fail(400, "Send up to 30 invites at a time.");
     const have = new Set((await q("select email from users where gym_id=$1 and email = any($2)", [u.gym_id, emails])).rows.map((x) => x.email));
-    let sent = 0; const failed = [];
+    const st = await gymMailState(u.gym_id);
+    let sent = 0; const failed = [], stopped = [];
     for (const e of emails) {
       if (have.has(e)) continue;
-      // 100 invite emails per gym, per coach and per address a day (gyms are free to start, so one person could start several)
-      const keys = ["inv:" + u.gym_id, "inv-c:" + u.id, "inv-ip:" + clientIp(req)];
-      if (keys.some((k) => over(k, 100))) { failed.push(e); continue; }
-      keys.forEach((k) => limited(k, Infinity, 24 * 3600e3));
-      try { await mail.send({ to: e, ...mail.templates.invite(u.name, u.gym_name, mail.appUrl() + "/app/?join=" + u.student_code) }); sent++; }
+      const stop = await stopLink(u.gym_id, e); if (!stop) { stopped.push(e); continue; }
+      // 100 invite emails per gym, per coach and per address a day (gyms are free to start, so one person could start several),
+      // and while the gym is new, its emails of any kind to NEW_GYM_CAP people a day.
+      const keys = [["inv:" + u.gym_id, 100], ["inv-c:" + lg.id, 100], ["inv-ip:" + limitIp(req), 100], ...(st.young ? [["gm:" + u.gym_id, NEW_GYM_CAP], ["gm-c:" + lg.id, NEW_GYM_CAP]] : [])];
+      if (!mailSlot(keys)) { failed.push(e); continue; }
+      try { await mail.send({ to: e, headers: stopHeaders(stop), ...mail.templates.invite(u.name, u.gym_name, mail.appUrl() + "/app/?join=" + u.student_code, stop) }); sent++; }
       catch (err) { console.warn("mail:", err.message); failed.push(e); }
     }
-    res.json({ sent, already: [...have], failed });
+    res.json({ sent, already: [...have], failed, stopped });
   }));
   // The head coach hands the role (money, payment emails) to another active coach in the gym.
   api.post("/coach/head", wrap(async (req, res) => {
@@ -3736,7 +3793,7 @@ function makeApi(pool, { secureCookies, build }) {
   // eslint-disable-next-line no-unused-vars
   api.use((err, req, res, next) => {
     // signedOut: nobody is signed in on this request (as opposed to a wrong password), so the app asks them to sign in again.
-    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, ...(err.status === 401 && !req.user ? { signedOut: true } : {}) });
+    if (err instanceof HttpError) return res.status(err.status).json({ ...(err.extra || {}), error: err.message, ...(err.status === 401 && !req.user ? { signedOut: true } : {}) });
     if (err.type === "entity.too.large") return res.status(413).json({ error: "That's too much data in one go." });
     if (err.type === "entity.parse.failed") return res.status(400).json({ error: "Bad request." });
     console.error("API error:", err);

@@ -1078,7 +1078,7 @@ function coachGym(){const g=API.me.gym;
         <span class="small muted">${g.waPhoneSet?"Students' \"Ask for a time\" button opens a chat with this number.":"Not saved yet: students' \"Ask for a time\" button opens WhatsApp without a contact until you save one."}</span></form></div>
     ${gymImportPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
       <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
-    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2><p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
+    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2>${verifyLine()}<p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
     <div class="panel stack"><h2 class="label">Coaches</h2>${headLine()}<p class="small">Only share this with coaches: it gives access to classes and the roster. Fees and payments stay with the head coach.</p><div class="row"><span class="mono"><b>${esc(g.coachCode)}</b></span><button class="btn" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button></div>${coachesPanel()}</div>
     <form id="gymform" class="panel stack"><h2 class="label">Gym details</h2><label class="f">Gym name<input id="g-name" name="name" value="${esc(g.name)}"></label>
       ${isHead()?`<label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label>`:""}<button class="btn primary" type="submit">Save gym</button></form>
@@ -1103,8 +1103,8 @@ async function makeHead(id){try{const j=await api("POST","/coach/head",{userId:i
   toast(`${first((j.me.gym.headCoach||{}).name||"They")} is the head coach now.`)}catch(e){toast(e.message)}}
 async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
   try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";if(j.sent)jfTrack("share",{method:"email",content_type:"gym_invite",count:j.sent});
-    toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")}.`:""}`)}
-  catch(e){toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
+    toast(`Sent ${j.sent} invite${j.sent===1?"":"s"}.${j.already.length?` ${j.already.length} already in your gym.`:""}${j.failed.length?` Couldn't send to ${j.failed.join(", ")} today: share your invite link on WhatsApp instead.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} asked not to get your gym's emails.`:""}`)}
+  catch(e){if(e.data&&e.data.verify)verifySheet(e.message);else toast(e.message)}btn.disabled=false;btn.textContent="Send invites"}
 async function copyText(t){if(/[?&]join=/.test(t))jfTrack("share",{method:"copy",content_type:"gym_invite"});try{await navigator.clipboard.writeText(t);toast("Copied.")}catch(e){toast(t)}}
 
 /* ----- gym profile: import from the gym's website, timetable, coaches, rates ----- */
@@ -1451,15 +1451,15 @@ const MSG={risk:["Missed you on the mats","Hey! We haven't seen you at training 
 function msgSheet(kind,ids){
   const ppl=(COACH.insights?COACH.insights.students:[]).concat(COACH.roster?COACH.roster.people:[]);const by={};ppl.forEach(p=>by[p.id]=p);
   S.ui.msg={ids:ids.filter(i=>by[i]),kind};const m=MSG[kind]||MSG.blank;S.ui.sheet={k:"msg"};S.ui.stack=[];
-  openSheet(`${sheetHead("Email students")}<form id="msgform" class="stack-lg" novalidate>
+  openSheet(`${sheetHead("Email students")}<form id="msgform" class="stack-lg" novalidate>${verifyLine()}
     <div class="stack"><span class="small muted">To</span><div class="chips">${S.ui.msg.ids.map(i=>`<span class="chip">${esc(by[i].name)}</span>`).join("")}</div><p class="small muted">Each person gets their own email. Replies come to ${esc(API.me.email)}.</p></div>
     <label class="f">Subject<input id="m-sub" name="subject" value="${esc(m[0])}"></label>
     <label class="f">Message<textarea id="m-text" name="text" rows="8">${esc(m[1])}</textarea></label></form>`,false,{act:`<button class="btn primary grow" type="submit" form="msgform">Send ${S.ui.msg.ids.length} email${S.ui.msg.ids.length===1?"":"s"}</button>`});
 }
 async function sendMsg(form){const btn=document.querySelector('#sheetbar [type=submit]');if(btn)btn.disabled=true;
   try{const j=await api("POST","/coach/message",{userIds:S.ui.msg.ids,subject:form.querySelector("[name=subject]").value,text:form.querySelector("[name=text]").value});
-    jfTrack("coach_message",{kind:S.ui.msg.kind,count:j.sent});hideSheet();render();toast(`Sent ${j.sent} email${j.sent===1?"":"s"}.${j.failed.length?" Couldn't send to "+j.failed.join(", ")+".":""}${(j.noEmail||[]).length?` No email for ${j.noEmail.join(", ")}: use WhatsApp.`:""}`)}
-  catch(e){toast(e.message);if(btn)btn.disabled=false}}
+    jfTrack("coach_message",{kind:S.ui.msg.kind,count:j.sent});hideSheet();render();toast(`Sent ${j.sent} email${j.sent===1?"":"s"}.${j.failed.length?" Couldn't send to "+j.failed.join(", ")+" today.":""}${(j.noEmail||[]).length?` No email for ${j.noEmail.join(", ")}: use WhatsApp.`:""}${(j.held||[]).length?` ${j.held.join(", ")} ${j.held.length>1?"aren't":"isn't"} on the app: use WhatsApp for now (email reaches them once your gym is a week old).`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} asked not to get your gym's emails.`:""}`)}
+  catch(e){if(e.data&&e.data.verify){verifySheet(e.message);return}toast(e.message);if(btn)btn.disabled=false}}
 
 /* ----- coach: membership plans ----- */
 function plansPanel(){const ps=(COACH.roster&&COACH.roster.plans)||[],cur=API.me.gym.currency,ed=S.ui.planEdit;
