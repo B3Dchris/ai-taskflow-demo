@@ -5590,6 +5590,7 @@ function accountSection(){
       :g&&API.me.role!=="coach"?`<details class="more"><summary>Add your kids</summary><div style="padding-top:8px">${kidForm()}</div></details>`:""}
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":fam?`${esc(first(API.me.name))} trains at`:"Training at"} <b>${esc(g.name)}</b>${API.me.role==="coach"?"":` · <button type="button" class="linkbtn small" data-a="leavegym">Leave gym</button>`}</p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
     <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
+    <button type="button" class="linkbtn small" data-a="signoutall" style="justify-self:start">Sign out on all your other devices</button>
     ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>${dashPanel()}${outPanel()}`;
 }
 
@@ -5724,7 +5725,7 @@ function moneyMonth(){
     ${quick?`<div class="row small" style="gap:8px">Tapping <b>Paid</b> records it today, paid by <span class="seg2" role="group" aria-label="Paid by" style="display:inline-flex"><button data-a="paidhow" data-v="cash" aria-pressed="${how==="cash"}">Cash</button><button data-a="paidhow" data-v="eft" aria-pressed="${how==="eft"}">EFT</button></span></div>`:""}
     ${shown.length?`<div class="list">${shown.map(s=>{const [k,l,tone]=s.status,back=isCur&&owesBack(s);
       return `<div class="mrow"><button class="mrow-main" data-a="student" data-v="${s.id}"><span class="nm">${esc(s.name)}${s.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small muted">${[s.plan,back?owedTxt(s,cur):s.feeCents?`${money(s.paidCents,cur)} of ${money(s.feeCents,cur)}`:"",
-        isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:"",s.lastPaid&&k!=="paid"?`last paid ${fmtDate(s.lastPaid)}`:""].filter(Boolean).map(esc).join(" · ")}</span></button>
+        isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",s.mailStopped?"stopped emails · WhatsApp instead":"",["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:"",s.lastPaid&&k!=="paid"?`last paid ${fmtDate(s.lastPaid)}`:""].filter(Boolean).map(esc).join(" · ")}</span></button>
         <span class="mrow-side">${tone?`<span class="pill ${tone}">${esc(l)}</span>`:`<span class="small muted">${esc(l)}</span>`}${["due","late","part"].includes(k)?remindBtn(s,M):""}${quick&&["due","late","part"].includes(k)?`<button class="btn sm" data-a="paidnow" data-v="${s.id}" aria-label="${esc(s.name)} paid ${esc(money(paidAmount(s),cur))}">Paid</button>`:""}</span></div>`}).join("")}</div>`
       :`<div class="empty">${f==="owing"?(billed.length?(isCur?"Nobody owes anything.":"Everyone's paid for this month."):"No fees set yet. Add membership plans under Setup and put students on them."):"Nobody here."}</div>`}
     ${(M.left||[]).length?`<h2 class="label">Left the gym</h2><div class="list">${M.left.map(x=>`<div class="mrow"><span class="mrow-main"><span class="nm">${esc(x.name)}</span><span class="small muted">Left ${esc(fmtDate(x.leftOn))}</span></span><span class="mrow-side"><span class="pill bad">Left · owes ${esc(money(x.owedCents,cur))}</span></span></div>`).join("")}</div>`:""}
@@ -5748,13 +5749,13 @@ async function paidNow(id){const M=COACH.money,s=M&&M.students.find(x=>x.id===id
     toast(`Recorded ${money(amt,M.currency)} (${PMETH[how]}) for ${s.name}.${splitTxt(j.split,M.currency)}`,{label:"Undo",fn:async()=>{try{await api("DELETE",`/coach/payments/${j.payment.id}`);await coachLoad();toast("Undone.")}catch(e){toast(e.message)}}})}
   catch(e){toast(e.message)}finally{PAYING.delete(id);if(btn)btn.disabled=false}}
 // Who "Email N reminders" goes to: people who owe, with an email, who weren't reminded in the last 6 days (by the app or by hand).
-const toRemind=ss=>ss.filter(s=>s.email&&!s.remindedRecently);
+const toRemind=ss=>ss.filter(s=>s.email&&!s.remindedRecently&&!s.mailStopped);
 const remindedTxt=at=>{const d=Math.round((fromYmd(todayK())-fromYmd(dayKey(at)))/864e5);return d<=0?"reminded today":d===1?"reminded yesterday":`reminded ${d} days ago`};
 // auto: the coach's answer the first time ("Send these automatically?"), sent with the reminders.
 let REMINDING=false; // a double tap sends them once
 async function remindAll(auto){const M=COACH.money;if(!M||REMINDING)return;const ids=toRemind(M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0]))).map(s=>s.id);
   REMINDING=true;try{const j=await api("POST","/coach/money/remind",{month:M.month,userIds:ids,...(typeof auto==="boolean"?{auto}:{})});M.autoRemind=j.autoRemind;if(COACH.payInfo)COACH.payInfo.autoRemind=j.autoRemind;hideSheet();
-    toast(`Sent ${j.sent} reminder${j.sent===1?"":"s"}.${auto===true?" From now on they go by themselves. Turn it off in Money › Setup.":""}${(j.recent||[]).length?` ${j.recent.length} already had one this week.`:""}${(j.checking||[]).length?` Not sent to ${j.checking.join(", ")}: their family sent a payment this week, or one is being checked.`:""}${j.noEmail.length?` No email for ${j.noEmail.join(", ")}.`:""}`);jfTrack("fee_reminders",{count:j.sent,auto:auto===true});
+    toast(`Sent ${j.sent} reminder${j.sent===1?"":"s"}.${auto===true?" From now on they go by themselves. Turn it off in Money › Setup.":""}${(j.recent||[]).length?` ${j.recent.length} already had one this week.`:""}${(j.checking||[]).length?` Not sent to ${j.checking.join(", ")}: their family sent a payment this week, or one is being checked.`:""}${j.noEmail.length?` No email for ${j.noEmail.join(", ")}.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} stopped your gym's emails: WhatsApp them instead.`:""}`);jfTrack("fee_reminders",{count:j.sent,auto:auto===true});
     loadMoney(M.month===M.today.slice(0,7)?null:M.month)}catch(e){toast(e.message)}finally{REMINDING=false}}
 // The first time the head coach emails reminders: once, whether to send them by themselves from now on.
 function remindAsk(){const M=COACH.money;if(!M)return;const n=remindN(toRemind(M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0]))));if(!n)return;
@@ -5833,7 +5834,7 @@ const owing=p=>p.owedCents>0;
 // Home's "Reminders sent to N today · See who": who was emailed, who couldn't be, and who has no email (Money has their WhatsApp Remind).
 function remindSheet(){const R=COACH.roster&&COACH.roster.reminders;if(!R)return;const fl=R.failed||[],to=R.to||[];
   const list=(t,ns,note)=>ns.length?`<h2 class="label">${t}</h2>${note?`<p class="small muted">${note}</p>`:""}<div class="list">${ns.map(n=>`<div class="mrow"><span class="mrow-main"><span class="nm">${esc(n)}</span></span></div>`).join("")}</div>`:"";
-  openSheet(`${sheetHead("Fee reminders")}<div class="stack-lg"><h1>Reminders today</h1>${list(`Emailed (${R.sent})`,to)}${list(`Couldn't be sent (${fl.length})`,fl,"We'll try these again later today.")}${list(`No email (${R.noEmail.length})`,R.noEmail,"Send them a reminder on WhatsApp from Money.")}
+  openSheet(`${sheetHead("Fee reminders")}<div class="stack-lg"><h1>Reminders today</h1>${list(`Emailed (${R.sent})`,to)}${list(`Couldn't be sent (${fl.length})`,fl,"We'll try these again later today.")}${list(`No email (${R.noEmail.length})`,R.noEmail,"Send them a reminder on WhatsApp from Money.")}${list(`Stopped your emails (${(R.stopped||[]).length})`,R.stopped||[],"They asked not to get your gym's emails. Remind them on WhatsApp from Money.")}
     ${R.sent&&!to.length?`<p class="small muted">${R.sent} sent.</p>`:""}</div>`,false,{act:`<button class="btn primary grow" data-a="remindmoney">Open Money</button>`})}
 // Home's "haven't trained in 60 days": pause them all (Undo puts them back before anyone hears), or keep them off the card for 30 days.
 // The buttons are off while it runs, so a double tap does it once. People with no email get the "we miss you" on WhatsApp from the coach.
@@ -7096,7 +7097,16 @@ const micBtn=id=>`<button type="button" class="btn mic" data-a="dictate" data-v=
 /* ============ COACH ASSISTANT: "update my bank details", "add Thabo, blue belt…" ============ */
 const AST={msgs:[],busy:false};
 const AST_EXAMPLES=["Update my bank details","Add a student","Thabo paid R650 cash","Add a class every Monday at 18:00 for 8 weeks","Note for Ana: great guard retention today","Move Sipho to blue belt"];
-function astBubble(m){return `<div class="bub ${m.role==="user"?"me":"ai"}"><div>${esc(m.text)}</div>${(m.actions||[]).map(a=>`<span class="ltag ok">✓ ${esc(a.summary)}</span>`).join("")}</div>`}
+// A change to money or contact details the assistant proposed: nothing is saved until the coach taps Confirm on its card.
+const astCard=p=>`<div class="insight stack astcard" style="gap:6px"><b>${esc(p.summary)}</b>${(p.lines||[]).length?`<span class="small" style="white-space:pre-line">${p.lines.map(esc).join("\n")}</span>`:""}
+  ${p.done?`<span class="ltag ok">✓ Saved</span>`:p.dropped?`<span class="small muted">Not changed</span>`:`<div class="row" style="gap:8px"><button class="btn sm primary" data-a="astok" data-v="${esc(p.id)}">Confirm</button><button class="btn sm" data-a="astno" data-v="${esc(p.id)}">Cancel</button></div>`}</div>`;
+function astBubble(m){return `<div class="bub ${m.role==="user"?"me":"ai"}"><div>${esc(m.text)}</div>${(m.proposals||[]).map(astCard).join("")}${(m.actions||[]).map(a=>`<span class="ltag ok">✓ ${esc(a.summary)}</span>`).join("")}</div>`}
+const astProp=id=>{for(const m of AST.msgs)for(const p of m.proposals||[])if(p.id===id)return p;return null};
+async function astConfirm(id,yes){const p=astProp(id);if(!p||p.done||p.dropped||p.busy)return;
+  if(!yes){p.dropped=true;assistantSheet();return}
+  p.busy=true;try{const j=await api("POST","/coach/assistant/confirm",{id});p.done=true;await astRefresh(j.refresh||[]);toast(`Saved: ${p.summary}.`)}
+  catch(e){toast(e.message);if(/expired|already/.test(e.message))p.dropped=true}
+  p.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="ast")assistantSheet()}
 function assistantSheet(){S.ui.sheet={k:"ast"};S.ui.stack=[];
   const intro=AST.msgs.length?"":`<div class="stack"><p>Tell me what to change, in your own words. Type it, or tap the mic and say it. I'll ask if I need anything else.</p><div class="chips">${AST_EXAMPLES.map(x=>`<button class="chip" data-a="astsay" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`;
   openSheet(`${sheetHead("Assistant")}<div class="stack-lg"><h1>Ask JitsFlow</h1>${intro}<div class="astlog" id="astlog">${AST.msgs.map(astBubble).join("")}${AST.busy?`<div class="bub ai"><span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span></div>`:""}</div></div>`,true,
@@ -7105,7 +7115,7 @@ function assistantSheet(){S.ui.sheet={k:"ast"};S.ui.stack=[];
 async function astSend(text){text=String(text||"").trim();if(!text||AST.busy)return;
   AST.msgs.push({role:"user",text});AST.busy=true;assistantSheet();
   try{const j=await api("POST","/coach/assistant",{messages:AST.msgs.slice(-12).map(m=>({role:m.role,text:m.text}))});
-    AST.msgs.push({role:"assistant",text:j.reply,actions:j.actions||[]});if(API.me.gym.setup)API.me.gym.setup.assistantUsed=true;await astRefresh(j.refresh||[]);jfTrack("assistant",{actions:(j.actions||[]).length})}
+    AST.msgs.push({role:"assistant",text:j.reply,actions:j.actions||[],proposals:j.proposals||[]});if(API.me.gym.setup)API.me.gym.setup.assistantUsed=true;await astRefresh(j.refresh||[]);jfTrack("assistant",{actions:(j.actions||[]).length})}
   catch(e){AST.msgs.push({role:"assistant",text:e.message})}
   AST.busy=false;if(S.ui.sheet&&S.ui.sheet.k==="ast")assistantSheet()}
 async function astRefresh(kinds){if(!kinds.length)return;
@@ -7300,6 +7310,7 @@ function pfPanel(){const og=S.ui.openG||{},pi=COACH.payInfo;
   const p=COACH.pf;if(!p)return "";
   return `<details class="more" data-g="m-pf"${og["m-pf"]?" open":""}><summary><span><b>Card and Instant EFT (PayFast)</b><br><span class="small muted">${p.connected?`Connected · ${esc(p.merchantId)}${p.test?" (test account)":""}`:p.needsReconnect?`<span class="warn-t">PayFast needs reconnecting</span>`:"Students pay in the app; it's marked paid by itself"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
     ${p.needsReconnect?`<p class="small warn-t" id="pf-reconnect"><b>PayFast needs reconnecting.</b> We can't use the PayFast details saved for your gym any more, so card payments are paused. Enter your Merchant ID, Merchant Key and passphrase again below. If anyone paid by card meanwhile, check PayFast and record it by hand.</p>`:""}
+    ${p.needsPassphrase?`<p class="small warn-t" id="pf-pass"><b>Add your PayFast passphrase.</b> It keeps card payments safe: without it, someone could change the amount on a payment. Set one in PayFast (step 3 below), then enter your details again here with it.</p>`:""}
     <label class="row small" style="flex-wrap:nowrap"><input id="pf-soon" type="checkbox"${pi&&pi.pay&&pi.pay.cardSoon?" checked":""}> Show students a PayFast button. Until card payments are switched on, it says “coming soon”.</label>
     <p class="small">Students tap <b>Pay by card or Instant EFT</b>. The money goes into your own PayFast account and the payment shows here as paid, with no proof to check. JitsFlow's fee is ${p.feePct}% of each payment, taken by PayFast at the time; PayFast's own fee applies too.</p>
     ${p.connected?`<div class="row"><span class="pill ok">Connected</span><span class="small mono">${esc(p.merchantId)}</span><button class="linkbtn small" data-a="pfremove">Disconnect</button></div>`:""}
@@ -7326,7 +7337,7 @@ function planPanel(){
     :`Your free months ended on ${esc(until)}. Keep JitsFlow for ${price}/month: add a card whenever you're ready. Everything keeps working in the meantime.`;
   const needCard=b.status!=="active"&&b.priceCents>0;
   return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:bt?`<span class="pill ok">Beta</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Free months over</span>`}</div>
-    <p class="small">${line}</p>${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+    <p class="small">${line}</p>${b.status==="active"&&b.card&&!NATIVE()?`<button class="linkbtn small" data-a="billcancel" style="justify-self:start">Cancel plan</button>`:""}${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
 // Home, head coach only: the calm reminder once the free months are over and there's no card (never shown to members).
 function dueBanner(){if(!isHead()||API.preview)return "";const b=COACH.bill;if(b===undefined){planPanel();return ""}
   if(!b||!b.due)return "";return `<div class="insight dueline"><div class="row between" style="flex-wrap:nowrap;gap:10px"><span>Your free months ended. Keep JitsFlow for ${money(b.priceCents,"ZAR")}/month.</span><button class="btn sm" data-a="coachgo" data-v="gym">See plan</button></div></div>`}
@@ -7481,6 +7492,11 @@ function dashSystem(y){if(!y)return "";const w=[];
   if(!y.secretOk)w.push(`<b>JF_SECRET isn't set.</b> Gyms' PayFast keys are sealed with a key made from the database address, which changes with the database password. Set JF_SECRET in Render (a long random value); keys are sealed again with it on the next start.`);
   if(y.cardsTestMode&&y.production)w.push(`<b>Card payments are in test mode.</b> PAYFAST_MERCHANT_ID isn't set, so payments go to PayFast's sandbox and no real money moves.`);
   if(y.ai&&y.ai.paused)w.push(`<b>Reading with AI is paused for today:</b> the daily budget is used up. Proofs are kept for coaches to check by hand.`);
+  const pfo=y.payfastOps||{},seen=(k,id)=>` <button class="linkbtn small" data-a="pfseen" data-v="${k}:${esc(id)}">Done</button>`;
+  for(const o of pfo.failed||[])w.push(`<b>Cancel by hand in PayFast:</b> ${esc(o.label||"a subscription")}. JitsFlow tried for a day; PayFast said: ${esc(o.error||"no answer")}.${seen("op",o.id)}`);
+  for(const f of y.payfastFlags||[])w.push(`<b>Check a PayFast payment${f.gym?` (${esc(f.gym)})`:""}:</b> ${esc(f.note)}${seen("flag",f.id)}`);
+  for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);
+  if(pfo.trying)w.push(`${nf(pfo.trying)} PayFast cancel${pfo.trying===1?" is":"s are"} still being tried (every 15 minutes at first).`);
   if((y.payfastBroken||[]).length)w.push(`<b>PayFast needs reconnecting</b> for ${y.payfastBroken.map(g=>esc(g.name)).join(", ")}. Their saved keys can't be decrypted; the head coaches have been emailed.`);
   const a=y.ai||{},aiLine=a.on?`<p class="small muted">AI today: ${nf(a.calls)} of ${nf(a.maxCalls)} reads, about ${nf(Math.round(a.tokens/1000))}k of ${nf(Math.round(a.maxTokens/1000))}k tokens.</p>`:"";
   return (w.length?`<section class="panel stack" id="dashsystem"><h2 class="label">Needs attention</h2>${w.map(x=>`<p class="small">${x}</p>`).join("")}</section>`:"")+aiLine}
@@ -7550,7 +7566,7 @@ async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…
    and here every change (a form, a copy or share, a payment) opens the claim instead. The bar at the top claims it in one step.
    Nothing about the preview is kept on the phone: no account data is synced, and the visitor's own progress stays as it was. */
 const PV_FREE=/^\/(auth\/|me\/claim-gym$|prospects\/)/; // calls that are about the visitor, not the preview
-const PV_BLOCK=new Set(["copy","rotate","signout","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
+const PV_BLOCK=new Set(["copy","rotate","signout","signoutall","billcancel","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
 async function previewInit(tok){
   let g;try{g=(await api("GET","/prospects/"+encodeURIComponent(tok))).gym}catch(e){toast(e.message);return}
   if(g.claimed){toast(`${g.name} has been claimed already. If it's yours, sign in.`);if(!API.me){S.ui.authMode="login";authSheet()}return}
@@ -7670,6 +7686,12 @@ function moreAct(a,v,el){switch(a){
   case "outgymdel": outAct("outgymdel");break;
   case "outunclaim": outAct("outunclaim");break;
   case "verifysend": verifySend();break;
+  case "pfseen": (async()=>{const [k,id]=String(v).split(":");try{await api("POST",`/admin/payfast/${k}/${id}/seen`,{});await dashLoad()}catch(e){toast(e.message)}})();break;
+  case "astok": astConfirm(v,true);break;
+  case "astno": astConfirm(v,false);break;
+  case "signoutall": (async()=>{try{const j=await api("POST","/me/sessions/end",{});toast(j.ended?`Signed out on ${j.ended} other device${j.ended===1?"":"s"}. You're still signed in here.`:"You weren't signed in anywhere else.")}catch(e){toast(e.message)}})();break;
+  case "billcancel": confirmSheet("Cancel your JitsFlow plan?","PayFast won't charge your card again. JitsFlow keeps working, and you can add a card again any time.",["billcancelyes",""],"Cancel plan");break;
+  case "billcancelyes": (async()=>{try{await api("DELETE","/coach/billing");hideSheet();COACH.bill=undefined;render();toast("Your plan is cancelled. Your card won't be charged again.")}catch(e){toast(e.message)}})();break;
 }}
 const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
 async function moreForm(fid,f,submitter){
