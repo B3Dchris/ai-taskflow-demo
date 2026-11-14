@@ -54,6 +54,10 @@ async function acctInit(){
   const rt=qs.get("reset");
   if(rt){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on){S.ui.authMode="reset";S.ui.resetTok=rt;setTimeout(authSheet,50)}}
+  // The link in a "confirm your email" email: confirmed in the background, whoever (if anyone) is signed in on this phone.
+  const vt=qs.get("verify");
+  if(vt){try{const k=new URLSearchParams(location.search);k.delete("verify");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
+    if(API.on)api("POST","/auth/verify",{token:vt}).then(j=>{if(j.me)API.me=j.me;render();toast("Your email is confirmed. Thanks!")}).catch(e=>toast(e.message))}
   const cl=qs.get("claim");if(cl)S.ui.claim=cl;
   // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
   // The gym outreach built for them (the email's link, and the older preview page's Claim button): the app opens as a preview of it.
@@ -253,13 +257,23 @@ async function kidClaim(btn){if(btn)btn.disabled=true;if(!(await sendFirst())){i
 async function authLink(v){const b=S.ui.regBody;if(!b)return authSheet();document.querySelectorAll('#sheetbar button').forEach(x=>x.disabled=true);
   try{const j=await api("POST","/auth/register",{...b,link:v});S.ui.regBody=null;jfTrack("sign_up",{method:"email",role:j.me.role,with_gym:!!j.me.gym});await signedIn(j.me,{adopt:true})}
   catch(e){toast(e.message);document.querySelectorAll('#sheetbar button').forEach(x=>x.disabled=false)}}
+// Coaches (their gym's emails go out once it's confirmed) and the JitsFlow team (the team tools open once it's confirmed) are asked,
+// gently, to confirm their email. Members aren't: nothing they do needs it.
+function verifyLine(){const me=API.me;if(!me||me.emailVerified||!(me.adminVerify||me.role==="coach"))return "";
+  return `<div class="insight" id="verifyline"><p class="small">${me.adminVerify?"<b>Verify your email to open the team tools.</b> ":"<b>Confirm your email</b> so your gym can email your members (invites and messages). "}We'll send a link: one tap and you're done.</p><button class="btn sm" data-a="verifysend">Send the link</button></div>`}
+// A gym email waiting on the coach's email check: one tap sends the link. WhatsApp works as before meanwhile.
+function verifySheet(msg){S.ui.sheet={k:"verify"};S.ui.stack=[];
+  openSheet(`${sheetHead("Confirm your email")}<div class="stack-lg"><h1>Confirm your email</h1><p>${esc(msg)}</p><p class="small muted">The link goes to ${esc((API.me.account||API.me).email||"your email")}.</p></div>`,false,
+   {act:`<button class="btn grow" data-a="close">Not now</button><button class="btn primary grow" data-a="verifysend">Send the link</button>`})}
+async function verifySend(){try{const j=await api("POST","/me/verify-email",{});if(S.ui.sheet&&S.ui.sheet.k==="verify")hideSheet();if(j.me)API.me=j.me;render();
+  toast(j.already?"Your email is confirmed already.":`Sent. Open the email to ${j.email} and tap the link.`)}catch(e){toast(e.message)}}
 function accountSection(){
   if(inClaude()||!API.on)return "";
   if(!API.me)return `<section class="panel accent"><h2 class="label">Your account</h2><p>Save your progress online so it's safe and on every device. Coaches can start a gym and invite students.</p>
     <div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button><button class="btn" data-a="auth" data-v="gym">Start a gym</button></div></section>`;
   const g=API.me.gym;
   const ac=API.me.account||API.me,fam=API.me.family;
-  return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(ac.name)}</b><br><span class="small muted">${esc(ac.email||"")}</span></div>
+  return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(ac.name)}</b><br><span class="small muted">${esc(ac.email||"")}</span></div>${verifyLine()}
     <form id="phoneform" class="row" style="flex-wrap:nowrap"><input id="a-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="WhatsApp number (optional)" value="${esc(API.me.phone||"")}" aria-label="WhatsApp number" style="flex:1"><button class="btn" type="submit">Save</button></form>
     <p class="small muted" style="margin-top:-6px">${API.me.role==="coach"?"Shown to nobody; used for your own WhatsApp links.":"Lets your coach message you on WhatsApp. Only coaches see it."}</p>
     ${fam?`<div class="stack" style="gap:6px"><h3 class="label">On this login</h3>${fam.map(x=>`<div class="row between" style="flex-wrap:nowrap"><span>${esc(x.name)}${x.login?` <span class="small muted">(login)</span>`:""}</span>${x.id===API.me.id?`<span class="pill ok">Booking for</span>`:`<button class="linkbtn small" data-a="famswitch" data-v="${esc(x.id)}">Book for ${esc(first(x.name))}</button>`}</div>`).join("")}${kidForm()}</div>`
@@ -2335,6 +2349,7 @@ function moreAct(a,v,el){switch(a){
   case "outbuild": outAct("outbuild");break;
   case "outgymdel": outAct("outgymdel");break;
   case "outunclaim": outAct("outunclaim");break;
+  case "verifysend": verifySend();break;
 }}
 const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
 async function moreForm(fid,f,submitter){

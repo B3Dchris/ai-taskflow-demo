@@ -459,6 +459,30 @@ create table if not exists site_salt(day date primary key, salt text not null);
 -- Where someone came from before signing up (the app sends it; see backend/visits.js signupSource), and when they made their login.
 alter table users add column if not exists signup_source jsonb;
 alter table users add column if not exists signed_up_at timestamptz;
+-- Email verification: when the address was confirmed, and which address (an account whose email changes isn't verified any more).
+-- Platform admin (JF_ADMIN_EMAILS) and email sent on a gym's behalf need it. Tokens are single-use, kept hashed, and expire.
+alter table users add column if not exists email_verified_at timestamptz;
+alter table users add column if not exists email_verified_for text;
+create table if not exists email_verifications(
+  token_hash text primary key,
+  user_id bigint not null references users(id) on delete cascade,
+  email text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists email_verifications_user on email_verifications(user_id);
+-- "Stop emails from this gym": one row per gym and address that gym has emailed (coach messages, invites). token: the link's key.
+create table if not exists gym_mail_stops(
+  gym_id bigint not null references gyms(id) on delete cascade,
+  email text not null,
+  token text not null unique,
+  stopped_at timestamptz,
+  created_at timestamptz not null default now(),
+  primary key(gym_id, email)
+);
+-- The last free trial someone picked for themselves, kept when they leave: rejoining the same gym soon after doesn't start another.
+alter table users add column if not exists trial_gym_id bigint;
+alter table users add column if not exists trial_at date;
 `;
 
 // Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.
@@ -568,6 +592,7 @@ async function migrate(pool) {
   await pool.query(HEAD_FIX);
   await pool.query("delete from sessions where expires_at < now()");
   await pool.query("delete from password_resets where expires_at < now()");
+  await pool.query("delete from email_verifications where expires_at < now()");
   // Logins made before sign-up times were kept: when the record was made.
   await pool.query("update users set signed_up_at=created_at where signed_up_at is null and pass_hash is not null");
   await purgeRejected(pool);

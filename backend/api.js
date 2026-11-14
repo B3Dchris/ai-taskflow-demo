@@ -220,8 +220,11 @@ function makeApi(pool, { secureCookies, build }) {
   // A coach the gym has marked inactive (or removed) has no coach access.
   const isCoach = (u) => !!u && u.role === "coach" && !!u.gym_id && u.active !== false;
   const needCoach = (req) => { const u = needUser(req); if (!isCoach(u)) fail(403, "Only coaches can do that."); return u; };
-  // Platform admins: the people whose email is in JF_ADMIN_EMAILS. Everyone else gets 403.
-  const needAdmin = (req) => { const u = needUser(req); if (!outreach.isAdmin(loginOf(u).email)) fail(403, "Not allowed."); return u; };
+  // An account's email is verified when they opened a link sent to it (or set a password from a reset email) for that same address.
+  const verifiedEmail = (x) => !!(x && x.email && x.email_verified_at && x.email_verified_for === x.email);
+  // Platform admins: the people whose email is in JF_ADMIN_EMAILS, once they've verified it. Everyone else gets 403.
+  const isTeam = (u) => { const lg = loginOf(u); return !!lg && outreach.isAdmin(lg.email) && verifiedEmail(lg); };
+  const needAdmin = (req) => { const u = needUser(req); if (!isTeam(u)) fail(403, outreach.isAdmin(loginOf(u).email) ? "Verify your email to open the team tools." : "Not allowed."); return u; };
 
   async function validTz(tz) { tz = clean(tz, 64); if (!tz) return null; try { await q("select now() at time zone $1", [tz]); return tz; } catch (e) { return null; } }
   async function startSession(res, userId) {
@@ -256,7 +259,8 @@ function makeApi(pool, { secureCookies, build }) {
     if (u.gym_id) { const b = u.gym_beta; out.gym.features = beta.active(b) ? b.features || [] : []; if (isHead(u) && b && b.status) out.gym.beta = b.status; }
     // A preview of a gym outreach built: who it's for, so the app shows the claim bar (and fills in the sign-up).
     if (u.preview) { Object.assign(out, { id: "preview", email: null, preview: { name: u.preview.name, domain: u.preview.domain, email: u.preview.email, accent: u.preview.accent } }); out.gym.logo = u.preview.logo; out.gym.headCoach = null; }
-    if (outreach.isAdmin(loginOf(u).email)) out.admin = true; // JitsFlow's own people (JF_ADMIN_EMAILS): the Outreach screen
+    // JitsFlow's own people (JF_ADMIN_EMAILS, verified): the Outreach screen. Not verified yet: Me asks them to verify first.
+    if (!u.preview) { const lg = loginOf(u); out.emailVerified = verifiedEmail(lg); if (isTeam(u)) out.admin = true; else if (outreach.isAdmin(lg.email)) out.adminVerify = true; }
     return out;
   }
   // Sign-ups and reset emails: every attempt counts, per address and per email.
@@ -353,7 +357,8 @@ function makeApi(pool, { secureCookies, build }) {
     await startSession(res, id);
     if (pro) await claimProspect(await loadMe(id), pro);
     const m = await loadMe(id);
-    mail.sendLater({ to: m.email, ...mail.templates.welcomeCoach(m.name, m.gym_name, mail.appUrl() + "/app/?join=" + m.student_code) });
+    // The welcome is also the email check: its button verifies the address (the gym can email its members once it's verified).
+    mail.sendLater({ to: m.email, ...mail.templates.welcomeCoach(first(m.name), mail.appUrl() + "/app/?join=" + m.student_code, await verifyUrl(m)) });
     res.status(201).json({ me: me(m), ...(pro ? { claimed: true } : {}) });
   }));
 
@@ -455,10 +460,35 @@ function makeApi(pool, { secureCookies, build }) {
     const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
     if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
     const uid = r.rows[0].user_id;
-    await q("update users set pass_hash=$1, offline=false, claim_token=null, signed_up_at=coalesce(signed_up_at, now()) where id=$2", [await bcrypt.hash(password, 11), uid]);
+    // The link came to their email, so the email is theirs: it's verified too.
+    await q(`update users set pass_hash=$1, offline=false, claim_token=null, signed_up_at=coalesce(signed_up_at, now()), email_verified_at=case when email is null then email_verified_at else now() end,
+      email_verified_for=coalesce(email, email_verified_for) where id=$2`, [await bcrypt.hash(password, 11), uid]);
     await q("delete from sessions where user_id=$1", [uid]); // sign out everywhere else
     await startSession(res, uid);
     res.json({ me: me(await loginMe(uid)) });
+  }));
+  // The link in a "confirm your email" email (/app/?verify=<token>): it works once, for 24 hours, for the address it was sent to.
+  // It doesn't sign anyone in: the app opened from it just says the email is confirmed (and refreshes Me if they're signed in).
+  api.post("/auth/verify", wrap(async (req, res) => {
+    const tok = clean(req.body?.token, 100);
+    if (limited("ver-ip:" + limitIp(req), 30, 15 * 60e3)) fail(429, "Too many attempts. Wait 15 minutes and try again.");
+    if (!/^[0-9a-f]{64}$/.test(tok)) fail(400, "That link isn't right. Send a new one from Me in the app.");
+    const r = await q("delete from email_verifications where token_hash=$1 returning user_id, email, expires_at > now() as live", [sha(tok)]);
+    if (!r.rows[0] || !r.rows[0].live) fail(400, "That link has expired or was already used. Send a new one from Me in the app.");
+    const v = await q("update users set email_verified_at=now(), email_verified_for=email where id=$1 and email=$2 returning id", [r.rows[0].user_id, r.rows[0].email]);
+    if (!v.rows[0]) fail(400, "That link was for another email address. Send a new one from Me in the app.");
+    res.json({ ok: true, me: req.user && !req.preview ? me(await reMe(req.user)) : null });
+  }));
+  // "Send verification email" (Me, and wherever a gym email waits on it).
+  api.post("/me/verify-email", wrap(async (req, res) => {
+    const u = needUser(req), lg = loginOf(u);
+    if (verifiedEmail(lg)) return res.json({ ok: true, already: true, me: me(u) });
+    if (!lg.email) fail(400, "Add an email to your account first.");
+    if (!mail.mailOn()) fail(503, "Email isn't switched on yet.");
+    if (limited("ver:" + lg.id, 5, 24 * 3600e3)) fail(429, "We've sent a few already today. Check your spam folder, or try again tomorrow.");
+    try { await mail.send({ to: lg.email, ...mail.templates.verify(first(parentNameOf(lg)), await verifyUrl(lg)) }); }
+    catch (e) { console.warn("mail:", e.message); fail(502, "Couldn't send the email just now. Try again in a minute."); }
+    res.json({ ok: true, sent: true, email: lg.email });
   }));
   // build: which version of the app the server has. An app left open compares it with its own and reloads when it changed.
   api.get("/status", (req, res) => res.json({ db: true, mail: mail.mailOn(), ai: !!process.env.ANTHROPIC_API_KEY, build: build || null }));
