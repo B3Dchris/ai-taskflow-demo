@@ -31,6 +31,12 @@ const cleanPhone = (v) => { const s = String(v == null ? "" : v).replace(/[^\d+\
 const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(e);
 const first = (n) => String(n || "").trim().split(/\s+/)[0] || "";
 const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d);
+// The most any fee or price can be (R20,000), checked on the server wherever one is set; a year or term plan up to 3 times that.
+const MAX_CENTS = 2000000, MAX_PLAN_CENTS = 6000000;
+const TOO_MUCH = "That's more than JitsFlow allows (R20 000). Check the amount.";
+// A fee or price in cents: null when left empty (if allowed), else 0..max. Anything else is a 400 with msg.
+const centsIn = (v, msg, { max = MAX_CENTS, empty = false } = {}) => { if (empty && (v === null || v === undefined || v === "")) return null; const c = intOr(v, NaN);
+  if (!Number.isFinite(c) || c < 0) fail(400, msg); if (c > max) fail(400, TOO_MUCH); return c; };
 // "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && (() => { const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; })();
 
@@ -708,7 +714,7 @@ function makeApi(pool, { secureCookies, build }) {
     const p = { focus: clean(plan.focus, 120), notes: clean(plan.notes, 4000), ids: Array.isArray(plan.ids) ? plan.ids.map((x) => clean(x, 64)).filter(Boolean).slice(0, 30) : [] };
     let capacity = b.capacity === null || b.capacity === undefined || b.capacity === "" ? null : Math.min(500, Math.max(1, intOr(b.capacity, 0)));
     if (kind === "private") capacity = Math.min(capacity || 1, 6);
-    const priceCents = b.priceCents === null || b.priceCents === undefined || b.priceCents === "" ? null : Math.max(0, intOr(b.priceCents, 0));
+    const priceCents = centsIn(b.priceCents, "Enter the price, or leave it empty.", { empty: true });
     return { title, startsAt, durationMin, plan: p, shared: b.shared !== false, kind, capacity, priceCents, coach: clean(b.coach, 60), level: clean(b.level, 40), discipline: clean(b.discipline, 40) };
   }
   const CLASS_COLS = "gym_id,title,starts_at,duration_min,plan,shared,created_by,kind,capacity,price_cents,coach,level,discipline";
@@ -1057,7 +1063,7 @@ function makeApi(pool, { secureCookies, build }) {
   async function plansOf(gymId) { return (await q("select * from plans where gym_id=$1 order by active desc, price_cents", [gymId])).rows; }
   const planOut = (p) => ({ id: String(p.id), name: p.name, priceCents: p.price_cents, period: p.period, classesPerWeek: p.classes_per_week, active: p.active, monthlyCents: monthly(p), privateCents: p.private_price_cents ?? null });
   // A private-lesson price: null or "" for none (the slot's price), else from R0 to R100 000.
-  const readPrivate = (v, msg) => { if (v === null || v === "") return null; const c = intOr(v, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, msg); return c; };
+  const readPrivate = (v, msg) => { if (v === null || v === "") return null; return centsIn(v, msg); };
   // Payments for a private-lesson pack buy credits; they don't count toward monthly fees.
   const FEES = "coalesce(pack_lessons,0)=0";
 
@@ -1455,7 +1461,7 @@ function makeApi(pool, { secureCookies, build }) {
     if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) fail(409, "Someone with that email is already on JitsFlow. Send them your gym's invite link instead.");
     const belt = BELTS.includes(b.belt) ? b.belt : "white", stripes = Math.min(4, Math.max(0, intOr(b.stripes, 0)));
     let planId = null; if (b.planId) { planId = intOr(b.planId, 0); if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
-    const fee = b.feeCents === undefined || b.feeCents === null || b.feeCents === "" ? null : Math.max(0, intOr(b.feeCents, 0));
+    const fee = centsIn(b.feeCents, "Enter the fee, or leave it empty.", { empty: true });
     const r = await q(`insert into users(gym_id,role,name,email,pass_hash,phone,belt,stripes,plan_id,plan_status,plan_started,monthly_fee_cents,notes,offline,parent_name)
       values($1,'student',$2,$3,null,$4,$5,$6,$7,$8,$9,$10,$11,true,$12) returning id`,
       [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000), parentName]);
@@ -1615,7 +1621,7 @@ function makeApi(pool, { secureCookies, build }) {
     const belt = b.belt !== undefined ? (BELTS.includes(b.belt) ? b.belt : fail(400, "Pick a belt.")) : st.belt;
     const stripes = b.stripes !== undefined ? Math.min(4, Math.max(0, intOr(b.stripes, 0))) : st.stripes;
     const notes = b.notes !== undefined ? clean(b.notes, 4000) : st.notes;
-    const fee = b.feeCents !== undefined ? (b.feeCents === null ? null : Math.max(0, intOr(b.feeCents, 0))) : st.monthly_fee_cents;
+    const fee = b.feeCents !== undefined ? centsIn(b.feeCents, "Enter the fee, or leave it empty.", { empty: true }) : st.monthly_fee_cents;
     const active = b.active !== undefined ? !!b.active : st.active;
     if (st.id === u.id && !active) fail(400, "You can't mark yourself inactive. Ask another coach to do it.");
     if (!active && st.active !== false && String(st.id) === String(u.head_id)) fail(400, `${first(st.name)} is the head coach. They need to hand that role to another coach first.`);
@@ -1644,8 +1650,8 @@ function makeApi(pool, { secureCookies, build }) {
   const PRIV_RATE = /private|\b1[\s-]?on[\s-]?1\b|one[\s-]on[\s-]one|personal train|\bpt\b/i;
   function readPlan(b) {
     const name = clean(b.name, 80); if (!name) fail(400, "Give the plan a name.");
-    const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 0 || price > 1e8) fail(400, "Enter the price.");
     const period = PERIODS.includes(b.period) ? b.period : "month";
+    const price = centsIn(b.priceCents, "Enter the price.", { max: period === "year" || period === "term" ? MAX_PLAN_CENTS : MAX_CENTS });
     const cpw = b.classesPerWeek === null || b.classesPerWeek === undefined || b.classesPerWeek === "" ? null : Math.min(30, Math.max(1, intOr(b.classesPerWeek, 0)));
     // What a private lesson costs someone on this plan: left out keeps it, null or "" means the slot's price.
     const priv = b.privateCents === undefined ? undefined : readPrivate(b.privateCents, "Enter the plan's private lesson price, or leave it empty.");
@@ -1672,7 +1678,8 @@ function makeApi(pool, { secureCookies, build }) {
     return (rates || []).filter((r) => { const k = String(r.name || "").toLowerCase(), ok = k && !seen.has(k) && ["month", "week", "term", "year"].includes(r.period) && !PRIV_RATE.test(`${r.name} ${r.note || ""}`) && !NOT_PLAN.test(r.name); if (ok) seen.add(k); return ok; }); };
   async function plansFromRates(gymId, rates) {
     const have = new Set((await plansOf(gymId)).map((p) => p.name.toLowerCase()));
-    const list = planRates(rates, have);
+    // A price above what JitsFlow allows (a misread, or a website's typo) isn't made into a plan.
+    const list = planRates(rates, have).filter((r) => Math.round(r.price * 100) <= (r.period === "year" || r.period === "term" ? MAX_PLAN_CENTS : MAX_CENTS));
     for (const r of list) {
       const cpw = /(\d)\s*(x|times|classes)\s*(a|per)\s*week/i.exec(r.name + " " + (r.note || ""));
       await q("insert into plans(gym_id,name,price_cents,period,classes_per_week) values($1,$2,$3,$4,$5)", [gymId, clean(r.name, 80), Math.round(r.price * 100), r.period, cpw ? Number(cpw[1]) : null]);
@@ -1913,7 +1920,7 @@ function makeApi(pool, { secureCookies, build }) {
     const name = b.name !== undefined ? clean(b.name, 100) : u.gym_name;
     if (!name) fail(400, "Enter your gym's name.");
     if (b.monthlyFeeCents !== undefined && !isHead(u)) fail(403, "Only the head coach can change fees.");
-    const fee = b.monthlyFeeCents !== undefined ? Math.max(0, intOr(b.monthlyFeeCents, 0)) : u.gym_fee;
+    const fee = b.monthlyFeeCents !== undefined ? centsIn(b.monthlyFeeCents || 0, "Enter the monthly fee.") : u.gym_fee;
     const show = b.showAttendees !== undefined ? !!b.showAttendees : u.show_attendees !== false;
     const invite = b.studentsInvite !== undefined ? !!b.studentsInvite : u.students_invite !== false;
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
@@ -2052,7 +2059,7 @@ function makeApi(pool, { secureCookies, build }) {
     const profile = importer.cleanProfile(b.profile);
     const name = profile.name || u.gym_name;
     let fee = u.gym_fee;
-    if (!fee && isHead(u)) { const m = profile.rates.find((r) => r.period === "month" && !NOT_PLAN.test(r.name) && (!r.currency || r.currency === (u.currency || "ZAR"))); if (m) fee = Math.round(m.price * 100); }
+    if (!fee && isHead(u)) { const m = profile.rates.find((r) => r.period === "month" && !NOT_PLAN.test(r.name) && (!r.currency || r.currency === (u.currency || "ZAR"))); if (m && Math.round(m.price * 100) <= MAX_CENTS) fee = Math.round(m.price * 100); }
     const was = ((await q("select profile from gyms where id=$1", [u.gym_id])).rows[0].profile || {}).timetable || [];
     profile.timetable = ttMerge(was, profile.timetable, b);
     await q("update gyms set name=$1, profile=$2, monthly_fee_cents=$3, profile_updated_at=now() where id=$4", [name, profile, fee, u.gym_id]);
@@ -2394,7 +2401,7 @@ function makeApi(pool, { secureCookies, build }) {
     const u = needHead(req), b = req.body || {}, mode = b.mode === undefined ? "fee" : b.mode;
     if (!["none", "fee", "membership"].includes(mode)) fail(400, "Pick what clients who only take private lessons pay.");
     let c = u.access_fee_cents || 0, ids = (u.private_plan_ids || []).map(String);
-    if (mode === "fee" || b.accessFeeCents !== undefined) { c = intOr(b.accessFeeCents, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, "Enter the access fee, or 0 to switch it off."); }
+    if (mode === "fee" || b.accessFeeCents !== undefined) { c = centsIn(b.accessFeeCents, "Enter the access fee, or 0 to switch it off."); }
     if (mode === "membership" || b.planIds !== undefined) {
       ids = [...new Set((Array.isArray(b.planIds) ? b.planIds : []).map((x) => intOr(x, 0)).filter(Boolean))].slice(0, 50);
       if ((await q("select id from plans where gym_id=$1 and id = any($2::bigint[])", [u.gym_id, ids])).rows.length !== ids.length) fail(404, "That plan doesn't exist.");
@@ -2413,7 +2420,7 @@ function makeApi(pool, { secureCookies, build }) {
   function readPack(b) {
     const name = clean(b.name, 80); if (!name) fail(400, "Give the pack a name, like 10 private lessons.");
     const lessons = intOr(b.lessons, 0); if (lessons < 1 || lessons > 100) fail(400, "How many lessons are in the pack? From 1 to 100.");
-    const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 500 || price > 5e6) fail(400, "Enter the pack's price, from R5.");
+    const price = centsIn(b.priceCents, "Enter the pack's price, from R5."); if (price < 500) fail(400, "Enter the pack's price, from R5.");
     const exp = b.expiryMonths === null || b.expiryMonths === undefined || b.expiryMonths === "" || Number(b.expiryMonths) === 0 ? null : Math.min(36, Math.max(1, intOr(b.expiryMonths, 0)));
     return { name, lessons, price, exp, active: b.active !== false };
   }
@@ -3056,7 +3063,7 @@ function makeApi(pool, { secureCookies, build }) {
     if (!p) fail(400, "Your gym doesn't take card payments yet.");
     // A private-lesson pack is paid at its price; anything else is the amount the student typed.
     const pack = req.body?.packId ? await packIn(u.gym_id, req.body.packId, true) : null;
-    const cents = pack ? pack.price_cents : intOr(req.body?.amountCents, 0); if (cents < 500 || cents > 5e6) fail(400, "Enter an amount from R5.");
+    const cents = pack ? pack.price_cents : intOr(req.body?.amountCents, 0); if (cents < 500) fail(400, "Enter an amount from R5."); if (cents > MAX_CENTS) fail(400, TOO_MUCH);
     const P = payfast.platform(), split = p.id !== P.id ? { merchant_id: Number(P.id), percentage: payfast.FEE_PCT() } : null;
     const [fn, ...ln] = String(u.name || "").trim().split(/\s+/);
     // The student picked Apple Pay, Google Pay, card or Instant EFT in the app: PayFast opens on just that one (its payment_method codes).
@@ -3293,10 +3300,13 @@ function makeApi(pool, { secureCookies, build }) {
     const old = (await q("select user_id, token, token_hash, merchant_id, stopped_at from autopay where user_id = any($1)", [ppl.map((x) => x.id)])).rows;
     if (ppl.every((x) => old.some((o) => String(o.user_id) === String(x.id) && o.token_hash === th && !o.stopped_at))) return; // the same notification again
     const gone = old.filter((o) => o.token_hash !== th);
-    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month) values($1,$2,$3,$4,$5,$6,$7)
+    // The card's limit for each of them: twice their monthly fee now, as they see it on their Pay sheet when they save the card (see autoCap).
+    const usual = async (id) => { const x = (await q("select * from users where id=$1", [id])).rows[0], plan = x && x.plan_id ? (await q("select * from plans where id=$1", [x.plan_id])).rows[0] : null;
+      return x ? 2 * membershipOf({ ...x, plan_status: "active" }, plan, g) : 0; };
+    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month,cap_cents) values($1,$2,$3,$4,$5,$6,$7,$8)
       on conflict (user_id) do update set gym_id=excluded.gym_id, payer_id=excluded.payer_id, token=excluded.token, token_hash=excluded.token_hash, merchant_id=excluded.merchant_id,
-        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null`,
-      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7)]);
+        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null, cap_cents=excluded.cap_cents`,
+      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7), await usual(x.id)]);
     // The card it replaces: cancelled with PayFast once nothing uses it.
     const m = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]);
     const done = new Set();
@@ -3329,6 +3339,19 @@ function makeApi(pool, { secureCookies, build }) {
     const pv = (await privatesOf(gc.gym_id, [x.id], tz, today))[x.id], led = leds[String(x.id)];
     const ms = balanceOf(x, plan, gc, pv, led, month).months.filter((o) => o.month >= a.from_month), cents = ms.reduce((t, o) => t + o.cents, 0);
     if (cents < 500) return 0;
+    // More than the card's limit (twice what the member usually paid when they saved it, at least R3,000): not charged. The month is
+    // claimed as failed, so it's tried once, and the member and the head coach are asked to sort it out by hand.
+    const cap = await autoCap(a);
+    if (cents > cap) {
+      const held = (await q("insert into autopay_charges(gym_id,user_id,month,amount_cents,alloc,status,error,told_at) values($1,$2,$3,$4,$5,'failed',$6,now()) on conflict do nothing returning *",
+        [gc.gym_id, x.id, month, cents, Object.fromEntries(ms.map((o) => [o.month, o.cents])), "over the card's limit"])).rows[0];
+      if (held) {
+        const p = await payerOf(x.id, a.payer_id), amount = fmtMoney(cents, gc.currency), limit = fmtMoney(cap, gc.currency);
+        if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayOverLimit(first(p.name), gc.gym_name, whoFor(x), amount, limit) });
+        toHead(gc.gym_id, (name) => mail.templates.autopayOverLimitCoach(name, x.name, amount, limit));
+      }
+      return 0;
+    }
     const c = (await q("insert into autopay_charges(gym_id,user_id,month,amount_cents,alloc) values($1,$2,$3,$4,$5) on conflict do nothing returning *",
       [gc.gym_id, x.id, month, cents, Object.fromEntries(ms.map((o) => [o.month, o.cents]))])).rows[0];
     if (!c) return 0;
@@ -3340,6 +3363,14 @@ function makeApi(pool, { secureCookies, build }) {
     catch (e) { await q("update autopay_charges set error=$2, updated_at=now() where id=$1", [c.id, clean(e.message, 200)]); return 0; }
     if (r.ok) { await q("update autopay_charges set status='sent', updated_at=now() where id=$1 and status='charging'", [c.id]); return 1; }
     await autoFailed(c.id, r.reason); return 0;
+  }
+  // The most a saved card is charged at once without the member saying so: twice their usual monthly fee when they saved it
+  // (cap_cents), and never under R3,000. A card saved before limits: twice the biggest charge it has paid, or R3,000.
+  const AUTO_CAP_MIN = Number(process.env.JF_AUTOPAY_CAP_MIN_CENTS) || 300000;
+  async function autoCap(a) {
+    if (a.cap_cents) return Math.max(AUTO_CAP_MIN, a.cap_cents);
+    const r = (await q("select max(amount_cents) as m from autopay_charges where user_id=$1 and gym_id=$2 and status in ('sent','paid')", [a.user_id, a.gym_id])).rows[0];
+    return Math.max(AUTO_CAP_MIN, 2 * (Number(r && r.m) || 0));
   }
   // coach: false when the head coach said so themselves (Money), so they aren't emailed about it.
   async function autoFailed(id, why, coach = true) {
