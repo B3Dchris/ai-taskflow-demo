@@ -389,28 +389,24 @@ function makeApi(pool, { secureCookies, build }) {
     const claim = clean(b.claim, 40);
     let pre = claim ? (await q("select id, gym_id, name, phone, parent_name from users where claim_token=$1 and pass_hash is null and parent_id is null", [claim])).rows[0] : null;
     if (pre && !(role === "student" && (!gymId || pre.gym_id === gymId))) pre = null;
-    // Kids the parent ticked ("Which of your kids train here?"): they all go on this one login. cands: the kids they could tick.
-    const kidOut = (x) => ({ id: String(x.id), name: x.name }), asked = Array.isArray(b.kids);
-    let cands = [];
-    // Signed up with the gym's code: the coach may have added them already. Offer that record ("Are you Sipho?") when
-    // their name or phone number matches it, and link to it only if they say yes. An email alone never links.
-    // A number that matches several kids (brothers and sisters share a parent's number): ask once which of them train here.
-    if (!pre && gymId && role === "student") {
-      const { one, all } = await offlineMatch(gymId, b.name, b.phone), adult = one && !one.parent_name ? one : null;
-      cands = all.filter((x) => x.parent_name);
-      if (b.link && b.link !== "no") { pre = all.find((x) => String(x.id) === String(b.link)); if (!pre) fail(409, "We couldn't link you to that student. Ask your coach for your invite link."); }
-      else if (!b.link && !asked) {
-        if (cands.length >= 2 || (adult && cands.length)) { await checkNew(0); return res.json({ ask: { ...(adult ? { id: String(adult.id), name: adult.name, kid: false } : {}), kids: cands.map(kidOut) } }); }
-        if (one) { await checkNew(one.id); return res.json({ ask: { id: String(one.id), name: one.name, kid: !!one.parent_name } }); }
-      }
-    } else if (pre && pre.parent_name) {
-      // A kid's own invite link: their brothers and sisters the coach added with the same number can come on the same login.
-      cands = (await offlineMatch(pre.gym_id, "", pre.phone || b.phone)).all.filter((x) => x.parent_name && String(x.id) !== String(pre.id));
-      if (cands.length && !asked) { await checkNew(pre.id); return res.json({ ask: { claim: String(pre.id), kids: [pre, ...cands].map(kidOut) } }); }
+    // Kids the parent ticked ("Which of your kids train here?", from a kid's invite link): they all go on this one login.
+    // cands: the kids they could tick.
+    const kidOut = (x) => ({ id: String(x.id), name: x.name }), asked = Array.isArray(b.kids) && !!pre;
+    let cands = [], dup = null;
+    // Signed up with the gym's code: the coach may have added them already. That record only becomes theirs through its own invite
+    // link (claim, above): a name or a phone number is easy to know, so a code sign-up always makes a new account, and nobody else's
+    // name is ever shown here. When a record the coach added matches their name or number, the coach is told (Members shows
+    // "Possible duplicate", with Merge).
+    if (!pre && gymId && role === "student") dup = (await offlineMatch(gymId, b.name, b.phone)).all[0] || null;
+    else if (pre) {
+      // An invite link (the coach sent it, so it's theirs): kids the coach added with the same number (a kid's brothers and sisters, or
+      // a member's own kids) can come on the same login. The number is the one the coach typed on the record the link is for.
+      cands = (await offlineMatch(pre.gym_id, "", pre.phone)).all.filter((x) => x.parent_name && String(x.id) !== String(pre.id));
+      if (cands.length && !asked) { await checkNew(pre.id); return res.json({ ask: pre.parent_name ? { claim: String(pre.id), kids: [pre, ...cands].map(kidOut) }
+        : { claim: String(pre.id), id: String(pre.id), name: pre.name, kid: false, kids: cands.map(kidOut) } }); }
     }
     let kids = asked ? [...new Set(b.kids.map(String))].filter((k) => !pre || k !== String(pre.id)).slice(0, 12)
       .map((k) => cands.find((x) => String(x.id) === k) || fail(409, "We couldn't link one of those kids. Ask your coach for their invite link.")) : [];
-    if (!pre && kids.length) { pre = kids[0]; kids = kids.slice(1); } // no record of their own: the first kid's record holds the login
     if (pre) {
       await checkNew(pre.id);
       // A kid's record (it has a parent's name): the parent signs up for them. The kid keeps their name; the parent's goes in as the parent.
@@ -422,6 +418,7 @@ function makeApi(pool, { secureCookies, build }) {
     } else id = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) });
     await startSession(res, id);
     const m = await loadMe(id);
+    if (dup && !limited("dup:" + gymId, 20, 24 * 3600e3)) await tellCoach(gymId, await headCoach(gymId), "duplicate", `${m.name} signed up with your gym's code. You added ${dup.name}, who isn't on the app, with the same name or number. If it's the same person, open ${first(m.name)} in Members and tap Merge. If not, there's nothing to do.`);
     if (m.role === "student") mail.sendLater({ to: m.email, ...mail.templates.welcomeStudent(m.name, m.gym_name) });
     res.status(201).json({ me: me(m) });
   }));
@@ -534,13 +531,14 @@ function makeApi(pool, { secureCookies, build }) {
     await setAs(req, id);
     res.json({ me: me(await loadMe(id, lg.id)) });
   }));
-  // Add a kid to this login: with their own invite link (claim, a record the coach added), or by name (the coach may have added them
-  // already: that record is linked, not copied). The phone then books for them.
+  // Add a kid to this login: with their own invite link (claim, a record the coach added), or by name (a new kid). A record the coach
+  // added is only ever linked through its invite link: a name (or a phone number, which anyone can type into their profile) proves
+  // nothing. The phone then books for them.
   api.post("/me/kids", once(async (req, res) => {
     const u = needUser(req), lg = loginOf(u), b = req.body || {}, pname = parentNameOf(lg), firstKid = familyIds(u).length <= 1;
     if (isCoach(lg)) fail(400, "Coaches add their own kids as members in the Members tab.");
     if (familyIds(u).length >= 12) fail(400, "That's a lot of kids on one login. Ask your coach to help.");
-    let kid, keepParent = false;
+    let kid;
     if (b.claim) {
       kid = (await q("select id, name, parent_name, gym_id from users where claim_token=$1 and pass_hash is null and parent_id is null and role='student'", [clean(b.claim, 40)])).rows[0];
       if (!kid) fail(404, "That invite link was used already or isn't right. Ask your coach for a new one.");
@@ -548,19 +546,17 @@ function makeApi(pool, { secureCookies, build }) {
     } else {
       const name = clean(b.name, 80); if (!name) fail(400, "Enter your kid's name.");
       if (!u.gym_id) fail(400, "Join your gym first, then add your kids.");
-      // Only a kid's record (it has a parent's name) is linked by name: an adult's record is theirs to claim, with their own link.
-      // And only with the same proof sign-up asks for: the parent's number is the one the coach has for the kid. Anyone else
-      // (a name is easy to guess) is asked for the kid's invite link, and the head coach hears about it.
-      const rec = (await q(`select id, name, parent_name, gym_id, phone from users where gym_id=$1 and role='student' and pass_hash is null and parent_id is null and parent_name<>''
+      // A kid the coach added already (a record with a parent's name): they're asked for the kid's invite link (it adds the kid to
+      // this login in one tap), and the head coach hears about it, so the real parent gets it. Adults' records aren't kids: a new kid.
+      const rec = (await q(`select id, name from users where gym_id=$1 and role='student' and pass_hash is null and parent_id is null and parent_name<>''
         and lower(regexp_replace(trim(name), '\\s+', ' ', 'g'))=$2 order by id limit 1`, [u.gym_id, nameKey(name)])).rows[0];
-      if (rec && !(phoneKey(rec.phone).length >= 7 && phoneKey(rec.phone) === phoneKey(lg.phone || u.phone))) {
-        if (!limited("kidask:" + lg.id, 3, 24 * 3600e3)) await tellCoach(u.gym_id, await headCoach(u.gym_id), "kidask", `${pname} asked to add ${rec.name} to their login, from a number you don't have for ${first(rec.name)}. If they're ${first(rec.name)}'s parent, send them ${first(rec.name)}'s invite link (on ${first(rec.name)}'s page).`);
-        fail(409, `${u.gym_name} already has ${rec.name}, with another number. Ask your coach for ${first(rec.name)}'s invite link and open it here. That adds ${first(rec.name)} to your login.`);
+      if (rec) {
+        if (!limited("kidask:" + lg.id, 3, 24 * 3600e3)) await tellCoach(u.gym_id, await headCoach(u.gym_id), "kidask", `${pname} asked to add ${rec.name} to their login. If they're ${first(rec.name)}'s parent, send them ${first(rec.name)}'s invite link (on ${first(rec.name)}'s page).`);
+        fail(409, `${u.gym_name} already has ${rec.name}. Ask your coach for ${first(rec.name)}'s invite link and open it here. That adds ${first(rec.name)} to your login.`);
       }
-      kid = rec; keepParent = !!rec; // the name the coach has for the parent stays
-      if (!kid) kid = (await q("insert into users(gym_id,role,name,phone,parent_name,offline) values($1,'student',$2,$3,$4,false) returning id, name, parent_name, gym_id", [u.gym_id, name, lg.phone || "", pname])).rows[0];
+      kid = (await q("insert into users(gym_id,role,name,phone,parent_name,offline) values($1,'student',$2,$3,$4,false) returning id, name, parent_name, gym_id", [u.gym_id, name, lg.phone || "", pname])).rows[0];
     }
-    await linkKids(lg.id, [kid.id], keepParent ? "" : pname);
+    await linkKids(lg.id, [kid.id], pname);
     await setAs(req, kid.id);
     // A parent who signed up with the gym's code but doesn't train (never booked, no plan, nothing paid) and adds their first kid:
     // they come off the gym's member list, so the coach doesn't wonder whether to bill them. One tap ("I train too") undoes it.
@@ -2707,16 +2703,18 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
 
   // ---------- families: brothers and sisters ----------
-  // Kids who share a parent: on the same parent's login, or added by the coach with the same parent's number (and a parent who's a
-  // member, with the kids on their login). Each keeps their own fees and payment reference (parents may have saved them in their
-  // banking app). They get one reminder between them, and money paid for one that's more than they owe pays the others.
-  // xs: students (id, parent_id, parent_name, phone). Returns {id: [the family's ids, oldest record first]}, for families of 2 or more.
+  // Kids who share a parent: on the same parent's login (and a parent who's a member, with the kids on their login), or kids the coach
+  // added who aren't on the app, with the same parent's number (the coach typed both). A number someone typed themselves (their
+  // profile, or a kid they added) never puts them in a family: anyone can type anyone's number. Each keeps their own fees and payment
+  // reference (parents may have saved them in their banking app). They get one reminder between them, and money paid for one that's
+  // more than they owe pays the others.
+  // xs: students (id, parent_id, parent_name, phone, offline). Returns {id: [the family's ids, oldest record first]}, for families of 2 or more.
   function familiesOf(xs) {
     const up = {}, find = (a) => (up[a] && up[a] !== a ? (up[a] = find(up[a])) : a);
     const join = (a, b) => { a = find(a); b = find(b); if (a !== b) { if (Number(a) < Number(b)) up[b] = a; else up[a] = b; } };
     const ids = new Set(xs.map((x) => String(x.id))), seen = {}, by = (k, id) => { if (seen[k]) join(id, seen[k]); else seen[k] = id; };
     for (const x of xs) {
-      const id = String(x.id), ph = x.parent_name || x.parent_id ? phoneKey(x.phone) : "";
+      const id = String(x.id), ph = x.parent_name && x.offline && !x.parent_id ? phoneKey(x.phone) : "";
       if (x.parent_id) { by("p" + x.parent_id, id); if (ids.has(String(x.parent_id))) join(id, String(x.parent_id)); }
       if (ph.length >= 7) by("t" + ph, id);
     }
@@ -2725,7 +2723,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     for (const g of Object.values(groups)) if (g.length > 1) { g.sort((a, b) => Number(a) - Number(b)); for (const id of g) out[id] = g; }
     return out;
   }
-  const famRows = async (gymId) => (await q("select id, name, parent_id, parent_name, phone from users where gym_id=$1 and role='student' and active", [gymId])).rows;
+  const famRows = async (gymId) => (await q("select id, name, parent_id, parent_name, phone, pass_hash is null and parent_id is null as offline from users where gym_id=$1 and role='student' and active", [gymId])).rows;
   // A fee payment for one of a family that's more than they owe pays the whole family's fees, oldest month first: everyone's months
   // still owed (the payer's and their brothers' and sisters', by month), then what's due next for each of them. So a payment from a
   // kid who's paid up pays a sister who owes before it pays his own next month. What's left over stays with the payer. Not for a
@@ -2768,7 +2766,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // until: the last month the running balance counts (this month unless said).
   async function moneyRows(u, month, until) {
     const plans = await plansOf(u.gym_id), pm = Object.fromEntries(plans.map((p) => [String(p.id), p]));
-    const ppl = (await q(`select id, name, parent_name, parent_id, ${EMAIL("users")} as email, phone, pass_hash is null and parent_id is null as offline, claim_token, monthly_fee_cents, plan_id, plan_status, pay_ref, created_at, bill_from, trial_ends, reminded_at from users
+    const ppl = (await q(`select id, name, parent_name, parent_id, ${EMAIL("users")} as email, email as own_email, phone, pass_hash is null and parent_id is null as offline, claim_token, monthly_fee_cents, plan_id, plan_status, pay_ref, created_at, bill_from, trial_ends, reminded_at from users
       where gym_id=$1 and role='student' and active order by name`, [u.gym_id])).rows;
     const today = await todayIn(u), cur = today.slice(0, 7), priv = await privatesOf(u.gym_id, ppl.map((x) => x.id), tzOf(u), today), led = await feeLedger(u.gym_id, ppl.map((x) => x.id));
     await withBreaks(u.gym_id, ppl, u, tzOf(u));
@@ -2828,7 +2826,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!x.email) return { skip: "noEmail" };
     // A kid's reminder goes to their parent: "Hi Thandi", about Lerato's fees.
     const hi = hiOf(x), kid = x.parent_name || x.parent_id ? first(x.name) : "";
-    return { mail: { to: x.email, replyTo: u.email, ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, x.offline ? await claimUrl(u, x) : null, r.parts, kid) } };
+    // Their invite link only goes to their own email (the one the coach added them with), never to a brother's or sister's.
+    const join = x.offline && x.own_email && x.own_email === x.email ? await claimUrl(u, x) : null;
+    return { mail: { to: x.email, replyTo: u.email, ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, join, r.parts, kid) } };
   }
   // What a reminder asks someone for: the amount (due), what it's for, the lines that make it up and their reference. Or { skip }.
   async function remindInfo(u, x, month, running) {
@@ -2851,12 +2851,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   async function unitReminder(u, xs, month, bank, running) {
     const one = async (x, to) => { const r = await reminderOf(u, { ...x, email: x.email || to }, month, bank, running); return r.mail ? { ...r, xs: [x] } : r; };
     if (xs.length === 1) return one(xs[0]);
+    // Who it goes to: the kids' parent's login (one family is one login, see familiesOf), or for kids the coach added who aren't on
+    // the app, the email the coach has for one of them.
     const items = [], skips = [], to = xs.map((x) => x.email).find(Boolean);
     for (const x of xs) { const r = await remindInfo(u, x, month, running); if (r.skip) skips.push(r.skip); else items.push({ x, ...r }); }
     if (!items.length) return { skip: skips.includes("paid") ? "paid" : "off" };
     if (items.length === 1) return one(items[0].x, to);
     if (!to) return { skip: "noEmail" };
-    const c = (v) => fmtMoney(v, u.currency), whats = [...new Set(items.map((i) => i.what))], off = items.find((i) => i.x.offline);
+    // The invite link in it is only ever the one for the record the email belongs to (the coach added it with that email).
+    const c = (v) => fmtMoney(v, u.currency), whats = [...new Set(items.map((i) => i.what))], off = items.find((i) => i.x.offline && i.x.own_email && i.x.own_email === to);
     const lines = items.map((i) => `${first(i.x.name)}: ${c(i.due)} for ${i.what}`);
     const m = mail.templates.familyReminder(hiOf(items[0].x), u.gym_name, c(items.reduce((a, i) => a + i.due, 0)), whats.length === 1 ? whats[0] : items[0].label, lines,
       items.map((i) => `${first(i.x.name)}: ${i.ref}`), bank, off ? await claimUrl(u, off.x) : null);

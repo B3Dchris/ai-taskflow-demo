@@ -209,16 +209,16 @@ function askSheet(a){S.ui.sheet={k:"authask"};S.ui.stack=[];
   openSheet(`${sheetHead("Your account")}<div class="stack-lg"><h1>${a.kid?`Signing up for ${esc(a.name)}?`:`Are you ${esc(a.name)}?`}</h1>
    <p>Your coach already has <b>${esc(a.name)}</b> on their list. ${a.kid?"If you're signing up for them":"If that's you"}, we'll link your account to it, so the plan, payments and classes carry over.</p></div>`,false,
    {act:`<button class="btn grow" data-a="authlink" data-v="no">${a.kid?"No":"No, that's not me"}</button><button class="btn primary grow" data-a="authlink" data-v="${esc(a.id)}">${a.kid?`Yes, link ${esc(first(a.name))}`:"Yes, that's me"}</button>`})}
-// The number they signed up with (or a kid's own link) matches several kids: ask once which of them train here. They all go on this one
-// login. a.claim: the kid whose link it is (always on). a.id: a member with their name (the parent trains too).
-function kidsAsk(a){const me=a.id&&!a.kid,cl=a.claim,k0=first(a.kids[0].name);
+// An invite link whose record the coach has with the same number as some kids: ask once which of them train here. They all go on this
+// one login. a.claim: whose link it is (always on). a.id: a member's own link (the parent trains too).
+function kidsAsk(a){const me=a.id&&!a.kid,cl=!me&&a.claim,k0=first(a.kids[0].name);
   const box=(n,v,on,lock,label)=>`<label class="row kidpick" style="flex-wrap:nowrap;gap:10px"><input type="checkbox" name="${n}" value="${esc(v)}"${on?" checked":""}${lock?" disabled":""}><span>${label}</span></label>`;
   openSheet(`${sheetHead("Your account")}<form id="kidsform" class="stack-lg" novalidate><h1>${cl?`Signing up for ${esc(k0)}`:me?`Are you ${esc(a.name)}?`:"Which of your kids train here?"}</h1>
-    ${me?box("self",a.id,true,false,`I'm <b>${esc(a.name)}</b>, and I train here too`):""}
+    ${me?box("self",a.id,true,!!a.claim,`I'm <b>${esc(a.name)}</b>, and I train here too`):""}
     <p>${cl?`Your coach also has these kids with your number. Which of them train here?`:me?"Your coach also has these kids with your number. Which of them are yours?":"Your coach has these kids with your number. Tick the ones that are yours."}</p>
     <div class="stack" style="gap:8px">${a.kids.map(k=>box("kid",k.id,true,cl&&k.id===a.claim,`<b>${esc(k.name)}</b>`)).join("")}</div>
     <p class="small muted">They all go on this one login. You book, pay and keep a journal for each of them, and switch with Booking for at the top.</p></form>`,false,
-   {act:`<button class="btn grow" data-a="authkids" data-v="none">${cl?`Just ${esc(k0)}`:"None of them"}</button><button class="btn primary grow" data-a="authkids" data-v="go">Continue</button>`})}
+   {act:`<button class="btn grow" data-a="authkids" data-v="none">${cl?`Just ${esc(k0)}`:me&&a.claim?"Just me":"None of them"}</button><button class="btn primary grow" data-a="authkids" data-v="go">Continue</button>`})}
 async function authKids(v){const b=S.ui.regBody,f=document.getElementById("kidsform");if(!b||!f)return authSheet();
   const kids=v==="none"?[]:[...f.querySelectorAll("[name=kid]:checked")].map(x=>x.value),self=f.querySelector("[name=self]"),body={...b,kids};
   if(self)body.link=v!=="none"&&self.checked?self.value:"no";

@@ -174,7 +174,7 @@ const templates = {
     paras: [`Hi ${name},`, `${gym} changed how it takes card payments, so your saved card is no longer charged automatically.`, "To keep paying automatically, open Pay in the app and save your card again."],
     button: { label: "Open JitsFlow", url: appUrl() + "/app/#me" } }),
   // To a coach: a private booked or cancelled, a member left, or a new member picked their plan. Fixed subjects; the line says who and when.
-  coachNews: (kind, name, line) => { const t = { booked: "A private lesson was booked", cancelled: "A private lesson was cancelled", left: "A member left your gym", joined: "A new member picked a plan", resumed: "A member is training again", kidask: "A parent asked to add a kid", unlinked: "A parent deleted their login" }[kind];
+  coachNews: (kind, name, line) => { const t = { booked: "A private lesson was booked", cancelled: "A private lesson was cancelled", left: "A member left your gym", joined: "A new member picked a plan", resumed: "A member is training again", kidask: "A parent asked to add a kid", unlinked: "A parent deleted their login", duplicate: "A new member may be on your list already" }[kind];
     return { subject: t, title: t, paras: [`Hi ${name},`, line], button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
   privateBooked: (name, gym, when) => ({ subject: "Your private lesson is booked", title: "Private lesson booked",
     paras: [`Hi ${name},`, `You're booked for a private lesson at ${gym}: ${when}.`, "It's free to cancel in the app until it starts."],
