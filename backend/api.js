@@ -610,6 +610,7 @@ function makeApi(pool, { secureCookies, build }) {
     res.json({ ok: true });
   }));
 
+  const LOG_MAX = Number(process.env.JF_LOG_MAX) || 3000, LOG_BYTES = (Number(process.env.JF_LOG_MB) || 8) * 1024 * 1024;
   api.get("/logs", wrap(async (req, res) => {
     const u = needUser(req);
     const r = await q("select id, data from training_logs where user_id=$1 order by date desc nulls last limit 1000", [u.id]);
@@ -618,7 +619,11 @@ function makeApi(pool, { secureCookies, build }) {
   api.put("/logs/:id", wrap(async (req, res) => {
     const u = needUser(req), id = req.params.id, d = req.body?.data;
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail(400, "Bad session id.");
-    if (!d || typeof d !== "object" || JSON.stringify(d).length > 20000) fail(400, "Bad session.");
+    const size = d && typeof d === "object" ? JSON.stringify(d).length : 0;
+    if (!d || typeof d !== "object" || size > 20000) fail(400, "Bad session.");
+    // A training log has room for LOG_MAX sessions and LOG_BYTES in all (years of training), so one account can't fill the database.
+    const used = (await q("select count(*)::int as n, coalesce(sum(pg_column_size(data)),0)::bigint as b, bool_or(id=$2) as had from training_logs where user_id=$1", [u.id, id])).rows[0];
+    if ((!used.had && used.n >= LOG_MAX) || Number(used.b) + size > LOG_BYTES) fail(413, "Your training log is full. Delete some old sessions to make room.");
     const date = isDay(d.date) ? d.date : null;
     await q(`insert into training_logs(user_id,id,date,data) values($1,$2,$3,$4)
              on conflict(user_id,id) do update set date=excluded.date, data=excluded.data, updated_at=now()`, [u.id, id, date, d]);
@@ -1488,6 +1493,7 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/coach/students/bulk", once(async (req, res) => {
     const u = needCoach(req), b = req.body || {}, list = (Array.isArray(b.people) ? b.people : []).slice(0, 300);
     if (!list.length) fail(400, "No one to add.");
+    if (limited("bulk:" + u.gym_id, 10, 60 * 60e3)) fail(429, "That's a lot of people added in an hour. Try again in a while.");
     if (!isHead(u) && (b.planId !== undefined || b.kidsPlanId !== undefined)) fail(403, "Only the head coach can set plans and fees.");
     const def = await defaultPlans(u.gym_id), pick = async (v, d) => { if (v === undefined) return d; if (!v) return null; const id = intOr(v, 0);
       if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [id, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); return String(id); };
@@ -2289,13 +2295,34 @@ function makeApi(pool, { secureCookies, build }) {
     fail(500, "Couldn't make a payment reference. Try again.");
   }
   // A proof file from the browser: base64, at most 8 MB, and really a PDF or an image Claude can read.
+  // Stored proofs (kept in the database) have limits, so uploads can't fill it: a file is at most 8 MB (a PDF) or 3 MB (a picture;
+  // the app shrinks big photos before sending them); each gym takes PROOF.gymDay files a day (from its members, its coaches and
+  // its forwarding address together) and each member PROOF.userDay; each gym keeps up to PROOF.gymMb of them (when that's full,
+  // files of proofs confirmed or set aside more than 90 days ago make room); and all gyms together take PROOF.dayMb a day.
+  const PROOF = { pdfBytes: 8 * 1024 * 1024, imageBytes: 3 * 1024 * 1024, gymDay: Number(process.env.JF_PROOF_GYM_DAY) || 60, userDay: Number(process.env.JF_PROOF_USER_DAY) || 10,
+    gymMb: Number(process.env.JF_PROOF_GYM_MB) || 300, dayMb: Number(process.env.JF_UPLOAD_DAY_MB) || 2000 };
+  const FULL_TODAY = "Your gym has had a lot of proofs of payment today. Try again tomorrow, or show your coach the proof.";
+  // Can the gym store these files now? Throws a friendly 429/507 if not. who: the member sending them (their own daily count), if any.
+  async function proofRoom(gymId, files, who = null) {
+    const bytes = files.reduce((t, f) => t + f.data.length, 0); if (!files.length) return;
+    const d = (await q(`select count(*) filter (where p.gym_id=$1)::int as gym, count(*) filter (where p.gym_id=$1 and p.submitted_by=$2 and p.source='student')::int as mine,
+      coalesce(sum(f.size),0)::bigint as bytes from pop_files f join payments p on p.id=f.payment_id where f.created_at > now() - interval '1 day'`, [gymId, who])).rows[0];
+    if (who && d.mine + files.length > PROOF.userDay) fail(429, "That's a lot of uploads today. Ask your coach if something's wrong.");
+    if (d.gym + files.length > PROOF.gymDay) fail(429, FULL_TODAY);
+    if (Number(d.bytes) + bytes > PROOF.dayMb * 1024 * 1024) { console.warn("uploads: today's upload budget (JF_UPLOAD_DAY_MB) is used up"); fail(503, "JitsFlow is taking a lot of uploads right now. Try again tomorrow, or show your coach the proof."); }
+    const stored = async () => Number((await q("select coalesce(sum(f.size),0)::bigint as b from pop_files f join payments p on p.id=f.payment_id where p.gym_id=$1", [gymId])).rows[0].b);
+    if ((await stored()) + bytes <= PROOF.gymMb * 1024 * 1024) return;
+    await q(`delete from pop_files f using payments p where p.id=f.payment_id and p.gym_id=$1 and p.status in ('confirmed','rejected','test') and p.created_at < now() - interval '90 days'`, [gymId]);
+    if ((await stored()) + bytes > PROOF.gymMb * 1024 * 1024) { console.warn("uploads: gym", gymId, "is at its proof storage quota"); fail(507, "Your gym's space for proofs of payment is full. Ask your coach to confirm or remove the proofs waiting on Money."); }
+  }
   function proofFile(b) {
     const data = Buffer.from(String(b.data || ""), "base64");
     if (!data.length) fail(400, "Choose the proof of payment (a PDF or a screenshot).");
-    if (data.length > 8 * 1024 * 1024) fail(413, "That file is over 8 MB. Send a screenshot of the payment instead.");
+    if (data.length > PROOF.pdfBytes) fail(413, "That file is over 8 MB. Send a screenshot of the payment instead.");
     const type = pop.sniff(data);
     if (type === "image/heic") fail(400, "That photo is in HEIC format. Take a screenshot of the payment and send that instead.");
     if (!type) fail(400, "Send a PDF or an image (a screenshot is fine).");
+    if (type !== "application/pdf" && data.length > PROOF.imageBytes) fail(413, "That picture is over 3 MB. Send a screenshot of the payment instead.");
     return { name: clean(b.name, 120) || (type === "application/pdf" ? "proof.pdf" : "proof"), type, data };
   }
   const gymStudents = async (gymId) => (await q("select id, name, pay_ref from users where gym_id=$1 and role='student'", [gymId])).rows;
@@ -2443,7 +2470,9 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/me/pay/proof", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
     if (limited("pop-u:" + u.id, 20, 24 * 3600e3)) fail(429, "That's a lot of uploads today. Ask your coach if something's wrong.");
-    const b = req.body || {}, file = proofFile(b), pack = b.packId ? await packIn(u.gym_id, b.packId, true) : null;
+    const b = req.body || {}, file = proofFile(b);
+    await proofRoom(u.gym_id, [file], u.id);
+    const pack = b.packId ? await packIn(u.gym_id, b.packId, true) : null;
     // "What's it for?" can be a plan, for a new member joining it: they're on it as a trial now, and for real once the coach confirms this.
     const plan = !pack && b.planId ? (await pickablePlans(u)).find((x) => x.id === String(b.planId)) || fail(404, "That plan isn't on offer.") : null;
     if (plan && String(u.plan_id) !== plan.id) { await q("update users set plan_id=$1, plan_started=$2 where id=$3", [plan.id, await todayIn(u), u.id]); u.plan_id = plan.id; }
@@ -2523,7 +2552,8 @@ function makeApi(pool, { secureCookies, build }) {
     const u = needHead(req), file = proofFile(req.body || {});
     // Each upload is a Claude read and up to 8 MB stored: cap them per gym a day.
     if (limited("pop-c:" + u.gym_id, 50, 24 * 3600e3)) fail(429, "That's a lot of uploads today. Record the rest by hand, or try again tomorrow.");
-    const read = await pop.readPop({ client: aiClient(), files: [file] });
+    await proofRoom(u.gym_id, [file]);
+    const read = await pop.readPop({ client: aiClient(), files: [file], meter: { gymId: u.gym_id, feature: "coach proof" } });
     const row = await addProof({ u, gymId: u.gym_id, read, source: "upload", files: [file], method: "eft" });
     res.status(201).json({ payment: payOut(row) });
   }));
@@ -3361,15 +3391,17 @@ function makeApi(pool, { secureCookies, build }) {
     const to = String(req.headers["x-jf-to"] || "").toLowerCase(), tok = (to.match(/^pop-([a-z0-9]{6,32})@/) || [])[1];
     const g = tok && (await q("select g.id, g.currency, g.timezone from gyms g where g.pop_token=$1 and g.claim is null", [tok])).rows[0];
     if (!g) fail(404, "Unknown address.");
-    if (limited("pop-g:" + g.id, 300, 24 * 3600e3)) fail(429, "Too many emails today.");
+    if (limited("pop-g:" + g.id, 100, 24 * 3600e3)) fail(429, "Too many emails today.");
     const { simpleParser } = require("mailparser");
     const parsed = await simpleParser(Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body || "")));
     const notice = pop.gmailConfirm(parsed);
     if (notice) { await q("update gyms set pop_notice=$1 where id=$2", [notice, g.id]); return res.json({ ok: true, gmailConfirm: true }); }
-    const files = (parsed.attachments || []).map((a) => ({ name: clean(a.filename, 120) || "attachment", data: a.content, type: pop.sniff(a.content) }))
-      .filter((f) => f.type && f.type !== "image/heic" && f.data.length <= 8 * 1024 * 1024 && f.data.length > 2048).slice(0, 3);
+    let files = (parsed.attachments || []).map((a) => ({ name: clean(a.filename, 120) || "attachment", data: a.content, type: pop.sniff(a.content) }))
+      .filter((f) => f.type && f.type !== "image/heic" && f.data.length <= (f.type === "application/pdf" ? PROOF.pdfBytes : PROOF.imageBytes) && f.data.length > 2048).slice(0, 3);
+    // Over the gym's limits for stored proofs (see proofRoom): the email's text is still kept, without its attachments.
+    if (files.length) { try { await proofRoom(g.id, files); } catch (e) { if (!e.status) throw e; files = []; } }
     const text = `From: ${(parsed.from && parsed.from.text) || ""}\nSubject: ${parsed.subject || ""}\n\n${(parsed.text || "").slice(0, 20000)}`;
-    const read = await pop.readPop({ client: aiClient(), text, files });
+    const read = await pop.readPop({ client: aiClient(), text, files, meter: { gymId: g.id, feature: "inbound proof" } });
     if (!read.isPayment && !files.length) return res.json({ ok: true, skipped: "not a payment" });
     const row = await addProof({ u: { id: null, currency: g.currency, timezone: g.timezone }, gymId: g.id, read, source: "email", files, text,
       from: (parsed.from && parsed.from.text) || String(req.headers["x-jf-from"] || ""), subject: parsed.subject || "", method: "eft" });
