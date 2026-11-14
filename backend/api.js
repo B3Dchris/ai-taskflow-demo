@@ -3027,12 +3027,44 @@ function makeApi(pool, { secureCookies, build }) {
     res.json(c);
   }));
   // A gym's own PayFast account, for students paying by card or Instant EFT. Keys are kept encrypted.
-  const pfOf = (row) => { const p = row && row.payfast; if (!p || !p.merchantId) return null; return { id: p.merchantId, key: payfast.open(p.key), pass: payfast.open(p.pass), sandbox: p.merchantId === payfast.TEST.id }; };
+  // broken: its keys can't be opened (JF_SECRET changed, or DATABASE_URL did before there was one): it takes no payments until the
+  // head coach connects PayFast again (they're told; see pfBroken).
+  const pfOf = (row) => { const p = row && row.payfast; if (!p || !p.merchantId) return null; const k = payfast.unseal(p.key), s = payfast.unseal(p.pass);
+    return { id: p.merchantId, key: k.text, pass: s.text, sandbox: p.merchantId === payfast.TEST.id, broken: !k.ok || !s.ok || !k.text }; };
   // PayFast's test account only works while JitsFlow itself is in test mode: once live, a gym still connected to it takes no payments.
-  const pfLive = (p) => (p && !(p.sandbox && !payfast.platform().sandbox) ? p : null);
+  const pfLive = (p) => (p && !p.broken && !(p.sandbox && !payfast.platform().sandbox) ? p : null);
+  // A gym whose PayFast keys can't be opened: marked (the head coach's PayFast settings say "needs reconnecting"), and the head coach
+  // and the JitsFlow team are emailed, at most once a day each. what: what it got in the way of (a payment notification).
+  const brokenTold = new Map();
+  async function pfBroken(gymId, what) {
+    console.error(`payfast: gym ${gymId}'s PayFast keys can't be decrypted (JF_SECRET changed?)${what ? ": " + what : ""}`);
+    await q("update gyms set payfast = payfast || $2 where id=$1 and payfast is not null and payfast->>'brokenAt' is null", [gymId, { brokenAt: new Date().toISOString() }]).catch(() => {});
+    if (Date.now() - (brokenTold.get(gymId) || 0) < 864e5) return; brokenTold.set(gymId, Date.now());
+    const g = (await q("select name from gyms where id=$1", [gymId])).rows[0]; if (!g) return;
+    toHead(gymId, (name) => mail.templates.payfastReconnect(name));
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastBrokenAdmin(g.name, gymId, what || "") });
+  }
+  // Seals every gym's PayFast keys and every saved-card token again with the current key (JF_SECRET), when they were sealed with
+  // an older one (JF_SECRET_OLD, or the legacy DATABASE_URL key). Safe to run any time, on several servers. Run at startup and with the jobs.
+  async function sealAgain() {
+    let n = 0;
+    for (const g of (await q("select id, payfast from gyms where payfast is not null")).rows) {
+      const p = g.payfast; if (!p || !p.merchantId) continue;
+      const k = payfast.unseal(p.key), s = payfast.unseal(p.pass);
+      if (!k.ok || !s.ok || !k.text) { if (!p.brokenAt) await pfBroken(g.id, "found when the server started"); continue; }
+      if (p.brokenAt) await q("update gyms set payfast = payfast - 'brokenAt' where id=$1", [g.id]); // readable again (e.g. JF_SECRET_OLD was set)
+      const nk = payfast.reseal(p.key), ns = payfast.reseal(p.pass); if (!nk && !ns) continue;
+      // Only if nobody changed it meanwhile (the old sealed values are still there).
+      n += (await q("update gyms set payfast = payfast || $2 where id=$1 and payfast->>'key' is not distinct from $3 and payfast->>'pass' is not distinct from $4",
+        [g.id, { ...(nk ? { key: nk } : {}), ...(ns ? { pass: ns } : {}) }, p.key, p.pass])).rowCount;
+    }
+    for (const a of (await q("select user_id, token from autopay")).rows) { const t = payfast.reseal(a.token); if (t) n += (await q("update autopay set token=$2 where user_id=$1 and token=$3", [a.user_id, t, a.token])).rowCount; }
+    if (n) console.log(`payfast: sealed ${n} stored secret${n === 1 ? "" : "s"} again with the current key`);
+    return n;
+  }
   api.get("/coach/payfast", wrap(async (req, res) => {
-    const u = needHead(req), p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]));
-    res.json({ payfast: { connected: !!p, merchantId: p ? p.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
+    const u = needHead(req), raw = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]), p = pfLive(raw);
+    res.json({ payfast: { connected: !!p, needsReconnect: !!(raw && raw.broken), merchantId: p ? p.id : raw && raw.broken ? raw.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
   }));
   api.put("/coach/payfast", wrap(async (req, res) => {
     const u = needHead(req), b = req.body || {};
@@ -3083,13 +3115,17 @@ function makeApi(pool, { secureCookies, build }) {
       if (d.custom_str1 === "sub") { const P = payfast.platform(); pass = P.pass; sandbox = P.sandbox; merchant = P.id; gymId = intOr(d.custom_int1, 0); }
       else if (d.custom_str1 === "card" || /^auto-\d+$/.test(String(d.m_payment_id || ""))) {
         auto = await autoItnOf(d); if (!auto) throw new Error("unknown saved card");
-        gymId = auto.gymId; const p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0])); if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id;
+        gymId = auto.gymId; const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
+        if (raw && raw.broken) { await pfBroken(gymId, `a saved-card notification (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked`); throw new Error("gym's PayFast keys can't be opened"); }
+        if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id;
       }
-      else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0])); if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
+      else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
+        if (raw && raw.broken) { await pfBroken(gymId, `a card payment (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked or recorded: record it by hand once PayFast shows it`); throw new Error("gym's PayFast keys can't be opened"); }
+        if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
       else throw new Error("unknown notification " + String(d.custom_str1 || "").slice(0, 20));
       if (!payfast.itnSignatureOk(pairs, pass)) throw new Error("bad signature");
       if (String(d.merchant_id) !== String(merchant)) throw new Error("wrong merchant");
-      const ip = String(req.headers["cf-connecting-ip"] || String(req.headers["x-forwarded-for"] || "").split(",")[0] || req.socket.remoteAddress || "").trim();
+      const ip = clientIp(req); // a header anyone can set doesn't count: only Cloudflare's, through Cloudflare (see clientIp)
       if (!(await payfast.payfastIps()).has(ip)) console.warn("payfast itn: from an unlisted address " + ip + " (still confirmed with PayFast below)");
       if (!(await payfast.confirmWithPayfast(pairs, sandbox))) throw new Error("PayFast didn't confirm it");
       const gross = Math.round(Number(d.amount_gross || 0) * 100);
@@ -3527,7 +3563,14 @@ function makeApi(pool, { secureCookies, build }) {
   // The team's dashboard: visitors, sign-ups, who's using the app, every gym, and outreach (see backend/admin.js).
   api.get("/admin/overview", wrap(async (req, res) => {
     needAdmin(req);
-    res.json(await adminDash.overview(q, { days: intOr(req.query.days, 30), bill: billState }));
+    const out = await adminDash.overview(q, { days: intOr(req.query.days, 30), bill: billState });
+    // Settings the JitsFlow team needs to fix (shown at the top of the dashboard), and today's AI use against its budget.
+    const L = ai.LIMITS(), used = (await q("select calls, tokens from ai_usage where day=(now() at time zone 'utc')::date and scope='all'")).rows[0] || { calls: 0, tokens: 0 };
+    const broken = (await q("select id, name from gyms where payfast->>'brokenAt' is not null order by name limit 50")).rows;
+    out.system = { secretOk: payfast.secretOk(), cardsTestMode: payfast.platform().sandbox, production: process.env.NODE_ENV === "production",
+      ai: { on: !!ai.getClient(), calls: used.calls, tokens: Number(used.tokens), maxCalls: L.calls, maxTokens: L.tokens, paused: ai.spent() },
+      payfastBroken: broken.map((g) => ({ id: String(g.id), name: g.name })) };
+    res.json(out);
   }));
   api.get("/admin/prospects", wrap(async (req, res) => {
     needAdmin(req);
@@ -3746,7 +3789,8 @@ function makeApi(pool, { secureCookies, build }) {
   // Scheduled jobs (server.js runs them every 15 minutes; each is safe to run twice or on several servers).
   // Card autopay goes first, so on a due day members whose card pays aren't reminded too.
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, run: async () => { await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
+  setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)));
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
   return api;
 }
 

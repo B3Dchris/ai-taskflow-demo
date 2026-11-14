@@ -169,6 +169,11 @@ async function main() {
   // Render puts one proxy in front of the app; trust exactly that hop for the visitor's address (TRUST_PROXY=0 when nothing is in front).
   app.set("trust proxy", process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : 1);
   app.use((req, res, next) => { res.set(SECURITY); next(); });
+  // Settings the live site needs. It keeps running without them (it's live), but says so loudly here and on the team's dashboard.
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.JF_SECRET) console.error("WARNING: JF_SECRET isn't set. Gyms' PayFast keys are encrypted with a key made from DATABASE_URL; set JF_SECRET (a long random value) in Render.");
+    if (!process.env.PAYFAST_MERCHANT_ID) console.error("WARNING: PAYFAST_MERCHANT_ID isn't set: card payments are in PayFast's test mode (no real money moves).");
+  }
   const pool = makePool();
   if (pool) {
     await migrate(pool);
