@@ -16,7 +16,7 @@ const outreach = require("./outreach");
 const visits = require("./visits");
 const adminDash = require("./admin");
 const beta = require("./beta");
-const { LONGEST, rollTimetable } = require("./db");
+const { LONGEST, rollTimetable, SESSION_MAX_DAYS, popToken } = require("./db");
 
 const COOKIE = "jf_s";
 const SESSION_DAYS = 60;
@@ -153,13 +153,15 @@ function makeApi(pool, { secureCookies, build }) {
       // A parent's session books for one of their kids (as_user): everything they do (bookings, fees, journal) is that kid's.
       const row = await bySession(tok);
       if (row) {
-        const ends = row.session_ends;
-        req.user = row;
+        const ends = row.session_ends, cap = new Date(row.session_at).getTime() + SESSION_MAX_DAYS * 864e5;
+        req.user = row; req.sessionHash = sha(tok);
         if (!req.user.last_seen || Date.now() - new Date(req.user.last_seen) > 3600e3) q("update users set last_seen=now() where id = any($1)", [[req.user.id, req.user.login_id]]).catch(() => {});
-        // Sessions roll: someone who uses the app stays signed in. At most hourly, push the end back to SESSION_DAYS from now.
-        if (!req.path.startsWith("/auth/") && new Date(ends) - Date.now() < SESSION_DAYS * 864e5 - 3600e3) {
-          q("update sessions set expires_at=now()+($2||' days')::interval where token_hash=$1", [sha(tok), String(SESSION_DAYS)]).catch(() => {});
-          res.cookie(COOKIE, tok, cookieOpts());
+        // Sessions roll: someone who uses the app stays signed in. At most hourly, push the end back to SESSION_DAYS from now, but never
+        // past SESSION_MAX_DAYS (180) from when they signed in: then they sign in again, however much they use it.
+        const want = Math.min(Date.now() + SESSION_DAYS * 864e5, cap);
+        if (!req.path.startsWith("/auth/") && want - new Date(ends) > 3600e3) {
+          q(`update sessions set expires_at=least(now()+($2||' days')::interval, created_at + interval '${SESSION_MAX_DAYS} days') where token_hash=$1`, [sha(tok), String(SESSION_DAYS)]).catch(() => {});
+          res.cookie(COOKIE, tok, { ...cookieOpts(), maxAge: Math.max(0, Math.min(SESSION_DAYS * 864e5, cap - Date.now())) });
         }
       }
     }
@@ -202,8 +204,8 @@ function makeApi(pool, { secureCookies, build }) {
   }));
   // The signed-in person for a session token (see AS_USER), or nothing.
   async function bySession(tok) {
-    const r = await q(`select ${ME_COLS}, s.expires_at as session_ends, s.user_id as login_id, ${FAM("s.user_id")}
-      from sessions s join users u on u.id=${AS_USER} ${ME_JOIN} where s.token_hash=$1 and s.expires_at>now()`, [sha(tok)]);
+    const r = await q(`select ${ME_COLS}, s.expires_at as session_ends, s.created_at as session_at, s.user_id as login_id, ${FAM("s.user_id")}
+      from sessions s join users u on u.id=${AS_USER} ${ME_JOIN} where s.token_hash=$1 and s.expires_at>now() and s.created_at > now() - interval '${SESSION_MAX_DAYS} days'`, [sha(tok)]);
     if (!r.rows[0]) return null;
     const u = await withHead(r.rows[0]); if (String(u.login_id) !== String(u.id)) await asKid(u);
     return u;
@@ -500,6 +502,13 @@ function makeApi(pool, { secureCookies, build }) {
   // build: which version of the app the server has. An app left open compares it with its own and reloads when it changed.
   api.get("/status", (req, res) => res.json({ db: true, mail: mail.mailOn(), ai: !!process.env.ANTHROPIC_API_KEY, build: build || null }));
 
+  // "Sign out everywhere else" (Me): every other session of this login ends (a lost phone, a shared computer). all: this one too.
+  api.post("/me/sessions/end", wrap(async (req, res) => {
+    const u = needUser(req), lg = loginOf(u), all = !!(req.body && req.body.all);
+    const r = await q("delete from sessions where user_id=$1 and ($2 or token_hash <> $3)", [u.login_id || lg.id, all, req.sessionHash || ""]);
+    if (all) res.clearCookie(COOKIE, { path: "/" });
+    res.json({ ended: r.rowCount - (all ? 1 : 0) });
+  }));
   api.post("/auth/logout", wrap(async (req, res) => {
     const tok = cookies(req)[COOKIE];
     if (tok) await q("delete from sessions where token_hash=$1", [sha(tok)]);
@@ -1657,7 +1666,7 @@ function makeApi(pool, { secureCookies, build }) {
     }
     // A student with their own account keeps it, with no gym. Payments you recorded stay with the gym.
     if (st.pass_hash || st.parent_id) { await leaveGym(st); return res.json({ ok: true }); }
-    await q("update payments set user_id=null where user_id=$1", [st.id]);
+    await q("update payments set user_id=null, user_gone_at=now() where user_id=$1", [st.id]); // (their proofs go 90 days on: see purgeRejected)
     await q("delete from users where id=$1", [st.id]);
     res.json({ ok: true });
   }));
@@ -2510,8 +2519,10 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   api.get("/coach/gym/pay", wrap(async (req, res) => {
     const u = needHead(req), g = (await q("select pay, pop_token, pop_notice, auto_remind from gyms where id=$1", [u.gym_id])).rows[0];
     let tok = g.pop_token;
-    if (req.preview) tok = "yourgym"; // the preview writes nothing: the gym gets its own address when it's claimed
-    else if (!tok) { tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join(""); await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [tok, u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
+    // Gyms get their address when they're made (or claimed). Reading this never writes, except to give a gym from before that one
+    // (once: only if it still has none). A preview, or any stand-in without an account, writes nothing.
+    if (req.preview || !u.id) tok = tok || "yourgym";
+    else if (!tok) { await q("update gyms set pop_token=$1 where id=$2 and pop_token is null", [popToken(), u.gym_id]); tok = (await q("select pop_token from gyms where id=$1", [u.gym_id])).rows[0].pop_token; }
     res.json({ pay: g.pay || {}, autoRemind: g.auto_remind, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, accessMode: u.access_mode || "fee", privatePlanIds: (u.private_plan_ids || []).map(String), privateCents: u.gym_private_cents ?? null });
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
@@ -2571,7 +2582,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // A new forwarding address (the old one stops working), e.g. if it leaked.
   api.post("/coach/gym/pay/new-address", wrap(async (req, res) => {
-    const u = needHead(req), tok = Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+    const u = needHead(req), tok = popToken();
     await q("update gyms set pop_token=$1, pop_notice=null where id=$2", [tok, u.gym_id]);
     res.json({ popAddress: popAddress(tok) });
   }));
@@ -3122,14 +3133,16 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   const todayZA = () => new Date(Date.now() + 2 * 3600e3).toISOString().slice(0, 10); // South Africa has no daylight saving
   // The gym's monthly price: R99 (payfast.PRICE_CENTS), or its beta deal while it's in the beta (0: nothing to pay).
   const priceOf = (g, today = todayZA()) => { const x = beta.priceFor(g.beta, today, payfast.PRICE_CENTS()); return x === null ? payfast.PRICE_CENTS() : x; };
-  async function billingOf(gymId) {
+  // save: keep the free months' end once worked out (a POST that needs it: adding a card). Reading the plan never writes.
+  async function billingOf(gymId, { save = false } = {}) {
     const g = (await q("select billing, created_at, claim, beta from gyms where id=$1", [gymId])).rows[0]; const b = g.billing || {};
     // A card added while JitsFlow was in test mode was never real: once live, the gym adds one again.
     if (b.sandbox && !payfast.platform().sandbox) { delete b.status; delete b.token; }
     b.priceCents = priceOf(g); b.beta = g.beta || null;
     // A gym outreach built and nobody has claimed: its free months start when it's claimed (as if that were today). Nothing saved.
     if (g.claim) { b.trialEnds = b.trialEnds || addMonths(todayZA(), payfast.TRIAL_MONTHS()); return b; }
-    if (!b.trialEnds) { const start = g.created_at.toISOString().slice(0, 10); b.trialEnds = addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS()); await q("update gyms set billing = billing || $1 where id=$2", [{ trialEnds: b.trialEnds }, gymId]); }
+    if (!b.trialEnds) { const start = g.created_at.toISOString().slice(0, 10); b.trialEnds = addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS());
+      if (save) await q("update gyms set billing = billing || $1 where id=$2 and not (billing ? 'trialEnds')", [{ trialEnds: b.trialEnds }, gymId]); }
     return b;
   }
   // A gym's JitsFlow plan for the team's dashboard, read only (like billingOf, without saving the trial's end).
@@ -3154,7 +3167,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // Card details for the monthly plan. During the free months nothing is charged now; PayFast starts on the first day after them.
   api.post("/coach/billing/checkout", wrap(async (req, res) => {
-    const u = needHead(req), b = await billingOf(u.gym_id), P = payfast.platform(), today = await todayIn(u);
+    const u = needHead(req), b = await billingOf(u.gym_id, { save: true }), P = payfast.platform(), today = await todayIn(u);
     if (!b.priceCents && !beta.priceFor(b.beta, "9999-12-31", payfast.PRICE_CENTS())) fail(400, "Your beta deal is free: there's nothing to add a card for.");
     // A free beta stretch that ends later: the card starts on the day the beta price does.
     const bUntil = beta.active(b.beta) && !b.priceCents && b.beta.feeUntil ? b.beta.feeUntil : null, startOn = bUntil && bUntil > b.trialEnds ? bUntil : b.trialEnds;
@@ -3661,8 +3674,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // today. First come: whoever has the link and signs up first claims it (the team sees who, and can unclaim or reassign it).
   async function claimBuilt(gymId, userId, { name, tz } = {}) {
     const r = await q(`update gyms set claim=null, claimed_at=now(), head_coach_id=$2, student_code=$3, coach_code=$4, name=coalesce(nullif($5,''), name),
-        timezone=coalesce($6, timezone), bill_start=date_trunc('month', now() at time zone coalesce($6, timezone))::date, billing = coalesce(billing,'{}'::jsonb) || $7
-      where id=$1 and claim is not null returning id`, [gymId, userId, code(), code(), clean(name, 100), tz || null, { trialEnds: addMonths(todayZA(), payfast.TRIAL_MONTHS()) }]);
+        timezone=coalesce($6, timezone), bill_start=date_trunc('month', now() at time zone coalesce($6, timezone))::date, billing = coalesce(billing,'{}'::jsonb) || $7, pop_token=coalesce(pop_token, $8)
+      where id=$1 and claim is not null returning id`, [gymId, userId, code(), code(), clean(name, 100), tz || null, { trialEnds: addMonths(todayZA(), payfast.TRIAL_MONTHS()) }, popToken()]);
     if (!r.rows[0]) fail(409, "This gym has been claimed already. If it's yours, sign in.");
   }
   // Unclaimed gyms nobody has looked at: deleted 60 days after they were built, unless their link was opened in the last 14 days.
@@ -3851,7 +3864,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (g.head_coach_id) await wipeClaimant(g, g.head_coach_id);
     await q("update users set gym_id=null where id=$1 and gym_id=$2", [g.head_coach_id, g.id]);
     await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [g.id, t.id]);
-    await q("update gyms set head_coach_id=$2 where id=$1", [g.id, t.id]);
+    await q("update gyms set head_coach_id=$2, pop_token=coalesce(pop_token, $3) where id=$1", [g.id, t.id, popToken()]);
     await q("update prospects set claimed_by=$2 where id=$1", [g.prospect_id, t.id]);
     res.json({ prospect: await proOut(await proRow(g.prospect_id)) });
   }));

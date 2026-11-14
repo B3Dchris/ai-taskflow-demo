@@ -1,6 +1,9 @@
 // JitsFlow database: connection pool and schema (created on startup, safe to run repeatedly).
 "use strict";
 const { Pool, types } = require("pg");
+const crypto = require("crypto");
+// A gym's proof-of-payment address (pop-<token>@jitsflow.com): 10 letters and digits that are easy to read.
+const popToken = () => Array.from(crypto.randomBytes(10), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
 // Plain dates (paid_on, session dates) stay "YYYY-MM-DD" strings, so no timezone can shift them a day.
 types.setTypeParser(1082, (v) => v);
 
@@ -496,6 +499,72 @@ create table if not exists ai_usage(
 -- Each proof file's size, for the per-gym storage quota and the daily upload budget (see api.js proofRoom).
 alter table pop_files add column if not exists size int generated always as (octet_length(data)) stored;
 create index if not exists pop_files_created on pop_files(created_at);
+-- PayFast changes that have to happen even once the gym is gone: cancelling the gym's JitsFlow plan (on JitsFlow's own account) and
+-- members' saved cards (on the gym's account, whose keys are copied here, sealed, since the gym's row may be deleted). Tried straight
+-- away and again by the 15-minute jobs until PayFast confirms; after a day of tries it's given up (failed_at) and the team is told.
+-- what: plan or card. platform: JitsFlow's own keys (read from the environment when it runs). pass and token: sealed.
+create table if not exists payfast_ops(
+  id bigserial primary key,
+  kind text not null default 'cancel',
+  what text not null default 'card',
+  gym_id bigint,
+  label text not null default '',
+  merchant_id text not null default '',
+  pass text not null default '',
+  platform boolean not null default false,
+  sandbox boolean not null default false,
+  token text not null,
+  token_hash text not null,
+  tries int not null default 0,
+  error text not null default '',
+  next_at timestamptz not null default now(),
+  done_at timestamptz,
+  failed_at timestamptz,
+  seen_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists payfast_ops_open on payfast_ops(token_hash, kind) where done_at is null and failed_at is null;
+-- Each card checkout a member opens: what it asks for (amount, JitsFlow's split, the pack), by its m_payment_id (which is signed).
+-- PayFast's notification is compared with it: an unknown id or another amount is flagged for the team (payfast_flags).
+create table if not exists card_checkouts(
+  m_payment_id text primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint references users(id) on delete set null,
+  amount_cents int not null,
+  split jsonb,
+  pack_id bigint,
+  created_at timestamptz not null default now()
+);
+-- PayFast payments that weren't what JitsFlow expected (a card payment for another amount, or with no checkout behind it; a JitsFlow
+-- plan payment that isn't the gym's price). Shown to the team on the dashboard until they mark it seen.
+create table if not exists payfast_flags(
+  id bigserial primary key,
+  gym_id bigint,
+  kind text not null,
+  ref text not null default '',
+  expected_cents int,
+  got_cents int,
+  note text not null default '',
+  seen_at timestamptz,
+  created_at timestamptz not null default now()
+);
+-- A money or contact change the coach assistant proposed: nothing is saved until the coach taps Confirm on its card in the app.
+create table if not exists assistant_proposals(
+  token text primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  tool text not null,
+  input jsonb not null,
+  summary text not null default '',
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+-- When a payment's member deleted their account (their proofs of payment are deleted 90 days later; the payment stays for the gym).
+alter table payments add column if not exists user_gone_at timestamptz;
+create or replace function jf_user_gone() returns trigger language plpgsql as $$
+begin update payments set user_gone_at=now() where user_id=old.id; return old; end $$;
+drop trigger if exists users_gone on users;
+create trigger users_gone before delete on users for each row execute function jf_user_gone();
 `;
 
 // Every class a timetable row makes in the next 8 weeks (today and 55 days on, in the gym's time zone), for one gym.
@@ -565,9 +634,27 @@ const LONGEST = (g) => `(select u.id from users u join gyms gg on gg.id=u.gym_id
 const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not exists (select 1 from users h where h.id=g.head_coach_id and h.gym_id=g.id and h.role='coach' and h.active)
   and ${LONGEST("g.id")} is not null`;
 
-// Proofs a coach marked "not a payment" leave the coach's list after 30 days. Delete them then (their files go with them).
-// AI use is kept 90 days (the admin overview shows today's).
-const purgeRejected = async (pool) => { await pool.query("delete from payments where status='rejected' and created_at < now() - interval '30 days'"); await pool.query("delete from ai_usage where day < current_date - 90"); };
+// Daily (and at startup): what isn't needed any more goes (the privacy page says so).
+// - Proofs a coach marked "not a payment" leave the coach's list after 30 days: deleted then (their files go with them).
+// - Proof-of-payment files of someone who deleted their account: 90 days later (the payment stays in the gym's books).
+// - Someone who left a gym still owing: 18 months after they left.
+// - Google Ads click ids on website visits: 90 days (where visitors came from is kept, without the id).
+// - Expired sign-in sessions, password reset and email links; card checkouts after 90 days; proposals the assistant made after a day.
+// - AI use is kept 90 days (the admin overview shows today's). gym_mail_stops are kept: they're people's "stop emailing me".
+const SESSION_MAX_DAYS = 180;
+async function purgeRejected(pool) {
+  const run = (sql) => pool.query(sql).catch((e) => console.warn("purge:", e.message));
+  await run("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
+  await run("delete from pop_files f using payments p where f.payment_id=p.id and p.user_id is null and p.user_gone_at < now() - interval '90 days'");
+  await run("delete from left_owing where left_at < now() - interval '18 months'");
+  await run("update site_visitors set click_id='' where click_id<>'' and day < current_date - 90");
+  await run(`delete from sessions where expires_at < now() or created_at < now() - interval '${SESSION_MAX_DAYS} days'`);
+  await run("delete from password_resets where expires_at < now()");
+  await run("delete from email_verifications where expires_at < now()");
+  await run("delete from card_checkouts where created_at < now() - interval '90 days'");
+  await run("delete from assistant_proposals where created_at < now() - interval '1 day'");
+  await run("delete from ai_usage where day < current_date - 90");
+}
 
 // Pauses that have run out end on their own: the member is active again and the head coach (and they) get a note on Home.
 // Safe to run any number of times, on any number of servers at once: one statement ends each pause once, and only the
@@ -612,12 +699,12 @@ async function migrate(pool) {
   // One row per PayFast payment, even if the same notification arrives twice at once. Older duplicates would block it: warn, don't stop.
   await pool.query("create unique index if not exists payments_payfast_ref on payments(gym_id, reference) where source='payfast'").catch((e) => console.warn("payments_payfast_ref:", e.message));
   await pool.query(HEAD_FIX);
-  await pool.query("delete from sessions where expires_at < now()");
-  await pool.query("delete from password_resets where expires_at < now()");
-  await pool.query("delete from email_verifications where expires_at < now()");
   // Logins made before sign-up times were kept: when the record was made.
   await pool.query("update users set signed_up_at=created_at where signed_up_at is null and pass_hash is not null");
   await purgeRejected(pool);
+  // Each gym has its proof-of-payment address from the start (reading the Money settings never writes it).
+  for (const g of (await pool.query("select id from gyms where pop_token is null and claim is null")).rows)
+    await pool.query("update gyms set pop_token=$2 where id=$1 and pop_token is null", [g.id, popToken()]).catch(() => {});
   // Gyms from before running balances start owing from the month this went live, whatever they recorded before: until now Money only
   // looked at the current month, so fees paid in cash and never recorded must not turn into months of arrears. Older months still
   // show when paging back. New gyms start the month they're made.
@@ -636,4 +723,4 @@ async function migrate(pool) {
   await pool.query("delete from gyms g where g.name like '%(delete me)' and not exists (select 1 from users u where u.gym_id=g.id)");
 }
 
-module.exports = { makePool, migrate, purgeRejected, tick, rollTimetable, rollAll, LONGEST };
+module.exports = { makePool, migrate, purgeRejected, tick, rollTimetable, rollAll, LONGEST, SESSION_MAX_DAYS, popToken };

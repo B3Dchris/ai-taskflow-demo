@@ -280,6 +280,7 @@ function accountSection(){
       :g&&API.me.role!=="coach"?`<details class="more"><summary>Add your kids</summary><div style="padding-top:8px">${kidForm()}</div></details>`:""}
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":fam?`${esc(first(API.me.name))} trains at`:"Training at"} <b>${esc(g.name)}</b>${API.me.role==="coach"?"":` · <button type="button" class="linkbtn small" data-a="leavegym">Leave gym</button>`}</p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
     <div class="row"><button class="btn" data-a="signout">Sign out</button>${S.ui.delOpen?"":`<button class="btn danger" data-a="delacct">Delete account</button>`}</div>
+    <button type="button" class="linkbtn small" data-a="signoutall" style="justify-self:start">Sign out on all your other devices</button>
     ${S.ui.delOpen?`<form id="delform" class="stack"><p class="small">${API.me.stays?`This permanently deletes your login and the progress and training logs kept on it. ${esc(namesTxt(API.me.stays))} ${API.me.stays.length>1?"stay members":"stays a member"} of the gym, with their classes and payments, and your coach sees them as not on the app.`:"This permanently deletes your account, progress, training log and attendance from the server."} Type your password to confirm.</p><input id="d-pass" name="password" type="password" autocomplete="current-password" placeholder="Password"><div class="row"><button class="btn danger" type="submit">Delete everything</button><button class="btn" type="button" data-a="delcancel">Keep my account</button></div></form>`:""}</section>${dashPanel()}${outPanel()}`;
 }
 
@@ -2240,7 +2241,7 @@ async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…
    and here every change (a form, a copy or share, a payment) opens the claim instead. The bar at the top claims it in one step.
    Nothing about the preview is kept on the phone: no account data is synced, and the visitor's own progress stays as it was. */
 const PV_FREE=/^\/(auth\/|me\/claim-gym$|prospects\/)/; // calls that are about the visitor, not the preview
-const PV_BLOCK=new Set(["copy","rotate","signout","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
+const PV_BLOCK=new Set(["copy","rotate","signout","signoutall","billcancel","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
 async function previewInit(tok){
   let g;try{g=(await api("GET","/prospects/"+encodeURIComponent(tok))).gym}catch(e){toast(e.message);return}
   if(g.claimed){toast(`${g.name} has been claimed already. If it's yours, sign in.`);if(!API.me){S.ui.authMode="login";authSheet()}return}
@@ -2360,6 +2361,12 @@ function moreAct(a,v,el){switch(a){
   case "outgymdel": outAct("outgymdel");break;
   case "outunclaim": outAct("outunclaim");break;
   case "verifysend": verifySend();break;
+  case "pfseen": (async()=>{const [k,id]=String(v).split(":");try{await api("POST",`/admin/payfast/${k}/${id}/seen`,{});await dashLoad()}catch(e){toast(e.message)}})();break;
+  case "astok": astConfirm(v,true);break;
+  case "astno": astConfirm(v,false);break;
+  case "signoutall": (async()=>{try{const j=await api("POST","/me/sessions/end",{});toast(j.ended?`Signed out on ${j.ended} other device${j.ended===1?"":"s"}. You're still signed in here.`:"You weren't signed in anywhere else.")}catch(e){toast(e.message)}})();break;
+  case "billcancel": confirmSheet("Cancel your JitsFlow plan?","PayFast won't charge your card again. JitsFlow keeps working, and you can add a card again any time.",["billcancelyes",""],"Cancel plan");break;
+  case "billcancelyes": (async()=>{try{await api("DELETE","/coach/billing");hideSheet();COACH.bill=undefined;render();toast("Your plan is cancelled. Your card won't be charged again.")}catch(e){toast(e.message)}})();break;
 }}
 const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
 async function moreForm(fid,f,submitter){
