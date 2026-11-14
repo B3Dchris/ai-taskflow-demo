@@ -148,7 +148,9 @@ function serveStatic(req, res) {
     const size = f.body.length, m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
     const base = { "Content-Type": f.type, "Accept-Ranges": "bytes", "Cache-Control": cacheFor(rel), ...SECURITY };
     if (!m) { res.writeHead(200, { ...base, "Content-Length": size }); return res.end(req.method === "HEAD" ? undefined : f.body); }
-    let start = m[1] === "" ? size - Number(m[2]) : Number(m[1]), end = m[1] === "" || m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+    // bytes=-N is the last N bytes; N bigger than the file means the whole file (RFC 9110), not an error.
+    let start = m[1] === "" ? Math.max(0, size - Number(m[2])) : Number(m[1]), end = m[1] === "" || m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+    if (m[1] === "" && m[2] === "") start = -1; // "bytes=-" asks for nothing
     if (!(start >= 0 && start <= end && end < size)) { res.writeHead(416, { ...base, "Content-Range": `bytes */${size}` }); return res.end(); }
     res.writeHead(206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
     return res.end(req.method === "HEAD" ? undefined : f.body.subarray(start, end + 1));

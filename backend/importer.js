@@ -38,8 +38,9 @@ function privateIp(ip) {
   if (zeros(5) && w[5] === 0xffff) return privateIp(v4()); // IPv4-mapped ::ffff:a.b.c.d
   if (zeros(4) && w[4] === 0xffff && w[5] === 0) return privateIp(v4()); // IPv4-translated ::ffff:0:a.b.c.d
   if (zeros(6)) return true; // ::, ::1 and IPv4-compatible ::a.b.c.d
-  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || w[0] >= 0xff00 || // unique local, link local, multicast
-    (w[0] === 0x64 && w[1] === 0xff9b) || w[0] === 0x2002 || (w[0] === 0x2001 && (w[1] === 0 || w[1] === 0xdb8)); // NAT64, 6to4, Teredo, documentation
+  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || (w[0] & 0xffc0) === 0xfec0 || w[0] >= 0xff00 || // unique local, link local, site local (old), multicast
+    (w[0] === 0x64 && w[1] === 0xff9b) || // NAT64: 64:ff9b::/96 and the local-use 64:ff9b:1::/48
+    w[0] === 0x2002 || (w[0] === 0x2001 && (w[1] === 0 || w[1] === 0xdb8)) || (w[0] === 0x100 && w[1] === 0 && w[2] === 0 && w[3] === 0); // 6to4, Teredo, documentation, discard
 }
 // An IPv6 address as its 8 16-bit numbers (a dotted IPv4 tail becomes the last two).
 function v6words(ip) {

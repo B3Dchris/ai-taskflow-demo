@@ -48,9 +48,14 @@ function layout(title, paras, button, preheader) {
   return { html, text };
 }
 
+// Header text (a subject, a sender's name) is one line: line breaks and other control characters could start a new header.
+const oneLine = (v) => String(v == null ? "" : v).replace(/[\r\n\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
+// An address for a header: one line, and nothing that could add a second address or a header.
+const addrLine = (v) => oneLine(v).replace(/[,;<>"]/g, "");
 async function send({ to, subject, title, paras, button, preheader, replyTo }) {
   if (!mailOn()) return { sent: false, reason: "off" };
   if (!to) return { sent: false, reason: "no address" };
+  subject = oneLine(subject).slice(0, 250); to = addrLine(to); if (replyTo) replyTo = addrLine(replyTo);
   const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
@@ -67,7 +72,9 @@ async function sendRaw({ fromName, to, replyTo, subject, html, text, headers }) 
   if (!mailOn()) return { sent: false, reason: "off" };
   if (!to) return { sent: false, reason: "no address" };
   const addr = ((FROM().match(/<([^<>\s]+@[^<>\s]+)>/) || [])[1] || FROM()).trim();
-  const name = String(fromName || "").replace(/["<>\\\r\n]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const name = oneLine(fromName).replace(/["<>\\]/g, "").trim().slice(0, 80);
+  subject = oneLine(subject).slice(0, 250); to = addrLine(to); if (replyTo) replyTo = addrLine(replyTo);
+  if (headers) headers = Object.fromEntries(Object.entries(headers).map(([k, v]) => [oneLine(k).replace(/[^\w-]/g, ""), oneLine(v)]));
   const r = await fetch(API_URL(), {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
@@ -209,4 +216,4 @@ const templates = {
       button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
 };
 
-module.exports = { send, sendRaw, sendLater, templates, mailOn, appUrl, layout };
+module.exports = { oneLine, send, sendRaw, sendLater, templates, mailOn, appUrl, layout };
