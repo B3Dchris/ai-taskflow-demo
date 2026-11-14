@@ -101,7 +101,11 @@ function startSite() {
     const admin = client(base), coach = client(base), anon = client(base), owner = client(base), stu = client(base);
     // ---------- who's an admin ----------
     let r = await admin("POST", "/auth/register", { name: "Boss Admin", email: "boss@jitsflow.test", password: "adminpass1" });
-    ok(r.s === 201 && r.j.me.admin === true, "an email in JF_ADMIN_EMAILS (any case, spaces around it) is an admin");
+    ok(r.s === 201 && !r.j.me.admin && r.j.me.adminVerify && (await admin("GET", "/admin/prospects")).s === 403, "an email in JF_ADMIN_EMAILS isn't an admin until it's verified (Me asks them to)");
+    r = await admin("POST", "/me/verify-email", {}); await wait(150);
+    { const vm = sink.mails.filter((m) => m.to[0] === "boss@jitsflow.test").pop(), vt = ((vm && vm.text) || "").match(/verify=([0-9a-f]{64})/);
+      r = await admin("POST", "/auth/verify", { token: vt && vt[1] }); }
+    ok(r.s === 200 && r.j.me.admin === true, "verified, an email in JF_ADMIN_EMAILS (any case, spaces around it) is an admin");
     r = await coach("POST", "/auth/start-gym", { gym: "Some Gym", name: "Coach Kim", email: "kim@gym.test", password: "coachpass1" });
     ok(r.s === 201 && !r.j.me.admin, "a coach isn't an admin");
     r = await anon("GET", "/admin/prospects"); ok(r.s === 401, "admin routes need sign-in");

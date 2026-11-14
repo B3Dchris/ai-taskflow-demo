@@ -201,12 +201,12 @@ function client(base) {
     r = await anon("GET", "/status"); ok(r.s === 200 && r.j.mail === true && r.j.ai === false, "status says email is on");
     await wait();
     const wc = sink.mails.find((m) => m.to[0] === "coach@example.com");
-    ok(wc && wc.subject === "Your gym is set up on JitsFlow" && wc.html.includes("JPB Martial Arts Academy is ready") && wc.html.includes("https://www.jitsflow.test/app/?join=" + sc) && wc.from === "JitsFlow <no-reply@jitsflow.com>" && wc.reply_to === "hello@jitsflow.com" && wc.text, "coach gets a welcome email with the invite link");
+    ok(wc && wc.subject === "Your gym is set up on JitsFlow" && wc.html.includes("Your gym is ready") && !wc.html.includes("JPB") && wc.html.includes("https://www.jitsflow.test/app/?join=" + sc) && /https:\/\/www\.jitsflow\.test\/app\/\?verify=[0-9a-f]{64}/.test(wc.text) && wc.from === "JitsFlow <no-reply@jitsflow.com>" && wc.reply_to === "hello@jitsflow.com" && wc.text, "coach gets a welcome email with the invite link and the email check (not the gym name they typed)");
     ok(sink.mails.some((m) => m.to[0] === "sam@example.com" && /Welcome/.test(m.subject)), "students get a welcome email");
     let n = sink.mails.length;
-    r = await anon("POST", "/auth/forgot", { email: "nobody@example.com" }); ok(r.s === 200 && sink.mails.length === n, "forgot-password for an unknown email looks the same and sends nothing");
+    r = await anon("POST", "/auth/forgot", { email: "nobody@example.com" }); await wait(); ok(r.s === 200 && sink.mails.length === n, "forgot-password for an unknown email looks the same and sends nothing");
     r = await anon("POST", "/auth/forgot", { email: "not-an-email" }); ok(r.s === 400, "forgot-password needs an email");
-    r = await anon("POST", "/auth/forgot", { email: "COACH@example.com" }, { host: "evil.example" });
+    r = await anon("POST", "/auth/forgot", { email: "COACH@example.com" }, { host: "evil.example" }); await wait();
     const rm = sink.mails[sink.mails.length - 1];
     ok(r.s === 200 && rm.to[0] === "coach@example.com" && /Reset your JitsFlow password/.test(rm.subject), "reset email is sent");
     const link = (rm.text.match(/https:\/\/\S+\?reset=([0-9a-f]{64})/) || []);
@@ -218,7 +218,7 @@ function client(base) {
     r = await resetter("POST", "/auth/reset", { token: link[1], password: "another-pass1" }); ok(r.s === 400, "a reset link works only once");
     r = await coach("GET", "/me"); ok(r.j.me === null, "other sessions are signed out after a reset");
     r = await coach("POST", "/auth/login", { email: "coach@example.com", password: "s3cret-pass" }); ok(r.s === 401, "old password no longer works");
-    r = await coach("POST", "/auth/login", { email: "coach@example.com", password: "brand-new-pass" }); ok(r.s === 200, "new password works");
+    r = await coach("POST", "/auth/login", { email: "coach@example.com", password: "brand-new-pass" }); ok(r.s === 200 && r.j.me.emailVerified, "new password works (and the reset email verified the address)");
     r = await stu2("POST", "/coach/invite", { emails: "x@example.com" }); ok(r.s === 403, "students can't send invites");
     r = await coach("POST", "/coach/invite", { emails: "lee@example.com, nope" }); ok(r.s === 400 && /nope/.test(r.j.error), "bad addresses are named");
     n = sink.mails.length;
@@ -331,26 +331,21 @@ function client(base) {
     r = await coach("GET", "/coach/roster"); { const pr = r.j.people.find((p) => p.id === pieter); ok(pr && pr.offline && pr.email === "pieter@example.com", "the record stays in the gym, not on the app"); }
     r = await coach("POST", `/coach/students/${pieter}/claim-link`); r = await pieterApp("POST", "/auth/register", { code: new URL(r.j.url).searchParams.get("join"), claim: new URL(r.j.url).searchParams.get("claim"), name: "Pieter B", email: "PIETER@example.com", password: "pieterpass1" });
     ok(r.s === 201 && r.j.me.id === pieter, "the coach's invite link signs them into it");
-    // --- added by the coach, then signs up with the gym's code (not their own link): "Are you ...?"
+    // --- added by the coach, then signs up with the gym's code (not their own link): a new account, and the coach is told.
+    // (A name or number is easy to know, so the record the coach added only becomes theirs through its invite link, or a merge.)
     { const ipA = { "x-forwarded-for": "198.51.100.40" }, sc2 = (await coach("GET", "/me")).j.me.gym.studentCode;
       const sipho = (await coach("POST", "/coach/students", { name: "Sipho Ndlovu", phone: "082 555 0001" })).j.id;
       await coach("POST", "/coach/payments", { userId: sipho, amountCents: 50000, paidOn: today, method: "cash" });
       const sApp = client(base);
-      r = await sApp("POST", "/auth/register", { code: sc2, name: "sipho  ndlovu", email: "sipho@example.com", password: "short" }, ipA); ok(r.s === 400, "the form is checked before asking");
-      r = await sApp("POST", "/auth/register", { code: sc2, name: "sipho  ndlovu", email: "sipho@example.com", password: "siphopass1" }, ipA);
-      ok(r.s === 200 && r.j.ask && r.j.ask.id === sipho && r.j.ask.name === "Sipho Ndlovu" && !r.j.me && !(await sApp("GET", "/me")).j.me, "the same name in that gym asks 'Are you Sipho Ndlovu?' and makes no account yet");
-      r = await client(base)("POST", "/auth/register", { code: sc2, name: "Someone Else", email: "else@example.com", password: "elsepass11", link: sipho }, ipA);
-      ok(r.s === 409 && !(await coach("GET", "/coach/roster")).j.people.find((p) => p.id === sipho).email, "someone whose name and number don't match can't link to that record");
-      r = await sApp("POST", "/auth/register", { code: sc2, name: "Sipho Ndlovu", email: "sipho@example.com", password: "siphopass1", link: sipho }, ipA);
-      ok(r.s === 201 && r.j.me.id === sipho && (await sApp("GET", "/me/pay")).j.pay.paidCents === 50000, "saying yes signs them into that record, payments and all");
+      r = await sApp("POST", "/auth/register", { code: sc2, name: "sipho  ndlovu", email: "sipho@example.com", password: "short" }, ipA); ok(r.s === 400, "the form is checked");
+      r = await sApp("POST", "/auth/register", { code: sc2, name: "sipho  ndlovu", email: "sipho@example.com", password: "siphopass1", link: sipho }, ipA);
+      ok(r.s === 201 && !r.j.ask && r.j.me.id !== sipho && !(await coach("GET", "/coach/roster")).j.people.find((p) => p.id === sipho).email, "the same name in that gym makes a new account; the coach's record (and its payments) stays as it was");
+      ok((await coach("GET", "/me/notices")).j.notices.some((x) => /may be on your list already/.test(x.title) && /Sipho Ndlovu/.test(x.body)), "and the head coach is told it may be the same person");
       const lindi = (await coach("POST", "/coach/students", { name: "Lindiwe Zulu", phone: "082 555 0002", notes: "pays cash" })).j.id;
       await coach("POST", "/coach/payments", { userId: lindi, amountCents: 40000, paidOn: today, method: "cash" });
       const lApp = client(base);
       r = await lApp("POST", "/auth/register", { code: sc2, name: "Lindi Z", email: "lindi@example.com", password: "lindipass1", phone: "+27 82 555 0002" }, ipA);
-      ok(r.s === 200 && r.j.ask && r.j.ask.id === lindi, "the same WhatsApp number asks too");
-      r = await client(base)("POST", "/auth/register", { code: sc2, name: "Lindi Z", email: "lindi2@example.com", password: "lindipass1" }, ipA); ok(r.s === 201 && r.j.me.id !== lindi, "a different name with no number doesn't ask");
-      r = await lApp("POST", "/auth/register", { code: sc2, name: "Lindi Z", email: "lindi@example.com", password: "lindipass1", phone: "+27 82 555 0002", link: "no" }, ipA);
-      const lindiApp = r.j.me.id; ok(r.s === 201 && lindiApp !== lindi && r.j.me.phone === "+27 82 555 0002", "saying no makes a new account (with their number)");
+      const lindiApp = r.j.me.id; ok(r.s === 201 && !r.j.ask && lindiApp !== lindi && r.j.me.phone === "+27 82 555 0002", "the same WhatsApp number makes a new account too (with their number)");
       r = await coach("GET", "/coach/roster"); const lo = r.j.people.find((p) => p.id === lindi), la = r.j.people.find((p) => p.id === lindiApp);
       ok(lo.sameAs && lo.sameAs.id === lindiApp && la.sameAs && la.sameAs.id === lindi, "the coach sees them as a possible duplicate");
       r = await stu2("POST", `/coach/students/${lindi}/merge`, { into: lindiApp }); ok(r.s === 403, "students can't merge");
@@ -532,7 +527,7 @@ function client(base) {
       await coach("PATCH", "/coach/gym/pay", { holder: "Test Gym", bank: "FNB", account: "62-123 456 789", branch: "250655", type: "Cheque", note: "Due by the 3rd" });
       // the head coach can't be removed or switched off: they hand over first
       r = await co2("DELETE", `/coach/students/${coachId}`); ok(r.s === 400 && /head coach/.test(r.j.error), "the head coach can't be removed: " + (r.j && r.j.error));
-      r = await co2("PATCH", `/coach/students/${coachId}`, { active: false }); ok(r.s === 400 && /hand that role/.test(r.j.error), "or marked inactive");
+      r = await co2("PATCH", `/coach/students/${coachId}`, { active: false }); ok(r.s === 403 && /head coach/.test(r.j.error), "or marked inactive (another coach can't change the head coach's record at all)");
       r = await coach("POST", "/coach/head", { userId: sam.id }); ok(r.s === 400, "the role only goes to a coach");
       m0 = sink.mails.length; r = await coach("POST", "/coach/head", { userId: co2Id }); await wait();
       ok(r.s === 200 && r.j.me.gym.head === false && r.j.me.gym.headCoach.id === co2Id && !("monthlyFeeCents" in r.j.me.gym), "the head coach hands the role to another coach");
@@ -891,9 +886,10 @@ function client(base) {
       ok(!(await seen(st.ben)) && await seen(st.cat) && (await st.ben("GET", "/me/membership")).j.membership.total180 === 0, "and the no-show's journal doesn't log it as training");
       // A parent linking to their kid's record keeps the kid's name (theirs goes in as the parent).
       const ayanda = (await hc("POST", "/coach/students", { name: "Ayanda Khumalo", parentName: "Bongi", phone: "072 333 4444" })).j.id, bongi = client(base);
-      r = await bongi("POST", "/auth/register", { code: fg.studentCode, name: "Bongi Khumalo", email: "bongi@fix.test", password: "bongipass1", phone: "072 333 4444" }, xh);
-      ok(r.j.ask && r.j.ask.id === ayanda && r.j.ask.kid, "a parent signing up with the kid's number is asked 'Signing up for Ayanda?'");
-      r = await bongi("POST", "/auth/register", { code: fg.studentCode, name: "Bongi Khumalo", email: "bongi@fix.test", password: "bongipass1", phone: "072 333 4444", link: ayanda }, xh);
+      r = await client(base)("POST", "/auth/register", { code: fg.studentCode, name: "Not Bongi", email: "notbongi@fix.test", password: "bongipass1", phone: "072 333 4444" }, xh);
+      ok(r.s === 201 && !r.j.ask && !JSON.stringify(r.j).includes("Ayanda"), "signing up with a kid's number (and the gym's code) neither names nor links the kid");
+      const atok = new URL((await hc("POST", `/coach/students/${ayanda}/claim-link`)).j.url).searchParams.get("claim");
+      r = await bongi("POST", "/auth/register", { code: fg.studentCode, claim: atok, name: "Bongi Khumalo", email: "bongi@fix.test", password: "bongipass1", phone: "072 333 4444" }, xh);
       let kid = (await hc("GET", "/coach/roster")).j.people.find((p) => p.id === ayanda);
       ok(r.s === 201 && kid.name === "Ayanda Khumalo" && kid.parentName === "Bongi Khumalo", "linking keeps the kid's name and saves the parent's: " + JSON.stringify([kid.name, kid.parentName]));
       const lerato = (await hc("POST", "/coach/students", { name: "Lerato Dlamini", parentName: "Thandi", phone: "072 333 5555" })).j.id;
@@ -1000,7 +996,11 @@ function client(base) {
         ok(codes.every((c) => c === 201) && r.s === 429 && /new gyms today/.test(r.j.error), "one address can start 10 gyms a day: " + codes.join() + " " + r.s);
         r = await client(base2)("POST", "/auth/start-gym", { gym: "Spam 9", name: "S", email: "spam9@example.com", password: "spampass1" }, { "x-forwarded-for": "198.51.100.1", "cf-connecting-ip": "192.0.2.77" });
         ok(r.s === 201, "another address still can");
-        // Invite emails: 100 a day per coach (and per gym, and per address).
+        // Invite emails: 100 a day per coach (and per gym, and per address), once the coach's email is verified and the gym is past
+        // its first week with 3 members on the app (a newer gym: 30 a day, see tests/security.js).
+        { const db = new Pool({ connectionString: DB }); await db.query("update users set email_verified_at=now(), email_verified_for=email where email='live@example.com'");
+          await db.query("update gyms set created_at=now()-interval '8 days' where name='Live Gym'");
+          await db.query("insert into users(gym_id,role,name,email,pass_hash) select id,'student','Live M'||n,'livem'||n||'@example.com','x' from gyms, generate_series(1,2) n where name='Live Gym'"); await db.end(); }
         let sent = 0, failed = 0; for (let b = 0; b < 4; b++) { r = await live("POST", "/coach/invite", { emails: Array.from({ length: 30 }, (_, i) => `inv${b}-${i}@example.com`) }, ipx); sent += r.j.sent; failed += r.j.failed.length; }
         ok(sent === 100 && failed === 20, `at most 100 invite emails a day (${sent} sent, ${failed} held back)`);
         // Proof uploads by coaches: 50 a day per gym.

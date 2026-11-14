@@ -160,7 +160,10 @@ const DAY = 864e5, wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(I.plans.find((p) => p.name === "Unlimited").members === 1, "membership mix by plan");
     r = await chris("GET", "/coach/insights"); ok(r.s === 403, "students can't see insights");
 
-    // ---- emailing students from insights
+    // ---- emailing students from insights (once the coach has tapped the email check in their welcome email)
+    r = await coach("POST", "/coach/message", { userIds: [sam.id], subject: "x", text: "y" }); ok(r.s === 403 && r.j.verify, "a coach whose email isn't verified is asked to verify it first");
+    { const wm = sink.mails.find((m) => m.to[0] === "coach@example.com" && /verify=/.test(m.text || ""));
+      r = await coach("POST", "/auth/verify", { token: ((wm && wm.text) || "").match(/verify=([0-9a-f]{64})/)[1] }); ok(r.s === 200 && r.j.me.emailVerified, "the welcome email's button verifies it"); }
     const n2 = sink.mails.length;
     r = await coach("POST", "/coach/message", { userIds: [sam.id], subject: "Missed you on the mats", text: "Hey, we haven't seen you in a while.\n\nTuesday advanced has a spot for you." });
     await wait(200);

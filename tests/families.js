@@ -43,11 +43,13 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     const roster = async () => Object.fromEntries((await hc("GET", "/coach/roster")).j.people.map((p) => [p.id, p]));
     const money = async (m) => Object.fromEntries((await hc("GET", "/coach/money" + (m ? `?month=${m}` : ""))).j.students.map((s) => [s.id, s]));
 
-    // ---- 1. One parent login, several kids: the number matches two kids, so the parent is asked once which of them train here.
+    const claimOf = async (id, h = hc) => new URL((await h("POST", `/coach/students/${id}/claim-link`)).j.url).searchParams.get("claim");
+    // ---- 1. One parent login, several kids: Lerato's invite link, and her brother the coach added with the same number: asked once.
+    // (Only an invite link links a record the coach added: a gym code with the parent's number makes a new account. tests/security.js)
     const lerato = await addKid("Lerato Dlamini", "082 555 1234"), sipho = await addKid("Sipho Dlamini", "082 555 1234");
-    const mom = client(base), body = { code, name: "Thandi Dlamini", email: "thandi@fam.test", password: "thandipass1", phone: "082 555 1234" };
+    const mom = client(base), body = { code, claim: await claimOf(lerato), name: "Thandi Dlamini", email: "thandi@fam.test", password: "thandipass1", phone: "082 555 1234" };
     r = await mom("POST", "/auth/register", body);
-    ok(r.s === 200 && r.j.ask && !r.j.ask.id && r.j.ask.kids.map((k) => k.id).join() === [lerato, sipho].join(), "a number that matches two kids asks once: 'Which of your kids train here?' " + JSON.stringify(r.j));
+    ok(r.s === 200 && r.j.ask && r.j.ask.claim === lerato && r.j.ask.kids.map((k) => k.id).join() === [lerato, sipho].join(), "Lerato's link asks once about the brother with the same number: " + JSON.stringify(r.j));
     r = await mom("POST", "/auth/register", { ...body, kids: [lerato, sipho] });
     ok(r.s === 201 && r.j.me.id === lerato && r.j.me.family && r.j.me.family.map((f) => f.id).join() === [lerato, sipho].join(), "ticking both puts them on one login: " + JSON.stringify(r.j.me && r.j.me.family));
     ok(r.j.me.account && r.j.me.account.name === "Thandi Dlamini" && r.j.me.account.email === "thandi@fam.test", "the account is the parent's (their name and email)");
@@ -55,7 +57,8 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     ok(ro[lerato].name === "Lerato Dlamini" && ro[sipho].name === "Sipho Dlamini" && !ro[lerato].offline && !ro[sipho].offline, "coaches still see two kids, both on the app now, with their own names");
     ok(ro[lerato].parentName === "Thandi Dlamini" && ro[sipho].parentName === "Thandi Dlamini" && ro[sipho].parentAccount === "Lerato Dlamini" && ro[sipho].email === "thandi@fam.test", "with the parent shown, and the parent's email for the kid on her login");
     ok(!Object.values(ro).some((p) => p.name === "Thandi Dlamini"), "and no third, empty account for the parent");
-    r = await mom("POST", "/auth/register", { ...body, email: "thandi2@fam.test", kids: [lerato] }); ok(r.s === 409, "a kid already on a login can't be picked again");
+    r = await client(base)("POST", "/auth/register", { code, name: "Someone Else", email: "thandi2@fam.test", password: "thandipass1", phone: "082 555 1234", kids: [lerato, sipho] });
+    ok(r.s === 201 && r.j.me.id !== lerato && !r.j.me.family && (await roster())[sipho].parentAccount === "Lerato Dlamini", "kids= without their invite link puts nobody on a login (a new account, nothing linked)");
 
     // ---- 2. Booking for: everything is per kid.
     const cls = (await hc("POST", "/classes", { title: "Kids BJJ", startsAt: new Date(Date.now() + 2 * DAY).toISOString(), durationMin: 60 })).j.class.id;
@@ -86,14 +89,15 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     const atok = new URL((await hc("POST", `/coach/students/${adult}/claim-link`)).j.url).searchParams.get("claim");
     r = await mom("POST", "/me/kids", { claim: atok }); ok(r.s === 400 && /own account/.test(r.j.error), "an adult's own link isn't added as a kid");
     ro = await roster(); ok(!ro[kabelo].offline && ro[kabelo].parentName === "Thandi Dlamini", "the coach sees Kabelo on the app, with his parent");
-    // A parent adds a kid the coach hasn't: by name, in the gym they're booking at. A name the coach already has is linked, not copied.
+    // A parent adds a kid the coach hasn't: by name, in the gym they're booking at. A kid the coach already has needs their invite link.
     r = await mom("POST", "/me/kids", { name: "Naledi Dlamini" }); const naledi = r.j.kid.id;
     ok(r.s === 201 && r.j.me.id === naledi && r.j.me.family.length === 4, "a parent adds a kid by name");
     ro = await roster(); ok(ro[naledi] && ro[naledi].parentName === "Thandi Dlamini" && !ro[naledi].offline && ro[naledi].phone === "082 555 1234", "the coach sees the new kid with the parent's name and number");
     const zola = await addKid("Zola Dlamini", "082 555 1234", "Mama Zola");
     r = await mom("POST", "/me/kids", { name: "zola  dlamini" }); ro = await roster();
-    ok(r.s === 201 && r.j.kid.id === zola && ro[zola].parentAccount === "Lerato Dlamini", "a kid the coach added with the parent's number is linked, not added twice");
-    ok(ro[zola].parentName === "Mama Zola", "and the parent's name the coach has for them stays: " + ro[zola].parentName);
+    ok(r.s === 409 && /invite link/.test(r.j.error) && !ro[zola].parentAccount, "a kid the coach added (even with the parent's number) isn't linked by name: they're asked for the invite link");
+    r = await mom("POST", "/me/kids", { claim: await claimOf(zola) }); ro = await roster();
+    ok(r.s === 201 && r.j.kid.id === zola && ro[zola].parentAccount === "Lerato Dlamini", "and the link adds the coach's record, not a copy");
     r = await mom("POST", "/me/kids", { name: "Adult Member" }); ro = await roster();
     ok(r.s === 201 && r.j.kid.id !== adult && ro[adult].offline && !ro[adult].parentName && !ro[adult].parentAccount, "an adult's record isn't taken over by typing their name");
     await pool.query("delete from users where id=$1", [r.j.kid.id]); await mom("POST", "/me/as", { id: lerato });
@@ -109,9 +113,9 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     ok(r.s === 201 && r.j.me.id === ayanda && r.j.me.family.map((f) => f.id).join() === [ayanda, lebo].join() && r.j.me.name === "Ayanda Dube", "both go on one login, and the kid keeps their name");
     // A parent who trains too: "Are you Bongani?" and their kid on the same login.
     const bongani = (await hc("POST", "/coach/students", { name: "Bongani Mokoena", phone: "071 222 3333" })).j.id, thabo = await addKid("Thabo Mokoena", "071 222 3333", "Bongani");
-    const bm = client(base), bmb = { code, name: "Bongani Mokoena", email: "bongani@fam.test", password: "bonganipass1", phone: "071 222 3333" };
+    const bm = client(base), bmb = { code, claim: await claimOf(bongani), name: "Bongani Mokoena", email: "bongani@fam.test", password: "bonganipass1", phone: "071 222 3333" };
     r = await bm("POST", "/auth/register", bmb);
-    ok(r.j.ask && r.j.ask.id === bongani && !r.j.ask.kid && r.j.ask.kids.map((k) => k.id).join() === thabo, "a parent who's a member is asked about themselves and their kid at once");
+    ok(r.j.ask && r.j.ask.id === bongani && !r.j.ask.kid && r.j.ask.kids.map((k) => k.id).join() === thabo, "a parent who's a member, with their own link, is asked about their kid at once");
     r = await bm("POST", "/auth/register", { ...bmb, link: bongani, kids: [thabo] });
     ok(r.s === 201 && r.j.me.id === bongani && !r.j.me.kid && r.j.me.family.map((f) => f.id).join() === [bongani, thabo].join() && r.j.me.account.name === "Bongani Mokoena", "the parent's own record is the login, with the kid on it");
 
@@ -219,7 +223,7 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     const wipe3 = () => pool.query("delete from payments where gym_id=$1", [gym3]);
     const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4c50000000049454e44ae426082", "hex").toString("base64");
     const le3 = await add3("Lerato Three", "084 100 2000"), si3 = await add3("Sipho Three", "084 100 2000");
-    const m3 = client(base), m3b = { code: code3, name: "Thandi Three", email: "thandi3@fam.test", password: "thandipass3", phone: "084 100 2000" };
+    const m3 = client(base), m3b = { code: code3, claim: await link3(le3), name: "Thandi Three", email: "thandi3@fam.test", password: "thandipass3", phone: "084 100 2000" };
     r = await m3("POST", "/auth/register", { ...m3b, kids: [le3, si3] }); ok(r.s === 201 && r.j.me.id === le3, "round 3: Thandi's login holds Lerato and Sipho");
 
     // Record a payment: the 'For' line says what a family payment does before it's saved.
@@ -255,7 +259,7 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     // One proof for the family, being checked: nobody in the family is reminded, and the Pay sheet counts it for them all.
     const ama = await add3("Ama Three", "084 300 4000", "Zanele"), bo = await add3("Bo Three", "084 300 4000", "Zanele");
     const z3 = client(base);
-    r = await z3("POST", "/auth/register", { code: code3, name: "Zanele Three", email: "zanele@fam.test", password: "zanelepass3", phone: "084 300 4000", kids: [ama, bo] }); ok(r.s === 201, "Zanele signs up for Ama and Bo");
+    r = await z3("POST", "/auth/register", { code: code3, claim: await link3(ama), name: "Zanele Three", email: "zanele@fam.test", password: "zanelepass3", phone: "084 300 4000", kids: [ama, bo] }); ok(r.s === 201, "Zanele signs up for Ama and Bo");
     await z3("POST", "/me/pay/proof", { name: "pop.png", data: png, amountCents: 100000 });
     fam3 = (await z3("GET", "/me/pay")).j.pay.family;
     ok(fam3 && fam3.totalCents === 0 && fam3.kids.every((k) => k.owedCents === 0), "after one R1 000 proof from Ama's sheet, the family total is R0, not Bo's R500: " + JSON.stringify(fam3));
@@ -277,7 +281,7 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     r = await l3x("POST", "/auth/login", { email: "lindi@fam.test", password: "lindipass3" }); ok(r.j.me.account.name === "Lindi Three", "signing in, the welcome uses the account's name");
     r = await l3x("POST", "/me/kids", { claim: ktok }); ok(r.s === 201 && r.j.me.id === kab3 && r.j.me.family.length === 2, "and the link then adds Kabelo with one tap");
 
-    // Typing a kid's name doesn't take over their record: only the parent's own number proves it. The coach can unlink a kid.
+    // Typing a kid's name doesn't take over their record (with any number): only their invite link does. The coach can unlink a kid.
     const naledi6 = (await h3("POST", "/coach/students", { name: "Naledi Six", parentName: "Thandi Six", phone: "085 600 7000" })).j.id;
     const rnd = client(base); await rnd("POST", "/auth/register", { code: code3, name: "Random Adult", email: "random@fam.test", password: "randompass1", phone: "079 111 2222" });
     m0 = (await pool.query("select count(*) from notices where kind='kidask'")).rows[0].count;
@@ -286,11 +290,11 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
     ok(Number((await pool.query("select count(*) from notices where kind='kidask'")).rows[0].count) === Number(m0) + 1 && (await h3("POST", `/coach/students/${naledi6}/claim-link`)).s === 200, "the head coach hears about it, and can still send the real parent the invite link");
     const t6 = client(base);
     r = await t6("POST", "/auth/register", { code: code3, name: "Thandi S", email: "thandi6@fam.test", password: "thandipass6", phone: "085 600 7000" });
-    r = await t6("POST", "/auth/register", { code: code3, name: "Thandi S", email: "thandi6@fam.test", password: "thandipass6", phone: "085 600 7000", link: "no" });
-    ok(r.s === 201 && (await ro3())[r.j.me.id], "the real parent signs up (no to 'Signing up for Naledi?'), and is on Members for now");
+    ok(r.s === 201 && !r.j.ask && (await ro3())[r.j.me.id], "the real parent signs up with the gym's code (her number links nothing), and is on Members for now");
     const t6id = r.j.me.id;
-    r = await t6("POST", "/me/kids", { name: "Naledi Six" }); ro6 = await ro3(); const mo6 = await st3();
-    ok(r.s === 201 && r.j.kid.id === naledi6 && ro6[naledi6].parentAccount === "Thandi S" && ro6[naledi6].parentName === "Thandi Six", "with her own number, the name links Naledi, and the parent's name the coach has stays");
+    r = await t6("POST", "/me/kids", { name: "Naledi Six" }); ok(r.s === 409, "even with her own number, the name alone doesn't link Naledi");
+    r = await t6("POST", "/me/kids", { claim: await link3(naledi6) }); ro6 = await ro3(); const mo6 = await st3();
+    ok(r.s === 201 && r.j.kid.id === naledi6 && ro6[naledi6].parentAccount === "Thandi S", "Naledi's invite link adds her");
     ok(r.j.parentOnly && !ro6[t6id] && !mo6[t6id] && mo6[naledi6], "a parent who never booked or had a plan comes off Members and Money when she adds her first kid");
     r = await t6("GET", "/me"); ok(r.j.me.id === naledi6 && r.j.me.gym && r.j.me.family.find((f) => f.id === t6id && !f.inGym), "and the app books for Naledi");
     r = await t6("POST", "/me/train", {}); ok(r.s === 200 && (await ro3())[t6id] && r.j.me.id === naledi6, "'I train too' puts her back on Members in one tap");
@@ -301,7 +305,7 @@ const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n,
 
     // The kid whose record holds the login leaves: the app carries on for her brother, and the parent keeps her name.
     const le4 = await add3("Lerato Four", "086 400 4000"), si4 = await add3("Sipho Four", "086 400 4000");
-    const f4 = client(base), f4b = { code: code3, name: "Thandi Four", email: "thandi4@fam.test", password: "thandipass4", phone: "086 400 4000" };
+    const f4 = client(base), f4b = { code: code3, claim: await link3(le4), name: "Thandi Four", email: "thandi4@fam.test", password: "thandipass4", phone: "086 400 4000" };
     r = await f4("POST", "/auth/register", { ...f4b, kids: [le4, si4] }); ok(r.j.me.id === le4, "Thandi Four's login is Lerato's record");
     r = await f4("POST", "/me/leave", {});
     ok(r.s === 200 && r.j.me.id === si4 && r.j.me.gym && r.j.me.gym.id === gym3 && r.j.me.account.name === "Thandi Four", "'Leave gym' while booking for Lerato: the app carries on for Sipho: " + JSON.stringify(r.j.me && [r.j.me.id, r.j.me.gym, r.j.me.account]));

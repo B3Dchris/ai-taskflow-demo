@@ -58,7 +58,8 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
     const admin = client(base), coach = client(base), anon = client(base), stu = client(base), solo = client(base);
     // ---------- sign-ups keep where they came from ----------
     let r = await admin("POST", "/auth/register", { name: "Boss Admin", email: "boss@jitsflow.test", password: "adminpass1", source: { utm_source: "Google", utm_medium: "cpc", utm_campaign: "Spring BJJ", gclid: "Cj0KCQiA_test-123", ref: "www.google.com", land: "/coaches/", t: Date.now() - 3600e3 } });
-    ok(r.s === 201 && r.j.me.admin, "the admin signs up");
+    ok(r.s === 201 && !r.j.me.admin && r.j.me.adminVerify, "the admin signs up (and is asked to verify their email first)");
+    await pool.query("update users set email_verified_at=now(), email_verified_for=email where email='boss@jitsflow.test'"); // as the link in the verification email does
     const src = async (email) => (await pool.query("select signup_source, signed_up_at from users where email=$1", [email])).rows[0];
     let x = await src("boss@jitsflow.test");
     ok(x.signup_source.click === "gclid" && x.signup_source.click_id === "Cj0KCQiA_test-123" && x.signup_source.utm_source === "google" && x.signup_source.utm_campaign === "spring bjj" && x.signup_source.ref === "google.com" && x.signup_source.land === "/coaches/" && x.signed_up_at, "register stores the sign-up source with the Google Ads click id: " + JSON.stringify(x.signup_source));

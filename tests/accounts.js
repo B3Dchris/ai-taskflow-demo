@@ -226,8 +226,18 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await st.fill("#a-pass", "newstudentpass"); await st.tap("#sheetbar [type=submit]"); await st.waitForTimeout(1200);
     ok(await ev(st, () => API.me && API.me.email === "chris@example.com"), "student is signed in with the new password");
     await wide(st, "reset");
-    // ---- coach invites by email
+    // ---- coach invites by email: first they confirm their email (one tap sends the link; the link confirms it)
     await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(300);
+    ok(await ev(co, () => /Confirm your email/.test(document.getElementById("inviteform").innerText)), "the invite form asks a coach whose email isn't confirmed to confirm it");
+    await co.fill("#inv-emails", "newkid@example.com"); await co.tap("#inviteform [type=submit]"); await co.waitForTimeout(800);
+    ok(await ev(co, () => S.ui.sheet && S.ui.sheet.k === "verify" && /WhatsApp works/.test(document.getElementById("sheet").innerText)), "sending before then offers the link (WhatsApp still works)");
+    await co.tap('#sheetbar [data-a="verifysend"]'); await co.waitForTimeout(900);
+    const vmail = sink.mails.filter((m) => m.to[0] === "coach@example.com" && /Confirm your email/.test(m.subject)).pop(), vtok = vmail && (vmail.text.match(/\?verify=([0-9a-f]{64})/) || [])[1];
+    ok(/Sent\. Open the email/.test(await toast(co)) && !!vtok, "one tap sends it: " + (await toast(co)));
+    await co.goto(URL + "/app/?verify=" + vtok); await co.waitForTimeout(1500);
+    ok(/email is confirmed/.test(await toast(co)) && await ev(co, () => API.me.emailVerified && !/verify=/.test(location.search)), "the link confirms it (and leaves the address bar): " + (await toast(co)));
+    await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(400);
+    ok(await ev(co, () => !/Confirm your email/.test(document.getElementById("inviteform").innerText)), "and the invite form stops asking");
     await co.fill("#inv-emails", "newkid@example.com, chris@example.com"); await co.tap("#inviteform [type=submit]"); await co.waitForTimeout(900);
     ok(/Sent 1 invite\. 1 already in your gym/.test(await toast(co)) && sink.mails.some((m) => m.to[0] === "newkid@example.com"), "coach invites students by email: " + (await toast(co)));
     // ---- calendar and quick class input
@@ -429,22 +439,20 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     const thandi = await ev(co, async () => { const j = await api("POST", "/coach/students", { name: "Thandi Mokoena", phone: "082 555 0009" }); await api("PATCH", "/coach/students/" + j.id, { feeCents: 85000 }); await coachLoad("roster"); COACH.money = null; COACH.moneyView = "month"; COACH.moneyFilter = "owing"; coachGo("money"); return j.id; });
     await co.waitForTimeout(1500);
     ok(await ev(co, () => { const row = [...document.querySelectorAll(".mrow")].find((r) => /Thandi Mokoena/.test(r.innerText)), a = row && row.querySelector("a.wa"); return !!a && /claim=/.test(decodeURIComponent(a.href)) && !/#book/.test(decodeURIComponent(a.href)); }), "the WhatsApp reminder for a student who isn't on the app links to their invite (claim) link");
-    // ---- someone the coach added signs up through the gym's link: "Are you ...?" links them to their record
+    // ---- someone the coach added: their own invite link signs them into their record; the gym's link makes a new account
+    // (a name or number proves nothing) and the coach sees a possible duplicate to merge.
     const sipho = await ev(co, async () => (await api("POST", "/coach/students", { name: "Sipho Ndlovu", phone: "082 555 0001" })).id);
+    const siphoLink = await ev(co, async (id) => (await api("POST", `/coach/students/${id}/claim-link`)).url, sipho);
     { const { c: c3, p: s3 } = await phone();
-      await s3.goto(invite); await s3.waitForTimeout(900);
-      await s3.fill("#a-name", "Sipho Ndlovu"); await s3.fill("#a-email", "sipho@example.com"); await s3.fill("#a-pass", "siphopass1"); await s3.tap("#sheetbar [type=submit]"); await s3.waitForTimeout(900);
-      ok(await ev(s3, () => S.ui.sheet && S.ui.sheet.k === "authask" && /Are you Sipho Ndlovu\?/.test(document.getElementById("sheet").innerText) && !API.me), "signing up with the name the coach added asks 'Are you Sipho Ndlovu?'");
-      await s3.tap('#sheetbar [data-a="authlink"]:not([data-v="no"])'); await s3.waitForTimeout(1200);
-      ok(await ev(s3, (id) => API.me && API.me.id === id && API.me.gym, sipho), "saying yes signs them into that record");
+      await s3.goto(siphoLink.replace("https://www.jitsflow.test", URL)); await s3.waitForTimeout(900);
+      await s3.fill("#a-name", "Sipho Ndlovu"); await s3.fill("#a-email", "sipho@example.com"); await s3.fill("#a-pass", "siphopass1"); await s3.tap("#sheetbar [type=submit]"); await s3.waitForTimeout(1200);
+      ok(await ev(s3, (id) => API.me && API.me.id === id && API.me.gym, sipho), "the invite link the coach sent signs them into their record");
       await c3.close(); }
     const lindi = await ev(co, async () => (await api("POST", "/coach/students", { name: "Lindiwe Zulu", phone: "082 555 0002" })).id);
     { const { c: c4, p: s4 } = await phone();
       await s4.goto(invite); await s4.waitForTimeout(900);
-      await s4.fill("#a-name", "Lindi Z"); await s4.fill("#a-email", "lindi@example.com"); await s4.fill("#a-pass", "lindipass1"); await s4.fill("#a-wa", "+27 82 555 0002"); await s4.tap("#sheetbar [type=submit]"); await s4.waitForTimeout(900);
-      ok(await ev(s4, () => S.ui.sheet && S.ui.sheet.k === "authask" && /Lindiwe Zulu/.test(document.getElementById("sheet").innerText)), "the same WhatsApp number asks too");
-      await s4.tap('#sheetbar [data-a="authlink"][data-v="no"]'); await s4.waitForTimeout(1200);
-      ok(await ev(s4, (id) => API.me && API.me.id !== id && API.me.gym, lindi), "saying no makes a new account");
+      await s4.fill("#a-name", "Lindi Z"); await s4.fill("#a-email", "lindi@example.com"); await s4.fill("#a-pass", "lindipass1"); await s4.fill("#a-wa", "+27 82 555 0002"); await s4.tap("#sheetbar [type=submit]"); await s4.waitForTimeout(1200);
+      ok(await ev(s4, (id) => API.me && API.me.id !== id && API.me.gym && !(S.ui.sheet && S.ui.sheet.k === "authask"), lindi), "the gym's link with the same WhatsApp number makes a new account, without asking who they are");
       await c4.close(); }
     await ev(co, async () => { await coachLoad("roster"); COACH.stuView = "list"; coachGo("students"); }); await co.waitForTimeout(400);
     ok(await ev(co, () => /Possible duplicate/.test(document.getElementById("roster-list").innerText)), "the coach sees a possible duplicate in the roster");

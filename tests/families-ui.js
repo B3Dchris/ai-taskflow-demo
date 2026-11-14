@@ -31,18 +31,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         out[k] = (await api("POST", "/coach/students", { name: n, parentName: "Thandi", phone: ph })).id; await api("PATCH", "/coach/students/" + out[k], { planId: plan }); }
       await api("PATCH", "/coach/gym/pay", { holder: "Family BJJ", bank: "FNB", account: "62000000000", branch: "250655", dueDay: 1 });
       await api("POST", "/classes", { title: "Kids BJJ", startsAt: new Date(Date.now() + 2 * 864e5).toISOString(), durationMin: 60, capacity: 10 });
-      out.claim = new URL((await api("POST", `/coach/students/${out.kabelo}/claim-link`)).url).search; return out; });
+      out.claim = new URL((await api("POST", `/coach/students/${out.kabelo}/claim-link`)).url).search;
+      out.claimL = new URL((await api("POST", `/coach/students/${out.lerato}/claim-link`)).url).search; return out; });
 
     // ---- A kid's invite link, signed out: the form says who it's for and asks for the parent's name.
     const peek = await phone("peek"); await peek.goto(URL + "/app/" + ids.claim); await peek.waitForTimeout(1200);
     ok(await ev(peek, () => /Signing up for\s+Kabelo Dlamini/.test(document.getElementById("a-joining").innerText) && /Your name \(parent\)/.test(document.querySelector("label.f").innerText)), "a kid's link says 'Signing up for Kabelo' and asks for 'Your name (parent)'");
     await peek.context().close();
 
-    // ---- Mom signs up with the gym's link and her number: asked once which kids train here.
+    // ---- Mom signs up with Lerato's invite link: asked once about Sipho, whom the coach added with the same number.
+    // (The gym's own link with her number would make a new account and link nobody: see tests/security.js.)
     const mom = await phone("mom");
-    await fill(mom, "/app/?join=" + code, { "#a-name": "Thandi Dlamini", "#a-email": "thandi@fam.test", "#a-pass": "thandipass1", "#a-wa": "082 555 1234" });
+    await fill(mom, "/app/" + ids.claimL, { "#a-name": "Thandi Dlamini", "#a-email": "thandi@fam.test", "#a-pass": "thandipass1" });
     let t = await sheet(mom);
-    ok(/Which of your kids train here\?/.test(t) && /Lerato Dlamini/.test(t) && /Sipho Dlamini/.test(t) && await ev(mom, () => document.querySelectorAll("#kidsform [name=kid]:checked").length === 2), "one question: 'Which of your kids train here?' with both ticked: " + t.slice(0, 200));
+    ok(/Signing up for Lerato/.test(t) && /Lerato Dlamini/.test(t) && /Sipho Dlamini/.test(t) && await ev(mom, () => document.querySelectorAll("#kidsform [name=kid]:checked").length === 2), "one question about the kids with her number, both ticked: " + t.slice(0, 200));
     await narrow(mom, "kids question");
     await mom.tap('#sheetbar [data-a="authkids"][data-v="go"]'); await mom.waitForTimeout(1500); await closeIntro(mom);
     ok(/Booking for: Lerato/.test(await bar(mom)), "signed in, the top says 'Booking for: Lerato': " + (await bar(mom)));
