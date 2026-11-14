@@ -2286,7 +2286,7 @@ function makeApi(pool, { secureCookies, build }) {
       forMonths: (p.for_month || p.alloc) && !p.pack_lessons ? Object.keys(sharesOf(p)).sort() : null,
       packId: p.pack_id ? String(p.pack_id) : null, packLessons: p.pack_lessons || null, packName: p.pack_name || null,
       family: p.family_cents ? { of: String(p.split_of || p.id), totalCents: Number(p.family_cents) } : null,
-      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? "Couldn't read it automatically." : "" } : null };
+      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? (/^(Not read automatically|Too long to read)/.test(a.error) ? a.error : "Couldn't read it automatically.") : "" } : null };
   }
   // family_cents: for a family payment split between brothers and sisters (see familySplit), on the payment and on each share: the whole amount.
   const PAY_COLS = `p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof, (select name from packs k where k.id=p.pack_id) as pack_name,
@@ -3034,16 +3034,17 @@ function makeApi(pool, { secureCookies, build }) {
     return { id: p.merchantId, key: k.text, pass: s.text, sandbox: p.merchantId === payfast.TEST.id, broken: !k.ok || !s.ok || !k.text }; };
   // PayFast's test account only works while JitsFlow itself is in test mode: once live, a gym still connected to it takes no payments.
   const pfLive = (p) => (p && !p.broken && !(p.sandbox && !payfast.platform().sandbox) ? p : null);
-  // A gym whose PayFast keys can't be opened: marked (the head coach's PayFast settings say "needs reconnecting"), and the head coach
-  // and the JitsFlow team are emailed, at most once a day each. what: what it got in the way of (a payment notification).
+  // A gym whose PayFast keys can't be opened: marked (the head coach's PayFast settings say "needs reconnecting"), the head coach is
+  // emailed (once a day), and so is the JitsFlow team: once a day when it's found, and for each payment notification it stopped
+  // (up to 20 a day a gym), so the payment can be recorded by hand. what: what happened. each: a notification (the team hears of each).
   const brokenTold = new Map();
-  async function pfBroken(gymId, what) {
+  const toldToday = (k, max = 1) => { const now = Date.now(), t = brokenTold.get(k); if (!t || now - t.at > 864e5) { brokenTold.set(k, { at: now, n: 1 }); return false; } if (t.n >= max) return true; t.n++; return false; };
+  async function pfBroken(gymId, what, { each = false } = {}) {
     console.error(`payfast: gym ${gymId}'s PayFast keys can't be decrypted (JF_SECRET changed?)${what ? ": " + what : ""}`);
     await q("update gyms set payfast = payfast || $2 where id=$1 and payfast is not null and payfast->>'brokenAt' is null", [gymId, { brokenAt: new Date().toISOString() }]).catch(() => {});
-    if (Date.now() - (brokenTold.get(gymId) || 0) < 864e5) return; brokenTold.set(gymId, Date.now());
     const g = (await q("select name from gyms where id=$1", [gymId])).rows[0]; if (!g) return;
-    toHead(gymId, (name) => mail.templates.payfastReconnect(name));
-    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastBrokenAdmin(g.name, gymId, what || "") });
+    if (!toldToday("head:" + gymId)) toHead(gymId, (name) => mail.templates.payfastReconnect(name));
+    if (!toldToday((each ? "itn:" : "team:") + gymId, each ? 20 : 1)) for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastBrokenAdmin(g.name, gymId, what || "") });
   }
   // Seals every gym's PayFast keys and every saved-card token again with the current key (JF_SECRET), when they were sealed with
   // an older one (JF_SECRET_OLD, or the legacy DATABASE_URL key). Safe to run any time, on several servers. Run at startup and with the jobs.
@@ -3117,11 +3118,11 @@ function makeApi(pool, { secureCookies, build }) {
       else if (d.custom_str1 === "card" || /^auto-\d+$/.test(String(d.m_payment_id || ""))) {
         auto = await autoItnOf(d); if (!auto) throw new Error("unknown saved card");
         gymId = auto.gymId; const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
-        if (raw && raw.broken) { await pfBroken(gymId, `a saved-card notification (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked`); throw new Error("gym's PayFast keys can't be opened"); }
+        if (raw && raw.broken) { await pfBroken(gymId, `a saved-card notification (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked`, { each: true }); throw new Error("gym's PayFast keys can't be opened"); }
         if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id;
       }
       else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
-        if (raw && raw.broken) { await pfBroken(gymId, `a card payment (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked or recorded: record it by hand once PayFast shows it`); throw new Error("gym's PayFast keys can't be opened"); }
+        if (raw && raw.broken) { await pfBroken(gymId, `a card payment (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked or recorded: record it by hand once PayFast shows it`, { each: true }); throw new Error("gym's PayFast keys can't be opened"); }
         if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
       else throw new Error("unknown notification " + String(d.custom_str1 || "").slice(0, 20));
       if (!payfast.itnSignatureOk(pairs, pass)) throw new Error("bad signature");

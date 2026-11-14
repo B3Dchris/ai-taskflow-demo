@@ -11,6 +11,8 @@ setInterval(() => parentPort.postMessage({ type: "tick" }), 1000);
 const ac = new AbortController();
 { const d = workerData.deadlineMs || 150000; setTimeout(() => ac.abort(), d - Math.min(8000, d * 0.2)).unref(); }
 (async () => {
+  // Tests only: an address containing JF_TEST_IMPORT_HANG gets a thread stuck for good, to show the main thread stops it.
+  if (process.env.JF_TEST_IMPORT_HANG && String(workerData.url).includes(process.env.JF_TEST_IMPORT_HANG)) for (;;);
   const fn = workerData.kind === "event" ? importer.importEvent : importer.importSite;
   try {
     const r = await fn(workerData.url, { meter: workerData.meter, signal: ac.signal, log: (text) => parentPort.postMessage({ type: "log", text: String(text) }) });
