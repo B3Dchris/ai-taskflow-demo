@@ -184,6 +184,13 @@ const templates = {
   payfastBrokenAdmin: (gym, id, what) => ({ subject: `PayFast keys can't be read for ${gym}`, title: "PayFast needs reconnecting",
     paras: [`The PayFast keys saved for ${gym} (gym ${id}) can't be decrypted. Usually that means JF_SECRET was changed (or DATABASE_URL, before JF_SECRET was set). Put the old value in JF_SECRET_OLD and restart, or ask the head coach to connect PayFast again (they've been emailed).`,
       ...(what ? [`What happened: ${what}.`] : [])] }),
+  // The team: a PayFast change JitsFlow couldn't make after a day of tries (cancel a plan or saved card, or change a plan's amount).
+  payfastOpAdmin: (what, error) => ({ subject: "PayFast needs a hand: " + what, title: "PayFast change didn't go through",
+    paras: [`JitsFlow tried for a day to ${what} with PayFast, and PayFast didn't confirm it.`, ...(error ? [`PayFast's last answer: ${error}`] : []),
+      "Do it by hand in PayFast (Subscriptions), then mark it done on the dashboard."], button: { label: "Open the dashboard", url: appUrl() + "/app/#me" } }),
+  // The team: a PayFast payment that wasn't what JitsFlow expected (see payfast_flags).
+  payfastFlagAdmin: (gym, line) => ({ subject: `Check a PayFast payment for ${gym}`, title: "PayFast payment to check",
+    paras: [line, "It's recorded as what was really paid, never more. Check it in PayFast, then mark it seen on the dashboard."], button: { label: "Open the dashboard", url: appUrl() + "/app/#me" } }),
   autopayUnsure: (coach, who, amount) => ({ subject: "Check an automatic card payment", title: "Card payment not confirmed",
     paras: [`Hi ${coach},`, `We asked PayFast to charge ${who}'s saved card ${amount}, but PayFast hasn't confirmed it after a day.`, "Check your PayFast account, then tap \"It went through\" or \"It didn't\" at the top of Money. There's no need to record it by hand. If PayFast confirms it later, it's recorded then."],
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),

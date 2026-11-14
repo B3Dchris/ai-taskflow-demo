@@ -2017,7 +2017,7 @@ function planPanel(){
     :`Your free months ended on ${esc(until)}. Keep JitsFlow for ${price}/month: add a card whenever you're ready. Everything keeps working in the meantime.`;
   const needCard=b.status!=="active"&&b.priceCents>0;
   return `<div class="panel stack planpanel"><div class="row between"><h2 class="label">Your JitsFlow plan</h2>${b.status==="active"?`<span class="pill ok">Active</span>`:bt?`<span class="pill ok">Beta</span>`:trial?`<span class="pill">Free</span>`:`<span class="pill due">Free months over</span>`}</div>
-    <p class="small">${line}</p>${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
+    <p class="small">${line}</p>${b.status==="active"&&b.card&&!NATIVE()?`<button class="linkbtn small" data-a="billcancel" style="justify-self:start">Cancel plan</button>`:""}${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button>`}${b.test?`<p class="small muted">Test mode: PayFast sandbox, no real money.</p>`:""}</div>`}
 // Home, head coach only: the calm reminder once the free months are over and there's no card (never shown to members).
 function dueBanner(){if(!isHead()||API.preview)return "";const b=COACH.bill;if(b===undefined){planPanel();return ""}
   if(!b||!b.due)return "";return `<div class="insight dueline"><div class="row between" style="flex-wrap:nowrap;gap:10px"><span>Your free months ended. Keep JitsFlow for ${money(b.priceCents,"ZAR")}/month.</span><button class="btn sm" data-a="coachgo" data-v="gym">See plan</button></div></div>`}
@@ -2172,6 +2172,11 @@ function dashSystem(y){if(!y)return "";const w=[];
   if(!y.secretOk)w.push(`<b>JF_SECRET isn't set.</b> Gyms' PayFast keys are sealed with a key made from the database address, which changes with the database password. Set JF_SECRET in Render (a long random value); keys are sealed again with it on the next start.`);
   if(y.cardsTestMode&&y.production)w.push(`<b>Card payments are in test mode.</b> PAYFAST_MERCHANT_ID isn't set, so payments go to PayFast's sandbox and no real money moves.`);
   if(y.ai&&y.ai.paused)w.push(`<b>Reading with AI is paused for today:</b> the daily budget is used up. Proofs are kept for coaches to check by hand.`);
+  const pfo=y.payfastOps||{},seen=(k,id)=>` <button class="linkbtn small" data-a="pfseen" data-v="${k}:${esc(id)}">Done</button>`;
+  for(const o of pfo.failed||[])w.push(`<b>Cancel by hand in PayFast:</b> ${esc(o.label||"a subscription")}. JitsFlow tried for a day; PayFast said: ${esc(o.error||"no answer")}.${seen("op",o.id)}`);
+  for(const f of y.payfastFlags||[])w.push(`<b>Check a PayFast payment${f.gym?` (${esc(f.gym)})`:""}:</b> ${esc(f.note)}${seen("flag",f.id)}`);
+  for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);
+  if(pfo.trying)w.push(`${nf(pfo.trying)} PayFast cancel${pfo.trying===1?" is":"s are"} still being tried (every 15 minutes at first).`);
   if((y.payfastBroken||[]).length)w.push(`<b>PayFast needs reconnecting</b> for ${y.payfastBroken.map(g=>esc(g.name)).join(", ")}. Their saved keys can't be decrypted; the head coaches have been emailed.`);
   const a=y.ai||{},aiLine=a.on?`<p class="small muted">AI today: ${nf(a.calls)} of ${nf(a.maxCalls)} reads, about ${nf(Math.round(a.tokens/1000))}k of ${nf(Math.round(a.maxTokens/1000))}k tokens.</p>`:"";
   return (w.length?`<section class="panel stack" id="dashsystem"><h2 class="label">Needs attention</h2>${w.map(x=>`<p class="small">${x}</p>`).join("")}</section>`:"")+aiLine}

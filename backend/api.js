@@ -663,6 +663,7 @@ function makeApi(pool, { secureCookies, build }) {
     // A gym with nobody left in it goes too (its classes, plans and payments with it).
     // Offline students (no login) don't keep a gym alive: with nobody left who can sign in, they go too.
     if (u.gym_id && !(await q("select 1 from users where gym_id=$1 and pass_hash is not null limit 1", [u.gym_id])).rows.length) {
+      await gymGoing(u.gym_id, "its last account was deleted");
       await q("delete from users where gym_id=$1 and pass_hash is null", [u.gym_id]);
       await q("delete from gyms g where g.id=$1 and not exists (select 1 from users x where x.gym_id=g.id)", [u.gym_id]);
     }
@@ -2043,6 +2044,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   api.delete("/coach/gym", wrap(async (req, res) => {
     const u = needCoach(req); if (!isHead(u)) fail(403, "Only the head coach can delete the gym.");
     if (!u.pass_hash || !(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
+    await gymGoing(u.gym_id, "the gym was deleted"); // its JitsFlow plan and members' saved cards stop with PayFast
     const db = await pool.connect();
     try {
       await db.query("begin");
@@ -3131,6 +3133,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   const addMonths = (day, n) => { const [y, m, dd] = day.split("-").map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1));
     t.setUTCDate(Math.min(dd, new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate())); return t.toISOString().slice(0, 10); };
   const todayZA = () => new Date(Date.now() + 2 * 3600e3).toISOString().slice(0, 10); // South Africa has no daylight saving
+  const addDays = (day, n) => new Date(Date.parse(day + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
   // The gym's monthly price: R99 (payfast.PRICE_CENTS), or its beta deal while it's in the beta (0: nothing to pay).
   const priceOf = (g, today = todayZA()) => { const x = beta.priceFor(g.beta, today, payfast.PRICE_CENTS()); return x === null ? payfast.PRICE_CENTS() : x; };
   // save: keep the free months' end once worked out (a POST that needs it: adding a card). Reading the plan never writes.
@@ -3152,7 +3155,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   function billState(g) {
     const b = { ...(g.billing || {}) }; if (b.sandbox && !payfast.platform().sandbox) { delete b.status; delete b.token; }
     const start = new Date(g.claimed_at || g.created_at).toISOString().slice(0, 10), trialEnds = b.trialEnds || addMonths(start > LAUNCH ? start : LAUNCH, payfast.TRIAL_MONTHS());
-    const inTrial = new Date().toISOString().slice(0, 10) < trialEnds, price = priceOf(g), out = { trialEnds, lastPaidAt: b.lastPaidAt || null, test: !!b.sandbox, priceCents: price, beta: beta.active(g.beta) };
+    const inTrial = new Date().toISOString().slice(0, 10) < trialEnds, price = priceOf(g), out = { trialEnds, lastPaidAt: b.lastPaidAt || null, test: !!b.sandbox, priceCents: price, beta: beta.active(g.beta),
+      ...(b.mismatch ? { mismatch: { gotCents: b.mismatch.gotCents, wantCents: b.mismatch.wantCents, at: b.mismatch.at } } : {}), ...(b.syncError ? { syncError: b.syncError } : {}) };
     if (b.status === "active") return { state: inTrial ? "card" : "paying", ...out };
     if (b.status === "cancelled") return { state: "cancelled", ...out };
     if (beta.active(g.beta) && price === 0) return { state: "beta", ...out };
@@ -3173,12 +3177,163 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const bUntil = beta.active(b.beta) && !b.priceCents && b.beta.feeUntil ? b.beta.feeUntil : null, startOn = bUntil && bUntil > b.trialEnds ? bUntil : b.trialEnds;
     const later = beta.active(b.beta) ? beta.priceFor(b.beta, startOn, payfast.PRICE_CENTS()) : payfast.PRICE_CENTS();
     const inTrial = today < startOn, price = payfast.money(b.priceCents || later);
+    const mPaymentId = `sub-${u.gym_id}-${Date.now()}`;
     const c = payfast.checkout({ merchant_id: P.id, merchant_key: P.key, return_url: mail.appUrl() + "/app/?billing=done", cancel_url: mail.appUrl() + "/app/?billing=cancel", notify_url: notifyUrl(),
-      name_first: first(u.name), email_address: u.email || "", m_payment_id: `sub-${u.gym_id}-${Date.now()}`, amount: inTrial ? "0.00" : price, item_name: "JitsFlow monthly plan",
+      name_first: first(u.name), email_address: u.email || "", m_payment_id: mPaymentId, amount: inTrial ? "0.00" : price, item_name: "JitsFlow monthly plan",
       item_description: clean(u.gym_name, 100), custom_int1: String(u.gym_id), custom_str1: "sub", subscription_type: "1", billing_date: inTrial ? startOn : addMonths(today, 1),
       recurring_amount: price, frequency: "3", cycles: "0" }, { pass: P.pass, sandbox: P.sandbox });
+    // What this subscription charges each month, for when PayFast says it's set up (see planIn and syncPlan).
+    await q("update gyms set billing = billing || $2 where id=$1", [u.gym_id, { checkout: { id: mPaymentId, cents: Math.round(Number(price) * 100), firstCents: inTrial ? 0 : Math.round(Number(price) * 100), startOn: inTrial ? startOn : today } }]);
     res.json(c);
   }));
+  // The head coach stops their JitsFlow plan: cancelled with PayFast, so their card isn't charged again. Nothing in JitsFlow locks.
+  api.delete("/coach/billing", wrap(async (req, res) => {
+    const u = needHead(req);
+    if (!(await cancelPlan(u.gym_id, "cancelled by the head coach"))) fail(409, "There's no card on your plan to cancel.");
+    const b = await billingOf(u.gym_id);
+    res.json({ billing: { status: b.status, card: !!b.token } });
+  }));
+  // ---------- PayFast changes that have to happen: plans and saved cards cancelled, a plan's amount kept right ----------
+  // A gym that's deleted (by its head coach, or with its last account), given back from a wrong claim (wipeClaimant), or whose head
+  // coach cancels stops its JitsFlow plan with PayFast, and its members' saved cards are cancelled too, before their rows go. Each
+  // cancel is queued (payfast_ops, with the keys it needs copied and sealed, since the gym's row may be gone) and tried straight
+  // away. One PayFast didn't confirm is tried again by the 15-minute jobs: 15 minutes on, then twice as long each time, 8 tries in
+  // about a day; then the team is emailed and the dashboard shows it, to do by hand. Nothing here ever holds up what someone asked for.
+  // The JitsFlow plan is cancelled with JitsFlow's own keys (PAYFAST_MERCHANT_ID and PAYFAST_PASSPHRASE, as for its checkouts).
+  const OP_TRIES = 8;
+  // what: "plan" (keys: JitsFlow's own, {sandbox}) or "card" (keys: the gym's {id, pass, sandbox}). label: for the team.
+  async function pfCancel({ what, gymId, label, keys, token }) {
+    if (!token) return null;
+    const plat = what === "plan";
+    const r = (await q(`insert into payfast_ops(kind,what,gym_id,label,merchant_id,pass,platform,sandbox,token,token_hash) values('cancel',$1,$2,$3,$4,$5,$6,$7,$8,$9)
+      on conflict do nothing returning id`, [what, gymId || null, clean(label, 200), plat ? "" : String(keys.id), plat ? "" : payfast.seal(keys.pass || ""), plat, !!(keys && keys.sandbox),
+      payfast.seal(String(token)), sha(String(token))])).rows[0];
+    if (r) pfOps([r.id]).catch((e) => console.warn("payfast ops:", e.message));
+    return r ? r.id : null;
+  }
+  // Runs the queued PayFast cancels that are due (ids: just these). Each is claimed first, so two servers never both run one.
+  async function pfOps(ids = null) {
+    const rows = (await q(`update payfast_ops o set tries=o.tries+1, next_at=now() + interval '10 minutes' where o.id in (select id from payfast_ops
+        where done_at is null and failed_at is null and next_at <= now() ${ids ? "and id = any($1)" : ""} order by id limit 50 for update skip locked) returning o.*`, ids ? [ids] : [])).rows;
+    let n = 0;
+    for (const o of rows) {
+      const tok = payfast.open(o.token), m = o.platform ? payfast.planKeys(o.sandbox) : { id: o.merchant_id, pass: payfast.open(o.pass), sandbox: o.sandbox };
+      const r = tok ? await payfast.cancelSub(m, tok) : { ok: false, error: "its saved token can't be decrypted (JF_SECRET changed?)" };
+      if (r.ok || r.gone) { await q("update payfast_ops set done_at=now(), error=$2 where id=$1", [o.id, r.gone ? "PayFast had nothing to cancel" : ""]); n++; continue; }
+      if (o.tries >= OP_TRIES) {
+        await q("update payfast_ops set failed_at=now(), error=$2 where id=$1", [o.id, clean(r.error, 300)]);
+        for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastOpAdmin("cancel " + (o.label || "a PayFast subscription"), r.error) });
+      } else await q("update payfast_ops set error=$2, next_at=now() + least(960, 15 * power(2, tries - 1)) * interval '1 minute' where id=$1", [o.id, clean(r.error, 300)]);
+    }
+    return n;
+  }
+  // The gym's JitsFlow plan stops: cancelled with PayFast (queued, above) and marked cancelled. false when there was no card on it.
+  async function cancelPlan(gymId, why) {
+    const g = (await q("select name, billing from gyms where id=$1", [gymId])).rows[0], b = (g && g.billing) || {};
+    if (!g || !b.token) return false;
+    // A card added in test mode, while JitsFlow is live now, was never real: there's nothing at PayFast to cancel.
+    if (!(b.sandbox && !payfast.platform().sandbox)) await pfCancel({ what: "plan", gymId, label: `${g.name}'s JitsFlow plan (${why})`, keys: { sandbox: !!b.sandbox }, token: b.token });
+    await q("update gyms set billing = (billing - 'token' - 'paused' - 'subCents' - 'syncTries' - 'syncError' - 'syncAfter') || $2 where id=$1", [gymId, { status: "cancelled", cancelledAt: new Date().toISOString(), cancelledWhy: why }]);
+    return true;
+  }
+  // Just before a gym is deleted: its plan and every saved card stop with PayFast. Never stops the delete.
+  async function gymGoing(gymId, why) {
+    try { await dropAutopay("a.gym_id=$1", [gymId]); } catch (e) { console.warn("gym going (cards):", e.message); }
+    try { await cancelPlan(gymId, why); } catch (e) { console.warn("gym going (plan):", e.message); }
+  }
+  // The plan's amount at PayFast follows the gym's price: a beta deal accepted or changed, its cheaper months ending (feeUntil), the
+  // gym leaving the beta, or JF_PRICE_CENTS changing. PayFast's subscription is changed to the new amount (from its next payment).
+  // While the price is R0 (a free beta) it's paused, not cancelled, so nobody has to add their card again: paused for the months
+  // until the free stretch ends (120 when it has no end), and unpaused, at the right amount, as soon as there's a price again.
+  // billing.subCents: the amount PayFast has (unknown for plans from before this: set the first time); billing.paused.
+  // Run when the price changes and by the 15-minute jobs (which catch the day feeUntil comes). A PayFast error is tried again an
+  // hour on; on the 8th the team is told (once) and it's tried daily after that.
+  const pauseCycles = (bt, today) => { if (!beta.active(bt) || !bt.feeUntil || bt.feeUntil <= today) return 120;
+    const [y1, m1] = today.split("-").map(Number), [y2, m2] = bt.feeUntil.split("-").map(Number); return Math.min(120, Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1)); };
+  async function syncPlan(gymId, { now = false } = {}) {
+    const g = (await q("select id, name, billing, beta from gyms where id=$1 and claim is null", [gymId])).rows[0], b = (g && g.billing) || {};
+    if (!g || b.status !== "active" || !b.token) return null;
+    if (b.sandbox && !payfast.platform().sandbox) return null; // a card added in test mode: never real
+    if (!now && b.syncAfter && Date.parse(b.syncAfter) > Date.now()) return null;
+    const today = todayZA(), want = priceOf(g, today), m = payfast.planKeys(b.sandbox), steps = [];
+    // A card added during a free stretch starts charging when it ends (its checkout's first payment day): nothing to pause.
+    const startsLater = b.startOn && !b.lastPaidAt && beta.active(g.beta) && g.beta.feeUntil && b.startOn >= g.beta.feeUntil;
+    if (want === 0) { if (!b.paused && !startsLater) steps.push(["pause", () => payfast.pauseSub(m, b.token, pauseCycles(g.beta, today)), { paused: true }]); }
+    else {
+      if (b.paused) steps.push(["unpause", () => payfast.unpauseSub(m, b.token), { paused: false }]);
+      if (b.subCents !== want) steps.push(["update", () => payfast.updateSub(m, b.token, want), { subCents: want }]);
+    }
+    for (const [what, call, patch] of steps) {
+      const r = await call();
+      if (!r.ok) {
+        const tries = (b.syncTries || 0) + 1;
+        await q("update gyms set billing = billing || $2 where id=$1 and billing->>'token' = $3", [gymId, { syncTries: tries, syncError: `${what}: ${clean(r.error, 200)}`,
+          syncAfter: new Date(Date.now() + (tries >= OP_TRIES ? 24 * 60 : 60) * 60e3).toISOString() }, b.token]);
+        if (tries === OP_TRIES) for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastOpAdmin(what === "update" ? `change ${g.name}'s JitsFlow plan to ${beta.rand(want)} a month` : `${what} ${g.name}'s JitsFlow plan`, r.error) });
+        return { ok: false, step: what, error: r.error };
+      }
+      await q("update gyms set billing = (billing - 'syncTries' - 'syncError' - 'syncAfter') || $2 where id=$1 and billing->>'token' = $3", [gymId, patch, b.token]);
+    }
+    return steps.length ? { ok: true, steps: steps.map((x) => x[0]) } : null;
+  }
+  const syncSoon = (gymId) => { syncPlan(gymId, { now: true }).catch((e) => console.warn("plan sync:", e.message)); };
+  // Every gym with an active plan (the 15-minute jobs): only ones whose amount at PayFast isn't right make a call.
+  async function syncPlans() {
+    let n = 0;
+    for (const g of (await q("select id from gyms where claim is null and billing->>'status'='active' and billing ? 'token'")).rows) {
+      try { if (await syncPlan(g.id)) n++; } catch (e) { console.warn("plan sync:", g.id, e.message); }
+    }
+    return n;
+  }
+  // PayFast payments that weren't what JitsFlow expected: kept for the team's dashboard, and the team is emailed (20 a day at most).
+  async function pfFlag(gymId, kind, { ref = "", expected = null, got = null, note = "" } = {}) {
+    await q("insert into payfast_flags(gym_id,kind,ref,expected_cents,got_cents,note) values($1,$2,$3,$4,$5,$6)", [gymId || null, kind, clean(ref, 80), expected, got, clean(note, 500)]);
+    console.warn(`payfast flag: gym ${gymId} ${kind} ${ref} expected ${expected} got ${got}`);
+    if (limited("pfflag", 20, 24 * 3600e3)) return;
+    const g = gymId ? (await q("select name from gyms where id=$1", [gymId])).rows[0] : null;
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastFlagAdmin(g ? g.name : "a gym", note) });
+  }
+  // A notification for a gym's JitsFlow plan. COMPLETE: the card is on; a new card replaces the old one, which is cancelled with
+  // PayFast. When money came it's checked against the gym's price (today's, or yesterday's on the day it changes): another amount is
+  // recorded as what it was and flagged for the team (billing.mismatch, payfast_flags), not taken as the month paid in full.
+  // CANCELLED: cancelled in PayFast (by the head coach there, or after failed payments).
+  async function planIn(gymId, d, sandbox, gross) {
+    const g = (await q("select id, name, billing, beta from gyms where id=$1", [gymId])).rows[0]; if (!g) return;
+    const b = g.billing || {}, now = new Date().toISOString(), tok = clean(d.token, 80), live = !(b.sandbox && !sandbox);
+    if (d.payment_status === "CANCELLED") {
+      if (tok && b.token && tok !== b.token) return; // a card replaced already
+      await q("update gyms set billing = (billing - 'token' - 'paused' - 'subCents') || $2 where id=$1", [gymId, { status: "cancelled", sandbox, cancelledAt: now, cancelledWhy: "cancelled in PayFast" }]);
+      return;
+    }
+    if (d.payment_status !== "COMPLETE") return;
+    const patch = { status: "active", sandbox }, co = b.checkout && b.checkout.id === String(d.m_payment_id || "") ? b.checkout : null;
+    // A payment on a card that was replaced (it came before its cancel went through): the plan keeps its current card, the old one is
+    // cancelled (again, if it's still open), and the team checks it.
+    if (tok && b.token && tok !== b.token && !co) {
+      await pfCancel({ what: "plan", gymId, label: `${g.name}'s old JitsFlow plan card (a new card replaced it)`, keys: { sandbox: !!sandbox }, token: tok });
+      if (gross > 0) await pfFlag(gymId, "plan-old-card", { ref: "PayFast " + clean(d.pf_payment_id, 40), got: gross, note: `${g.name} paid ${beta.rand(gross)} on a JitsFlow plan card it has replaced. PayFast payment ${clean(d.pf_payment_id, 40)}: check the old card is cancelled, and refund it if they paid twice.` });
+      return;
+    }
+    if (tok && tok !== b.token) {
+      // A new card: what its subscription charges is what its checkout set up (unknown: syncPlan sets it).
+      Object.assign(patch, { token: tok, cardAt: now, paused: false, subCents: co ? co.cents : null, startOn: co ? co.startOn || null : null });
+      if (b.token && b.status !== "cancelled" && live) await pfCancel({ what: "plan", gymId, label: `${g.name}'s old JitsFlow plan card (a new card replaced it)`, keys: { sandbox: !!b.sandbox }, token: b.token });
+    }
+    let drop = ["mismatch"];
+    if (gross > 0) {
+      Object.assign(patch, { lastPaidAt: now, lastPaidCents: gross });
+      const today = todayZA(), want = priceOf(g, today), first = co ? co.firstCents : null;
+      const okAmounts = [want, priceOf(g, addDays(today, -1)), first].filter((x) => x !== null && x !== undefined);
+      if (!okAmounts.includes(gross)) {
+        patch.mismatch = { at: now, gotCents: gross, wantCents: want, ref: clean(d.pf_payment_id, 40) }; drop = [];
+        await pfFlag(gymId, "plan-amount", { ref: "PayFast " + clean(d.pf_payment_id, 40), expected: want, got: gross,
+          note: `${g.name} paid ${beta.rand(gross)} for its JitsFlow plan, but its price is ${beta.rand(want)} a month. PayFast payment ${clean(d.pf_payment_id, 40)}${sandbox ? " (PayFast test mode: no real money)" : ""}.` });
+      }
+    }
+    await q(`update gyms set billing = (billing - $3::text[]) || $2 where id=$1`, [gymId, patch, drop]);
+    if (tok && tok !== b.token) syncSoon(gymId);
+  }
+
   // A gym's own PayFast account, for students paying by card or Instant EFT. Keys are kept encrypted.
   // broken: its keys can't be opened (JF_SECRET changed, or DATABASE_URL did before there was one): it takes no payments until the
   // head coach connects PayFast again (they're told; see pfBroken).
@@ -3254,8 +3409,11 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const [fn, ...ln] = String(u.name || "").trim().split(/\s+/);
     // The student picked Apple Pay, Google Pay, card or Instant EFT in the app: PayFast opens on just that one (its payment_method codes).
     const method = { ap: "ap", gp: "gp", cc: "cc", ef: "ef" }[req.body?.method] || undefined;
+    // What this checkout asks for, kept by its m_payment_id (signed): PayFast's notification is checked against it (see cardIn).
+    const mPaymentId = `pay-${u.id}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+    await q("insert into card_checkouts(m_payment_id,gym_id,user_id,amount_cents,split,pack_id) values($1,$2,$3,$4,$5,$6)", [mPaymentId, u.gym_id, u.id, cents, split, pack ? pack.id : null]);
     res.json(payfast.checkout({ merchant_id: p.id, merchant_key: p.key, return_url: mail.appUrl() + "/app/?paid=card", payment_method: method, cancel_url: mail.appUrl() + "/app/", notify_url: notifyUrl(),
-      name_first: clean(fn, 100), name_last: clean(ln.join(" "), 100), email_address: u.email || "", m_payment_id: `pay-${u.id}-${Date.now()}`, amount: payfast.money(cents),
+      name_first: clean(fn, 100), name_last: clean(ln.join(" "), 100), email_address: u.email || "", m_payment_id: mPaymentId, amount: payfast.money(cents),
       item_name: clean(pack ? `${g.name}: ${pack.name}` : `${g.name} fees`, 100), item_description: clean(u.name, 255), custom_int1: String(u.id), custom_int2: String(u.gym_id),
       custom_int3: pack ? String(pack.id) : "", custom_str1: "pay" }, { pass: p.pass, sandbox: p.sandbox, split }));
   }));
@@ -3283,15 +3441,31 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       if (!(await payfast.payfastIps()).has(ip)) console.warn("payfast itn: from an unlisted address " + ip + " (still confirmed with PayFast below)");
       if (!(await payfast.confirmWithPayfast(pairs, sandbox))) throw new Error("PayFast didn't confirm it");
       const gross = Math.round(Number(d.amount_gross || 0) * 100);
-      if (d.custom_str1 === "sub") {
-        const now = new Date().toISOString();
-        const patch = d.payment_status === "COMPLETE" ? { status: "active", token: clean(d.token, 80), cardAt: now, sandbox, ...(gross > 0 ? { lastPaidAt: now, lastPaidCents: gross } : {}) } : d.payment_status === "CANCELLED" ? { status: "cancelled", sandbox } : null;
-        if (patch) await q("update gyms set billing = billing || $1 where id=$2", [patch, gymId]);
-      } else if (auto) await autoIn(auto, d, sandbox, gross, merchant);
-      else if (d.payment_status === "COMPLETE" && gross > 0) await cardIn({ gymId, uid: intOr(d.custom_int1, 0), gross, d, sandbox, packId: d.custom_int3 ? intOr(d.custom_int3, 0) : null });
+      if (d.custom_str1 === "sub") await planIn(gymId, d, sandbox, gross);
+      else if (auto) await autoIn(auto, d, sandbox, gross, merchant);
+      else if (d.payment_status === "COMPLETE" && gross > 0) await cardCheck(gymId, d, sandbox, gross);
     } catch (e) { console.warn("payfast itn:", e.message); }
   }));
 
+  // A member's card payment PayFast confirmed, checked against the checkout it came from (card_checkouts, by m_payment_id). The
+  // payment is always recorded as what PayFast says was paid, never more; one with no checkout behind it, for another member or gym,
+  // or for another amount, is flagged for the team (a checkout's form is in the member's hands). JitsFlow's split can't be checked:
+  // PayFast's notification doesn't say how a payment was split.
+  async function cardCheck(gymId, d, sandbox, gross) {
+    const co = (await q("select * from card_checkouts where m_payment_id=$1", [String(d.m_payment_id || "")])).rows[0];
+    // The gym and member are the ones the notification was signed for (with that gym's passphrase).
+    const uid = intOr(d.custom_int1, 0), ref = "PayFast " + clean(d.pf_payment_id, 40), same = !!co && String(co.gym_id) === String(gymId) && String(co.user_id) === String(uid);
+    let why = "";
+    if (!co) why = `came with a payment id JitsFlow didn't make (${clean(d.m_payment_id, 60) || "none"})`;
+    else if (!same) why = "doesn't match the member or gym its checkout was for";
+    else if (gross !== co.amount_cents) why = `was for ${fmtMoney(gross)} but its checkout asked for ${fmtMoney(co.amount_cents)}`;
+    if (why && !sandbox && !(await q("select 1 from payments where gym_id=$1 and source='payfast' and reference=$2", [gymId, ref])).rows[0]) {
+      const who = (await q("select name from users where id=$1", [uid])).rows[0];
+      await pfFlag(gymId, co ? "card-amount" : "card-unknown", { ref, expected: co ? co.amount_cents : null, got: gross,
+        note: `A card payment from ${who ? who.name : "a member"} (${ref}) ${why}. It's recorded as ${fmtMoney(gross)}.` });
+    }
+    return cardIn({ gymId, uid, gross, d, sandbox, packId: same ? co.pack_id : d.custom_int3 ? intOr(d.custom_int3, 0) : null });
+  }
   // A card payment PayFast confirmed, recorded as paid (like one the coach confirms). packId: the pack it was for, from the checkout.
   // auto: a charge on a saved card, for exactly what they owe: no family split, and no email to the head coach for each one (Money
   // shows them). Returns the payment saved, or null (not a member there, or recorded already).
@@ -3343,9 +3517,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     for (const r of rows) {
       if (seen.has(r.token_hash)) continue; seen.add(r.token_hash);
       if ((await q("select 1 from autopay where token_hash=$1", [r.token_hash])).rows[0]) continue;
-      const m = opts.keys || pfOf((await q("select payfast from gyms where id=$1", [r.gym_id])).rows[0]);
-      if (m && m.id === r.merchant_id) payfast.cancelToken(m, payfast.open(r.token)).catch(() => {});
-      if (opts.tell) { const p = await payerOf(r.user_id, r.payer_id), g = (await q("select name from gyms where id=$1", [r.gym_id])).rows[0];
+      const m = opts.keys || pfOf((await q("select payfast from gyms where id=$1", [r.gym_id])).rows[0]), g = (await q("select name from gyms where id=$1", [r.gym_id])).rows[0];
+      if (m && m.id === r.merchant_id) await pfCancel({ what: "card", gymId: r.gym_id, label: `a member's saved card at ${g ? g.name : "gym " + r.gym_id}`, keys: m, token: payfast.open(r.token) });
+      if (opts.tell) { const p = await payerOf(r.user_id, r.payer_id);
         if (p.email && g) mail.sendLater({ to: p.email, ...mail.templates.autopayEnded(first(p.name), g.name) }); }
     }
     return rows;
@@ -3501,7 +3675,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const m = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]);
     const done = new Set();
     for (const o of gone) { if (done.has(o.token_hash)) continue; done.add(o.token_hash);
-      if (m && m.id === o.merchant_id && !(await q("select 1 from autopay where token_hash=$1", [o.token_hash])).rows[0]) payfast.cancelToken(m, payfast.open(o.token)).catch(() => {}); }
+      if (m && m.id === o.merchant_id && !(await q("select 1 from autopay where token_hash=$1", [o.token_hash])).rows[0]) await pfCancel({ what: "card", gymId, label: `a replaced saved card at ${g.gym_name}`, keys: m, token: payfast.open(o.token) }); }
     const p = await payerOf(payerId);
     if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayOn(first(p.name), g.gym_name, andList(ppl.map(whoFor)), "the " + ordinal(dueDayOf(g.pay))) });
     const live = autoLive(pfLive(m)); if (!live) return;
@@ -3721,10 +3895,25 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     // Settings the JitsFlow team needs to fix (shown at the top of the dashboard), and today's AI use against its budget.
     const L = ai.LIMITS(), used = (await q("select calls, tokens from ai_usage where day=(now() at time zone 'utc')::date and scope='all'")).rows[0] || { calls: 0, tokens: 0 };
     const broken = (await q("select id, name from gyms where payfast->>'brokenAt' is not null order by name limit 50")).rows;
+    // PayFast: cancels that didn't go through after a day of tries (to do by hand), how many are still being tried, plans whose amount
+    // couldn't be changed, and payments that weren't what was expected. Each stays until the team marks it done.
+    const ops = (await q("select id, what, label, error, failed_at from payfast_ops where failed_at is not null and seen_at is null order by id desc limit 50")).rows;
+    const opsOpen = Number((await q("select count(*) from payfast_ops where done_at is null and failed_at is null")).rows[0].count);
+    const flags = (await q("select f.id, f.kind, f.ref, f.expected_cents, f.got_cents, f.note, f.created_at, g.name from payfast_flags f left join gyms g on g.id=f.gym_id where f.seen_at is null order by f.id desc limit 50")).rows;
+    const syncs = (await q("select id, name, billing->>'syncError' as err from gyms where billing->>'syncError' is not null and coalesce((billing->>'syncTries')::int, 0) >= 3 order by name limit 50")).rows;
     out.system = { secretOk: payfast.secretOk(), cardsTestMode: payfast.platform().sandbox, production: process.env.NODE_ENV === "production",
       ai: { on: !!ai.getClient(), calls: used.calls, tokens: Number(used.tokens), maxCalls: L.calls, maxTokens: L.tokens, paused: ai.spent() },
-      payfastBroken: broken.map((g) => ({ id: String(g.id), name: g.name })) };
+      payfastBroken: broken.map((g) => ({ id: String(g.id), name: g.name })),
+      payfastOps: { trying: opsOpen, failed: ops.map((o) => ({ id: String(o.id), what: o.what, label: o.label, error: o.error, at: o.failed_at })) },
+      payfastFlags: flags.map((f) => ({ id: String(f.id), kind: f.kind, gym: f.name || "", ref: f.ref, expectedCents: f.expected_cents, gotCents: f.got_cents, note: f.note, at: f.created_at })),
+      planSync: syncs.map((g) => ({ id: String(g.id), name: g.name, error: g.err })) };
     res.json(out);
+  }));
+  // The team did a PayFast cancel by hand, or checked a flagged payment: off the dashboard.
+  api.post("/admin/payfast/:kind/:id/seen", wrap(async (req, res) => {
+    needAdmin(req); const t = { op: "payfast_ops", flag: "payfast_flags" }[req.params.kind]; if (!t) fail(404, "Not found.");
+    const r = await q(`update ${t} set seen_at=now() where id=$1 and seen_at is null returning id`, [intOr(req.params.id, 0)]);
+    if (!r.rows[0]) fail(404, "Not found."); res.json({ ok: true });
   }));
   api.get("/admin/prospects", wrap(async (req, res) => {
     needAdmin(req);
@@ -3832,6 +4021,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // they added who aren't on the app, notices and classes they made. g: the gym (builtGym), prev: the claimant's id.
   async function wipeClaimant(g, prev) {
     await dropAutopay("a.gym_id=$1", [g.id]);
+    await cancelPlan(g.id, "taken back from a wrong claim").catch((e) => console.warn("unclaim plan:", e.message));
     await q("delete from autopay_charges where gym_id=$1", [g.id]);
     await q("delete from payments where gym_id=$1 and (submitted_by=$2 or user_id=$2 or (user_id is null and submitted_by is null and source='manual'))", [g.id, prev]);
     if (g.claimed_at) for (const t of ["plans", "packs"]) await q(`delete from ${t} where gym_id=$1 and created_at >= $2`, [g.id, g.claimed_at]);
@@ -3892,6 +4082,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       if (!b.status) fail(409, "You're not in the beta.");
       const nb = { ...b, status: "left", leftAt: new Date().toISOString() };
       await q("update gyms set beta=$2 where id=$1", [u.gym_id, nb]);
+      syncSoon(u.gym_id); // the plan's amount at PayFast goes back to the normal price
       return res.json({ beta: beta.forGym(nb, todayZA(), payfast.PRICE_CENTS()) });
     }
     fail(400, "Apply or leave.");
@@ -3938,6 +4129,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (body.adminNote !== undefined) b.adminNote = clean(body.adminNote, 1000);
     if (!b.status) b.status = "accepted";
     await q("update gyms set beta=$2 where id=$1", [g.id, b]);
+    syncSoon(g.id); // the plan's amount at PayFast follows the new price
     res.json({ beta: { ...b, line: beta.feeLine(b, today, payfast.PRICE_CENTS()), priceCents: beta.priceFor(b, today, payfast.PRICE_CENTS()) } });
   }));
   api.post("/admin/feedback/:id/done", wrap(async (req, res) => {
@@ -3965,7 +4157,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Card autopay goes first, so on a due day members whose card pays aren't reminded too.
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
   setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)));
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
+  // PayFast cancels that didn't go through are tried again, and plans' amounts at PayFast follow their gyms' prices (syncPlans).
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
+    await pfOps().catch((e) => console.warn("payfast ops:", e.message)); await syncPlans().catch((e) => console.warn("plan sync:", e.message)); } };
   return api;
 }
 

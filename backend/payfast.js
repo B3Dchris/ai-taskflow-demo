@@ -32,7 +32,9 @@ function paramString(pairs, pass) {
 const md5 = (s) => crypto.createHash("md5").update(s).digest("hex");
 function sign(fields, pass) { return md5(paramString(ORDER.filter((k) => k in fields).map((k) => [k, fields[k]]), pass)); }
 
-// What the browser posts to PayFast. "setup" (the split) isn't part of the signature.
+// What the browser posts to PayFast. "setup" (the split) isn't part of the signature, and PayFast's notification doesn't say how a
+// payment was split: JitsFlow can't check its share was taken. What it can check is the amount: each card checkout's amount
+// and split are kept (card_checkouts, by m_payment_id, which is signed) and the notification is compared with them (see api.js).
 function checkout(fields, { pass, sandbox, split } = {}) {
   const f = {}; for (const k of ORDER) if (fields[k] !== undefined && fields[k] !== "") f[k] = String(fields[k]);
   f.signature = sign(f, pass);
@@ -137,12 +139,28 @@ async function chargeToken(m, token, { cents, item, mPaymentId, split }) {
   if (status < 300 && json && json.status === "success" && (d.response === true || d.response === "true")) return { ok: true, id: d.pf_payment_id ? String(d.pf_payment_id) : "" };
   return { ok: false, reason: String(d.message || d.response || (json && json.status) || "declined").slice(0, 200) };
 }
-// Stops a saved card for good. Best effort: false if PayFast didn't confirm.
-async function cancelToken(m, token) {
-  try { const { status, json } = await apiCall("PUT", `/subscriptions/${encodeURIComponent(token)}/cancel`, m); return status < 300 && !!json && json.status === "success"; }
-  catch (e) { return false; }
+// One change to a subscription or saved card (cancel, update, pause, unpause): {ok} when PayFast confirmed it, {ok: false, gone}
+// when PayFast says there's no such subscription (nothing left to change), {ok: false, error} otherwise. Never throws.
+async function subCall(method, m, token, what, body) {
+  try {
+    const { status, json } = await apiCall(method, `/subscriptions/${encodeURIComponent(token)}/${what}`, m, body);
+    if (status < 300 && json && json.status === "success") return { ok: true };
+    const msg = String((json && json.data && (json.data.message || json.data.response)) || (json && json.status) || "").slice(0, 200);
+    return { ok: false, gone: status === 404, error: `PayFast ${status}${msg ? ": " + msg : ""}` };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e).slice(0, 200) }; }
 }
+// Stops a saved card (or a subscription) for good. Best effort: false if PayFast didn't confirm.
+async function cancelToken(m, token) { return (await cancelSub(m, token)).ok; }
+const cancelSub = (m, token) => subCall("PUT", m, token, "cancel");
+// A subscription's amount from its next payment on (cents, as PayFast's API takes it).
+const updateSub = (m, token, cents) => subCall("PATCH", m, token, "update", { amount: Math.round(cents) });
+// Skips the next `cycles` payments (while the gym's price is R0), and starts them again.
+const pauseSub = (m, token, cycles) => subCall("PUT", m, token, "pause", { cycles: Math.max(1, Math.round(cycles)) });
+const unpauseSub = (m, token) => subCall("PUT", m, token, "unpause");
+// JitsFlow's own keys for a JitsFlow-plan subscription made in test mode (sandbox: true) or live: the test merchant for one made
+// in the sandbox while JitsFlow is live now, else JitsFlow's account as it's set now.
+function planKeys(sandbox) { const P = platform(); return sandbox && !P.sandbox ? { ...TEST, sandbox: true } : P; }
 
 const money = (cents) => (Math.round(cents) / 100).toFixed(2);
 module.exports = { PRICE_CENTS, FEE_PCT, TRIAL_MONTHS, TEST, platform, host, sign, paramString, checkout, parseItn, itnSignatureOk, payfastIps, confirmWithPayfast, seal, open, unseal, reseal, secretOk, money, ORDER,
-  autopayTest, apiSign, chargeToken, cancelToken };
+  autopayTest, apiSign, chargeToken, cancelToken, cancelSub, updateSub, pauseSub, unpauseSub, planKeys };
