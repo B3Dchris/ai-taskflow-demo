@@ -104,14 +104,17 @@ const templates = {
     button: { label: "See your bookings", url: appUrl() + "/app/#book" } }),
   // join: their own invite link, for someone the coach added who isn't on the app yet
   // kid: whose fees they are, when the reminder goes to a kid's parent ("Hi Thandi, ... R500 is due for Lerato for November").
-  feeReminder: (name, gym, amount, month, ref, bankLines, join, parts, kid) => ({ subject: `${gym}: ${kid ? `${kid}'s fees` : "fees"} for ${month}`, title: `Fees for ${month}`,
-    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due${kid && kid !== name ? ` for ${kid}` : ""} for ${month}.`, ...(parts && parts.length ? [parts.join("\n")] : []), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`],
+  // stop: the link that stops this gym's emails to this address (as on its messages).
+  feeReminder: (name, gym, amount, month, ref, bankLines, join, parts, kid, stop) => ({ subject: `${gym}: ${kid ? `${kid}'s fees` : "fees"} for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due${kid && kid !== name ? ` for ${kid}` : ""} for ${month}.`, ...(parts && parts.length ? [parts.join("\n")] : []), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`,
+      ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
     button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
   // Brothers and sisters: one reminder to their parent, with one total, a line per kid and each kid's own reference.
-  familyReminder: (name, gym, amount, month, lines, refs, bankLines, join) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
+  familyReminder: (name, gym, amount, month, lines, refs, bankLines, join, stop) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
     paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for your kids at ${gym}:`, lines.join("\n"), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []),
       `Pay it all in one go if you like, with any one of these references. ${gym} splits it between them:\n${refs.join("\n")}`,
-      `Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`],
+      `Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`,
+      ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
     button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
   // To a member the head coach paused because they stopped coming. Their fees are on hold; booking again starts them.
   missYou: (name, gym) => ({ subject: `We miss you at ${gym}`, title: "We miss you",

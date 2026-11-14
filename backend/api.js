@@ -1544,7 +1544,7 @@ function makeApi(pool, { secureCookies, build }) {
     const g = (await q("select pay, remind_log from gyms where id=$1", [u.gym_id])).rows[0], today = await todayIn(u), rl = g.remind_log;
     // For Home: the automatic reminders that went today, and the people who stopped coming.
     res.json({ gymFeeCents: u.gym_fee, accessFeeCents: accessFee(u), currency: u.currency, plans: plans.map(planOut), defaultPlans: await defaultPlans(u.gym_id), dueDay: dueDayOf(g.pay), today, people: rows,
-      reminders: rl && rl.day === today ? { sent: rl.sent || 0, to: rl.to || [], noEmail: rl.noEmail || [], failed: rl.done === false ? [] : rl.failed || [] } : null, idle: idleOf(raw, rows, await seenP, today) });
+      reminders: rl && rl.day === today ? { sent: rl.sent || 0, to: rl.to || [], noEmail: rl.noEmail || [], stopped: rl.stopped || [], failed: rl.done === false ? [] : rl.failed || [] } : null, idle: idleOf(raw, rows, await seenP, today) });
   }));
 
   async function ownStudent(u, id) {
@@ -2891,6 +2891,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const cardCheck = (await q("select c.id, c.amount_cents, c.month, u.name from autopay_charges c join users u on u.id=c.user_id where c.gym_id=$1 and c.status='unsure' order by c.id", [u.gym_id])).rows
       .map((r) => ({ id: String(r.id), name: r.name, cents: r.amount_cents, month: r.month }));
     const lastEver = Object.fromEntries((await q("select user_id, max(paid_on) as last from payments where gym_id=$1 and status='confirmed' and user_id is not null group by user_id", [u.gym_id])).rows.map((r) => [String(r.user_id), r.last]));
+    // Addresses that stopped this gym's emails (the stop link in its messages and reminders): Money says so, and WhatsApp still works.
+    const stoppedMail = new Set((await q("select email from gym_mail_stops where gym_id=$1 and stopped_at is not null", [u.gym_id])).rows.map((r) => r.email));
     // Joined before the next month starts, by the gym's own clock (not UTC: someone added at 00:30 on the 1st joined that month).
     const tz = tzOf(u); for (const x of rows) x.joinedDay = dayIn(x.created_at, tz);
     const joined = (x) => x.joinedDay, inMonth = rows.filter((x) => joined(x) < next), fam = familiesOf(inMonth);
@@ -2901,7 +2903,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       owedCents: x.bal.owedCents, owedMonths: x.bal.months, nextMonth: x.bal.next, creditCents: x.bal.creditCents, pendingAllCents: x.led.pendingCents, ...statusOut(x, today.slice(0, 7)),
       // the last fee reminder (by email, from the app or the daily job): nobody is emailed twice within 6 days
       remindedAt: x.reminded_at || null, remindedRecently: !!x.reminded_at && Date.now() - new Date(x.reminded_at).getTime() < RECENT_DAYS * DAY,
-      autopay: autos.has(String(x.id)), ...autoFlags(chs[String(x.id)], x.bal) }; });
+      autopay: autos.has(String(x.id)), ...autoFlags(chs[String(x.id)], x.bal), ...(x.email && stoppedMail.has(String(x.email).toLowerCase()) ? { mailStopped: true } : {}) }; });
     const methods = (await q(`select coalesce(nullif(method,''),'other') as m, sum(amount_cents) as c, count(*) as n from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3 group by 1 order by 2 desc`, [u.gym_id, start, next])).rows.map((r) => ({ method: r.m, cents: Number(r.c), n: Number(r.n) }));
     const total = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as c, coalesce(sum(amount_cents) filter (where status='confirmed' and user_id is null),0) as unmatched,
       coalesce(sum(amount_cents) filter (where status='pending'),0) as pending from payments where gym_id=$1 and paid_on >= $2 and paid_on < $3`, [u.gym_id, start, next])).rows[0];
@@ -2929,7 +2931,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const hi = hiOf(x), kid = x.parent_name || x.parent_id ? first(x.name) : "";
     // Their invite link only goes to their own email (the one the coach added them with), never to a brother's or sister's.
     const join = x.offline && x.own_email && x.own_email === x.email ? await claimUrl(u, x) : null;
-    return { mail: { to: x.email, replyTo: u.email, ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, join, r.parts, kid) } };
+    // Like every email a gym sends: a link (and a List-Unsubscribe header) that stops this gym's emails to the address. Stopped: none.
+    const stop = await stopLink(u.gym_id, x.email); if (!stop) return { skip: "stopped" };
+    return { mail: { to: x.email, replyTo: u.email, headers: stopHeaders(stop), ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, join, r.parts, kid, stop) } };
   }
   // What a reminder asks someone for: the amount (due), what it's for, the lines that make it up and their reference. Or { skip }.
   async function remindInfo(u, x, month, running) {
@@ -2959,12 +2963,13 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!items.length) return { skip: skips.includes("paid") ? "paid" : "off" };
     if (items.length === 1) return one(items[0].x, to);
     if (!to) return { skip: "noEmail" };
+    const stop = await stopLink(u.gym_id, to); if (!stop) return { skip: "stopped" };
     // The invite link in it is only ever the one for the record the email belongs to (the coach added it with that email).
     const c = (v) => fmtMoney(v, u.currency), whats = [...new Set(items.map((i) => i.what))], off = items.find((i) => i.x.offline && i.x.own_email && i.x.own_email === to);
     const lines = items.map((i) => `${first(i.x.name)}: ${c(i.due)} for ${i.what}`);
     const m = mail.templates.familyReminder(hiOf(items[0].x), u.gym_name, c(items.reduce((a, i) => a + i.due, 0)), whats.length === 1 ? whats[0] : items[0].label, lines,
-      items.map((i) => `${first(i.x.name)}: ${i.ref}`), bank, off ? await claimUrl(u, off.x) : null);
-    return { mail: { to, replyTo: u.email, ...m }, xs: items.map((i) => i.x) };
+      items.map((i) => `${first(i.x.name)}: ${i.ref}`), bank, off ? await claimUrl(u, off.x) : null, stop);
+    return { mail: { to, replyTo: u.email, headers: stopHeaders(stop), ...m }, xs: items.map((i) => i.x) };
   }
   // People to remind, with brothers and sisters together (see familiesOf).
   const remindUnits = (rows) => { const fam = familiesOf(rows), seen = new Set(), out = [];
@@ -2997,21 +3002,21 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const today = await todayIn(u), month = /^\d{4}-\d{2}$/.test(b.month || "") ? b.month : today.slice(0, 7);
     const ids = (Array.isArray(b.userIds) ? b.userIds : []).map((x) => intOr(x, 0)).filter(Boolean).slice(0, 300);
     const all = await moneyRows(u, month), rows = all.filter((x) => ids.includes(Number(x.id))), bank = await bankOf(u.gym_id), fam = familiesOf(all);
-    let sent = 0; const noEmail = [], paid = [], recent = [], checking = [], running = month === today.slice(0, 7);
+    let sent = 0; const noEmail = [], paid = [], recent = [], checking = [], stopped = [], running = month === today.slice(0, 7);
     // A family where one of them just paid, or sent a proof that's being checked, may have paid for them all: not now.
     const held = await justPaid(u.gym_id, today, all);
     // Brothers and sisters get one email between them (sent counts emails, not people).
     for (const xs of remindUnits(rows)) {
       if (fam[String(xs[0].id)] && held.has(String(xs[0].id))) { checking.push(namesOf(xs)); continue; }
       const r0 = await unitReminder(u, xs, month, bank, running);
-      if (r0.skip === "paid") paid.push(namesOf(xs)); else if (r0.skip === "noEmail") noEmail.push(namesOf(xs));
+      if (r0.skip === "paid") paid.push(namesOf(xs)); else if (r0.skip === "noEmail") noEmail.push(namesOf(xs)); else if (r0.skip === "stopped") stopped.push(namesOf(xs));
       if (!r0.mail) continue;
       if (limited("remind:" + u.gym_id, 300, 24 * 3600e3)) break;
       const { r, got } = await claimUnit(u, r0, month, bank, running);
       if (!got.length) { recent.push(namesOf(r0.xs)); continue; }
       mail.sendLater(r.mail); sent++;
     }
-    res.json({ sent, noEmail, paid, recent, checking, autoRemind: (await q("select auto_remind from gyms where id=$1", [u.gym_id])).rows[0].auto_remind });
+    res.json({ sent, noEmail, paid, recent, checking, stopped, autoRemind: (await q("select auto_remind from gyms where id=$1", [u.gym_id])).rows[0].auto_remind });
   }));
   // Money > Setup: automatic reminders on or off.
   api.put("/coach/money/auto", wrap(async (req, res) => {
@@ -3066,7 +3071,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
         and coalesce((remind_log->>'tries')::int, 1) < ${REMIND_TRIES} and coalesce((remind_log->>'at')::timestamptz, '-infinity') < now() - interval '30 minutes')) returning id`, [gymId, today])).rowCount) return 0;
     const h = await headCoach(gymId), u = h && (await q(`select ${ME_COLS} from users u ${ME_JOIN} where u.id=$1`, [h.id])).rows[0]; if (!u) return 0;
     const bank = await bankOf(gymId);
-    const sent = [], noEmail = [], failed = [], rows = await moneyRows(u, dueMonth, dueMonth), held = await justPaid(gymId, today, rows);
+    const sent = [], noEmail = [], failed = [], stopped = [], rows = await moneyRows(u, dueMonth, dueMonth), held = await justPaid(gymId, today, rows);
     // Card members: left alone if their card pays it all, or reminded about just the older months the card doesn't pay.
     const cards = await autoHeld(gymId, dueMonth);
     for (const x of rows) { const from = cards.get(String(x.id)); if (!from) continue;
@@ -3075,7 +3080,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const due = rows.filter((x) => x.plan_status === "active" && !held.has(String(x.id)));
     for (const xs of remindUnits(due)) { // brothers and sisters: one email between them
       const r0 = await unitReminder(u, xs, dueMonth, bank, true);
-      if (r0.skip === "noEmail") noEmail.push(namesOf(xs));
+      if (r0.skip === "noEmail") noEmail.push(namesOf(xs)); else if (r0.skip === "stopped") stopped.push(namesOf(xs));
       if (!r0.mail) continue;
       const { r, got } = await claimUnit(u, r0, dueMonth, bank, true); if (!got.length) continue;
       if (sent.length + failed.length) await nap(MAIL_GAP);
@@ -3083,7 +3088,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       catch (e) { console.warn("reminder:", e.message); failed.push(namesOf(got.map((g) => g.x))); for (const g of got) await q("update users set reminded_at=$2 where id=$1", [g.x.id, g.was]); }
     }
     await q(`update gyms set remind_log=remind_log || jsonb_build_object('sent', coalesce((remind_log->>'sent')::int, 0) + $3::int, 'to', coalesce(remind_log->'to', '[]'::jsonb) || $4::jsonb,
-      'noEmail', $5::jsonb, 'failed', $6::jsonb, 'done', true) where id=$1 and remind_log->>'day' = $2`, [gymId, today, sent.length, JSON.stringify(sent.slice(0, 200)), JSON.stringify(noEmail.slice(0, 50)), JSON.stringify(failed.slice(0, 50))]);
+      'noEmail', $5::jsonb, 'failed', $6::jsonb, 'stopped', $7::jsonb, 'done', true) where id=$1 and remind_log->>'day' = $2`, [gymId, today, sent.length, JSON.stringify(sent.slice(0, 200)), JSON.stringify(noEmail.slice(0, 50)), JSON.stringify(failed.slice(0, 50)), JSON.stringify(stopped.slice(0, 50))]);
     return sent.length;
   }
 
