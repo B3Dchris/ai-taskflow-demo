@@ -3688,14 +3688,34 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // The wrong person claimed a gym (first come, first served): give it back to its link, or to another account.
   const builtGym = async (id) => { const g = (await q("select g.*, p.id as prospect_id, p.sent_at from gyms g join prospects p on p.gym_id=g.id where g.id=$1", [intOr(id, 0)])).rows[0];
     if (!g) fail(404, "That isn't a gym outreach built."); if (g.claim) fail(409, "Nobody has claimed this gym."); return g; };
+  // Whoever claimed it wrongly leaves nothing behind for the link (a preview) or the next owner: the gym's money settings go back to
+  // none (bank details, PayFast, the JitsFlow plan's card, the proof-of-payment address and notices, WhatsApp number, the beta), with
+  // every card saved with that PayFast account, and what they added goes: payments they recorded, plans and packs they made, members
+  // they added who aren't on the app, notices and classes they made. g: the gym (builtGym), prev: the claimant's id.
+  async function wipeClaimant(g, prev) {
+    await dropAutopay("a.gym_id=$1", [g.id]);
+    await q("delete from autopay_charges where gym_id=$1", [g.id]);
+    await q("delete from payments where gym_id=$1 and (submitted_by=$2 or user_id=$2 or (user_id is null and submitted_by is null and source='manual'))", [g.id, prev]);
+    if (g.claimed_at) for (const t of ["plans", "packs"]) await q(`delete from ${t} where gym_id=$1 and created_at >= $2`, [g.id, g.claimed_at]);
+    if (g.claimed_at) await q("delete from users where gym_id=$1 and pass_hash is null and parent_id is null and created_at >= $2", [g.id, g.claimed_at]);
+    await q("delete from notices where gym_id=$1 and (user_id is null or user_id=$2)", [g.id, prev]);
+    await q("delete from classes where gym_id=$1 and created_by=$2", [g.id, prev]);
+    await q("delete from left_owing where gym_id=$1", [g.id]);
+    await q(`update gyms set pay='{}'::jsonb, payfast=null, billing=jsonb_strip_nulls(jsonb_build_object('trialEnds', billing->'trialEnds')), pop_token=null, pop_notice=null,
+      wa_phone='', beta=null, auto_remind=null, remind_log=null where id=$1`, [g.id]);
+  }
   api.post("/admin/gyms/:id/unclaim", wrap(async (req, res) => {
     const u = needAdmin(req), g = await builtGym(req.params.id);
-    const others = (await q("select count(*)::int as n from users where gym_id=$1 and id is distinct from $2", [g.id, g.head_coach_id])).rows[0].n;
+    // (People the claimant added who aren't on the app don't count: they go with the rest of what the claimant added.)
+    const others = (await q("select count(*)::int as n from users where gym_id=$1 and id is distinct from $2 and (pass_hash is not null or parent_id is not null or created_at < $3)", [g.id, g.head_coach_id, g.claimed_at])).rows[0].n;
     if (others) fail(409, `${g.name} has ${others} other ${others === 1 ? "person" : "people"} in it now. Reassign it to the right account instead.`);
+    await wipeClaimant(g, g.head_coach_id);
     await q("update users set gym_id=null where id=$1 and gym_id=$2", [g.head_coach_id, g.id]);
     await q(`update gyms set claim=$2, claimed_at=null, head_coach_id=null, student_code=$3, coach_code=$4, billing = coalesce(billing,'{}'::jsonb) - 'trialEnds' where id=$1`,
       [g.id, { prospectId: String(g.prospect_id), builtAt: new Date().toISOString(), builtBy: String(u.id), unclaimed: true }, code(), code()]);
     await q("update prospects set status=$2, claimed_at=null, claimed_gym_id=null, claimed_by=null where id=$1", [g.prospect_id, g.sent_at ? "sent" : "draft"]);
+    // Back as the website made it (timetable, plans, logo), whatever the claimant changed.
+    await buildGym(g.prospect_id, { by: u.id }).catch((e) => console.warn("rebuild:", e.message));
     res.json({ prospect: await proOut(await proRow(g.prospect_id)) });
   }));
   api.post("/admin/gyms/:id/reassign", wrap(async (req, res) => {
@@ -3703,6 +3723,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const t = isEmail(email) ? (await q("select id, gym_id, name from users where email=$1 and pass_hash is not null", [email])).rows[0] : null;
     if (!t) fail(404, "No JitsFlow account has that email. Ask them to sign up first (with no gym).");
     if (t.gym_id) fail(409, `${t.name} is in a gym already.`);
+    if (g.head_coach_id) await wipeClaimant(g, g.head_coach_id);
     await q("update users set gym_id=null where id=$1 and gym_id=$2", [g.head_coach_id, g.id]);
     await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [g.id, t.id]);
     await q("update gyms set head_coach_id=$2 where id=$1", [g.id, t.id]);
