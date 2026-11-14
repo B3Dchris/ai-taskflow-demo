@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="a90d087207";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="fe83d48a60";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -7323,7 +7323,8 @@ async function payByCard(packId,method){const amt=Math.round(Number((document.ge
 function pfPanel(){const og=S.ui.openG||{},pi=COACH.payInfo;
   if(COACH.pf===undefined){COACH.pf=null;api("GET","/coach/payfast").then(j=>{COACH.pf=j.payfast;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   const p=COACH.pf;if(!p)return "";
-  return `<details class="more" data-g="m-pf"${og["m-pf"]?" open":""}><summary><span><b>Card and Instant EFT (PayFast)</b><br><span class="small muted">${p.connected?`Connected · ${esc(p.merchantId)}${p.test?" (test account)":""}`:"Students pay in the app; it's marked paid by itself"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+  return `<details class="more" data-g="m-pf"${og["m-pf"]?" open":""}><summary><span><b>Card and Instant EFT (PayFast)</b><br><span class="small muted">${p.connected?`Connected · ${esc(p.merchantId)}${p.test?" (test account)":""}`:p.needsReconnect?`<span class="warn-t">PayFast needs reconnecting</span>`:"Students pay in the app; it's marked paid by itself"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+    ${p.needsReconnect?`<p class="small warn-t" id="pf-reconnect"><b>PayFast needs reconnecting.</b> We can't use the PayFast details saved for your gym any more, so card payments are paused. Enter your Merchant ID, Merchant Key and passphrase again below. If anyone paid by card meanwhile, check PayFast and record it by hand.</p>`:""}
     <label class="row small" style="flex-wrap:nowrap"><input id="pf-soon" type="checkbox"${pi&&pi.pay&&pi.pay.cardSoon?" checked":""}> Show students a PayFast button. Until card payments are switched on, it says “coming soon”.</label>
     <p class="small">Students tap <b>Pay by card or Instant EFT</b>. The money goes into your own PayFast account and the payment shows here as paid, with no proof to check. JitsFlow's fee is ${p.feePct}% of each payment, taken by PayFast at the time; PayFast's own fee applies too.</p>
     ${p.connected?`<div class="row"><span class="pill ok">Connected</span><span class="small mono">${esc(p.merchantId)}</span><button class="linkbtn small" data-a="pfremove">Disconnect</button></div>`:""}
@@ -7500,6 +7501,14 @@ function dashGyms(){const d=DASH.data;if(!d)return "";const q=DASH.q.trim().toLo
       <p class="small">${g.head?`Head coach <b>${esc(g.head.name)}</b>${g.head.email?` · <a href="mailto:${esc(g.head.email)}">${esc(g.head.email)}</a>`:""}`:"No head coach"}</p>
       <p class="small muted">${esc(billTxt(g.billing))}. ${esc(pay)}. ${g.onApp} of ${g.members} member${g.members===1?"":"s"} on the app · ${g.coaches} coach${g.coaches===1?"":"es"} · started ${esc(outDay(g.createdAt))} · last active ${esc(dAgo(g.lastSeen))}</p></div>`}).join("")+(many?`<button class="btn" style="justify-self:start" data-a="dashallgyms">Show all ${list.length} gyms</button>`:"")}
 const roleTxt=u=>u.role==="coach"?"Coach":u.parent?"Parent":u.kid?"Kid":u.gym?"Student":"On their own";
+// Settings the team needs to fix, at the top of the dashboard (nothing shows when all is well), and today's AI use.
+function dashSystem(y){if(!y)return "";const w=[];
+  if(!y.secretOk)w.push(`<b>JF_SECRET isn't set.</b> Gyms' PayFast keys are sealed with a key made from the database address, which changes with the database password. Set JF_SECRET in Render (a long random value); keys are sealed again with it on the next start.`);
+  if(y.cardsTestMode&&y.production)w.push(`<b>Card payments are in test mode.</b> PAYFAST_MERCHANT_ID isn't set, so payments go to PayFast's sandbox and no real money moves.`);
+  if(y.ai&&y.ai.paused)w.push(`<b>Reading with AI is paused for today:</b> the daily budget is used up. Proofs are kept for coaches to check by hand.`);
+  if((y.payfastBroken||[]).length)w.push(`<b>PayFast needs reconnecting</b> for ${y.payfastBroken.map(g=>esc(g.name)).join(", ")}. Their saved keys can't be decrypted; the head coaches have been emailed.`);
+  const a=y.ai||{},aiLine=a.on?`<p class="small muted">AI today: ${nf(a.calls)} of ${nf(a.maxCalls)} reads, about ${nf(Math.round(a.tokens/1000))}k of ${nf(Math.round(a.maxTokens/1000))}k tokens.</p>`:"";
+  return (w.length?`<section class="panel stack" id="dashsystem"><h2 class="label">Needs attention</h2>${w.map(x=>`<p class="small">${x}</p>`).join("")}</section>`:"")+aiLine}
 function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
   const seg=`<div class="seg3" role="group" aria-label="Days shown">${[7,30,90].map(n=>`<button data-a="dashdays" data-v="${n}" aria-pressed="${DASH.days===n}">${n} days</button>`).join("")}</div>`;
   if(!d){openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash"><h1>Dashboard</h1>${seg}<p class="small muted">Loading…</p></div>`,keep);return}
@@ -7510,6 +7519,7 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
   const o=d.outreach,ppl=[[T.active1,"people used the app today"],[T.active7,"people used the app this week"],[T.active30,"people used the app in the last 30 days"],[T.coaches,"coaches"],[T.members,`students in gyms (${nf(T.membersOnApp)} on the app, the rest added by their coach)`],[T.kids,"kids on a parent's login"],[T.selfStudy,"people studying on their own, without a gym"],[T.new1,"signed up today"],[T.new7,"signed up this week"],[T.new30,"signed up in the last 30 days"]];
   openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash">
     <div class="stack" style="gap:4px"><h1>Dashboard</h1><p class="small muted">Updated ${esc(new Date(DASH.at).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}))} · <button class="linkbtn" data-a="dashload">Refresh</button></p></div>
+    ${dashSystem(d.system)}
     <div class="stats four dtiles">${tile(d.visitors.today,"Visitors today",`${nf(d.visitors.week)} this week`)}${tile(T.new7,"Sign-ups this week",`${nf(T.new1)} today`)}${tile(T.active7,"Used the app this week",`${nf(T.active1)} today`)}${tile(T.gyms,"Gyms",`${nf(T.gymsActive)} active this week`)}</div>
     ${seg}
     <section class="panel stack"><div class="row between"><h2 class="label">Website visitors</h2><span class="small muted">${nf(sum("visitors"))} in ${d.days} days</span></div>

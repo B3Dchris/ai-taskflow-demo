@@ -48,10 +48,16 @@ function layout(title, paras, button, preheader) {
   return { html, text };
 }
 
+// Header text (a subject, a sender's name) is one line: line breaks and other control characters could start a new header.
+const oneLine = (v) => String(v == null ? "" : v).replace(/[\r\n\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
+// An address for a header: one line, and nothing that could add a second address or a header.
+const addrLine = (v) => oneLine(v).replace(/[,;<>"]/g, "");
 // headers: extra headers such as List-Unsubscribe (emails a gym sends: see stopLink in api.js).
 async function send({ to, subject, title, paras, button, preheader, replyTo, headers }) {
   if (!mailOn()) return { sent: false, reason: "off" };
   if (!to) return { sent: false, reason: "no address" };
+  subject = oneLine(subject).slice(0, 250); to = addrLine(to); if (replyTo) replyTo = addrLine(replyTo);
+  if (headers) headers = Object.fromEntries(Object.entries(headers).map(([k, v]) => [oneLine(k).replace(/[^\w-]/g, ""), oneLine(v)]));
   const { html, text } = layout(title || subject, paras, button, preheader);
   const r = await fetch(API_URL(), {
     method: "POST",
@@ -68,7 +74,9 @@ async function sendRaw({ fromName, to, replyTo, subject, html, text, headers }) 
   if (!mailOn()) return { sent: false, reason: "off" };
   if (!to) return { sent: false, reason: "no address" };
   const addr = ((FROM().match(/<([^<>\s]+@[^<>\s]+)>/) || [])[1] || FROM()).trim();
-  const name = String(fromName || "").replace(/["<>\\\r\n]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const name = oneLine(fromName).replace(/["<>\\]/g, "").trim().slice(0, 80);
+  subject = oneLine(subject).slice(0, 250); to = addrLine(to); if (replyTo) replyTo = addrLine(replyTo);
+  if (headers) headers = Object.fromEntries(Object.entries(headers).map(([k, v]) => [oneLine(k).replace(/[^\w-]/g, ""), oneLine(v)]));
   const r = await fetch(API_URL(), {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
@@ -161,6 +169,21 @@ const templates = {
   autopayFailedCoach: (coach, who, amount, why) => ({ subject: "An automatic card payment didn't go through", title: "Card payment failed",
     paras: [`Hi ${coach},`, `${who}'s automatic card payment of ${amount} didn't go through${why ? ` (${why})` : ""}.`, "We've asked them to pay another way. They show as owing in Money until they do."],
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
+  autopayOverLimit: (name, gym, who, amount, limit) => ({ subject: "Your card wasn't charged: please check the amount", title: "Card not charged",
+    paras: [`Hi ${name},`, `${gym}'s fees for ${who} this month come to ${amount}. That's more than your saved card pays without asking you (${limit}), so we didn't charge it.`,
+      "If the amount is right, pay it in the app, by card or EFT. If it isn't, ask your coach. Your card stays saved for next month."],
+    button: { label: "Open the app", url: appUrl() + "/app/#me" } }),
+  autopayOverLimitCoach: (coach, who, amount, limit) => ({ subject: "An automatic card payment wasn't charged", title: "Card not charged",
+    paras: [`Hi ${coach},`, `${who}'s fees this month come to ${amount}, more than their saved card pays without them saying so (${limit}). We didn't charge the card.`,
+      "We've asked them to pay by hand. If the amount is wrong, fix it in their profile. They show as owing in Money until they pay."],
+    button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
+  payfastReconnect: (coach) => ({ subject: "Connect PayFast again", title: "PayFast needs reconnecting",
+    paras: [`Hi ${coach},`, "We can't use your gym's PayFast details any more, so card payments in the app are paused. Nothing is wrong with your PayFast account.",
+      "Open Money › Settings › Card and Instant EFT (PayFast) and enter your Merchant ID, Merchant Key and passphrase again. Card payments work again straight away. If a member paid by card in the meantime, check PayFast and record it by hand."],
+    button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
+  payfastBrokenAdmin: (gym, id, what) => ({ subject: `PayFast keys can't be read for ${gym}`, title: "PayFast needs reconnecting",
+    paras: [`The PayFast keys saved for ${gym} (gym ${id}) can't be decrypted. Usually that means JF_SECRET was changed (or DATABASE_URL, before JF_SECRET was set). Put the old value in JF_SECRET_OLD and restart, or ask the head coach to connect PayFast again (they've been emailed).`,
+      ...(what ? [`What happened: ${what}.`] : [])] }),
   autopayUnsure: (coach, who, amount) => ({ subject: "Check an automatic card payment", title: "Card payment not confirmed",
     paras: [`Hi ${coach},`, `We asked PayFast to charge ${who}'s saved card ${amount}, but PayFast hasn't confirmed it after a day.`, "Check your PayFast account, then tap \"It went through\" or \"It didn't\" at the top of Money. There's no need to record it by hand. If PayFast confirms it later, it's recorded then."],
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
@@ -203,4 +226,4 @@ const templates = {
       button: { label: "Open JitsFlow", url: appUrl() + "/app/#coach" } }; },
 };
 
-module.exports = { send, sendRaw, sendLater, templates, mailOn, appUrl, layout };
+module.exports = { oneLine, send, sendRaw, sendLater, templates, mailOn, appUrl, layout };

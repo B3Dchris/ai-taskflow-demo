@@ -446,6 +446,27 @@ const GYM_PASS = "gym pass phrase";
     ok(gp2 && gp2.on === true && (await row2(gus2)).autopay === false, "a card still saved: Gus sees it on and can stop it; Money doesn't claim it pays");
     r = await gus("DELETE", "/me/autopay"); ok(r.s === 200 && r.j.stopped === 1, "Stop works");
     r = await gus("POST", "/me/autopay", {}); ok(r.s === 400, "but he can't save a card while it's off");
+
+    // --- 11. Limits: no fee above R20,000, and a saved card is never charged more than its limit without the member saying so
+    await z("PUT", "/coach/payfast", { merchantId: "10000105", merchantKey: "abcdefghijk12", passphrase: GYM_PASS });
+    const bea = await add("Bea Banda", { email: "bea@auto.test" });
+    r = await z("PATCH", `/coach/students/${bea}`, { feeCents: 2000000000 }); ok(r.s === 400 && /R20 000/.test(r.j.error), "a fee of R20,000,000 is refused (the audit's attack): " + JSON.stringify(r.j));
+    r = await z("POST", "/coach/plans", { name: "Gold", priceCents: 2500000, period: "month" }); ok(r.s === 400, "so is a R25,000 monthly plan");
+    r = await z("POST", "/coach/students", { name: "Max Fee", feeCents: 2000001 }); ok(r.s === 400, "and a new member's fee over R20,000");
+    m0 = sink.mails.length;
+    await notify({ ...saved({ id: bea }, "tok-bea"), custom_int1: bea, custom_int2: String(gym2) });
+    ok(adhoc("tok-bea").length === 1 && adhoc("tok-bea")[0].body.amount === 85000, "Bea saves her card on R850 a month: charged R850");
+    ok((await pool.query("select cap_cents from autopay where user_id=$1", [bea])).rows[0].cap_cents === 170000, "its limit is twice her fee then (and never under R3,000)");
+    await pool.query("delete from autopay_charges where user_id=$1", [bea]);
+    await z("POST", "/coach/payments", { userId: bea, amountCents: 85000, paidOn: today, method: "cash" });
+    r = await z("PATCH", `/coach/students/${bea}`, { feeCents: 1500000 }); ok(r.s === 200, "a fee up to R20,000 is allowed");
+    m0 = sink.mails.length; await run2(); await wait(600);
+    ok(adhoc("tok-bea").length === 1, "the head coach raises her fee to R15,000: her card isn't charged the R14,150 now owed");
+    const held = (await charges(bea))[0];
+    ok(held && held.status === "failed" && held.amount_cents === 1415000 && /limit/.test(held.error), "the month is marked not charged (over the card's limit), once: " + JSON.stringify(held && [held.status, held.amount_cents, held.error]));
+    ok(to("bea@auto.test", m0).some((x) => x.subject === "Your card wasn't charged: please check the amount" && /3.000,00/.test(x.text)) && to("zed@auto.test", m0).some((x) => x.subject === "An automatic card payment wasn't charged" && /Bea Banda/.test(x.text)),
+      "Bea and the head coach are emailed to sort it out by hand: " + JSON.stringify(sink.mails.slice(m0).map((x) => [x.to[0], x.subject, x.text.slice(0, 200)])));
+    m0 = sink.mails.length; await run2(); await wait(600); ok(adhoc("tok-bea").length === 1 && !to("bea@auto.test", m0).length, "the next run doesn't try again, or email again");
   } catch (e) { fail++; fails.push("crashed: " + (e.stack || e.message)); }
   finally { for (const s of srvs) s.kill(); await pool.end(); await pool2.end(); sink.close(); pfSrv.close(); }
   console.log(`autopay: ${pass} passed, ${fail} failed`);

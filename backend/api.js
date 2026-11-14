@@ -31,6 +31,12 @@ const cleanPhone = (v) => { const s = String(v == null ? "" : v).replace(/[^\d+\
 const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(e);
 const first = (n) => String(n || "").trim().split(/\s+/)[0] || "";
 const intOr = (v, d) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : d);
+// The most any fee or price can be (R20,000), checked on the server wherever one is set; a year or term plan up to 3 times that.
+const MAX_CENTS = 2000000, MAX_PLAN_CENTS = 6000000;
+const TOO_MUCH = "That's more than JitsFlow allows (R20 000). Check the amount.";
+// A fee or price in cents: null when left empty (if allowed), else 0..max. Anything else is a 400 with msg.
+const centsIn = (v, msg, { max = MAX_CENTS, empty = false } = {}) => { if (empty && (v === null || v === undefined || v === "")) return null; const c = intOr(v, NaN);
+  if (!Number.isFinite(c) || c < 0) fail(400, msg); if (c > max) fail(400, TOO_MUCH); return c; };
 // "2026-02-31" and "2027-13-45" match the pattern but aren't dates: check the calendar too.
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && (() => { const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; })();
 
@@ -42,7 +48,8 @@ function cookies(req) {
   const out = {};
   for (const part of String(req.headers.cookie || "").split(";")) {
     const i = part.indexOf("=");
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    // A cookie that isn't valid %-encoding (another site's, or a tampered one) is skipped, not a 500 on every request.
+    if (i > 0) { try { out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); } catch (e) { /* skip it */ } }
   }
   return out;
 }
@@ -109,6 +116,7 @@ const EMAIL = (a) => `coalesce(${a}.email, (select pe.email from users pe where 
 function makeApi(pool, { secureCookies, build }) {
   const api = express.Router();
   const q = (text, params) => pool.query(text, params);
+  ai.useStore(ai.dbStore(q)); // the daily AI budget is kept in the database, shared by every server (see ai.take)
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
   // Adding something from a form (a payment, a class, a student): the app sends one key per opened form, so the same form sent twice
   // (a double tap, or sent again after the answer got lost on bad signal) gets the first answer back instead of adding it twice.
@@ -672,6 +680,7 @@ function makeApi(pool, { secureCookies, build }) {
     res.json({ ok: true });
   }));
 
+  const LOG_MAX = Number(process.env.JF_LOG_MAX) || 3000, LOG_BYTES = (Number(process.env.JF_LOG_MB) || 8) * 1024 * 1024;
   api.get("/logs", wrap(async (req, res) => {
     const u = needUser(req);
     const r = await q("select id, data from training_logs where user_id=$1 order by date desc nulls last limit 1000", [u.id]);
@@ -680,7 +689,11 @@ function makeApi(pool, { secureCookies, build }) {
   api.put("/logs/:id", wrap(async (req, res) => {
     const u = needUser(req), id = req.params.id, d = req.body?.data;
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail(400, "Bad session id.");
-    if (!d || typeof d !== "object" || JSON.stringify(d).length > 20000) fail(400, "Bad session.");
+    const size = d && typeof d === "object" ? JSON.stringify(d).length : 0;
+    if (!d || typeof d !== "object" || size > 20000) fail(400, "Bad session.");
+    // A training log has room for LOG_MAX sessions and LOG_BYTES in all (years of training), so one account can't fill the database.
+    const used = (await q("select count(*)::int as n, coalesce(sum(pg_column_size(data)),0)::bigint as b, bool_or(id=$2) as had from training_logs where user_id=$1", [u.id, id])).rows[0];
+    if ((!used.had && used.n >= LOG_MAX) || Number(used.b) + size > LOG_BYTES) fail(413, "Your training log is full. Delete some old sessions to make room.");
     const date = isDay(d.date) ? d.date : null;
     await q(`insert into training_logs(user_id,id,date,data) values($1,$2,$3,$4)
              on conflict(user_id,id) do update set date=excluded.date, data=excluded.data, updated_at=now()`, [u.id, id, date, d]);
@@ -765,7 +778,7 @@ function makeApi(pool, { secureCookies, build }) {
     const p = { focus: clean(plan.focus, 120), notes: clean(plan.notes, 4000), ids: Array.isArray(plan.ids) ? plan.ids.map((x) => clean(x, 64)).filter(Boolean).slice(0, 30) : [] };
     let capacity = b.capacity === null || b.capacity === undefined || b.capacity === "" ? null : Math.min(500, Math.max(1, intOr(b.capacity, 0)));
     if (kind === "private") capacity = Math.min(capacity || 1, 6);
-    const priceCents = b.priceCents === null || b.priceCents === undefined || b.priceCents === "" ? null : Math.max(0, intOr(b.priceCents, 0));
+    const priceCents = centsIn(b.priceCents, "Enter the price, or leave it empty.", { empty: true });
     return { title, startsAt, durationMin, plan: p, shared: b.shared !== false, kind, capacity, priceCents, coach: clean(b.coach, 60), level: clean(b.level, 40), discipline: clean(b.discipline, 40) };
   }
   const CLASS_COLS = "gym_id,title,starts_at,duration_min,plan,shared,created_by,kind,capacity,price_cents,coach,level,discipline";
@@ -1116,7 +1129,7 @@ function makeApi(pool, { secureCookies, build }) {
   async function plansOf(gymId) { return (await q("select * from plans where gym_id=$1 order by active desc, price_cents", [gymId])).rows; }
   const planOut = (p) => ({ id: String(p.id), name: p.name, priceCents: p.price_cents, period: p.period, classesPerWeek: p.classes_per_week, active: p.active, monthlyCents: monthly(p), privateCents: p.private_price_cents ?? null });
   // A private-lesson price: null or "" for none (the slot's price), else from R0 to R100 000.
-  const readPrivate = (v, msg) => { if (v === null || v === "") return null; const c = intOr(v, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, msg); return c; };
+  const readPrivate = (v, msg) => { if (v === null || v === "") return null; return centsIn(v, msg); };
   // Payments for a private-lesson pack buy credits; they don't count toward monthly fees.
   const FEES = "coalesce(pack_lessons,0)=0";
 
@@ -1514,7 +1527,7 @@ function makeApi(pool, { secureCookies, build }) {
     if (email && (await q("select 1 from users where email=$1", [email])).rows[0]) fail(409, "Someone with that email is already on JitsFlow. Send them your gym's invite link instead.");
     const belt = BELTS.includes(b.belt) ? b.belt : "white", stripes = Math.min(4, Math.max(0, intOr(b.stripes, 0)));
     let planId = null; if (b.planId) { planId = intOr(b.planId, 0); if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [planId, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); }
-    const fee = b.feeCents === undefined || b.feeCents === null || b.feeCents === "" ? null : Math.max(0, intOr(b.feeCents, 0));
+    const fee = centsIn(b.feeCents, "Enter the fee, or leave it empty.", { empty: true });
     const r = await q(`insert into users(gym_id,role,name,email,pass_hash,phone,belt,stripes,plan_id,plan_status,plan_started,monthly_fee_cents,notes,offline,parent_name)
       values($1,'student',$2,$3,null,$4,$5,$6,$7,$8,$9,$10,$11,true,$12) returning id`,
       [u.gym_id, name, email || null, phone, belt, stripes, planId, "active", planId ? (isDay(b.planStarted) ? b.planStarted : await todayIn(u)) : null, fee, clean(b.notes, 4000), parentName]);
@@ -1541,8 +1554,8 @@ function makeApi(pool, { secureCookies, build }) {
       if (!type || !/^image\/(jpeg|png|webp|gif)$/.test(type)) fail(400, "Those need to be screenshots (pictures)."); if (data.length > 4 * 1024 * 1024) fail(413, "One of those pictures is too big."); return { type, data }; });
     if (limited("ppl:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of screenshots. Try again in a while.");
     let rows;
-    try { rows = await people.readPeople({ client, images }); }
-    catch (e) { console.error("read-people:", e.message); fail(502, "Couldn't read those screenshots just now. Try again, or paste the names."); }
+    try { rows = await people.readPeople({ client, images, meter: { gymId: u.gym_id, feature: "screenshots" } }); }
+    catch (e) { if (e.code === "AI_BUDGET") fail(503, "Reading screenshots is paused for today. Paste the names instead, or try again tomorrow."); console.error("read-people:", e.message); fail(502, "Couldn't read those screenshots just now. Try again, or paste the names."); }
     const { seenPh, sameName, digits } = await whoIsIn(u.gym_id);
     res.json({ people: rows.map((r) => ({ ...r, already: !!((r.name && sameName(r.name, r.phone, "")) || (!r.parentName && r.phone && seenPh.has(digits(r.phone)))) })) });
   }));
@@ -1552,6 +1565,7 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/coach/students/bulk", once(async (req, res) => {
     const u = needCoach(req), b = req.body || {}, list = (Array.isArray(b.people) ? b.people : []).slice(0, 300);
     if (!list.length) fail(400, "No one to add.");
+    if (limited("bulk:" + u.gym_id, 10, 60 * 60e3)) fail(429, "That's a lot of people added in an hour. Try again in a while.");
     if (!isHead(u) && (b.planId !== undefined || b.kidsPlanId !== undefined)) fail(403, "Only the head coach can set plans and fees.");
     const def = await defaultPlans(u.gym_id), pick = async (v, d) => { if (v === undefined) return d; if (!v) return null; const id = intOr(v, 0);
       if (!(await q("select 1 from plans where id=$1 and gym_id=$2", [id, u.gym_id])).rows[0]) fail(404, "That plan doesn't exist."); return String(id); };
@@ -1677,7 +1691,7 @@ function makeApi(pool, { secureCookies, build }) {
     const belt = b.belt !== undefined ? (BELTS.includes(b.belt) ? b.belt : fail(400, "Pick a belt.")) : st.belt;
     const stripes = b.stripes !== undefined ? Math.min(4, Math.max(0, intOr(b.stripes, 0))) : st.stripes;
     const notes = b.notes !== undefined ? clean(b.notes, 4000) : st.notes;
-    const fee = b.feeCents !== undefined ? (b.feeCents === null ? null : Math.max(0, intOr(b.feeCents, 0))) : st.monthly_fee_cents;
+    const fee = b.feeCents !== undefined ? centsIn(b.feeCents, "Enter the fee, or leave it empty.", { empty: true }) : st.monthly_fee_cents;
     const active = b.active !== undefined ? !!b.active : st.active;
     if (st.id === u.id && !active) fail(400, "You can't mark yourself inactive. Ask another coach to do it.");
     if (!active && st.active !== false && String(st.id) === String(u.head_id)) fail(400, `${first(st.name)} is the head coach. They need to hand that role to another coach first.`);
@@ -1706,8 +1720,8 @@ function makeApi(pool, { secureCookies, build }) {
   const PRIV_RATE = /private|\b1[\s-]?on[\s-]?1\b|one[\s-]on[\s-]one|personal train|\bpt\b/i;
   function readPlan(b) {
     const name = clean(b.name, 80); if (!name) fail(400, "Give the plan a name.");
-    const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 0 || price > 1e8) fail(400, "Enter the price.");
     const period = PERIODS.includes(b.period) ? b.period : "month";
+    const price = centsIn(b.priceCents, "Enter the price.", { max: period === "year" || period === "term" ? MAX_PLAN_CENTS : MAX_CENTS });
     const cpw = b.classesPerWeek === null || b.classesPerWeek === undefined || b.classesPerWeek === "" ? null : Math.min(30, Math.max(1, intOr(b.classesPerWeek, 0)));
     // What a private lesson costs someone on this plan: left out keeps it, null or "" means the slot's price.
     const priv = b.privateCents === undefined ? undefined : readPrivate(b.privateCents, "Enter the plan's private lesson price, or leave it empty.");
@@ -1734,7 +1748,8 @@ function makeApi(pool, { secureCookies, build }) {
     return (rates || []).filter((r) => { const k = String(r.name || "").toLowerCase(), ok = k && !seen.has(k) && ["month", "week", "term", "year"].includes(r.period) && !PRIV_RATE.test(`${r.name} ${r.note || ""}`) && !NOT_PLAN.test(r.name); if (ok) seen.add(k); return ok; }); };
   async function plansFromRates(gymId, rates) {
     const have = new Set((await plansOf(gymId)).map((p) => p.name.toLowerCase()));
-    const list = planRates(rates, have);
+    // A price above what JitsFlow allows (a misread, or a website's typo) isn't made into a plan.
+    const list = planRates(rates, have).filter((r) => Math.round(r.price * 100) <= (r.period === "year" || r.period === "term" ? MAX_PLAN_CENTS : MAX_CENTS));
     for (const r of list) {
       const cpw = /(\d)\s*(x|times|classes)\s*(a|per)\s*week/i.exec(r.name + " " + (r.note || ""));
       await q("insert into plans(gym_id,name,price_cents,period,classes_per_week) values($1,$2,$3,$4,$5)", [gymId, clean(r.name, 80), Math.round(r.price * 100), r.period, cpw ? Number(cpw[1]) : null]);
@@ -1881,7 +1896,7 @@ function makeApi(pool, { secureCookies, build }) {
   api.post("/coach/competitions/import", wrap(async (req, res) => {
     const u = needCoach(req);
     if (limited("cimp:" + u.gym_id, 30, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
-    try { res.json(await importer.importEvent(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    try { res.json(await importer.runImport("event", clean(req.body?.url, 500), { meter: { gymId: u.gym_id, feature: "competition" }, log: (m) => console.warn(m) })); }
     catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
   }));
   api.post("/coach/competitions", wrap(async (req, res) => {
@@ -2035,7 +2050,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const name = b.name !== undefined ? clean(b.name, 100) : u.gym_name;
     if (!name) fail(400, "Enter your gym's name.");
     if (b.monthlyFeeCents !== undefined && !isHead(u)) fail(403, "Only the head coach can change fees.");
-    const fee = b.monthlyFeeCents !== undefined ? Math.max(0, intOr(b.monthlyFeeCents, 0)) : u.gym_fee;
+    const fee = b.monthlyFeeCents !== undefined ? centsIn(b.monthlyFeeCents || 0, "Enter the monthly fee.") : u.gym_fee;
     const show = b.showAttendees !== undefined ? !!b.showAttendees : u.show_attendees !== false;
     const invite = b.studentsInvite !== undefined ? !!b.studentsInvite : u.students_invite !== false;
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
@@ -2123,7 +2138,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     await q("update gyms set import_job=$1 where id=$2", [job, u.gym_id]);
     const run = (async () => {
       let done;
-      try { const r = await importer.importSite(url, { log: (m) => console.warn(m) }); done = { ...job, status: "done", finishedAt: new Date().toISOString(), result: r }; }
+      // In a worker with a deadline (importer.runImport): an import that runs too long ends as failed, and frees the gym's slot.
+      try { const r = await importer.runImport("site", url, { meter: { gymId: u.gym_id, feature: "import" }, log: (m) => console.warn(m) }); done = { ...job, status: "done", finishedAt: new Date().toISOString(), result: r }; }
       catch (e) { done = { ...job, status: "error", finishedAt: new Date().toISOString(), error: e instanceof importer.ImportError ? e.message : "Couldn't read that site just now. Try again in a minute." }; if (!(e instanceof importer.ImportError)) console.error("import job:", e.message); }
       await q("update gyms set import_job=$1 where id=$2", [done, u.gym_id]).catch(() => {});
     })().finally(() => jobs.delete(u.gym_id));
@@ -2147,14 +2163,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: clean(m.text, 2000) })).filter((m) => m.content);
     if (!msgs.length || msgs[msgs.length - 1].role !== "user") fail(400, "Say what you'd like to do.");
     while (msgs.length && msgs[0].role !== "user") msgs.shift();
-    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths } });
+    const out = await assistant.run({ u, q, msgs, helpers: { ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths } })
+      .catch((e) => { if (e.code === "AI_BUDGET") fail(503, "The assistant is paused for today. Make the change in the app, or try again tomorrow."); throw e; });
     await q("update gyms set setup = setup || $1 where id=$2", [{ assistantUsed: true }, u.gym_id]);
     res.json(out);
   }));
   api.post("/coach/import", wrap(async (req, res) => {
     const u = needCoach(req);
     if (limited("imp:" + u.gym_id, 12, 60 * 60e3)) fail(429, "That's a lot of imports. Try again in an hour.");
-    try { res.json(await importer.importSite(clean(req.body?.url, 500), { log: (m) => console.warn(m) })); }
+    try { res.json(await importer.runImport("site", clean(req.body?.url, 500), { meter: { gymId: u.gym_id, feature: "import" }, log: (m) => console.warn(m) })); }
     catch (e) { if (e instanceof importer.ImportError) fail(400, e.message); throw e; }
   }));
   // Save the gym's details. The weekly timetable is what the calendar is made from: rows keep their ids, a changed row moves its
@@ -2175,7 +2192,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const profile = importer.cleanProfile(b.profile);
     const name = profile.name || u.gym_name;
     let fee = u.gym_fee;
-    if (!fee && isHead(u)) { const m = profile.rates.find((r) => r.period === "month" && !NOT_PLAN.test(r.name) && (!r.currency || r.currency === (u.currency || "ZAR"))); if (m) fee = Math.round(m.price * 100); }
+    if (!fee && isHead(u)) { const m = profile.rates.find((r) => r.period === "month" && !NOT_PLAN.test(r.name) && (!r.currency || r.currency === (u.currency || "ZAR"))); if (m && Math.round(m.price * 100) <= MAX_CENTS) fee = Math.round(m.price * 100); }
     const was = ((await q("select profile from gyms where id=$1", [u.gym_id])).rows[0].profile || {}).timetable || [];
     profile.timetable = ttMerge(was, profile.timetable, b);
     await q("update gyms set name=$1, profile=$2, monthly_fee_cents=$3, profile_updated_at=now() where id=$4", [name, profile, fee, u.gym_id]);
@@ -2401,7 +2418,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       forMonths: (p.for_month || p.alloc) && !p.pack_lessons ? Object.keys(sharesOf(p)).sort() : null,
       packId: p.pack_id ? String(p.pack_id) : null, packLessons: p.pack_lessons || null, packName: p.pack_name || null,
       family: p.family_cents ? { of: String(p.split_of || p.id), totalCents: Number(p.family_cents) } : null,
-      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? "Couldn't read it automatically." : "" } : null };
+      read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? (/^(Not read automatically|Too long to read)/.test(a.error) ? a.error : "Couldn't read it automatically.") : "" } : null };
   }
   // family_cents: for a family payment split between brothers and sisters (see familySplit), on the payment and on each share: the whole amount.
   const PAY_COLS = `p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof, (select name from packs k where k.id=p.pack_id) as pack_name,
@@ -2418,13 +2435,34 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     fail(500, "Couldn't make a payment reference. Try again.");
   }
   // A proof file from the browser: base64, at most 8 MB, and really a PDF or an image Claude can read.
+  // Stored proofs (kept in the database) have limits, so uploads can't fill it: a file is at most 8 MB (a PDF) or 3 MB (a picture;
+  // the app shrinks big photos before sending them); each gym takes PROOF.gymDay files a day (from its members, its coaches and
+  // its forwarding address together) and each member PROOF.userDay; each gym keeps up to PROOF.gymMb of them (when that's full,
+  // files of proofs confirmed or set aside more than 90 days ago make room); and all gyms together take PROOF.dayMb a day.
+  const PROOF = { pdfBytes: 8 * 1024 * 1024, imageBytes: 3 * 1024 * 1024, gymDay: Number(process.env.JF_PROOF_GYM_DAY) || 60, userDay: Number(process.env.JF_PROOF_USER_DAY) || 10,
+    gymMb: Number(process.env.JF_PROOF_GYM_MB) || 300, dayMb: Number(process.env.JF_UPLOAD_DAY_MB) || 2000 };
+  const FULL_TODAY = "Your gym has had a lot of proofs of payment today. Try again tomorrow, or show your coach the proof.";
+  // Can the gym store these files now? Throws a friendly 429/507 if not. who: the member sending them (their own daily count), if any.
+  async function proofRoom(gymId, files, who = null) {
+    const bytes = files.reduce((t, f) => t + f.data.length, 0); if (!files.length) return;
+    const d = (await q(`select count(*) filter (where p.gym_id=$1)::int as gym, count(*) filter (where p.gym_id=$1 and p.submitted_by=$2 and p.source='student')::int as mine,
+      coalesce(sum(f.size),0)::bigint as bytes from pop_files f join payments p on p.id=f.payment_id where f.created_at > now() - interval '1 day'`, [gymId, who])).rows[0];
+    if (who && d.mine + files.length > PROOF.userDay) fail(429, "That's a lot of uploads today. Ask your coach if something's wrong.");
+    if (d.gym + files.length > PROOF.gymDay) fail(429, FULL_TODAY);
+    if (Number(d.bytes) + bytes > PROOF.dayMb * 1024 * 1024) { console.warn("uploads: today's upload budget (JF_UPLOAD_DAY_MB) is used up"); fail(503, "JitsFlow is taking a lot of uploads right now. Try again tomorrow, or show your coach the proof."); }
+    const stored = async () => Number((await q("select coalesce(sum(f.size),0)::bigint as b from pop_files f join payments p on p.id=f.payment_id where p.gym_id=$1", [gymId])).rows[0].b);
+    if ((await stored()) + bytes <= PROOF.gymMb * 1024 * 1024) return;
+    await q(`delete from pop_files f using payments p where p.id=f.payment_id and p.gym_id=$1 and p.status in ('confirmed','rejected','test') and p.created_at < now() - interval '90 days'`, [gymId]);
+    if ((await stored()) + bytes > PROOF.gymMb * 1024 * 1024) { console.warn("uploads: gym", gymId, "is at its proof storage quota"); fail(507, "Your gym's space for proofs of payment is full. Ask your coach to confirm or remove the proofs waiting on Money."); }
+  }
   function proofFile(b) {
     const data = Buffer.from(String(b.data || ""), "base64");
     if (!data.length) fail(400, "Choose the proof of payment (a PDF or a screenshot).");
-    if (data.length > 8 * 1024 * 1024) fail(413, "That file is over 8 MB. Send a screenshot of the payment instead.");
+    if (data.length > PROOF.pdfBytes) fail(413, "That file is over 8 MB. Send a screenshot of the payment instead.");
     const type = pop.sniff(data);
     if (type === "image/heic") fail(400, "That photo is in HEIC format. Take a screenshot of the payment and send that instead.");
     if (!type) fail(400, "Send a PDF or an image (a screenshot is fine).");
+    if (type !== "application/pdf" && data.length > PROOF.imageBytes) fail(413, "That picture is over 3 MB. Send a screenshot of the payment instead.");
     return { name: clean(b.name, 120) || (type === "application/pdf" ? "proof.pdf" : "proof"), type, data };
   }
   const gymStudents = async (gymId) => (await q("select id, name, pay_ref from users where gym_id=$1 and role='student'", [gymId])).rows;
@@ -2496,7 +2534,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const u = needHead(req), b = req.body || {}, mode = b.mode === undefined ? "fee" : b.mode;
     if (!["none", "fee", "membership"].includes(mode)) fail(400, "Pick what clients who only take private lessons pay.");
     let c = u.access_fee_cents || 0, ids = (u.private_plan_ids || []).map(String);
-    if (mode === "fee" || b.accessFeeCents !== undefined) { c = intOr(b.accessFeeCents, NaN); if (!Number.isFinite(c) || c < 0 || c > 1e7) fail(400, "Enter the access fee, or 0 to switch it off."); }
+    if (mode === "fee" || b.accessFeeCents !== undefined) { c = centsIn(b.accessFeeCents, "Enter the access fee, or 0 to switch it off."); }
     if (mode === "membership" || b.planIds !== undefined) {
       ids = [...new Set((Array.isArray(b.planIds) ? b.planIds : []).map((x) => intOr(x, 0)).filter(Boolean))].slice(0, 50);
       if ((await q("select id from plans where gym_id=$1 and id = any($2::bigint[])", [u.gym_id, ids])).rows.length !== ids.length) fail(404, "That plan doesn't exist.");
@@ -2515,7 +2553,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   function readPack(b) {
     const name = clean(b.name, 80); if (!name) fail(400, "Give the pack a name, like 10 private lessons.");
     const lessons = intOr(b.lessons, 0); if (lessons < 1 || lessons > 100) fail(400, "How many lessons are in the pack? From 1 to 100.");
-    const price = intOr(b.priceCents, NaN); if (!Number.isFinite(price) || price < 500 || price > 5e6) fail(400, "Enter the pack's price, from R5.");
+    const price = centsIn(b.priceCents, "Enter the pack's price, from R5."); if (price < 500) fail(400, "Enter the pack's price, from R5.");
     const exp = b.expiryMonths === null || b.expiryMonths === undefined || b.expiryMonths === "" || Number(b.expiryMonths) === 0 ? null : Math.min(36, Math.max(1, intOr(b.expiryMonths, 0)));
     return { name, lessons, price, exp, active: b.active !== false };
   }
@@ -2572,7 +2610,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   api.post("/me/pay/proof", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
     if (limited("pop-u:" + u.id, 20, 24 * 3600e3)) fail(429, "That's a lot of uploads today. Ask your coach if something's wrong.");
-    const b = req.body || {}, file = proofFile(b), pack = b.packId ? await packIn(u.gym_id, b.packId, true) : null;
+    const b = req.body || {}, file = proofFile(b);
+    await proofRoom(u.gym_id, [file], u.id);
+    const pack = b.packId ? await packIn(u.gym_id, b.packId, true) : null;
     // "What's it for?" can be a plan, for a new member joining it: they're on it as a trial now, and for real once the coach confirms this.
     const plan = !pack && b.planId ? (await pickablePlans(u)).find((x) => x.id === String(b.planId)) || fail(404, "That plan isn't on offer.") : null;
     if (plan && String(u.plan_id) !== plan.id) { await q("update users set plan_id=$1, plan_started=$2 where id=$3", [plan.id, await todayIn(u), u.id]); u.plan_id = plan.id; }
@@ -2585,7 +2625,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const c = aiClient();
     setImmediate(async () => {
       try {
-        const read = await pop.readPop({ client: c, files: [file] });
+        const read = await pop.readPop({ client: c, files: [file], meter: { gymId: u.gym_id, feature: "proof" } });
         const amount = row.amount_cents || read.amountCents || 0, mismatch = row.amount_cents && read.amountCents && read.amountCents !== row.amount_cents;
         const otherRef = pop.refsIn(read.reference).find((r) => r !== (u.pay_ref || "")) || null;
         const paidOn = on || read.date || row.paid_on;
@@ -2652,7 +2692,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const u = needHead(req), file = proofFile(req.body || {});
     // Each upload is a Claude read and up to 8 MB stored: cap them per gym a day.
     if (limited("pop-c:" + u.gym_id, 50, 24 * 3600e3)) fail(429, "That's a lot of uploads today. Record the rest by hand, or try again tomorrow.");
-    const read = await pop.readPop({ client: aiClient(), files: [file] });
+    await proofRoom(u.gym_id, [file]);
+    const read = await pop.readPop({ client: aiClient(), files: [file], meter: { gymId: u.gym_id, feature: "coach proof" } });
     const row = await addProof({ u, gymId: u.gym_id, read, source: "upload", files: [file], method: "eft" });
     res.status(201).json({ payment: payOut(row) });
   }));
@@ -3126,12 +3167,45 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     res.json(c);
   }));
   // A gym's own PayFast account, for students paying by card or Instant EFT. Keys are kept encrypted.
-  const pfOf = (row) => { const p = row && row.payfast; if (!p || !p.merchantId) return null; return { id: p.merchantId, key: payfast.open(p.key), pass: payfast.open(p.pass), sandbox: p.merchantId === payfast.TEST.id }; };
+  // broken: its keys can't be opened (JF_SECRET changed, or DATABASE_URL did before there was one): it takes no payments until the
+  // head coach connects PayFast again (they're told; see pfBroken).
+  const pfOf = (row) => { const p = row && row.payfast; if (!p || !p.merchantId) return null; const k = payfast.unseal(p.key), s = payfast.unseal(p.pass);
+    return { id: p.merchantId, key: k.text, pass: s.text, sandbox: p.merchantId === payfast.TEST.id, broken: !k.ok || !s.ok || !k.text }; };
   // PayFast's test account only works while JitsFlow itself is in test mode: once live, a gym still connected to it takes no payments.
-  const pfLive = (p) => (p && !(p.sandbox && !payfast.platform().sandbox) ? p : null);
+  const pfLive = (p) => (p && !p.broken && !(p.sandbox && !payfast.platform().sandbox) ? p : null);
+  // A gym whose PayFast keys can't be opened: marked (the head coach's PayFast settings say "needs reconnecting"), the head coach is
+  // emailed (once a day), and so is the JitsFlow team: once a day when it's found, and for each payment notification it stopped
+  // (up to 20 a day a gym), so the payment can be recorded by hand. what: what happened. each: a notification (the team hears of each).
+  const brokenTold = new Map();
+  const toldToday = (k, max = 1) => { const now = Date.now(), t = brokenTold.get(k); if (!t || now - t.at > 864e5) { brokenTold.set(k, { at: now, n: 1 }); return false; } if (t.n >= max) return true; t.n++; return false; };
+  async function pfBroken(gymId, what, { each = false } = {}) {
+    console.error(`payfast: gym ${gymId}'s PayFast keys can't be decrypted (JF_SECRET changed?)${what ? ": " + what : ""}`);
+    await q("update gyms set payfast = payfast || $2 where id=$1 and payfast is not null and payfast->>'brokenAt' is null", [gymId, { brokenAt: new Date().toISOString() }]).catch(() => {});
+    const g = (await q("select name from gyms where id=$1", [gymId])).rows[0]; if (!g) return;
+    if (!toldToday("head:" + gymId)) toHead(gymId, (name) => mail.templates.payfastReconnect(name));
+    if (!toldToday((each ? "itn:" : "team:") + gymId, each ? 20 : 1)) for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastBrokenAdmin(g.name, gymId, what || "") });
+  }
+  // Seals every gym's PayFast keys and every saved-card token again with the current key (JF_SECRET), when they were sealed with
+  // an older one (JF_SECRET_OLD, or the legacy DATABASE_URL key). Safe to run any time, on several servers. Run at startup and with the jobs.
+  async function sealAgain() {
+    let n = 0;
+    for (const g of (await q("select id, payfast from gyms where payfast is not null")).rows) {
+      const p = g.payfast; if (!p || !p.merchantId) continue;
+      const k = payfast.unseal(p.key), s = payfast.unseal(p.pass);
+      if (!k.ok || !s.ok || !k.text) { if (!p.brokenAt) await pfBroken(g.id, "found when the server started"); continue; }
+      if (p.brokenAt) await q("update gyms set payfast = payfast - 'brokenAt' where id=$1", [g.id]); // readable again (e.g. JF_SECRET_OLD was set)
+      const nk = payfast.reseal(p.key), ns = payfast.reseal(p.pass); if (!nk && !ns) continue;
+      // Only if nobody changed it meanwhile (the old sealed values are still there).
+      n += (await q("update gyms set payfast = payfast || $2 where id=$1 and payfast->>'key' is not distinct from $3 and payfast->>'pass' is not distinct from $4",
+        [g.id, { ...(nk ? { key: nk } : {}), ...(ns ? { pass: ns } : {}) }, p.key, p.pass])).rowCount;
+    }
+    for (const a of (await q("select user_id, token from autopay")).rows) { const t = payfast.reseal(a.token); if (t) n += (await q("update autopay set token=$2 where user_id=$1 and token=$3", [a.user_id, t, a.token])).rowCount; }
+    if (n) console.log(`payfast: sealed ${n} stored secret${n === 1 ? "" : "s"} again with the current key`);
+    return n;
+  }
   api.get("/coach/payfast", wrap(async (req, res) => {
-    const u = needHead(req), p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]));
-    res.json({ payfast: { connected: !!p, merchantId: p ? p.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
+    const u = needHead(req), raw = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]), p = pfLive(raw);
+    res.json({ payfast: { connected: !!p, needsReconnect: !!(raw && raw.broken), merchantId: p ? p.id : raw && raw.broken ? raw.id : "", test: p ? p.sandbox : false, feePct: payfast.FEE_PCT(), jitsflowMerchantId: payfast.platform().id, testMode: payfast.platform().sandbox } });
   }));
   api.put("/coach/payfast", wrap(async (req, res) => {
     const u = needHead(req), b = req.body || {};
@@ -3162,7 +3236,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!p) fail(400, "Your gym doesn't take card payments yet.");
     // A private-lesson pack is paid at its price; anything else is the amount the student typed.
     const pack = req.body?.packId ? await packIn(u.gym_id, req.body.packId, true) : null;
-    const cents = pack ? pack.price_cents : intOr(req.body?.amountCents, 0); if (cents < 500 || cents > 5e6) fail(400, "Enter an amount from R5.");
+    const cents = pack ? pack.price_cents : intOr(req.body?.amountCents, 0); if (cents < 500) fail(400, "Enter an amount from R5."); if (cents > MAX_CENTS) fail(400, TOO_MUCH);
     const P = payfast.platform(), split = p.id !== P.id ? { merchant_id: Number(P.id), percentage: payfast.FEE_PCT() } : null;
     const [fn, ...ln] = String(u.name || "").trim().split(/\s+/);
     // The student picked Apple Pay, Google Pay, card or Instant EFT in the app: PayFast opens on just that one (its payment_method codes).
@@ -3182,13 +3256,17 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       if (d.custom_str1 === "sub") { const P = payfast.platform(); pass = P.pass; sandbox = P.sandbox; merchant = P.id; gymId = intOr(d.custom_int1, 0); }
       else if (d.custom_str1 === "card" || /^auto-\d+$/.test(String(d.m_payment_id || ""))) {
         auto = await autoItnOf(d); if (!auto) throw new Error("unknown saved card");
-        gymId = auto.gymId; const p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0])); if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id;
+        gymId = auto.gymId; const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
+        if (raw && raw.broken) { await pfBroken(gymId, `a saved-card notification (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked`, { each: true }); throw new Error("gym's PayFast keys can't be opened"); }
+        if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id;
       }
-      else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const p = pfLive(pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0])); if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
+      else if (d.custom_str1 === "pay") { gymId = intOr(d.custom_int2, 0); const raw = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]), p = pfLive(raw);
+        if (raw && raw.broken) { await pfBroken(gymId, `a card payment (PayFast ${clean(d.pf_payment_id, 40)}, R${clean(d.amount_gross, 20)}) couldn't be checked or recorded: record it by hand once PayFast shows it`, { each: true }); throw new Error("gym's PayFast keys can't be opened"); }
+        if (!p) throw new Error("gym has no PayFast"); pass = p.pass; sandbox = p.sandbox; merchant = p.id; }
       else throw new Error("unknown notification " + String(d.custom_str1 || "").slice(0, 20));
       if (!payfast.itnSignatureOk(pairs, pass)) throw new Error("bad signature");
       if (String(d.merchant_id) !== String(merchant)) throw new Error("wrong merchant");
-      const ip = String(req.headers["cf-connecting-ip"] || String(req.headers["x-forwarded-for"] || "").split(",")[0] || req.socket.remoteAddress || "").trim();
+      const ip = clientIp(req); // a header anyone can set doesn't count: only Cloudflare's, through Cloudflare (see clientIp)
       if (!(await payfast.payfastIps()).has(ip)) console.warn("payfast itn: from an unlisted address " + ip + " (still confirmed with PayFast below)");
       if (!(await payfast.confirmWithPayfast(pairs, sandbox))) throw new Error("PayFast didn't confirm it");
       const gross = Math.round(Number(d.amount_gross || 0) * 100);
@@ -3399,10 +3477,13 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const old = (await q("select user_id, token, token_hash, merchant_id, stopped_at from autopay where user_id = any($1)", [ppl.map((x) => x.id)])).rows;
     if (ppl.every((x) => old.some((o) => String(o.user_id) === String(x.id) && o.token_hash === th && !o.stopped_at))) return; // the same notification again
     const gone = old.filter((o) => o.token_hash !== th);
-    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month) values($1,$2,$3,$4,$5,$6,$7)
+    // The card's limit for each of them: twice their monthly fee now, as they see it on their Pay sheet when they save the card (see autoCap).
+    const usual = async (id) => { const x = (await q("select * from users where id=$1", [id])).rows[0], plan = x && x.plan_id ? (await q("select * from plans where id=$1", [x.plan_id])).rows[0] : null;
+      return x ? 2 * membershipOf({ ...x, plan_status: "active" }, plan, g) : 0; };
+    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month,cap_cents) values($1,$2,$3,$4,$5,$6,$7,$8)
       on conflict (user_id) do update set gym_id=excluded.gym_id, payer_id=excluded.payer_id, token=excluded.token, token_hash=excluded.token_hash, merchant_id=excluded.merchant_id,
-        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null`,
-      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7)]);
+        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null, cap_cents=excluded.cap_cents`,
+      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7), await usual(x.id)]);
     // The card it replaces: cancelled with PayFast once nothing uses it.
     const m = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]);
     const done = new Set();
@@ -3435,6 +3516,19 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const pv = (await privatesOf(gc.gym_id, [x.id], tz, today))[x.id], led = leds[String(x.id)];
     const ms = balanceOf(x, plan, gc, pv, led, month).months.filter((o) => o.month >= a.from_month), cents = ms.reduce((t, o) => t + o.cents, 0);
     if (cents < 500) return 0;
+    // More than the card's limit (twice what the member usually paid when they saved it, at least R3,000): not charged. The month is
+    // claimed as failed, so it's tried once, and the member and the head coach are asked to sort it out by hand.
+    const cap = await autoCap(a);
+    if (cents > cap) {
+      const held = (await q("insert into autopay_charges(gym_id,user_id,month,amount_cents,alloc,status,error,told_at) values($1,$2,$3,$4,$5,'failed',$6,now()) on conflict do nothing returning *",
+        [gc.gym_id, x.id, month, cents, Object.fromEntries(ms.map((o) => [o.month, o.cents])), "over the card's limit"])).rows[0];
+      if (held) {
+        const p = await payerOf(x.id, a.payer_id), amount = fmtMoney(cents, gc.currency), limit = fmtMoney(cap, gc.currency);
+        if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayOverLimit(first(p.name), gc.gym_name, whoFor(x), amount, limit) });
+        toHead(gc.gym_id, (name) => mail.templates.autopayOverLimitCoach(name, x.name, amount, limit));
+      }
+      return 0;
+    }
     const c = (await q("insert into autopay_charges(gym_id,user_id,month,amount_cents,alloc) values($1,$2,$3,$4,$5) on conflict do nothing returning *",
       [gc.gym_id, x.id, month, cents, Object.fromEntries(ms.map((o) => [o.month, o.cents]))])).rows[0];
     if (!c) return 0;
@@ -3446,6 +3540,14 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     catch (e) { await q("update autopay_charges set error=$2, updated_at=now() where id=$1", [c.id, clean(e.message, 200)]); return 0; }
     if (r.ok) { await q("update autopay_charges set status='sent', updated_at=now() where id=$1 and status='charging'", [c.id]); return 1; }
     await autoFailed(c.id, r.reason); return 0;
+  }
+  // The most a saved card is charged at once without the member saying so: twice their usual monthly fee when they saved it
+  // (cap_cents), and never under R3,000. A card saved before limits: twice the biggest charge it has paid, or R3,000.
+  const AUTO_CAP_MIN = Number(process.env.JF_AUTOPAY_CAP_MIN_CENTS) || 300000;
+  async function autoCap(a) {
+    if (a.cap_cents) return Math.max(AUTO_CAP_MIN, a.cap_cents);
+    const r = (await q("select max(amount_cents) as m from autopay_charges where user_id=$1 and gym_id=$2 and status in ('sent','paid')", [a.user_id, a.gym_id])).rows[0];
+    return Math.max(AUTO_CAP_MIN, 2 * (Number(r && r.m) || 0));
   }
   // coach: false when the head coach said so themselves (Money), so they aren't emailed about it.
   async function autoFailed(id, why, coach = true) {
@@ -3497,15 +3599,17 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const to = String(req.headers["x-jf-to"] || "").toLowerCase(), tok = (to.match(/^pop-([a-z0-9]{6,32})@/) || [])[1];
     const g = tok && (await q("select g.id, g.currency, g.timezone from gyms g where g.pop_token=$1 and g.claim is null", [tok])).rows[0];
     if (!g) fail(404, "Unknown address.");
-    if (limited("pop-g:" + g.id, 300, 24 * 3600e3)) fail(429, "Too many emails today.");
+    if (limited("pop-g:" + g.id, 100, 24 * 3600e3)) fail(429, "Too many emails today.");
     const { simpleParser } = require("mailparser");
     const parsed = await simpleParser(Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body || "")));
     const notice = pop.gmailConfirm(parsed);
     if (notice) { await q("update gyms set pop_notice=$1 where id=$2", [notice, g.id]); return res.json({ ok: true, gmailConfirm: true }); }
-    const files = (parsed.attachments || []).map((a) => ({ name: clean(a.filename, 120) || "attachment", data: a.content, type: pop.sniff(a.content) }))
-      .filter((f) => f.type && f.type !== "image/heic" && f.data.length <= 8 * 1024 * 1024 && f.data.length > 2048).slice(0, 3);
+    let files = (parsed.attachments || []).map((a) => ({ name: clean(a.filename, 120) || "attachment", data: a.content, type: pop.sniff(a.content) }))
+      .filter((f) => f.type && f.type !== "image/heic" && f.data.length <= (f.type === "application/pdf" ? PROOF.pdfBytes : PROOF.imageBytes) && f.data.length > 2048).slice(0, 3);
+    // Over the gym's limits for stored proofs (see proofRoom): the email's text is still kept, without its attachments.
+    if (files.length) { try { await proofRoom(g.id, files); } catch (e) { if (!e.status) throw e; files = []; } }
     const text = `From: ${(parsed.from && parsed.from.text) || ""}\nSubject: ${parsed.subject || ""}\n\n${(parsed.text || "").slice(0, 20000)}`;
-    const read = await pop.readPop({ client: aiClient(), text, files });
+    const read = await pop.readPop({ client: aiClient(), text, files, meter: { gymId: g.id, feature: "inbound proof" } });
     if (!read.isPayment && !files.length) return res.json({ ok: true, skipped: "not a payment" });
     const row = await addProof({ u: { id: null, currency: g.currency, timezone: g.timezone }, gymId: g.id, read, source: "email", files, text,
       from: (parsed.from && parsed.from.text) || String(req.headers["x-jf-from"] || ""), subject: parsed.subject || "", method: "eft" });
@@ -3600,7 +3704,14 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // The team's dashboard: visitors, sign-ups, who's using the app, every gym, and outreach (see backend/admin.js).
   api.get("/admin/overview", wrap(async (req, res) => {
     needAdmin(req);
-    res.json(await adminDash.overview(q, { days: intOr(req.query.days, 30), bill: billState }));
+    const out = await adminDash.overview(q, { days: intOr(req.query.days, 30), bill: billState });
+    // Settings the JitsFlow team needs to fix (shown at the top of the dashboard), and today's AI use against its budget.
+    const L = ai.LIMITS(), used = (await q("select calls, tokens from ai_usage where day=(now() at time zone 'utc')::date and scope='all'")).rows[0] || { calls: 0, tokens: 0 };
+    const broken = (await q("select id, name from gyms where payfast->>'brokenAt' is not null order by name limit 50")).rows;
+    out.system = { secretOk: payfast.secretOk(), cardsTestMode: payfast.platform().sandbox, production: process.env.NODE_ENV === "production",
+      ai: { on: !!ai.getClient(), calls: used.calls, tokens: Number(used.tokens), maxCalls: L.calls, maxTokens: L.tokens, paused: ai.spent() },
+      payfastBroken: broken.map((g) => ({ id: String(g.id), name: g.name })) };
+    res.json(out);
   }));
   api.get("/admin/prospects", wrap(async (req, res) => {
     needAdmin(req);
@@ -3840,7 +3951,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Scheduled jobs (server.js runs them every 15 minutes; each is safe to run twice or on several servers).
   // Card autopay goes first, so on a due day members whose card pays aren't reminded too.
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, run: async () => { await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
+  setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)));
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message)); } };
   return api;
 }
 

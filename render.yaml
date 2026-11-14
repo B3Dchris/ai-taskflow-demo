@@ -30,6 +30,8 @@ services:
           property: connectionString
       - key: APP_URL            # address used in email links
         value: https://www.jitsflow.com
+      - key: JF_SECRET          # set in the Render dashboard: a long random value (e.g. openssl rand -hex 32). Encrypts gyms' PayFast keys.
+        sync: false             # Never change it without putting the old value in JF_SECRET_OLD first (see backend/payfast.js).
       - key: RESEND_API_KEY     # set in the Render dashboard; turns on email
         sync: false
       - key: ANTHROPIC_API_KEY  # optional; smarter gym website import

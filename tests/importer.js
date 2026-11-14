@@ -137,6 +137,13 @@ const rejects = async (p, re) => { try { await p; return false; } catch (e) { re
     const cl = im.cleanProfile({ name: "x".repeat(500), website: "javascript:alert(1)", socials: { instagram: "javascript:alert(1)", facebook: "https://facebook.com/a" }, timetable: [{ day: "Mon", start: "25:00" }, { day: "Tue", start: "7:05", title: "<b>Hi</b>" }], rates: [{ name: "a", price: -5 }, { name: "b", price: "100", period: "weird" }] });
     ok(cl.name.length === 100 && cl.website === "" && !cl.socials.instagram && cl.socials.facebook, "unsafe links are dropped and text is capped");
     ok(cl.timetable.length === 1 && cl.timetable[0].start === "07:05" && cl.rates.length === 1 && cl.rates[0].period === "other", "bad times and prices are dropped");
+    // ---- pages built to make the reader backtrack (ReDoS) are read in linear time (tests/hardening.js has the end-to-end attack)
+    { const brand = require("../backend/brand"), slow = [];
+      for (const [k, html] of Object.entries({ comments: "<!--".repeat(60000), links: "<a x>".repeat(60000), tables: "<table>".repeat(60000), scripts: "<script>".repeat(60000), cells: "<table><tr>" + "<td>".repeat(60000) + "</table>", lt: "<".repeat(240000) })) {
+        const t = Date.now(); im.plainRead([im.parsePage(html, "https://x.test/")]); await brand.fromSite(html, "https://x.test/"); if (Date.now() - t > 200) slow.push(`${k} ${Date.now() - t} ms`); }
+      const t = Date.now(); brand.tallyCss("a".repeat(120000) + "{", new Map()); if (Date.now() - t > 200) slow.push("css " + (Date.now() - t) + " ms");
+      ok(!slow.length, "ReDoS pages and stylesheets are read in under 200 ms each: " + slow.join(", ")); }
+    ok(im.privateIp("fec0::1") && im.privateIp("64:ff9b:1::a00:1"), "site-local and local-NAT64 IPv6 addresses aren't public");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
   site.close();
   console.log(`importer: ${pass} passed, ${fail} failed`); fails.forEach((f) => console.log("  FAIL", f));

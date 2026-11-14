@@ -188,6 +188,17 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await new Promise(r=>setTimeout(r,900));const bh=await (await fetch(`http://localhost:${gport+1}/`)).text();bs.kill();
     ok(!/JF_GA/.test(bh),'a malformed GA_ID is ignored');
   }catch(e){fail++;fails.push('CRASH GA '+e.message)}
+  // ---- the security policy: scripts without 'unsafe-inline' (each page's own inline scripts run by their hashes), and no violations anywhere
+  try{const bad=[];
+    for(const u of ['','coaches/','techniques/','techniques/kimura/','glossary/','privacy/','no-such-page','app/']){
+      const r=await fetch(URL+u),c=r.headers.get('content-security-policy')||'',ss=c.split(';').find(d=>/script-src/.test(d))||'';
+      if(/unsafe-inline/.test(ss)||!/'sha256-/.test(ss))bad.push(u+': '+ss.slice(0,80));
+      if(r.headers.get('cross-origin-opener-policy')!=='same-origin'||r.headers.get('x-frame-options')!=='SAMEORIGIN')bad.push(u+': COOP/XFO missing');
+      const pg=await ctx.newPage();await pg.addInitScript(()=>{window.__csp=[];document.addEventListener('securitypolicyviolation',e=>window.__csp.push(e.violatedDirective+' '+e.blockedURI))});
+      const cons=[];pg.on('console',m=>{if(/Content Security Policy/i.test(m.text()))cons.push(m.text().slice(0,120))});
+      await pg.goto(URL+u);await pg.waitForTimeout(600);const v=await pg.evaluate(()=>window.__csp||[]);if(v.length||cons.length)bad.push(u+': '+v.concat(cons).join(', '));await pg.close()}
+    ok(!bad.length,"pages: no 'unsafe-inline' scripts, COOP and X-Frame-Options, and no security policy violations: "+bad.join(' | '));
+  }catch(e){fail++;fails.push('CRASH CSP '+e.message)}
   const csp=await p.evaluate(()=>window.__csp||[]).catch(()=>[]);ok(csp.length===0,'no security policy violations: '+csp.join(' | '));
   ok(errs.length===0,'page errors: '+errs.join(' | '));
   console.log(`website: ${pass} passed, ${fail} failed`);fails.forEach(f=>console.log('  FAIL',f));

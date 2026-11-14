@@ -63,10 +63,10 @@ function kidFromName(name) {
   return null;
 }
 
-async function readPeople({ client, images }) {
+async function readPeople({ client, images, meter }) {
   const content = images.slice(0, 8).map((im) => ({ type: "image", source: { type: "base64", media_type: im.type, data: im.data.toString("base64") } }));
   content.push({ type: "text", text: `${images.length > 1 ? `These ${images.length} screenshots are one list, scrolled.` : "Here's the screenshot."} List the people in it.` });
-  const a = await require("./ai").extract(client, { system: SYSTEM, schema: SCHEMA, maxTokens: 6000, content });
+  const a = await require("./ai").extract(client, { system: SYSTEM, schema: SCHEMA, maxTokens: 6000, content, meter });
   return toRows(a.people);
 }
 

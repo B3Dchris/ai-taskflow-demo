@@ -2,6 +2,7 @@
 // Colours are counted (weighted by where they're used), and greys, near-white and near-black are left out. Also: the text colour
 // that's readable on a colour, and a colour darkened just enough to carry white button text.
 "use strict";
+const scan = require("./htmlscan");
 
 const JF_ACCENT = "#1d4fb5"; // JitsFlow's own blue: used when a site has no colour of its own
 
@@ -69,13 +70,14 @@ function weightOf(prop, selector) {
 }
 // Adds every colour in a block of CSS (or a style="" attribute) to the tally.
 function tallyCss(css, tally, scale = 1) {
-  css = String(css).replace(/\/\*[\s\S]*?\*\//g, " ");
+  css = scan.stripCssComments(css); // also cuts it at 150 KB
   const add = (prop, value, selector) => {
     const w = weightOf(prop, selector) * scale; if (!w) return;
     for (const tok of value.match(COLOUR_RE) || []) { const c = parseColour(tok.trim()); if (!c || neutral(c)) continue; const hex = rgb2hex(c); if (STOCK.has(hex) && scale < 5) continue; tally.set(hex, (tally.get(hex) || 0) + w); }
   };
   if (!/[{}]/.test(css)) { for (const d of css.split(";")) { const i = d.indexOf(":"); if (i > 0) add(d.slice(0, i).trim(), d.slice(i + 1), ""); } return; }
-  for (const m of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) for (const d of m[2].split(";")) { const i = d.indexOf(":"); if (i > 0) add(d.slice(0, i).trim(), d.slice(i + 1), m[1]); }
+  // Each "selector { declarations }" block, found by splitting on the braces (a pattern for it backtracks for ever on "aaaa…{").
+  for (const [sel, body] of scan.cssBlocks(css)) for (const d of body.split(";")) { const i = d.indexOf(":"); if (i > 0) add(d.slice(0, i).trim(), d.slice(i + 1), sel); }
 }
 // The colour most used across the tally, after putting near-identical colours together.
 function pick(tally) {
@@ -90,18 +92,21 @@ function pick(tally) {
 async function fromSite(html, base, { get, budgetMs = 6000, maxSheets = 4 } = {}) {
   const tally = new Map(); html = String(html || "");
   try {
-    for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
-      const t = m[0]; if (!/name\s*=\s*["']?(theme-color|msapplication-TileColor)/i.test(t)) continue;
-      const c = parseColour(((t.match(/content\s*=\s*["']([^"']+)["']/i) || [])[1] || "").trim());
+    // The page as tags, read once (see htmlscan.js: no pattern here can backtrack over the whole page).
+    const T = scan.tokens(html), A = (t) => scan.attrs(t.attr, (v) => v.replace(/&quot;/g, "\"").replace(/&amp;/g, "&")), open = (t, n) => t.kind === "tag" && !t.close && t.name === n;
+    for (const t of T.list) {
+      if (!open(t, "meta")) continue; const a = A(t);
+      if (!/^(theme-color|msapplication-TileColor)$/i.test(a.name || "")) continue;
+      const c = parseColour((a.content || "").trim());
       if (c && !neutral(c)) { const hex = rgb2hex(c); tally.set(hex, (tally.get(hex) || 0) + 40); }
     }
-    for (const m of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) tallyCss(m[1], tally, 1.5);
-    for (const m of html.matchAll(/\sstyle\s*=\s*"([^"]{3,600})"/gi)) tallyCss(m[1].replace(/&quot;/g, '"'), tally, 1.5);
+    for (const t of T.list) if (t.kind === "raw" && t.name === "style") tallyCss(t.text, tally, 1.5);
+    for (const t of T.list) { if (t.kind !== "tag" || t.close) continue; const st = A(t).style; if (st && st.length >= 3 && st.length <= 600) tallyCss(st, tally, 1.5); }
     if (get) {
       const hrefs = [];
-      for (const m of html.matchAll(/<link\b[^>]*>/gi)) { const t = m[0]; if (!/rel\s*=\s*["']?[^"'>]*stylesheet/i.test(t)) continue; const h = (t.match(/href\s*=\s*["']([^"']+)["']/i) || [])[1];
+      for (const t of T.list) { if (!open(t, "link")) continue; const a = A(t); if (!/stylesheet/i.test(a.rel || "")) continue; const h = a.href;
         if (!h || /fonts\.googleapis|font-awesome|fontawesome|bootstrap(\.min)?\.css|jquery|swiper|slick|animate(\.min)?\.css|dashicons|wp-block-library|elementor-icons|\/icons?\//i.test(h)) continue;
-        try { hrefs.push(new URL(h.replace(/&amp;/g, "&"), base).href); } catch (e) {} }
+        try { hrefs.push(new URL(h, base).href); } catch (e) {} }
       const t0 = Date.now(), left = () => budgetMs - (Date.now() - t0);
       const sheets = await Promise.race([
         Promise.all([...new Set(hrefs)].slice(0, maxSheets).map((u) => get(u, { timeoutMs: Math.max(1000, Math.min(5000, left())), maxBytes: 600000, accept: "text/css,*/*;q=0.5" })

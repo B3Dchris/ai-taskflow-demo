@@ -64,10 +64,47 @@ async function confirmWithPayfast(pairs, sandbox) {
   return (await r.text()).trim() === "VALID";
 }
 
-// ---- gyms' own PayFast keys, encrypted at rest ----
-const keyBytes = () => crypto.createHash("sha256").update("jf-payfast:" + (process.env.JF_SECRET || process.env.DATABASE_URL || "dev")).digest();
-function seal(text) { if (!text) return ""; const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", keyBytes(), iv); const out = Buffer.concat([c.update(String(text), "utf8"), c.final()]); return [iv, c.getAuthTag(), out].map((b) => b.toString("base64")).join("."); }
-function open(blob) { if (!blob) return ""; try { const [iv, tag, data] = blob.split(".").map((x) => Buffer.from(x, "base64")); const d = crypto.createDecipheriv("aes-256-gcm", keyBytes(), iv); d.setAuthTag(tag); return Buffer.concat([d.update(data), d.final()]).toString("utf8"); } catch (e) { return ""; } }
+// ---- gyms' own PayFast keys (and members' saved-card tokens), encrypted at rest ----
+// The key comes from JF_SECRET, a secret of its own (set it in Render). Values are sealed as "v2.<kid>.<iv>.<tag>.<data>": kid
+// says which key sealed it (8 hex characters of a hash of the key), so the secret can be changed: put the old one in JF_SECRET_OLD
+// (comma separated) until everything's been sealed again (sealAgain, at startup and with the scheduled jobs), then remove it.
+// Values from before JF_SECRET ("<iv>.<tag>.<data>", no prefix) were sealed with a key made from DATABASE_URL: they're still read
+// with that key, and sealed again with JF_SECRET. Without JF_SECRET (only allowed outside production) that legacy key seals too.
+const derive = (secret) => crypto.createHash("sha256").update("jf-payfast:" + secret).digest();
+const kidOf = (key) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
+const legacyKey = () => derive(process.env.DATABASE_URL || "dev");
+const sealKey = () => (process.env.JF_SECRET ? derive(process.env.JF_SECRET) : legacyKey());
+// Every key a value may have been sealed with, the current one first.
+function keys() {
+  const list = [sealKey()];
+  for (const s of String(process.env.JF_SECRET_OLD || "").split(",").map((x) => x.trim()).filter(Boolean)) list.push(derive(s));
+  list.push(legacyKey());
+  const seen = new Set(); return list.filter((k) => { const id = kidOf(k); if (seen.has(id)) return false; seen.add(id); return true; });
+}
+// Is the sealing key a secret of its own? (false: JF_SECRET isn't set, so it's made from DATABASE_URL, which changes with the database password)
+const secretOk = () => !!process.env.JF_SECRET;
+function seal(text) {
+  if (!text) return "";
+  const key = sealKey(), iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const out = Buffer.concat([c.update(String(text), "utf8"), c.final()]);
+  return ["v2", kidOf(key), ...[iv, c.getAuthTag(), out].map((b) => b.toString("base64"))].join(".");
+}
+const tryKey = (key, iv, tag, data) => { try { const d = crypto.createDecipheriv("aes-256-gcm", key, iv); d.setAuthTag(tag); return Buffer.concat([d.update(data), d.final()]).toString("utf8"); } catch (e) { return null; } };
+// { text, ok, stale }: ok false when no key opens it (text ""); stale when it opened but wasn't sealed with the current key.
+function unseal(blob) {
+  if (!blob) return { text: "", ok: true, stale: false };
+  const parts = String(blob).split("."), v2 = parts[0] === "v2" && parts.length === 5;
+  const [iv, tag, data] = (v2 ? parts.slice(2) : parts).map((x) => Buffer.from(x || "", "base64"));
+  if (!iv || !tag || !data || iv.length !== 12 || tag.length !== 16) return { text: "", ok: false, stale: false };
+  const all = keys(), cur = kidOf(all[0]);
+  // A v2 value names its key; one that names a key we don't have is tried with all of them (the kid could be wrong only by accident).
+  const order = v2 ? [...all.filter((k) => kidOf(k) === parts[1]), ...all.filter((k) => kidOf(k) !== parts[1])] : all;
+  for (const k of order) { const t = tryKey(k, iv, tag, data); if (t !== null) return { text: t, ok: true, stale: !v2 || kidOf(k) !== cur || parts[1] !== cur }; }
+  return { text: "", ok: false, stale: false };
+}
+const open = (blob) => unseal(blob).text;
+// The value sealed with the current key, or null if it's current already (or can't be opened).
+function reseal(blob) { const r = unseal(blob); return r.ok && r.stale && r.text ? seal(r.text) : null; }
 
 // ---- saved cards (tokenization): charging a member's saved card, and cancelling it ----
 // Card autopay is only offered once JitsFlow and the gym are both on live PayFast. PAYFAST_AUTOPAY_TEST=1 opens it on the sandbox
@@ -107,5 +144,5 @@ async function cancelToken(m, token) {
 }
 
 const money = (cents) => (Math.round(cents) / 100).toFixed(2);
-module.exports = { PRICE_CENTS, FEE_PCT, TRIAL_MONTHS, TEST, platform, host, sign, paramString, checkout, parseItn, itnSignatureOk, payfastIps, confirmWithPayfast, seal, open, money, ORDER,
+module.exports = { PRICE_CENTS, FEE_PCT, TRIAL_MONTHS, TEST, platform, host, sign, paramString, checkout, parseItn, itnSignatureOk, payfastIps, confirmWithPayfast, seal, open, unseal, reseal, secretOk, money, ORDER,
   autopayTest, apiSign, chargeToken, cancelToken };
