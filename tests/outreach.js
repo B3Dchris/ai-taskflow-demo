@@ -219,7 +219,7 @@ function startSite() {
     ok(nonceM && !/unsafe-inline'[^;]*;?\s*style/.test(csp.split("style-src")[0]) && [...t.matchAll(/<script\b([^>]*)>/g)].every((m) => m[1].includes(`nonce="${nonceM[1]}"`)), "page: its one inline script runs by this response's nonce, and no other inline script would: " + csp.slice(0, 120));
     ok(/default-src 'self'/.test(csp) && !/<script[^>]+src=/.test(t) && ![...t.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].some((m) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(m[1])), "page: the site's security policy, and nothing loaded from elsewhere but fonts");
     ok(!/googletagmanager|analytics/.test(t), "page: no analytics");
-    ok(t.includes(`/app/?gym=${S0.token}`) && /Claim Green Lions BJJ, free for 3 months/.test(t) && /R99\/month only if you want to keep going/.test(t) && /Apple Pay and Google Pay are coming soon/.test(t) && !/2% fee/.test(t), "page: the claim button, the no-obligation line, payments coming soon");
+    ok(t.includes(`/app/?gym=${S0.token}`) && /Claim Green Lions BJJ, free for 3 months/.test(t) && /R99\/month only if you want to keep going/.test(t) && /Apple Pay and Capitec Pay are coming soon/.test(t) && !/2% fee/.test(t), "page: the claim button, the no-obligation line, payments coming soon");
     await pool.query("delete from prospects where id=$1", [S0.id]);
     r = await pub("GET", `/try/${tokA}/logo`); ok(r.s === 200 && r.h.get("content-type") === "image/png", "logo served as PNG for email");
     r = await pub("GET", "/try/" + "x".repeat(32)); ok(r.s === 404 && /This page isn('|&#39;)t here/.test(r.t) && /noindex/.test(r.t), "unknown token: a friendly 404");
@@ -243,8 +243,8 @@ function startSite() {
     r = await admin("GET", `/admin/prospects/${idA}`);
     const e = r.j.email;
     ok(e.subject === "Green Lions on JitsFlow" && /Hi Thabo,/.test(e.html) && /Congrats on the new mats in Durbanville!/.test(e.html) && /Green Lions BJJ is already set up on JitsFlow/.test(e.html), "email: subject, first name, personal line, headline");
-    ok(/run Green Lions BJJ from your phone: less admin for you, and room to grow/.test(e.html) && /Members book classes themselves, with waitlists and check-in/.test(e.html) && /automatic reminders and EFT references\. Card, Apple Pay and Google Pay are coming soon\./.test(e.html)
-      && /kids and parents, and coaches all in one place/.test(e.html) && /Already set up from your website/.test(e.html) && /Helps you grow: invite links and WhatsApp/.test(e.html), "email: what JitsFlow does for the gym, in five plain lines (payments: EFT now, card and Apple/Google Pay coming soon)");
+    ok(/run Green Lions BJJ from your phone: less admin for you, and room to grow/.test(e.html) && /Members book classes themselves, with waitlists and check-in/.test(e.html) && /automatic reminders and EFT references\. Card, Apple Pay and Capitec Pay are coming soon\./.test(e.html)
+      && /kids and parents, and coaches all in one place/.test(e.html) && /Already set up from your website/.test(e.html) && /Helps you grow: invite links and WhatsApp/.test(e.html), "email: what JitsFlow does for the gym, in five plain lines (payments: EFT now, card, Apple Pay and Capitec Pay coming soon)");
     ok(e.html.includes(`https://www.jitsflow.test/try/${tokA}/logo`) && !/src="data:/.test(e.html) && e.html.includes(`href="https://www.jitsflow.test/app/?gym=${tokA}"`) && e.html.includes(`https://www.jitsflow.test/try/${tokA}/optout`), "email: hosted https logo (no data: URI), one button to their gym in the app, opt-out link");
     ok((e.html.match(/>See Green Lions BJJ on JitsFlow<\/a>/g) || []).length === 1 && !/<img(?![^>]*\/try\/[^>]*\/logo)/.test(e.html), "email: one button; no remote images but their logo");
     ok(/max-width:600px/.test(e.html) && /role="presentation"/.test(e.html) && /v:roundrect/.test(e.html) && !/<style[^>]*>[^<]*\.[a-z]+\s*\{[^}]*\}[^<]*<\/style>/.test(e.html.replace(/@media[^{]*\{[^}]*\{[^}]*\}[^}]*\}/g, "").replace(/:root\{[^}]*\}/g, "")), "email: 600px tables, inline styles, an Outlook-proof button");
@@ -255,7 +255,7 @@ function startSite() {
     ok(e.html.indexOf("See Green Lions BJJ on JitsFlow") < e.html.indexOf("No obligation.") && e.html.indexOf("No obligation.") < e.html.indexOf("Join the JitsFlow beta") && e.html.indexOf("Join the JitsFlow beta") < e.html.indexOf("Thanks,"), "email: the button, then the no-obligation line, then the beta, then the sign-off");
     ok(/Thanks,<br>Boss Admin<br>and the JitsFlow team/.test(e.html) && /I(&#39;|')m Boss from JitsFlow\./.test(e.html), "email: introduced by first name, signed with the full name and the team");
     ok(/Hi Thabo,/.test(e.text) && /optout/.test(e.text) && e.text.includes(`See Green Lions BJJ on JitsFlow: https://www.jitsflow.test/app/?gym=${tokA}`) && !/</.test(e.text) && /\nThanks,\nBoss Admin\nand the JitsFlow team\n/.test(e.text)
-      && /No obligation\. 3 months free/.test(e.text) && /Join the JitsFlow beta\./.test(e.text) && /Card, Apple Pay and Google Pay are coming soon/.test(e.text), "email: a plain-text version with the link, the deal, the beta, the sign-off and opt-out");
+      && /No obligation\. 3 months free/.test(e.text) && /Join the JitsFlow beta\./.test(e.text) && /Card, Apple Pay and Capitec Pay are coming soon/.test(e.text), "email: a plain-text version with the link, the deal, the beta, the sign-off and opt-out");
     ok(r.j.from === "Boss from JitsFlow" && r.j.replyTo === "boss@jitsflow.test", "email: from the admin's first name, replies to the admin");
     r = await admin("GET", `/admin/prospects/${idA}/email`); ok(r.s === 200 && /text\/html/.test(r.h.get("content-type")) && /Hi Thabo/.test(r.t), "the admin can open the rendered email in a tab");
 

@@ -1,13 +1,23 @@
 // The pricing, terms, refunds, contact and secure-payments pages, and the legal footer every page carries.
 // Business details come from src/business.json (tools/business.js); prices and the platform fee from the code that charges
-// them (backend/payfast.js, backend/beta.js), so the pages can't drift from what Payfast is asked to charge.
+// them (backend/payfast.js, backend/beta.js), so the pages can't drift from what Payfast and Paystack are asked to charge.
+// JitsFlow's own gym plan is billed through Payfast. Members pay their gym through Paystack (card, Apple Pay, Capitec Pay) or by EFT.
+// Member card payments say "coming soon" until JitsFlow's Paystack is live: each page carries both wordings (soonLive) and
+// server.js keeps the one that applies when it starts (JF_PAYSTACK_LIVE=1 or a live PAYSTACK_SECRET_KEY: live; otherwise soon).
 // Used by tools/seo.js: legalFooter() goes in its page frame, and legalPages() adds the pages with its frame and add().
 "use strict";
 const { load } = require("./business");
 const payfast = require("../backend/payfast");
 const beta = require("../backend/beta");
 
-const UPDATED = "15 November 2026"; // change when the terms, refund policy or pricing text changes
+const UPDATED = "15 November 2026";
+// Both wordings, for server.js to pick from (see the top of this file). Only in page text: never in an attribute or <head>.
+const soonLive = (soon, live) => `<!--jf:soon-->${soon}<!--/jf:soon--><!--jf:live-->${live}<!--/jf:live-->`;
+// How members pay their gym, in the words every page uses.
+const memberPay = (fee) => soonLive(
+  `Members pay their gym by EFT with their own reference today. Card, Apple Pay and Capitec Pay are coming soon: card payments will be processed by Paystack and paid by Paystack directly into the gym's bank account, so JitsFlow never holds membership money. JitsFlow's ${fee}% platform fee and Paystack's processing fee will be deducted from each card payment.`,
+  `Members pay their gym by card, Apple Pay, Capitec Pay or EFT. Card payments are processed by Paystack and paid by Paystack directly into the gym's bank account; JitsFlow never holds membership money. JitsFlow's ${fee}% platform fee and Paystack's processing fee are deducted from each card payment.`);
+const PS_PRICING = `<a href="https://paystack.com/za/pricing" rel="noopener">paystack.com/za/pricing</a>`; // change when the terms, refund policy or pricing text changes
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rand = (c) => "R" + (c % 100 ? (c / 100).toFixed(2) : String(Math.round(c / 100)));
 
@@ -25,7 +35,7 @@ const LINKS = [["Pricing", "/pricing/"], ["Terms", "/terms/"], ["Refunds", "/ref
 function legalLine() {
   const { biz: b } = facts();
   const parts = [`© ${new Date().getFullYear()} ${esc(b.tradingName)}${b.legalName ? `, a product of ${entity(b)}` : ""}`, b.regNo ? `Company registration number ${esc(b.regNo)}` : "",
-    esc(b.address), mail(b), "Payments are processed securely by Payfast."];
+    esc(b.address), mail(b), "Payments are processed securely by Payfast" + soonLive(".", " (JitsFlow plans) and Paystack (members' card payments).")];
   return parts.filter(Boolean).join(" · ");
 }
 // For the content pages' frame (tools/seo.js).
@@ -67,7 +77,7 @@ function legalPages({ frame, add, SITE }) {
 <tr><th scope="row">Gyms</th><td><b>${months} months free, then ${price}/month</b></td><td class="mut">Per gym. Billed monthly by card through Payfast, only once you add a card.</td></tr>
 <tr><th scope="row">Gyms in the JitsFlow beta</th><td><b>${betaMonths} months free, then ${betaPrice}/month</b></td><td class="mut">For gyms accepted into the beta, while they stay in it.</td></tr>
 <tr><th scope="row">Member fees paid by EFT</th><td><b>No JitsFlow fee</b></td><td class="mut">Members pay the gym's bank account with their own reference.</td></tr>
-<tr><th scope="row">Member fees paid through Payfast</th><td><b>${fee}% platform fee</b></td><td class="mut">Card, Apple Pay and Google Pay are coming soon. When a gym switches them on, ${fee}% of each payment goes to JitsFlow.</td></tr>
+<tr><th scope="row">Member fees paid by card</th><td><b>${fee}% platform fee</b></td><td class="mut">${soonLive("Card, Apple Pay and Capitec Pay are coming soon, through Paystack.", "Card, Apple Pay and Capitec Pay, through Paystack.")} Paystack pays the rest straight into the gym's bank account. Paystack's processing fee applies too (${PS_PRICING}).</td></tr>
 </tbody></table></div>
 ${b.priceNote ? `<p>${esc(b.priceNote)}</p>` : b.vatNote ? `<p>All prices are in South African rand (ZAR). ${esc(b.vatNote)}.</p>` : `<p>All prices are in South African rand (ZAR).</p>`}</section>
 <section class="stack"><h2>What a gym gets</h2><ul class="ticks">
@@ -84,10 +94,12 @@ ${b.priceNote ? `<p>${esc(b.priceNote)}</p>` : b.vatNote ? `<p>All prices are in
 <li><span><b>Cancel any time.</b> Gym tab › Your JitsFlow plan › Cancel plan. Payfast won't charge your card again. There's no cancellation fee and no notice period.</span></li></ol>
 <p>If you don't add a card, nothing is charged and nothing locks: the app reminds the head coach that the free months are over. After you cancel, your gym and its data stay in JitsFlow, and you can add a card again whenever you like. We don't refund part-months; see the <a href="/refunds/">refund policy</a>. If we ever change the price, we'll tell you by email at least 30 days before the new price applies.</p></section>
 <section class="stack"><h2>Member payments</h2>
-<p>Each gym connects its own Payfast account, so members pay the gym directly and the gym is the seller of its memberships. JitsFlow is the software in between.</p>
+<p>${memberPay(fee)}</p>
+<p>The gym is the seller of its memberships, and JitsFlow is the software in between. The gym doesn't need a payment account of its own: it gives its bank account in the app once, and we check it before card payments switch on.</p>
 <ul class="ticks"><li><b>EFT with a reference:</b> free. Members pay the gym's bank account with their own reference and send a proof of payment in the app.</li>
-<li><b>Card, Apple Pay and Google Pay:</b> coming soon. When a gym switches them on, payments go through Payfast's secure checkout into the gym's Payfast account.</li>
-<li><b>JitsFlow's ${fee}% platform fee</b> is charged on member payments processed through the gym's Payfast account. Payfast splits it off at the time of payment (Payfast Split Payments). The member pays the gym's normal price; the fee comes out of what the gym receives. Payfast's own transaction fees are charged to the gym by Payfast.</li></ul></section>
+<li><b>Card, Apple Pay and Capitec Pay:</b> ${soonLive("coming soon, on Paystack's secure checkout.", "on Paystack's secure checkout (Apple Pay on devices that support it).")} Paystack pays the gym's share into the gym's bank account, normally 2 working days after each payment.</li>
+<li><b>JitsFlow's ${fee}% platform fee</b> is split off by Paystack at the time of each card payment. The member pays the gym's normal price; the fee comes out of what the gym receives, and so does Paystack's processing fee (see ${PS_PRICING}).</li></ul>
+<p>JitsFlow's own gym plan is billed separately, through Payfast (above).</p></section>
 <section class="panel cta"><h2>Start your gym</h2><p>Paste your gym's website and your timetable, coaches and prices are in. ${months} months free, no card needed.</p><a class="btn primary" href="/app/?start=1" data-ev="start_gym">Start your gym</a></section>
 <p>Questions about pricing? ${contactLine || "See the contact page"}. Read the <a href="/terms/">terms of service</a>, the <a href="/refunds/">refund and cancellation policy</a> and how <a href="/security/">payments are kept secure</a>.</p>
 </article>` }), 0.6);
@@ -114,9 +126,11 @@ ${b.priceNote ? `<p>${esc(b.priceNote)}</p>` : b.vatNote ? `<p>All prices are in
 <li><b>Price changes:</b> we'll give you at least 30 days' notice by email before a new price applies to your plan. If you don't want to continue at the new price, cancel before it applies.</li>
 <li><b>Cancelling:</b> cancel any time in the app: Gym tab › Your JitsFlow plan › Cancel plan, or email us. Payfast won't charge your card again. Your gym keeps its access at least until the end of the month you've paid for, and its data stays until you delete the gym. See the <a href="/refunds/">refund and cancellation policy</a>.</li></ul></section>
 <section><h2>5. Member payments</h2><ul>
-<li>Members pay their gym, not JitsFlow. Each gym connects its own Payfast account and is the merchant (the seller) for its memberships, class packs and other fees. The gym sets its prices and its own membership terms.</li>
+<li>Members pay their gym, not JitsFlow. The gym is the merchant (the seller) for its memberships, class packs and other fees. The gym sets its prices and its own membership terms.</li>
+<li>${memberPay(fee)}</li>
 <li>JitsFlow provides the software: the Pay sheet, reminders and records. We aren't a party to the agreement between a member and their gym.</li>
-<li>JitsFlow charges the gym a ${fee}% platform fee on member payments processed through the gym's Payfast account. Payfast splits it off at the time of payment. Payments by EFT with the member's reference carry no JitsFlow fee.</li>
+<li>JitsFlow charges the gym a ${fee}% platform fee on each member card payment. Paystack splits it off at the time of payment, and deducts its own processing fee (${PS_PRICING}). Payments by EFT with the member's reference carry no JitsFlow fee.</li>
+<li>A gym that takes card payments gives its bank account in the app and confirms it's the gym's own account. We check it before card payments switch on, and Paystack may hold the first payout to a new or changed account until it's verified.</li>
 <li>Questions or disputes about membership fees, refunds, classes or cancellations are between the member and the gym. We'll help where we can: email us.</li></ul></section>
 <section><h2>6. Acceptable use</h2><p>Don't use JitsFlow to break the law, send spam, harass anyone, upload things you don't have the right to share, collect other people's details without permission, get into accounts or data that aren't yours, overload or probe our systems, or copy the app or its content in bulk.</p></section>
 <section><h2>7. Your content and data</h2><p>What you add (notes, training logs, a gym's timetable, members and payments) stays yours. You let us store and show it only to run JitsFlow for you. For the details a gym keeps about its members, the gym is responsible for them under the Protection of Personal Information Act (POPIA) and we process them on the gym's behalf. How we handle personal information is in the <a href="/privacy/">privacy notice</a>.</p></section>
@@ -146,9 +160,9 @@ ${policyLinks("/terms/")}</article>` }), 0.3);
 <section><h2>How to ask for a refund</h2><p>Email ${mail(b) || "us"} with your gym's name, the date and amount of the charge, and what went wrong. We'll check it with Payfast and confirm by email, and the refund goes back to the card that was charged. Refunds are never more than the original payment, and never to a different card.</p></section>
 <section><h2>Membership fees you pay your gym</h2><ul>
 <li>Your gym is the seller of its memberships, so refunds of membership fees, class packs and other fees are up to your gym and its own terms. Contact your gym first.</li>
-<li>A gym refunds a card payment from its own Payfast account. If it refunds a payment in full, JitsFlow's ${fee}% platform fee on it is refunded along with it.</li>
+<li>A gym refunds a card payment in the app (Money), in full or in part, back to the card it was paid with, through Paystack. Paystack reverses the payment's split (the gym's share and JitsFlow's ${fee}% platform fee) under its own refund rules.</li>
 <li>If you can't sort it out with your gym, email us and we'll help where we can.</li></ul></section>
-<section><h2>Chargebacks</h2><p>Please contact us (for your gym's plan) or your gym (for membership fees) before disputing a card payment with your bank. Most problems are quicker to fix directly. If a chargeback is raised, it's handled by Payfast under the card schemes' rules, and we'll give Payfast the records it asks for.</p></section>
+<section><h2>Chargebacks</h2><p>Please contact us (for your gym's plan) or your gym (for membership fees) before disputing a card payment with your bank. Most problems are quicker to fix directly. If a chargeback is raised, it's handled under the card schemes' rules by Payfast (for a gym's plan) or Paystack (for membership fees). For membership fees the gym gives its evidence, which we pass to Paystack, and we give the processor the records it asks for.</p></section>
 <section><h2>Delivery</h2><p>JitsFlow is a digital service. Access is immediate after you sign up or pay, and there are no physical goods, so nothing is shipped and there are no delivery fees. Prices are in South African rand${b.priceNote && /not vat/i.test(b.priceNote) ? ", with no VAT added" : ""}.</p></section>
 ${policyLinks("/refunds/")}</article>` }), 0.3);
 
@@ -163,27 +177,29 @@ ${policyLinks("/refunds/")}</article>` }), 0.3);
 <p class="lead">Questions about your account, your gym's plan, a payment or a refund? ${b.email ? `Email ${mail(b)}${b.phone ? ` or call ${tel(b)}` : ""}${b.hours ? ` (${esc(b.hours)})` : ""}.` : ""}</p></header>
 <section class="stack"><h2>Business details</h2><dl class="biz">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
 ${b.legalName ? `<p class="small muted">JitsFlow is a product of ${entity(b)}.</p>` : ""}</section>
-<section class="panel"><h2>Payments</h2><p>Payments are processed securely by Payfast. JitsFlow never sees or stores your card number. <a href="/security/">How payments are kept secure</a>.</p></section>
+<section class="panel"><h2>Payments</h2><p>Payments are processed securely by Payfast${soonLive(".", " (JitsFlow plans) and Paystack (members' card payments to their gym).")} JitsFlow never sees or stores your card number. <a href="/security/">How payments are kept secure</a>.</p>
+<p>${memberPay(facts().fee)}</p></section>
 <section class="stack"><h2>Policies</h2><ul class="links"><li><a href="/pricing/">Pricing</a></li><li><a href="/terms/">Terms of service</a></li><li><a href="/refunds/">Refund and cancellation policy</a></li><li><a href="/privacy/">Privacy notice</a></li><li><a href="/security/">Secure payments</a></li></ul></section>
 <p class="small muted">Membership fees are paid to your gym. For a refund of a membership fee, contact your gym first; we'll help if you can't sort it out.</p>
 </article>` }), 0.4);
 
   // --- secure payments
   add("/security/", frame({ url: "/security/", type: "website", title: "Secure payments | JitsFlow", image: "/og/home.jpg",
-    desc: "Card payments on JitsFlow go through Payfast's secure checkout. JitsFlow never sees or stores your card number. HTTPS everywhere.",
+    desc: "Card payments on JitsFlow go through Payfast's and Paystack's secure checkouts. JitsFlow never sees or stores your card number. HTTPS everywhere.",
     crumbs: crumbs("Secure payments", "/security/"),
     body: `<article class="stack-lg legal-doc"><header class="stack"><p class="eyebrow">Secure payments</p><h1>Secure payments</h1>
-<p class="lead">Card payments go through Payfast, a South African payment processor. Your card details go to Payfast only, never to JitsFlow.</p></header>
+<p class="lead">Card payments go through Payfast (a gym's JitsFlow plan) and Paystack (members paying their gym), both PCI DSS compliant payment processors. Your card details go to them only, never to JitsFlow.</p></header>
 <section><h2>How it works</h2><ul>
-<li>When you pay or add a card, JitsFlow sends you to Payfast's secure checkout, where you enter your card or choose another payment method. Payfast is PCI DSS compliant, the card industry's security standard.</li>
+<li>When you pay or add a card, JitsFlow sends you to Payfast's or Paystack's secure checkout, where you enter your card or choose another payment method. Both are PCI DSS compliant, the card industry's security standard.</li>
 <li>JitsFlow never sees, receives or stores your full card number or security code (CVV).</li>
-<li>For monthly billing or a saved card, Payfast gives us a token: a reference that lets us ask Payfast to charge that card or cancel it. A token isn't your card number and is useless outside Payfast. Saved-card tokens are encrypted when we store them.</li>
-<li>Every checkout is signed, and we only mark a payment as paid when Payfast's notification about it has a valid signature and Payfast confirms it directly.</li>
+<li>For monthly billing or a saved card, Payfast or Paystack gives us a token (Paystack calls it an authorization): a reference that lets us ask them to charge that card. A token isn't your card number and is useless outside the processor. Saved-card tokens are encrypted when we store them.</li>
+<li>We only mark a payment as paid when the processor's notification about it has a valid signature and the processor confirms it directly, for the amount and account the checkout asked for.</li>
+<li>Membership money is paid by Paystack straight into the gym's bank account. JitsFlow never holds it. A gym's bank and ID details are encrypted when we store them, and shown only by their last 4 digits.</li>
 <li>The whole site uses HTTPS (encrypted connections), and browsers are told to always use it (HSTS).</li></ul></section>
-<section><h2>Ways to pay</h2><p>Card (Visa and Mastercard) and the methods Payfast offers at checkout, including Instant EFT, Apple Pay and Google Pay. Which ones you see depends on your device and what the merchant has switched on. All amounts are in South African rand (ZAR).</p>
-<p>Gym plans are paid to JitsFlow. Membership fees are paid to your gym, through the gym's own Payfast account, or by EFT to the gym's bank account with your reference. Card payments for membership fees are coming soon.</p></section>
+<section><h2>Ways to pay</h2><p>Gym plans are paid to JitsFlow by card (Visa and Mastercard) or another method Payfast offers at its checkout. Which ones you see depends on your device. All amounts are in South African rand (ZAR).</p>
+<p>${memberPay(facts().fee)} Paystack's checkout shows the methods it offers on your device.</p></section>
 <section><h2>Spotted a problem?</h2><p>If you see a charge you don't recognise, or think something isn't secure, email ${mail(b) || "us"} straight away.</p></section>
 ${policyLinks("/security/")}</article>` }), 0.3);
 }
 
-module.exports = { legalFooter, landingFooter, legalPages, LINKS, UPDATED, facts };
+module.exports = { legalFooter, landingFooter, legalPages, LINKS, UPDATED, facts, soonLive, memberPay };

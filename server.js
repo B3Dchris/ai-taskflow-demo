@@ -43,6 +43,13 @@ if(r)o.ref=r.slice(0,100);if(!n&&!r)return;var s=null;try{s=JSON.parse(localStor
 if(s&&Date.now()-s.t<30*864e5&&(!n||s.utm_source||s.gclid||s.gbraid||s.wbraid))return;
 o.land=L.pathname.slice(0,120);o.t=Date.now();localStorage.setItem(K,JSON.stringify(o))}catch(e){}})();</script>`;
 
+// Member card payments (Paystack) are "coming soon" on the public pages until JitsFlow's Paystack is live: JF_PAYSTACK_LIVE=1, or a
+// live PAYSTACK_SECRET_KEY (sk_live_…). The pages carry both wordings, marked <!--jf:soon-->…<!--/jf:soon--> and
+// <!--jf:live-->…<!--/jf:live--> ({{jf:soon}}… in structured data): the one that doesn't apply is taken out here, once, at startup
+// (see tools/legal.js). Switching it is a restart with the setting changed; nothing is rebuilt.
+const CARDS = require("./backend/paystack").publicLive() ? "live" : "soon";
+const cardsCopy = (html) => html.replace(/<!--jf:(soon|live)-->([\s\S]*?)<!--\/jf:\1-->|\{\{jf:(soon|live)\}\}([\s\S]*?)\{\{\/jf:\3\}\}/g,
+  (m, a, x, b, y) => ((a || b) === CARDS ? (a ? x : y) : ""));
 const { cspFor, scriptHashes } = require("./backend/csp");
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -63,7 +70,7 @@ const files = new Map();
     const rel = "/" + path.relative(ROOT, full).split(path.sep).join("/");
     const ext = path.extname(name).toLowerCase();
     let body = fs.readFileSync(full);
-    if (ext === ".html") body = Buffer.from(body.toString("utf8").replace("</head>", SRC_TAG + GA_TAG + "\n</head>"));
+    if (ext === ".html") body = Buffer.from(cardsCopy(body.toString("utf8")).replace("</head>", SRC_TAG + GA_TAG + "\n</head>"));
     files.set(rel, { body, gz: COMPRESS.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null, ext,
       type: TYPES[ext] || "application/octet-stream", sec: ext === ".html" ? { ...SECURITY, "Content-Security-Policy": cspFor(scriptHashes(body.toString("utf8"))) } : SECURITY });
   }
@@ -166,6 +173,7 @@ async function main() {
   if (process.env.NODE_ENV === "production") {
     if (!process.env.JF_SECRET) console.error("WARNING: JF_SECRET isn't set. Gyms' PayFast keys are encrypted with a key made from DATABASE_URL; set JF_SECRET (a long random value) in Render.");
     if (!process.env.PAYFAST_MERCHANT_ID) console.error("WARNING: PAYFAST_MERCHANT_ID isn't set: card payments are in PayFast's test mode (no real money moves).");
+    if (/^sk_test_/.test(process.env.PAYSTACK_SECRET_KEY || "")) console.error("WARNING: PAYSTACK_SECRET_KEY is a test key: members' card payments are in Paystack's test mode (no real money moves).");
   }
   const pool = makePool();
   if (pool) {

@@ -184,9 +184,15 @@ def media_html(idx):
     return gallery, posmap
 
 
+def cards_marks(h):
+    """Keeps the "coming soon" and "live" wordings for member card payments (<!--jf:soon-->…) in structured data as {{jf:soon}}…,
+    so server.js can keep the one that applies there too (see tools/legal.js)."""
+    return re.sub(r"<!--(/?jf:(?:soon|live))-->", r"{{\1}}", h)
+
+
 def landing_ld(landing):
     """Structured data for the home page: the site, the app, and the FAQ (read from the page itself)."""
-    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
+    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", cards_marks(h))).strip()
     faq = [{"@type": "Question", "name": strip(q), "acceptedAnswer": {"@type": "Answer", "text": strip(a)}}
            for q, a in re.findall(r"<details><summary>(.*?)</summary><p>(.*?)</p></details>", landing, re.S)]
     site = "https://www.jitsflow.com"
@@ -203,7 +209,7 @@ def landing_ld(landing):
 
 def page_ld(page, url):
     """FAQ structured data for a marketing page, read from its own <details> blocks."""
-    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
+    strip = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", cards_marks(h))).strip()
     faq = [{"@type": "Question", "name": strip(q), "acceptedAnswer": {"@type": "Answer", "text": strip(a)}}
            for q, a in re.findall(r"<details><summary>(.*?)</summary><p>(.*?)</p></details>", page, re.S)]
     data = {"@context": "https://schema.org", "@type": "FAQPage", "url": "https://www.jitsflow.com" + url, "mainEntity": faq}

@@ -8,6 +8,7 @@ const crypto = require("crypto");
 const express = require("express");
 const brand = require("./brand");
 const payfast = require("./payfast");
+const paystack = require("./paystack");
 const importer = require("./importer");
 const beta = require("./beta");
 
@@ -114,10 +115,12 @@ const classLine = (r) => [r.level && !new RegExp(r.level.replace(/[.*+?^${}()|[\
 const initials = (n) => String(n || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
 
 /* ---------------- the email ---------------- */
+// Card payments for members: coming soon until JitsFlow's Paystack is live (see paystack.publicLive), then simply on offer.
+const CARDS_SOON = () => (paystack.publicLive() ? "Members can pay by card, Apple Pay or Capitec Pay too, straight into your bank account." : "Card, Apple Pay and Capitec Pay are coming soon.");
 // What the gym side of JitsFlow does for an owner, in plain words (the email, the preview's claim screen and the landing copy say the same).
 const PITCH = (p) => [
   "Members book classes themselves, with waitlists and check-in at the door.",
-  "Fees are tracked for you, with automatic reminders and EFT references. Card, Apple Pay and Google Pay are coming soon.",
+  "Fees are tracked for you, with automatic reminders and EFT references. " + CARDS_SOON(),
   "Your timetable, kids and parents, and coaches all in one place.",
   ttOf(p).length ? "Already set up from your website: your classes, prices and logo are in." : "Already set up from your website: your details and logo are in.",
   "Helps you grow: invite links and WhatsApp bring members in, and members who stopped coming are flagged.",
@@ -254,7 +257,7 @@ function renderPreview(p, { base = "", now = new Date(), nonce = "" } = {}) {
   const gets = [
     ["Bookings and check-ins", "Members book their classes and check in on their phones. You see who's coming before class starts."],
     ["Fees that keep track", "Running balances for every member, and payment reminders that go out by themselves."],
-    ["EFT proof of payment", "Members pay by EFT with their own reference and send their proof in the app. Card, Apple Pay and Google Pay are coming soon."],
+    ["EFT proof of payment", "Members pay by EFT with their own reference and send their proof in the app. " + CARDS_SOON()],
     ["Kids and families", "One parent login books and pays for all their kids."],
     ["Belt progress and moves", "Stripes and belts for every member, plus a library of moves to study between classes."],
     ["Import from WhatsApp", "Bring your members over from your WhatsApp group in a few taps."],
