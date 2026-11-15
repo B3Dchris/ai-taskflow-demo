@@ -183,7 +183,7 @@ const healthMs = async (root) => { const t = Date.now(); await new Promise((ok) 
     ok(/style-src 'self' 'unsafe-inline'/.test(csp) && /object-src 'none'/.test(csp), "inline styles stay allowed; plugins aren't");
     ok(r.headers.get("cross-origin-opener-policy") === "same-origin" && r.headers.get("x-frame-options") === "SAMEORIGIN" && !r.headers.get("strict-transport-security"), "COOP and X-Frame-Options on pages; no HSTS outside production");
     r = await fetch(A.base + "/status"); const st = await r.json();
-    ok(r.headers.get("cross-origin-resource-policy") === "same-origin" && Object.keys(st).sort().join() === "ai,build,db,mail", "/api answers can't be embedded by other sites, and /api/status says only what the app needs: " + Object.keys(st));
+    ok(r.headers.get("cross-origin-resource-policy") === "same-origin" && Object.keys(st).sort().join() === "ai,build,cards,db,mail" && ["paystack", "payfast"].includes(st.cards), "/api answers can't be embedded by other sites, and /api/status says only what the app needs (cards: who processes member card payments, no secrets): " + Object.keys(st));
     // 8. A cookie that isn't valid %-encoding: not a 500 on every call
     r = await fetch(A.base + "/me", { headers: { cookie: "jf_s=%E0%A4%A; theme=%" } }); ok(r.status === 200 && (await r.json()).me === null, "a malformed cookie is ignored (was a 500): " + r.status);
     // 9. Line breaks in an email subject can't add headers

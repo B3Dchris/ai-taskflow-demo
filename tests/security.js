@@ -312,11 +312,12 @@ function client(base, headers0 = {}) {
       r = await H1("POST", `/coach/students/${off}/merge`, { into: acc.id }); ok(r.s === 200, "the head coach can");
     }
 
-    // ---------- Every state-changing route still needs the app's header (one-tap unsubscribe is the only new exception) ----------
+    // ---------- Every state-changing route still needs the app's header (one-tap unsubscribe is the only new exception; Paystack's
+    // webhook comes from Paystack's servers and needs its signature instead: 401 without it) ----------
     {
       const src = require("fs").readFileSync(path.resolve(__dirname, "../backend/api.js"), "utf8");
       const routes = [...src.matchAll(/api\.(post|put|patch|delete)\("([^"]+)"/g)].map((m) => [m[1].toUpperCase(), m[2].replace(/:token/g, "A".repeat(24)).replace(/:\w+/g, "1")]);
-      const bad = []; for (const [m, u] of routes) { const x = await H1(m, u, "a=1", { "x-jf": undefined, "content-type": "application/x-www-form-urlencoded" }); if (x.s !== 403 && u !== "/payfast/notify" && !u.startsWith("/gym-mail/stop/")) bad.push(`${m} ${u} -> ${x.s}`); }
+      const bad = []; for (const [m, u] of routes) { const x = await H1(m, u, "a=1", { "x-jf": undefined, "content-type": "application/x-www-form-urlencoded" }); if (u === "/paystack/webhook" ? x.s !== 401 : x.s !== 403 && u !== "/payfast/notify" && !u.startsWith("/gym-mail/stop/")) bad.push(`${m} ${u} -> ${x.s}`); }
       ok(!bad.length && routes.length > 100, `all ${routes.length} state-changing routes refuse a request without x-jf ` + bad.join("; "));
     }
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e)); }
