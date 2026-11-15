@@ -559,6 +559,80 @@ create table if not exists assistant_proposals(
   used_at timestamptz,
   created_at timestamptz not null default now()
 );
+-- Paystack (backend/paystack.js): members pay their gym by card; Paystack pays the gym's share into the gym's bank account (its
+-- subaccount). gyms.paystack: {subaccount, bankName, bankCode, last4, holder, business, idKind ('reg' or 'id'), idSealed, idLast4,
+-- accountSealed, ownerId, status ('pending_verification', 'active', 'disabled'), createdAt, updatedAt, verifiedAt, verifiedBy}.
+-- Full account and ID numbers are sealed (payfast.seal); everything else shows only their last 4 digits.
+alter table gyms add column if not exists paystack jsonb;
+-- Each Paystack checkout or saved-card charge, by its reference: what it asked for. Paystack's answer is checked against it (amount,
+-- currency, the gym's subaccount) before anything is credited. kind: fees, pack, plan or auto (a saved-card charge). save: keep the card.
+-- status: open, paid (credited, once), failed, flagged (Paystack's answer didn't match: the team checks it).
+create table if not exists paystack_checkouts(
+  reference text primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  user_id bigint references users(id) on delete set null,
+  payer_id bigint references users(id) on delete set null,
+  kind text not null default 'fees',
+  amount_cents int not null,
+  fee_cents int not null default 0,
+  subaccount text not null,
+  pack_id bigint,
+  plan_id bigint,
+  charge_id bigint,
+  save boolean not null default false,
+  status text not null default 'open',
+  error text not null default '',
+  paid_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists paystack_checkouts_user on paystack_checkouts(user_id, created_at desc);
+-- When an open one was last asked about with Paystack (a webhook that never came, a member who closed the checkout): see psRecheck.
+alter table paystack_checkouts add column if not exists checked_at timestamptz;
+-- A card payment's fees: JitsFlow's (fee_cents) and Paystack's (psp_fee_cents); refunded_cents: refunded so far; dispute: open, won, lost.
+alter table payments add column if not exists fee_cents int;
+alter table payments add column if not exists psp_fee_cents int;
+alter table payments add column if not exists refunded_cents int not null default 0;
+alter table payments add column if not exists dispute text;
+-- Refunds a head coach asked for (Money), and what Paystack said. status: pending, processed, failed. seen_at: the team saw a failed one.
+create table if not exists paystack_refunds(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  payment_id bigint references payments(id) on delete set null,
+  reference text not null,
+  amount_cents int not null,
+  status text not null default 'pending',
+  error text not null default '',
+  by_user bigint references users(id) on delete set null,
+  seen_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists paystack_refunds_ref on paystack_refunds(reference);
+-- Paystack's own id for the refund (from its answer, or its webhook): a refund is applied once, however often Paystack says so.
+alter table paystack_refunds add column if not exists ps_id text;
+create unique index if not exists paystack_refunds_ps on paystack_refunds(ps_id) where ps_id is not null;
+-- Chargebacks Paystack tells us about (charge.dispute.*), by Paystack's dispute id. seen_at: the team has dealt with it.
+create table if not exists paystack_disputes(
+  id text primary key,
+  gym_id bigint references gyms(id) on delete cascade,
+  payment_id bigint references payments(id) on delete set null,
+  reference text not null default '',
+  amount_cents int,
+  status text not null default 'open',
+  resolution text not null default '',
+  due_at timestamptz,
+  seen_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- Saved cards with either processor: provider payfast (token: PayFast's token, merchant_id: the gym's PayFast account) or paystack
+-- (token: the sealed authorization code, merchant_id: the gym's subaccount, pay_email: the email Paystack knows the card by,
+-- card_label: "Visa •••• 4081"). A charge's Paystack reference is kept on it (ref) so it can be checked with Paystack.
+alter table autopay add column if not exists provider text not null default 'payfast';
+alter table autopay add column if not exists pay_email text;
+alter table autopay add column if not exists card_label text not null default '';
+alter table autopay_charges add column if not exists provider text not null default 'payfast';
+alter table autopay_charges add column if not exists ref text;
 -- When a payment's member deleted their account (their proofs of payment are deleted 90 days later; the payment stays for the gym).
 alter table payments add column if not exists user_gone_at timestamptz;
 create or replace function jf_user_gone() returns trigger language plpgsql as $$
@@ -639,7 +713,7 @@ const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not e
 // - Proof-of-payment files of someone who deleted their account: 90 days later (the payment stays in the gym's books).
 // - Someone who left a gym still owing: 18 months after they left.
 // - Google Ads click ids on website visits: 90 days (where visitors came from is kept, without the id).
-// - Expired sign-in sessions, password reset and email links; card checkouts after 90 days; proposals the assistant made after a day.
+// - Expired sign-in sessions, password reset and email links; card checkouts (PayFast and Paystack) after 90 days; proposals the assistant made after a day.
 // - AI use is kept 90 days (the admin overview shows today's). gym_mail_stops are kept: they're people's "stop emailing me".
 const SESSION_MAX_DAYS = 180;
 async function purgeRejected(pool) {
@@ -652,6 +726,7 @@ async function purgeRejected(pool) {
   await run("delete from password_resets where expires_at < now()");
   await run("delete from email_verifications where expires_at < now()");
   await run("delete from card_checkouts where created_at < now() - interval '90 days'");
+  await run("delete from paystack_checkouts where created_at < now() - interval '90 days'");
   await run("delete from assistant_proposals where created_at < now() - interval '1 day'");
   await run("delete from ai_usage where day < current_date - 90");
 }
@@ -698,6 +773,8 @@ async function migrate(pool) {
   await pool.query(SCHEMA);
   // One row per PayFast payment, even if the same notification arrives twice at once. Older duplicates would block it: warn, don't stop.
   await pool.query("create unique index if not exists payments_payfast_ref on payments(gym_id, reference) where source='payfast'").catch((e) => console.warn("payments_payfast_ref:", e.message));
+  // One payment per Paystack reference, however often Paystack (or the member coming back) says it went through.
+  await pool.query("create unique index if not exists payments_paystack_ref on payments(reference) where source='paystack'").catch((e) => console.warn("payments_paystack_ref:", e.message));
   await pool.query(HEAD_FIX);
   // Logins made before sign-up times were kept: when the record was made.
   await pool.query("update users set signed_up_at=created_at where signed_up_at is null and pass_hash is not null");

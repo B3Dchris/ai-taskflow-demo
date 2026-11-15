@@ -11,6 +11,7 @@ const ai = require("./ai");
 const assistant = require("./assistant");
 const people = require("./people");
 const payfast = require("./payfast");
+const paystack = require("./paystack");
 const brand = require("./brand");
 const outreach = require("./outreach");
 const visits = require("./visits");
@@ -136,13 +137,14 @@ function makeApi(pool, { secureCookies, build }) {
 
   // Proof-of-payment uploads carry a file (base64), so they get a bigger allowance than everything else.
   const smallJson = express.json({ limit: "400kb" }), bigJson = express.json({ limit: "12mb" });
-  api.use((req, res, next) => (/\/(proof|read-people|feedback)$/.test(req.path) ? bigJson : smallJson)(req, res, next));
+  // Paystack's webhook is checked against its raw body (its signature), so it's read as bytes on its own route, never as JSON here.
+  api.use((req, res, next) => (req.path === "/paystack/webhook" ? next() : (/\/(proof|read-people|feedback)$/.test(req.path) ? bigJson : smallJson)(req, res, next)));
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     // Changes must come from our own pages: same-site cookie plus a custom header a form post can't send.
-    // (PayFast's payment notifications come from PayFast's servers and are checked separately.)
+    // (PayFast's payment notifications and Paystack's webhooks come from their servers and are checked separately: signatures.)
     // (So do mail apps' one-tap "unsubscribe" from a gym's emails: it changes nothing but that one address's choice.)
-    if (req.method !== "GET" && req.headers["x-jf"] !== "1" && req.path !== "/payfast/notify" && !/^\/gym-mail\/stop\/[A-Za-z0-9_-]{24}$/.test(req.path)) return res.status(403).json({ error: "Request blocked." });
+    if (req.method !== "GET" && req.headers["x-jf"] !== "1" && req.path !== "/payfast/notify" && req.path !== "/paystack/webhook" && !/^\/gym-mail\/stop\/[A-Za-z0-9_-]{24}$/.test(req.path)) return res.status(403).json({ error: "Request blocked." });
     next();
   });
 
@@ -174,7 +176,7 @@ function makeApi(pool, { secureCookies, build }) {
   // preview (unknown, opted out, claimed) is a 404. Tokens are 192 random bits, looked up by their hash (see outreach.findToken).
   const PREVIEW_GETS = [/^\/me$/, /^\/status$/, /^\/classes$/, /^\/me\/notices$/, /^\/coach\/classes\/\d+$/, /^\/coach\/roster$/, /^\/coach\/plans$/, /^\/coach\/insights$/,
     /^\/competitions$/, /^\/gym$/, /^\/coach\/import\/job$/, /^\/coach\/gym\/pay$/, /^\/coach\/packs$/, /^\/coach\/payments$/, /^\/coach\/payments\/months$/, /^\/coach\/money$/,
-    /^\/coach\/billing$/, /^\/coach\/payfast$/, /^\/coach\/beta$/];
+    /^\/coach\/billing$/, /^\/coach\/payfast$/, /^\/coach\/paystack$/, /^\/coach\/beta$/];
   const CLAIM_FIRST = "Claim your gym first. It's free: make your account and it's yours.";
   // The stand-in head coach of an unclaimed gym: no account behind it (id null), the gym's own settings. extra: more of its fields.
   async function standIn(gymId, extra = {}) {
@@ -526,7 +528,8 @@ function makeApi(pool, { secureCookies, build }) {
     res.json({ ok: true, sent: true, email: lg.email });
   }));
   // build: which version of the app the server has. An app left open compares it with its own and reloads when it changed.
-  api.get("/status", (req, res) => res.json({ db: true, mail: mail.mailOn(), ai: !!process.env.ANTHROPIC_API_KEY, build: build || null }));
+  // cards: how members pay their gym by card (paystack: through JitsFlow's Paystack; payfast: each gym's own PayFast). No secrets.
+  api.get("/status", (req, res) => res.json({ db: true, mail: mail.mailOn(), ai: !!process.env.ANTHROPIC_API_KEY, build: build || null, cards: paystack.memberCards() }));
 
   // "Sign out everywhere else" (Me): every other session of this login ends (a lost phone, a shared computer). all: this one too.
   api.post("/me/sessions/end", wrap(async (req, res) => {
@@ -2462,10 +2465,13 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       forMonths: (p.for_month || p.alloc) && !p.pack_lessons ? Object.keys(sharesOf(p)).sort() : null,
       packId: p.pack_id ? String(p.pack_id) : null, packLessons: p.pack_lessons || null, packName: p.pack_name || null,
       family: p.family_cents ? { of: String(p.split_of || p.id), totalCents: Number(p.family_cents) } : null,
+      // card payments through Paystack: JitsFlow's fee, Paystack's fee, what's been refunded, and a chargeback (open, won, lost)
+      ...(p.source === "paystack" ? { feeCents: p.fee_cents || 0, pspFeeCents: p.psp_fee_cents || 0, refundedCents: p.refunded_cents || 0, dispute: p.dispute || null, refundPending: !!p.refund_pending } : {}),
       read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? (/^(Not read automatically|Too long to read)/.test(a.error) ? a.error : "Couldn't read it automatically.") : "" } : null };
   }
   // family_cents: for a family payment split between brothers and sisters (see familySplit), on the payment and on each share: the whole amount.
   const PAY_COLS = `p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof, (select name from packs k where k.id=p.pack_id) as pack_name,
+    (p.source='paystack' and exists(select 1 from paystack_refunds r where r.payment_id=p.id and r.status='pending')) as refund_pending,
     (select o.amount_cents + sum(x.amount_cents) from payments o join payments x on x.split_of=o.id where o.id=coalesce(p.split_of, p.id) group by o.id) as family_cents`;
   const todayIn = async (u) => (await q("select to_char(now() at time zone $1,'YYYY-MM-DD') as d", [tzOf(u)])).rows[0].d;
   async function payRef(userId) {
@@ -2625,7 +2631,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // ---------- students: what's due, where to pay, send proof ----------
   api.get("/me/pay", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") return res.json({ pay: null });
-    const g = (await q("select pay, payfast from gyms where id=$1", [u.gym_id])).rows[0];
+    const g = (await q("select pay, payfast, paystack from gyms where id=$1", [u.gym_id])).rows[0];
     const { today, month, plan, pv, led, d, bal } = await feesOf(u, u), sums = { paid: led.paid[month] || 0, pending: led.pending[month] || 0 };
     const recent = (await q(`select ${PAY_COLS} from payments p where p.user_id=$1 and p.gym_id=$2 and p.paid_on > $3::date - 200 order by p.paid_on desc, p.id desc limit 12`, [u.id, u.gym_id, today])).rows;
     const pa = await privateAccess(u);
@@ -2651,7 +2657,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       paidCents: Number(sums.paid), pendingCents: Number(sums.pending), currency: u.currency || "ZAR", privatesLeft: privOut(pv), packs,
       // the running balance: every month still owed ("R1 700 · Oct + Nov"), and everything sent that's still being checked
       owedCents: bal.owedCents, owedMonths: bal.months, creditCents: bal.creditCents, pendingAllCents: led.pendingCents, month, planStatus: u.plan_status, plan: plan ? planOut(plan) : null, plans: await pickablePlans(u, bal.owedCents), ...statusOut(u, month),
-      reference: await payRef(u.id), bank: g.pay || {}, card: !!pfLive(pfOf(g)), autopay: await autopayOut(u, g, bal), payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
+      // card: the gym takes card payments in the app now; provider: through whom (paystack, or the gym's own payfast).
+      reference: await payRef(u.id), bank: g.pay || {}, card: !!cardsOn(g), provider: paystack.memberCards(), autopay: await autopayOut(u, g, bal), payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
   }));
   api.post("/me/pay/proof", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
@@ -2885,8 +2892,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     for (const x of rows) { if (!x.pay_ref) x.pay_ref = await payRef(x.id); if (x.offline) x.claimUrl = await claimUrl(u, x); }
     // Who pays by card automatically (while the gym takes saved cards), and whose card payment for this month needs a look: declined
     // (only while what it was for is still owed), or not confirmed by PayFast yet (cardCheck: the head coach says which, in one tap).
-    const live = !!autoLive(pfLive(pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0])));
-    const autos = new Set(live ? (await q("select user_id from autopay where gym_id=$1 and stopped_at is null", [u.gym_id])).rows.map((r) => String(r.user_id)) : []);
+    const live = autoProv((await q("select payfast, paystack from gyms where id=$1", [u.gym_id])).rows[0]);
+    const autos = new Set(live ? (await q("select user_id from autopay where gym_id=$1 and stopped_at is null and provider=$2", [u.gym_id, live.kind])).rows.map((r) => String(r.user_id)) : []);
     const chs = Object.fromEntries((await q("select user_id, month, status, alloc from autopay_charges where gym_id=$1 and month=$2 and status in ('failed','unsure')", [u.gym_id, month])).rows.map((r) => [String(r.user_id), r]));
     const cardCheck = (await q("select c.id, c.amount_cents, c.month, u.name from autopay_charges c join users u on u.id=c.user_id where c.gym_id=$1 and c.status='unsure' order by c.id", [u.gym_id])).rows
       .map((r) => ({ id: String(r.id), name: r.name, cents: r.amount_cents, month: r.month }));
@@ -3329,7 +3336,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     console.warn(`payfast flag: gym ${gymId} ${kind} ${ref} expected ${expected} got ${got}`);
     if (limited("pfflag", 20, 24 * 3600e3)) return;
     const g = gymId ? (await q("select name from gyms where id=$1", [gymId])).rows[0] : null;
-    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastFlagAdmin(g ? g.name : "a gym", note) });
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.payfastFlagAdmin(g ? g.name : "a gym", note, /^ps-/.test(kind) ? "Paystack" : "PayFast") });
   }
   // A notification for a gym's JitsFlow plan. COMPLETE: the card is on; a new card replaces the old one, which is cancelled with
   // PayFast. When money came it's checked against the gym's price (today's, or yesterday's on the day it changes): another amount is
@@ -3406,6 +3413,12 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
         [g.id, { ...(nk ? { key: nk } : {}), ...(ns ? { pass: ns } : {}) }, p.key, p.pass])).rowCount;
     }
     for (const a of (await q("select user_id, token from autopay")).rows) { const t = payfast.reseal(a.token); if (t) n += (await q("update autopay set token=$2 where user_id=$1 and token=$3", [a.user_id, t, a.token])).rowCount; }
+    // Gyms' payout account and KYC numbers (Paystack), sealed the same way.
+    for (const g of (await q("select id, paystack from gyms where paystack is not null")).rows) {
+      const s = g.paystack || {}, na = payfast.reseal(s.accountSealed), ni = payfast.reseal(s.idSealed); if (!na && !ni) continue;
+      n += (await q("update gyms set paystack = paystack || $2 where id=$1 and paystack->>'accountSealed' is not distinct from $3 and paystack->>'idSealed' is not distinct from $4",
+        [g.id, { ...(na ? { accountSealed: na } : {}), ...(ni ? { idSealed: ni } : {}) }, s.accountSealed || null, s.idSealed || null])).rowCount;
+    }
     if (n) console.log(`payfast: sealed ${n} stored secret${n === 1 ? "" : "s"} again with the current key`);
     return n;
   }
@@ -3430,19 +3443,21 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     // Saved cards belong to the old account and need its passphrase: a new account, or no passphrase now, stops them (cancelled
     // there), and the members who saved them are told. They save their card again once it's back.
     const was = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
-    if (was && (was.id !== id || (was.pass && !pass))) await dropAutopay("a.gym_id=$1", [u.gym_id], { keys: was, tell: true });
+    if (was && (was.id !== id || (was.pass && !pass))) await dropAutopay("a.gym_id=$1 and a.provider='payfast'", [u.gym_id], { keys: was, tell: true });
     await q("update gyms set payfast=$1 where id=$2", [{ merchantId: id, key: payfast.seal(key), pass: payfast.seal(pass), at: new Date().toISOString() }, u.gym_id]);
     tellHead(u.gym_id, "payfast", u.name, id);
     res.json({ ok: true });
   }));
   api.delete("/coach/payfast", wrap(async (req, res) => {
     const u = needHead(req), was = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
-    if (was) await dropAutopay("a.gym_id=$1", [u.gym_id], { keys: was, tell: true });
+    if (was) await dropAutopay("a.gym_id=$1 and a.provider='payfast'", [u.gym_id], { keys: was, tell: true });
     await q("update gyms set payfast=null where id=$1", [u.gym_id]); res.json({ ok: true });
   }));
   // A student pays their gym. The money goes to the gym's PayFast account; PayFast sends JitsFlow's share to JitsFlow.
   api.post("/me/pay/payfast", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
+    // While Paystack takes member payments, a gym's own PayFast isn't offered (see /me/pay/paystack).
+    if (paystack.memberCards() === "paystack") fail(400, "Card payments go through Paystack now. Close the Pay sheet and open it again.");
     const g = (await q("select name, payfast from gyms where id=$1", [u.gym_id])).rows[0], p = pfLive(pfOf(g));
     if (!p) fail(400, "Your gym doesn't take card payments yet.");
     // A private-lesson pack is paid at its price; anything else is the amount the student typed.
@@ -3509,33 +3524,407 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     }
     return cardIn({ gymId, uid, gross, d, sandbox, packId: same ? co.pack_id : d.custom_int3 ? intOr(d.custom_int3, 0) : null });
   }
-  // A card payment PayFast confirmed, recorded as paid (like one the coach confirms). packId: the pack it was for, from the checkout.
+  // A card payment PayFast (or Paystack) confirmed, recorded as paid (like one the coach confirms). packId: the pack it was for, from the checkout.
   // auto: a charge on a saved card, for exactly what they owe: no family split, and no email to the head coach for each one (Money
   // shows them). Returns the payment saved, or null (not a member there, or recorded already).
   // after: an automatic charge pays the months it was for, from this one on (see feeMonths).
-  async function cardIn({ gymId, uid, gross, d, sandbox, packId, auto, after, note: how }) {
-    const ref = "PayFast " + clean(d.pf_payment_id, 40);
+  // ps: a Paystack payment ({reference, feeCents, pspFeeCents, planId}): Paystack's reference is the payment's, method card.
+  async function cardIn({ gymId, uid, gross, d, sandbox, packId, auto, after, note: how, ps }) {
+    const ref = ps ? ps.reference : "PayFast " + clean(d.pf_payment_id, 40), source = ps ? "paystack" : "payfast", via = ps ? "Paystack" : "PayFast";
     const st = (await q("select u.id, u.name, g.timezone, g.currency from users u join gyms g on g.id=u.gym_id where u.id=$1 and u.gym_id=$2", [uid, gymId])).rows[0];
     const asked = packId && !auto ? (await q("select * from packs where id=$1 and gym_id=$2", [packId, gymId])).rows[0] : null;
     // A pack's lessons only come with its full price. The checkout form is in the student's hands, so a smaller amount
     // for a pack is kept as an ordinary payment, with no lessons, and the head coach is told.
     const pack = asked && gross >= asked.price_cents ? asked : null, short = asked && !pack ? { name: asked.name, price: fmtMoney(asked.price_cents, st && st.currency) } : null;
-    const fee = d.amount_fee ? ` (PayFast fee R${Math.abs(Number(d.amount_fee)).toFixed(2)})` : "";
-    const note = auto ? `Paid automatically from a saved card via PayFast${fee}${how || ""}` : `Card or Instant EFT via PayFast${fee}${short ? `. Less than ${short.name} costs (${short.price}), so no lessons were added.` : ""}`;
+    const fee = ps ? [ps.feeCents ? `JitsFlow fee ${fmtMoney(ps.feeCents)}` : "", ps.pspFeeCents ? `Paystack fee ${fmtMoney(ps.pspFeeCents)}` : ""].filter(Boolean).join(", ").replace(/^(.+)$/, " ($1)")
+      : d.amount_fee ? ` (PayFast fee R${Math.abs(Number(d.amount_fee)).toFixed(2)})` : "";
+    const note = auto ? `Paid automatically from a saved card via ${via}${fee}${how || ""}` : `${ps ? "Card via Paystack" : "Card or Instant EFT via PayFast"}${fee}${short ? `. Less than ${short.name} costs (${short.price}), so no lessons were added.` : ""}`;
     // A payment through PayFast's test account moved no real money: kept as 'test', which no total counts (and gives no lessons).
     // A card payment for fees: a first one ends a trial, and it pays the months it's for (worked out now, like one the coach records).
+    // One bought with a plan (a new member joining it by card) puts them on that plan.
     const gc = st && !pack && !sandbox ? await gymCtx(gymId) : null;
-    if (gc) await feeIn(gc, uid);
+    if (gc) await feeIn(gc, uid, ps && ps.planId);
     // A family's payment from one kid's Pay sheet: what's more than they owe pays their brothers and sisters (see familySplit).
-    const dup = !!(await q("select 1 from payments where gym_id=$1 and source='payfast' and reference=$2", [gymId, ref])).rows[0];
+    const dup = !!(await q("select 1 from payments where gym_id=$1 and source=$2 and reference=$3", [gymId, source, ref])).rows[0];
     const parts = gc && !dup && !auto ? await familySplit(gc, uid, gross) : [], keep = gross - splitSum(parts);
     const fm = gc ? await feeMonths(gc, uid, keep, await todayIn(gc), 0, 0, { after: auto && after }) : { for_month: null, months: 1, alloc: null };
-    const r = st ? await q(`insert into payments(gym_id,user_id,amount_cents,paid_on,reference,note,source,method,status,pack_id,pack_lessons,pack_months,months,for_month,alloc) values($1,$2,$3,(now() at time zone $4)::date,$5,$6,'payfast','payfast',$7,$8,$9,$10,$11,$12,$13) on conflict do nothing returning *`,
+    const r = st ? await q(`insert into payments(gym_id,user_id,amount_cents,paid_on,reference,note,source,method,status,pack_id,pack_lessons,pack_months,months,for_month,alloc,fee_cents,psp_fee_cents,plan_id)
+      values($1,$2,$3,(now() at time zone $4)::date,$5,$6,$14,$15,$7,$8,$9,$10,$11,$12,$13,$16,$17,$18) on conflict do nothing returning *`,
       [gymId, uid, keep, st.timezone || "Africa/Johannesburg", ref, note, sandbox ? "test" : "confirmed",
-        pack ? pack.id : null, pack ? pack.lessons : null, pack ? pack.expiry_months : null, fm.months, fm.for_month, fm.alloc]) : null;
+        pack ? pack.id : null, pack ? pack.lessons : null, pack ? pack.expiry_months : null, fm.months, fm.for_month, fm.alloc, source, ps ? "card" : "payfast",
+        ps ? ps.feeCents || 0 : null, ps ? ps.pspFeeCents || 0 : null, ps && ps.planId ? ps.planId : null]) : null;
     if (r && r.rows[0] && gc) await saveSplit(gc, r.rows[0], parts);
-    if (r && r.rows[0] && !sandbox && !auto) toHead(gymId, (name) => mail.templates.cardPaid(name, st.name, fmtMoney(gross, st.currency), pack ? pack.name : "", short));
+    if (r && r.rows[0] && !sandbox && !auto) toHead(gymId, (name) => mail.templates.cardPaid(name, st.name, fmtMoney(gross, st.currency), pack ? pack.name : "", short, via));
     return (r && r.rows[0]) || null;
+  }
+
+  // ---------- Paystack: members pay their gym by card; Paystack pays the gym's share straight into the gym's bank account ----------
+  // Switched on for everyone by PAYSTACK_SECRET_KEY (see backend/paystack.js). Each gym gives its bank account once (Money › Settings ›
+  // Get paid by card): JitsFlow makes it a Paystack subaccount, and the JitsFlow team checks it on Paystack's dashboard and marks it
+  // verified (team dashboard). From then on members can pay by card, Apple Pay, Capitec Pay or EFT on Paystack's checkout. Each
+  // payment's split is set by JitsFlow when the checkout is made (the gym's subaccount, JitsFlow's fee as a flat transaction_charge),
+  // never by the member. Nothing is credited until Paystack confirms it (/transaction/verify) for the amount, currency and subaccount
+  // the checkout asked for. While Paystack is on, the gyms' own PayFast (above) isn't offered to members.
+  const psActive = (g) => { const s = g && g.paystack; return s && s.status === "active" && s.subaccount ? s : null; };
+  // Does this gym take card payments in the app now (g: its row with payfast and paystack)? Through Paystack while it's on, else its own PayFast.
+  const cardsOn = (g) => (paystack.memberCards() === "paystack" ? psActive(g) : pfLive(pfOf(g)));
+  // What the head coach (and the team) see of a gym's payout account: never the full account or ID number.
+  const psOut = (s) => (s && s.subaccount ? { status: s.status, bankName: s.bankName, bankCode: s.bankCode, last4: s.last4, holder: s.holder, business: s.business || "", idKind: s.idKind || "",
+    idLast4: s.idLast4 || "", createdAt: s.createdAt || null, updatedAt: s.updatedAt || null, verifiedAt: s.verifiedAt || null } : null);
+  const psFail = (e) => { if (e instanceof paystack.PaystackError) fail(e.unsure ? 503 : 502, e.message); throw e; };
+  // South African ID numbers end in a Luhn check digit.
+  const luhn = (n) => { let t = 0; for (let i = 0; i < n.length; i++) { let d = +n[n.length - 1 - i]; if (i % 2) { d *= 2; if (d > 9) d -= 9; } t += d; } return t % 10 === 0; };
+  api.get("/coach/paystack", wrap(async (req, res) => {
+    const u = needHead(req), g = (await q("select pay, paystack from gyms where id=$1", [u.gym_id])).rows[0];
+    res.json({ paystack: { on: paystack.memberCards() === "paystack", test: paystack.testMode(), feePct: payfast.FEE_PCT(), bearer: paystack.bearer(), account: req.preview ? null : psOut(g.paystack),
+      cardSoon: !!(g.pay && g.pay.cardSoon) } });
+  }));
+  api.get("/coach/paystack/banks", wrap(async (req, res) => {
+    needHead(req); if (paystack.memberCards() !== "paystack") fail(400, "Card payments aren't switched on yet.");
+    res.json({ banks: await paystack.banks().catch(psFail) });
+  }));
+  // The gym's bank account for card payouts. Saved with Paystack as the gym's subaccount (made the first time, changed after that).
+  // New details wait for the JitsFlow team to check them, so card payments pause until then (Paystack holds the first payout to a new
+  // account until it's verified anyway). The KYC number (company registration or the owner's ID) and the account number are sealed.
+  api.put("/coach/paystack", wrap(async (req, res) => {
+    const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
+    if (paystack.memberCards() !== "paystack") fail(400, "Card payments aren't switched on yet.");
+    const b = req.body || {}, bankCode = clean(b.bankCode, 20), account = String(b.account || "").replace(/[\s-]/g, ""), holder = clean(b.holder, 80), business = clean(b.business, 100);
+    const idKind = b.idKind === "id" ? "id" : "reg", idNo = String(b.idNumber || "").replace(/\s/g, "").toUpperCase();
+    if (!bankCode) fail(400, "Pick your bank.");
+    if (!/^\d{6,16}$/.test(account)) fail(400, "Enter the account number: 6 to 16 digits, as on your bank statement.");
+    if (holder.length < 2) fail(400, "Enter the account holder's name, as the bank has it.");
+    if (business.length < 2) fail(400, "Enter your gym's registered business name (or your own name if it isn't a company).");
+    if (idKind === "reg" && !/^\d{4}\/\d{6}\/\d{2}$/.test(idNo)) fail(400, "Enter the company registration number like 2019/123456/07.");
+    if (idKind === "id" && !(/^\d{13}$/.test(idNo) && luhn(idNo))) fail(400, "Enter the owner's 13-digit South African ID number.");
+    if (limited("ps-sub:" + u.gym_id, 8, 24 * 3600e3)) fail(429, "That's a lot of changes today. Try again tomorrow, or email us.");
+    const bank = (await paystack.banks().catch(psFail)).find((x) => x.code === bankCode) || fail(400, "Pick your bank.");
+    const g = (await q("select name, paystack from gyms where id=$1", [u.gym_id])).rows[0], was = g.paystack && g.paystack.subaccount ? g.paystack : null;
+    // Nothing changed: nothing to send, and an account already verified stays verified.
+    if (was && was.bankCode === bankCode && payfast.open(was.accountSealed) === account && was.holder === holder && was.business === business && was.idKind === idKind && payfast.open(was.idSealed) === idNo)
+      return res.json({ paystack: psOut(was), same: true });
+    const lg = loginOf(u), details = { business, bankCode, account, contact: clean(lg.name || u.name, 80), email: lg.email || "", description: clean(`JitsFlow gym ${u.gym_id}: ${g.name}`, 200) };
+    const code = await (was ? paystack.updateSubaccount(was.subaccount, details) : paystack.createSubaccount(details)).catch(psFail);
+    const now = new Date().toISOString();
+    const s = { subaccount: code, bankName: bank.name, bankCode, last4: paystack.last4(account), accountSealed: payfast.seal(account), holder, business, idKind, idSealed: payfast.seal(idNo),
+      idLast4: paystack.last4(idNo), ownerId: String(u.id), status: "pending_verification", createdAt: (was && was.createdAt) || now, updatedAt: now, verifiedAt: null, verifiedBy: null };
+    await q("update gyms set paystack=$1 where id=$2", [s, u.gym_id]);
+    console.log(`paystack: gym ${u.gym_id} ${was ? "changed its" : "added a"} payout account (${bank.name} ending ${s.last4}), waiting for the team`);
+    tellHead(u.gym_id, "payout", u.name, `${bank.name}, account ending ${s.last4}`);
+    for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.psVerifyAdmin(g.name, bank.name, s.last4, !!was) });
+    res.json({ paystack: psOut(s) });
+  }));
+
+  // A checkout on Paystack for a member (u: who it's for; their login pays). What it's for: their fees (amountCents, what they typed),
+  // a private-lesson pack (its price), or a plan they're joining (at least its price). save: also keep the card for automatic payments
+  // (Paystack saves a card from a payment, so they pay what they owe now, or a month's fees ahead when nothing's owed).
+  async function psCheckout(u, g, { save = false, packId = null, planId = null, amountCents = 0 } = {}) {
+    const s = psActive(g); if (!s || paystack.memberCards() !== "paystack") fail(400, "Your gym doesn't take card payments yet.");
+    if (limited("psinit-u:" + (u.login_id || u.id), 12, 15 * 60e3) || limited("psinit-g:" + u.gym_id, 300, 3600e3)) fail(429, "That's a lot of payments started. Wait a few minutes, then try again.");
+    const payer = u.login || u, email = clean(payer.email || u.email || "", 254);
+    if (!isEmail(email)) fail(400, "Add your email address in Me first. Paystack sends your receipt there.");
+    let kind = "fees", pack = null, plan = null, cents = intOr(amountCents, 0);
+    if (packId) { pack = await packIn(u.gym_id, packId, true); kind = "pack"; cents = pack.price_cents; }
+    else if (planId) { plan = (await pickablePlans(u)).find((x) => x.id === String(planId)) || fail(404, "That plan isn't on offer."); kind = "plan"; cents = Math.max(cents, plan.priceCents); }
+    else if (save) { const f = await feesOf(u, u); cents = f.bal.owedCents >= 500 ? f.bal.owedCents : membershipOf({ ...u, plan_status: "active" }, f.plan, u);
+      if (!(cents >= 500)) fail(400, "There's nothing to pay yet. Save your card once your fees start."); }
+    if (!(cents >= 500)) fail(400, "Enter an amount from R5."); if (cents > MAX_CENTS) fail(400, TOO_MUCH);
+    const reference = paystack.newRef(save ? "s" : "p"), fee = paystack.feeOf(cents);
+    await q(`insert into paystack_checkouts(reference,gym_id,user_id,payer_id,kind,amount_cents,fee_cents,subaccount,pack_id,plan_id,save) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [reference, u.gym_id, u.id, payer.id || u.id, kind, cents, fee, s.subaccount, pack ? pack.id : null, plan ? plan.id : null, save]);
+    try {
+      const r = await paystack.initialize({ email, cents, reference, subaccount: s.subaccount, feeCents: fee, callbackUrl: mail.appUrl() + (save ? "/app/?paid=card&autopay=on" : "/app/?paid=card"),
+        metadata: { userId: String(u.id), gymId: String(u.gym_id), kind, ...(pack ? { packId: String(pack.id) } : {}), ...(plan ? { planId: plan.id } : {}), ...(save ? { save: true } : {}),
+          custom_fields: [{ display_name: "Gym", variable_name: "gym", value: clean(g.name, 100) }, { display_name: "Member", variable_name: "member", value: clean(u.name, 100) }] },
+        // A card is the only way to pay that can be saved: the checkout to save one offers cards only.
+        channels: save ? ["card"] : undefined });
+      return { url: r.url, reference, cents };
+    } catch (e) { await q("update paystack_checkouts set status='failed', error=$2 where reference=$1", [reference, clean(e.message, 200)]); return psFail(e); }
+  }
+  api.post("/me/pay/paystack", wrap(async (req, res) => {
+    const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
+    const g = (await q("select name, paystack from gyms where id=$1", [u.gym_id])).rows[0], b = req.body || {};
+    res.json(await psCheckout(u, g, { packId: b.packId || null, planId: b.planId || null, amountCents: b.amountCents }));
+  }));
+  // Back from Paystack's checkout (/app/?paid=card&reference=…): asked about straight away, so it shows as paid without waiting for the webhook.
+  api.post("/me/pay/paystack/check", wrap(async (req, res) => {
+    const u = needUser(req), ref = clean(req.body && req.body.reference, 100);
+    if (limited("pscheck:" + (u.login_id || u.id), 20, 15 * 60e3)) fail(429, "Wait a minute, then try again.");
+    const ids = [...new Set([String(u.id), String(u.login_id || u.id), ...familyIds(u)])];
+    const co = ref ? (await q("select * from paystack_checkouts where reference=$1 and (user_id::text = any($2) or payer_id::text = any($2))", [ref, ids])).rows[0] : null;
+    if (!co) fail(404, "We couldn't find that payment.");
+    const r = await psSettle(ref).catch((e) => { console.warn("paystack check:", e.message); return { status: "unsure" }; });
+    res.json({ status: r.status === "paid" ? "paid" : ["failed", "abandoned", "reversed"].includes(r.status) ? "failed" : "waiting" });
+  }));
+
+  // Paystack's webhook. Its signature (an HMAC of the raw body with the secret key) is checked first; then the answer goes straight
+  // away, and the event is handled after. A payment is never credited from the webhook's own words: Paystack is asked (verify).
+  api.post("/paystack/webhook", express.raw({ type: () => true, limit: "256kb" }), wrap(async (req, res) => {
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!paystack.signatureOk(raw, String(req.headers["x-paystack-signature"] || ""))) { console.warn("paystack webhook: bad or missing signature"); return res.status(401).end(); }
+    res.status(200).end();
+    const ip = clientIp(req); if (!paystack.IPS.has(ip)) console.warn("paystack webhook: from an unlisted address " + ip + " (its signature is right)");
+    let ev = null; try { ev = JSON.parse(raw.toString("utf8")); } catch (e) { return; }
+    const t = String((ev && ev.event) || ""), d = (ev && ev.data) || {};
+    try {
+      if (t === "charge.success") await psSettle(clean(d.reference, 100), { webhook: true });
+      else if (/^refund\./.test(t)) await psRefundEvent(t, d);
+      else if (/^charge\.dispute\./.test(t)) await psDispute(t, d);
+    } catch (e) { console.warn("paystack webhook:", t, e.message); }
+  }));
+
+  // A Paystack payment JitsFlow started, settled once: Paystack is asked what happened (verify), and only a success for exactly the
+  // amount, currency and subaccount the checkout asked for is credited. Safe to call any number of times, from the webhook, the member
+  // coming back and the jobs at once: the checkout is claimed (status paid) by one of them before anything is recorded.
+  // {status}: paid, failed/abandoned/…, flagged (Paystack's answer didn't match: the team checks it), unknown, unsure (no answer).
+  async function psSettle(reference, { webhook = false } = {}) {
+    if (!reference) return { status: "unknown" };
+    const co = (await q("select * from paystack_checkouts where reference=$1", [reference])).rows[0];
+    if (co && co.status === "paid") return { status: "paid" };
+    if (co && co.status === "flagged") return { status: "flagged" };
+    let v; try { v = await paystack.verify(reference); } catch (e) { await q("update paystack_checkouts set checked_at=now() where reference=$1", [reference]); return { status: "unsure" }; }
+    await q("update paystack_checkouts set checked_at=now() where reference=$1", [reference]);
+    const st = String((v && v.status) || "");
+    if (!co) {
+      // Paystack took a payment JitsFlow didn't start (a payment page in Paystack's dashboard, say): the team checks it.
+      if (webhook && st === "success" && !(await q("select 1 from payfast_flags where kind='ps-unknown' and ref=$1", [reference])).rows[0]) {
+        const g = (await q("select id from gyms where paystack->>'subaccount'=$1", [paystack.subOf(v)])).rows[0];
+        await pfFlag(g ? g.id : null, "ps-unknown", { ref: reference, got: Math.round(Number(v.amount) || 0), note: `Paystack took a payment JitsFlow didn't start (${reference}, ${fmtMoney(Number(v.amount) || 0)}). It isn't recorded. Check it in Paystack.` });
+      }
+      return { status: "unknown" };
+    }
+    if (st !== "success") {
+      if (["failed", "abandoned", "reversed"].includes(st)) {
+        await q("update paystack_checkouts set status='failed', error=$2 where reference=$1 and status='open'", [reference, clean(v.gateway_response || st, 200)]);
+        if (co.kind === "auto" && co.charge_id && st !== "abandoned") await autoFailed(co.charge_id, clean(v.gateway_response || "the bank declined it", 200));
+      }
+      return { status: st || "unsure" };
+    }
+    const got = Math.round(Number(v.amount)), why = String(v.currency || "").toUpperCase() !== "ZAR" ? `was in ${clean(v.currency, 8) || "another currency"}, not rand`
+      : got !== co.amount_cents ? `was for ${fmtMoney(got)} but its checkout asked for ${fmtMoney(co.amount_cents)}`
+      : paystack.subOf(v) !== co.subaccount ? "was paid to another account than the gym's" : String(v.reference || "") !== reference ? "came back with another reference" : "";
+    if (why) {
+      if ((await q("update paystack_checkouts set status='flagged', error=$2 where reference=$1 and status in ('open','failed') returning 1", [reference, why])).rowCount) {
+        const who = (await q("select name from users where id=$1", [co.user_id])).rows[0];
+        await pfFlag(co.gym_id, "ps-mismatch", { ref: reference, expected: co.amount_cents, got, note: `A Paystack payment from ${who ? who.name : "a member"} (${reference}) ${why}. It isn't recorded: check it in Paystack, then record it by hand or refund it.` });
+      }
+      return { status: "flagged" };
+    }
+    const claimed = (await q("update paystack_checkouts set status='paid', paid_at=now(), error='' where reference=$1 and status in ('open','failed') returning *", [reference])).rows[0];
+    if (!claimed) return { status: "paid" };
+    try { await psCredit(claimed, v); }
+    catch (e) { await q("update paystack_checkouts set status='open', paid_at=null, error=$2 where reference=$1", [reference, clean(e.message, 200)]); throw e; }
+    return { status: "paid" };
+  }
+  // Records a Paystack payment confirmed by psSettle: like a PayFast card payment (cardIn: fees and their months, a pack's lessons,
+  // a plan joined), or a saved card's monthly charge (autoRecord). A receipt goes to whoever paid; a card they asked to keep is saved.
+  async function psCredit(co, v) {
+    const gross = Math.round(Number(v.amount)), sandbox = v.domain === "test";
+    const ps = { reference: co.reference, feeCents: co.fee_cents, pspFeeCents: Math.max(0, Math.round(Number(v.fees) || 0)), planId: co.kind === "plan" ? co.plan_id : null };
+    if (co.kind === "auto") {
+      const c = (await q("select * from autopay_charges where id=$1", [co.charge_id])).rows[0]; if (!c) return null;
+      // The head coach said it went through (Money) before Paystack did: recorded already. The receipt goes now.
+      if (c.status === "paid") { if ((await q("update autopay_charges set error='', updated_at=now() where id=$1 and status='paid' and error=$2 returning id", [c.id, CHECKED])).rowCount) await autoReceipt(c, gross, co.reference, "Paystack"); return null; }
+      if (await autoByHand(c, gross, "Paystack")) return null;
+      const pay = await autoRecord(c, gross, {}, sandbox, ["charging", "sent", "unsure", "failed"], "", ps);
+      if (pay) await autoReceipt(c, gross, co.reference, "Paystack");
+      return pay;
+    }
+    const pay = await cardIn({ gymId: co.gym_id, uid: co.user_id, gross, d: {}, sandbox, packId: co.kind === "pack" ? co.pack_id : null, ps });
+    const x = (await q(`select u.name, u.parent_name, coalesce(nullif(pp.parent_name,''), pp.name, u.name) as payer, coalesce(pp.email, ${EMAIL("u")}) as email, g.name as gym_name, g.currency
+      from users u join gyms g on g.id=$2 left join users pp on pp.id=$3 where u.id=$1`, [co.user_id, co.gym_id, co.payer_id])).rows[0];
+    if (pay && x && x.email) { const k = co.pack_id ? (await q("select name from packs where id=$1", [co.pack_id])).rows[0] : null;
+      mail.sendLater({ to: x.email, ...mail.templates.cardReceipt(first(x.payer), x.gym_name, fmtMoney(gross, x.currency), k ? k.name : x.parent_name ? `${first(x.name)}'s fees` : "fees", co.reference) }); }
+    if (!pay && !(await q("select 1 from payments where source='paystack' and reference=$1", [co.reference])).rows[0])
+      await pfFlag(co.gym_id, "ps-left", { ref: co.reference, got: gross, note: `${x ? x.name : "A member"} paid ${fmtMoney(gross)} by card through Paystack (${co.reference}) but isn't a member of the gym any more, so it isn't recorded. The gym has the money: record it by hand or refund it.` });
+    // The card, when they asked to keep it for automatic payments: only a reusable card authorization, sealed like PayFast's tokens.
+    const au = v.authorization || {};
+    if (co.save && au.reusable === true && au.authorization_code) {
+      const label = [String(au.brand || au.card_type || "Card").trim().replace(/^./, (c) => c.toUpperCase()), au.last4 ? "•••• " + String(au.last4).replace(/\D/g, "").slice(-4) : ""].filter(Boolean).join(" ");
+      await autopaySaved(co.gym_id, co.payer_id || co.user_id, String(au.authorization_code), co.subaccount, { provider: "paystack", email: clean((v.customer && v.customer.email) || (x && x.email) || "", 254), label });
+    }
+    return pay;
+  }
+  // A saved card's monthly charge with Paystack (from chargeOne, the charge claimed already). 1 if Paystack took it or may have.
+  async function psCharge(gc, p, a, c, x) {
+    const ref = paystack.newRef("a"), cents = c.amount_cents, fee = paystack.feeOf(cents);
+    await q("update autopay_charges set provider='paystack', ref=$2 where id=$1", [c.id, ref]);
+    await q("insert into paystack_checkouts(reference,gym_id,user_id,payer_id,kind,amount_cents,fee_cents,subaccount,charge_id) values($1,$2,$3,$4,'auto',$5,$6,$7,$8)", [ref, gc.gym_id, x.id, a.payer_id, cents, fee, p.id, c.id]);
+    const auth = payfast.open(a.token);
+    if (!auth || !a.pay_email) { await autoFailed(c.id, "the saved card can't be used any more: save it again"); return 0; }
+    let d;
+    try { d = await paystack.chargeAuthorization({ authorization: auth, email: a.pay_email, cents, reference: ref, subaccount: p.id, feeCents: fee, metadata: { userId: String(x.id), gymId: String(gc.gym_id), kind: "auto", chargeId: String(c.id) } }); }
+    catch (e) {
+      // No answer: it may or may not have gone through. Never tried again: Paystack is asked about it later (psRecheck), and after a day the head coach.
+      if (e.unsure) { await q("update autopay_charges set error=$2, updated_at=now() where id=$1", [c.id, clean(e.message, 200)]); return 0; }
+      await q("update paystack_checkouts set status='failed', error=$2 where reference=$1", [ref, clean(e.message, 200)]);
+      await autoFailed(c.id, e.message); return 0;
+    }
+    const st = String((d && d.status) || "");
+    if (["failed", "abandoned", "reversed"].includes(st)) { await q("update paystack_checkouts set status='failed', error=$2 where reference=$1", [ref, clean(d.gateway_response || st, 200)]); await autoFailed(c.id, clean(d.gateway_response || "the bank declined it", 200)); return 0; }
+    await q("update autopay_charges set status='sent', updated_at=now() where id=$1 and status='charging'", [c.id]);
+    if (st === "success") await psSettle(ref).catch((e) => console.warn("paystack settle:", e.message));
+    return 1;
+  }
+  // Paystack payments still open a while after they started (a webhook that never came, a member who closed the page): asked about
+  // again, each at most hourly, for 3 days. Run with the 15-minute jobs.
+  async function psRecheck() {
+    if (!paystack.on()) return 0;
+    const rows = (await q(`select reference from paystack_checkouts where status='open' and created_at < now() - interval '10 minutes' and created_at > now() - interval '3 days'
+      and (checked_at is null or checked_at < now() - interval '1 hour') order by created_at limit 40`)).rows;
+    let n = 0; for (const r of rows) { try { if ((await psSettle(r.reference)).status === "paid") n++; } catch (e) { console.warn("paystack recheck:", e.message); } }
+    return n;
+  }
+
+  // ---------- refunds (head coach, Money) ----------
+  // A card payment through Paystack refunded, in full or in part, back to the card. Paystack does it (and reverses the split by its
+  // own rules); when it says it's processed (its webhook), the payment comes off what the member paid: a full refund takes the
+  // payment (and any family shares of it) out of their balance, a part refund makes it smaller (the payer's own part first).
+  api.post("/coach/payments/:id/refund", wrap(async (req, res) => {
+    const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
+    if (!paystack.on()) fail(400, "Card refunds aren't switched on.");
+    const p = (await q("select * from payments where id=$1 and gym_id=$2 and source='paystack'", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+    if (!p) fail(404, "That card payment doesn't exist.");
+    if (!["confirmed", "test"].includes(p.status)) fail(409, "That payment has been refunded already.");
+    const shares = Number((await q("select coalesce(sum(amount_cents),0)::int as c from payments where split_of=$1 and status in ('confirmed','test')", [p.id])).rows[0].c);
+    const pending = Number((await q("select coalesce(sum(amount_cents),0)::int as c from paystack_refunds where payment_id=$1 and status='pending'", [p.id])).rows[0].c);
+    const left = p.amount_cents + shares - pending, raw = req.body && req.body.amountCents;
+    const cents = raw === undefined || raw === null || raw === "" ? left : intOr(raw, NaN);
+    if (left <= 0) fail(409, "That payment's refund is on its way already.");
+    if (!(cents >= 100 && cents <= left)) fail(400, `Enter an amount from R1 to ${fmtMoney(left)}.`);
+    if (limited("psrefund:" + u.gym_id, 20, 24 * 3600e3)) fail(429, "That's a lot of refunds today. Try again tomorrow, or email us.");
+    const d = await paystack.refund({ reference: p.reference, cents }).catch(psFail);
+    const r = (await q("insert into paystack_refunds(gym_id,payment_id,reference,amount_cents,status,by_user,ps_id) values($1,$2,$3,$4,'pending',$5,$6) on conflict do nothing returning *",
+      [u.gym_id, p.id, p.reference, cents, u.id, d && d.id != null ? String(d.id) : null])).rows[0];
+    if (r && d && d.status === "processed") await psRefundDone(r.id, null);
+    res.json({ refund: r ? { id: String(r.id), cents, status: d && d.status === "processed" ? "processed" : "pending" } : null });
+  }));
+  // Paystack's refund webhooks. A refund JitsFlow didn't ask for (made in Paystack's dashboard) is recorded too: the member has the money back.
+  async function psRefundEvent(t, d) {
+    const ref = clean(d.transaction_reference || (d.transaction && d.transaction.reference) || d.reference || "", 100), cents = Math.round(Number(d.amount) || 0), pid = d.id != null ? String(d.id) : null;
+    if (!ref) return;
+    let r = pid ? (await q("select * from paystack_refunds where ps_id=$1", [pid])).rows[0] : null;
+    if (!r) r = (await q("select * from paystack_refunds where reference=$1 and status in ('pending','failed') and ps_id is null order by (amount_cents=$2) desc, id limit 1", [ref, cents])).rows[0];
+    if (t === "refund.processed") {
+      if (r && r.status === "processed") return;
+      if (!r) {
+        const p = (await q("select id, gym_id from payments where source='paystack' and reference=$1", [ref])).rows[0]; if (!p || !(cents > 0)) return;
+        r = (await q("insert into paystack_refunds(gym_id,payment_id,reference,amount_cents,status,ps_id) values($1,$2,$3,$4,'pending',$5) on conflict do nothing returning *", [p.gym_id, p.id, ref, cents, pid])).rows[0];
+        if (!r) return;
+      }
+      return psRefundDone(r.id, pid);
+    }
+    if (t === "refund.failed" && r && r.status === "pending") {
+      const f = (await q("update paystack_refunds set status='failed', error=$2, ps_id=coalesce(ps_id,$3), updated_at=now() where id=$1 and status='pending' returning *", [r.id, clean(d.reason || d.message || d.status || "Paystack couldn't refund it", 200), pid])).rows[0];
+      if (f) { const x = (await q("select u.name, g.currency from payments p left join users u on u.id=p.user_id join gyms g on g.id=p.gym_id where p.id=$1", [f.payment_id])).rows[0];
+        toHead(f.gym_id, (name) => mail.templates.psRefundFailed(name, (x && x.name) || "a member", fmtMoney(f.amount_cents, x && x.currency), f.error)); }
+    }
+  }
+  // A refund Paystack processed: claimed once (status processed), then taken off the payment.
+  async function psRefundDone(id, pid) {
+    const r = (await q("update paystack_refunds set status='processed', ps_id=coalesce(ps_id,$2), updated_at=now() where id=$1 and status<>'processed' returning *", [id, pid])).rows[0];
+    if (!r) return;
+    const p = (await q("select * from payments where id=$1", [r.payment_id])).rows[0]; if (!p) return;
+    const gc = await gymCtx(p.gym_id), shares = (await q("select * from payments where split_of=$1 and status in ('confirmed','test') order by id desc", [p.id])).rows;
+    const total = p.amount_cents + shares.reduce((a, x) => a + x.amount_cents, 0), note = `Refunded ${fmtMoney(r.amount_cents, p.currency)} to the card via Paystack.`;
+    const months = async (x, amt) => (x.user_id && !x.pack_lessons && x.status === "confirmed" && amt > 0 ? feeMonths(gc, x.user_id, amt, x.paid_on, x.id) : { for_month: x.for_month, months: x.months, alloc: amt > 0 ? x.alloc : null });
+    if (r.amount_cents >= total) {
+      await q("update payments set status='refunded', refunded_cents=refunded_cents+$2, note=$3 where id=$1", [p.id, r.amount_cents, noteWith(p.note, note)]);
+      await q("update payments set status='refunded' where split_of=$1 and status in ('confirmed','test')", [p.id]);
+    } else {
+      let rest = r.amount_cents;
+      const take = Math.min(rest, p.amount_cents); rest -= take;
+      const fm = await months(p, p.amount_cents - take);
+      await q("update payments set amount_cents=$2, refunded_cents=refunded_cents+$3, note=$4, for_month=$5, months=$6, alloc=$7 where id=$1", [p.id, p.amount_cents - take, r.amount_cents, noteWith(p.note, note), fm.for_month, fm.months, fm.alloc]);
+      for (const x of shares) {
+        if (rest <= 0) break; const t = Math.min(rest, x.amount_cents); rest -= t;
+        if (t >= x.amount_cents) await q("update payments set status='refunded' where id=$1", [x.id]);
+        else { const f = await months(x, x.amount_cents - t); await q("update payments set amount_cents=$2, for_month=$3, months=$4, alloc=$5 where id=$1", [x.id, x.amount_cents - t, f.for_month, f.months, f.alloc]); }
+      }
+    }
+    const x = (await q(`select u.name, ${EMAIL("u")} as email, coalesce(nullif(u.parent_name,''), u.name) as payer, g.name as gym_name from users u join gyms g on g.id=$2 where u.id=$1`, [p.user_id, p.gym_id])).rows[0];
+    toHead(p.gym_id, (name) => mail.templates.psRefunded(name, (x && x.name) || "a member", fmtMoney(r.amount_cents, p.currency)));
+    if (x && x.email) mail.sendLater({ to: x.email, ...mail.templates.refundMember(first(x.payer), x.gym_name, fmtMoney(r.amount_cents, p.currency)) });
+  }
+
+  // ---------- chargebacks (disputes) ----------
+  // A member disputed a card payment with their bank. The payment is marked Disputed, and the head coach and the team are told what
+  // to do: the gym answers in Paystack's dashboard with its evidence before Paystack's deadline (JitsFlow passes on Paystack's requests).
+  // Resolved: won (the gym keeps it) or lost (the money went back, so it comes off the member's balance, like a full refund).
+  async function psDispute(t, d) {
+    const id = clean(d.id != null ? String(d.id) : "", 60), tx = d.transaction || {}, ref = clean(tx.reference || d.transaction_reference || "", 100);
+    if (!id) return;
+    const p = ref ? (await q("select * from payments where source='paystack' and reference=$1", [ref])).rows[0] : null;
+    const cents = Math.round(Number(d.refund_amount || tx.amount || (p && p.amount_cents) || 0)), due = d.dueAt || d.due_at || null;
+    const who = p ? ((await q("select name from users where id=$1", [p.user_id])).rows[0] || {}).name || "a member" : "a member";
+    const gymId = p ? p.gym_id : ((await q("select id from gyms where paystack->>'subaccount'=$1", [paystack.subOf(tx)])).rows[0] || {}).id || null;
+    const gname = gymId ? ((await q("select name from gyms where id=$1", [gymId])).rows[0] || {}).name || "a gym" : "a gym";
+    const dueTxt = due && !isNaN(Date.parse(due)) ? new Date(due).toLocaleDateString("en-ZA", { day: "numeric", month: "long", timeZone: "Africa/Johannesburg" }) : "";
+    if (t === "charge.dispute.create") {
+      const ins = (await q("insert into paystack_disputes(id,gym_id,payment_id,reference,amount_cents,status,due_at) values($1,$2,$3,$4,$5,$6,$7) on conflict (id) do nothing returning *",
+        [id, gymId, p ? p.id : null, ref, cents || null, clean(d.status || "open", 40), due && !isNaN(Date.parse(due)) ? due : null])).rows[0];
+      if (!ins) return;
+      if (p) await q("update payments set dispute='open' where id=$1", [p.id]);
+      if (gymId) toHead(gymId, (name) => mail.templates.psDisputeCoach(name, who, fmtMoney(cents), ref, dueTxt));
+      for (const a of outreach.adminEmails()) mail.sendLater({ to: a, ...mail.templates.psDisputeAdmin(gname, who, fmtMoney(cents), ref, dueTxt) });
+      return;
+    }
+    if (t === "charge.dispute.resolve") {
+      const res = clean(d.resolution || "", 40), lost = /merchant-accepted|accepted|lost/i.test(res) && !/declined/i.test(res);
+      const r = (await q("update paystack_disputes set status='resolved', resolution=$2, updated_at=now() where id=$1 and status<>'resolved' returning *", [id, res])).rows[0];
+      if (!r) return;
+      if (p) {
+        await q("update payments set dispute=$2 where id=$1", [p.id, lost ? "lost" : "won"]);
+        // Lost: the bank gave the money back, so it's no longer paid (the same as a full refund).
+        if (lost && ["confirmed", "test"].includes(p.status)) {
+          await q("update payments set status='refunded', note=$2 where id=$1", [p.id, noteWith(p.note, "Chargeback: the member's bank took the payment back.")]);
+          await q("update payments set status='refunded' where split_of=$1 and status in ('confirmed','test')", [p.id]);
+        }
+      }
+      if (gymId) toHead(gymId, (name) => mail.templates.psDisputeResolved(name, who, fmtMoney(cents), lost));
+    }
+  }
+
+  // ---------- the team: gyms' payout accounts to verify ----------
+  // The team checks the account in Paystack's dashboard (Subaccounts), then taps Mark verified: card payments switch on for the gym.
+  const adminGym = async (id) => (await q("select id, name, paystack from gyms where id=$1 and paystack is not null", [intOr(id, 0)])).rows[0] || fail(404, "Not found.");
+  api.post("/admin/paystack/gyms/:id/verify", wrap(async (req, res) => {
+    const a = needAdmin(req), g = await adminGym(req.params.id);
+    const r = (await q(`update gyms set paystack = paystack || $2 where id=$1 and paystack->>'status' in ('pending_verification','disabled') and paystack->>'updatedAt' = $3 returning paystack`,
+      [g.id, { status: "active", verifiedAt: new Date().toISOString(), verifiedBy: loginOf(a).email }, g.paystack.updatedAt])).rows[0];
+    if (!r) fail(409, "That account changed or is verified already. Refresh the dashboard.");
+    console.log(`paystack: gym ${g.id}'s payout account verified by the team`);
+    toHead(g.id, (name) => mail.templates.psActiveCoach(name, g.name));
+    res.json({ ok: true });
+  }));
+  api.post("/admin/paystack/gyms/:id/disable", wrap(async (req, res) => {
+    needAdmin(req); const g = await adminGym(req.params.id);
+    await q("update gyms set paystack = paystack || $2 where id=$1", [g.id, { status: "disabled" }]);
+    res.json({ ok: true });
+  }));
+  // The full account and KYC numbers, for the team to compare with Paystack's dashboard. Never logged.
+  api.post("/admin/paystack/gyms/:id/reveal", wrap(async (req, res) => {
+    const a = needAdmin(req), g = await adminGym(req.params.id);
+    if (limited("psreveal:" + loginOf(a).id, 60, 3600e3)) fail(429, "Wait a few minutes.");
+    console.log(`paystack: the team viewed gym ${g.id}'s payout details`);
+    res.json({ account: payfast.open(g.paystack.accountSealed), idNumber: payfast.open(g.paystack.idSealed), idKind: g.paystack.idKind || "" });
+  }));
+  api.post("/admin/paystack/:kind/:id/seen", wrap(async (req, res) => {
+    needAdmin(req); const t = { dispute: "paystack_disputes", refund: "paystack_refunds" }[req.params.kind]; if (!t) fail(404, "Not found.");
+    const r = await q(`update ${t} set seen_at=now() where id::text=$1 and seen_at is null returning id`, [clean(req.params.id, 60)]);
+    if (!r.rows[0]) fail(404, "Not found."); res.json({ ok: true });
+  }));
+  // For the team's dashboard: Paystack's mode, accounts to verify, open chargebacks and refunds that failed.
+  async function psAdmin() {
+    if (!paystack.on() && !(await q("select 1 from gyms where paystack is not null limit 1")).rows[0]) return null;
+    const ver = (await q(`select g.id, g.name, g.paystack, h.name as head_name, h.email as head_email from gyms g left join users h on h.id=g.head_coach_id
+      where g.paystack->>'status' in ('pending_verification') order by g.paystack->>'updatedAt' limit 50`)).rows;
+    const disputes = (await q(`select d.*, g.name from paystack_disputes d left join gyms g on g.id=d.gym_id where d.seen_at is null order by d.created_at desc limit 50`)).rows;
+    const refunds = (await q(`select r.*, g.name from paystack_refunds r left join gyms g on g.id=r.gym_id where r.status='failed' and r.seen_at is null order by r.id desc limit 50`)).rows;
+    return { on: paystack.memberCards() === "paystack", test: paystack.testMode(), bearer: paystack.bearer(), dashboard: paystack.DASHBOARD,
+      toVerify: ver.map((g) => ({ id: String(g.id), gym: g.name, head: g.head_name ? { name: g.head_name, email: g.head_email } : null, ...psOut(g.paystack), subaccount: g.paystack.subaccount })),
+      disputes: disputes.map((d) => ({ id: d.id, gym: d.name || "", reference: d.reference, cents: d.amount_cents, status: d.status, resolution: d.resolution, dueAt: d.due_at, at: d.created_at })),
+      refundsFailed: refunds.map((r) => ({ id: String(r.id), gym: r.name || "", reference: r.reference, cents: r.amount_cents, error: r.error, at: r.updated_at })) };
   }
 
   // ---------- card autopay: a member's saved card, charged what they owe on each due day ----------
@@ -3544,6 +3933,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // The card is saved once (a PayFast tokenization checkout for R0.00, on the gym's own account). Each due day a scheduled job charges
   // exactly what's owed then, with JitsFlow's share split off by PayFast as on any card payment. PayFast's notification records it as paid.
   const autoLive = (p) => (p && p.pass && (payfast.autopayTest() || (!payfast.platform().sandbox && !p.sandbox)) ? p : null);
+  // The processor a gym's saved cards are charged through now (g: its gyms row, with payfast and paystack): {kind: "paystack", id: its
+  // subaccount} while Paystack takes member payments and the gym's bank account is verified; else {kind: "payfast", id, keys} for a gym
+  // on its own live PayFast that takes saved cards. null: saved cards can't be charged there now (the Pay sheet doesn't offer them).
+  // A card saved with the other processor (a gym's PayFast card once Paystack is switched on) isn't charged any more.
+  function autoProv(g) {
+    if (paystack.memberCards() === "paystack") { const s = psActive(g); return s ? { kind: "paystack", id: s.subaccount, sandbox: paystack.testMode() } : null; }
+    const p = autoLive(pfLive(pfOf(g))); return p ? { kind: "payfast", id: String(p.id), sandbox: p.sandbox, keys: p } : null;
+  }
+  const provOf = (a) => (a && a.provider) || "payfast";
   const AUTO_HOUR = 7, AUTO_UNDO_MIN = 10;
   const ordinal = (n) => n + ([11, 12, 13].includes(n % 100) ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
   const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
@@ -3561,7 +3959,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       if (seen.has(r.token_hash)) continue; seen.add(r.token_hash);
       if ((await q("select 1 from autopay where token_hash=$1", [r.token_hash])).rows[0]) continue;
       const m = opts.keys || pfOf((await q("select payfast from gyms where id=$1", [r.gym_id])).rows[0]), g = (await q("select name from gyms where id=$1", [r.gym_id])).rows[0];
-      if (m && m.id === r.merchant_id) await pfCancel({ what: "card", gymId: r.gym_id, label: `a member's saved card at ${g ? g.name : "gym " + r.gym_id}`, keys: m, token: payfast.open(r.token) });
+      // A Paystack card is gone once its row is: its authorization (sealed in the row) was the only way to charge it.
+      if (provOf(r) === "payfast" && m && m.id === r.merchant_id) await pfCancel({ what: "card", gymId: r.gym_id, label: `a member's saved card at ${g ? g.name : "gym " + r.gym_id}`, keys: m, token: payfast.open(r.token) });
       if (opts.tell) { const p = await payerOf(r.user_id, r.payer_id);
         if (p.email && g) mail.sendLater({ to: p.email, ...mail.templates.autopayEnded(first(p.name), g.name) }); }
     }
@@ -3577,19 +3976,23 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // month it pays (older months owed are theirs to pay). A card that's still saved can always be stopped, even while it's hidden.
   async function autopayOut(u, g, bal) {
     if (u.role !== "student") return null;
-    const a = (await q("select * from autopay where user_id=$1 and gym_id=$2 and stopped_at is null", [u.id, u.gym_id])).rows[0];
-    if (!a && !autoLive(pfLive(pfOf(g)))) return null;
+    let a = (await q("select * from autopay where user_id=$1 and gym_id=$2 and stopped_at is null", [u.id, u.gym_id])).rows[0];
+    if (a && provOf(a) !== paystack.memberCards()) a = null; // saved with the processor the gym used before: not charged any more
+    const pv = autoProv(g); if (!a && !pv) return null;
     const names = a ? (await q("select u.name from autopay a join users u on u.id=a.user_id where a.token_hash=$1 and a.gym_id=$2 and a.stopped_at is null order by u.id", [a.token_hash, u.gym_id])).rows.map((r) => first(r.name)) : [];
     const last = (await q("select month, amount_cents, status, alloc from autopay_charges where user_id=$1 and gym_id=$2 order by id desc limit 1", [u.id, u.gym_id])).rows[0];
-    return { on: !!a, names, dueDay: dueDayOf(g.pay), from: a ? a.from_month : null, last: a && last && (!bal || chargeOpen(last, bal)) ? { month: last.month, cents: last.amount_cents, status: last.status } : null };
+    return { on: !!a, names, dueDay: dueDayOf(g.pay), from: a ? a.from_month : null, last: a && last && (!bal || chargeOpen(last, bal)) ? { month: last.month, cents: last.amount_cents, status: last.status } : null,
+      provider: a ? provOf(a) : pv.kind, card: a ? a.card_label || "" : "" };
   }
   // "Save my card and pay automatically": PayFast's checkout saves the card (nothing is charged now). It pays for the person signed
   // in and, for a parent, each of their kids at the gym.
   api.post("/me/autopay", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
-    const g = (await q("select name, payfast from gyms where id=$1", [u.gym_id])).rows[0], p = autoLive(pfLive(pfOf(g)));
-    if (!p) fail(400, "Your gym doesn't take automatic card payments yet.");
-    const payer = u.login || u, [fn, ...ln] = String(payer.name || "").trim().split(/\s+/);
+    const g = (await q("select name, payfast, paystack from gyms where id=$1", [u.gym_id])).rows[0], pv = autoProv(g);
+    if (!pv) fail(400, "Your gym doesn't take automatic card payments yet.");
+    // Paystack saves a card from a payment: they pay what's due now (or a month's fees ahead), and the card is kept for the months after.
+    if (pv.kind === "paystack") return res.json(await psCheckout(u, g, { save: true }));
+    const p = pv.keys, payer = u.login || u, [fn, ...ln] = String(payer.name || "").trim().split(/\s+/);
     res.json(payfast.checkout({ merchant_id: p.id, merchant_key: p.key, return_url: mail.appUrl() + "/app/?autopay=on", cancel_url: mail.appUrl() + "/app/", notify_url: notifyUrl(),
       name_first: clean(fn, 100), name_last: clean(ln.join(" "), 100), email_address: payer.email || "", m_payment_id: `card-${payer.id}-${Date.now()}`, amount: "0.00",
       item_name: clean(`${g.name} fees, paid automatically`, 100), item_description: clean(u.name, 255), custom_int1: String(payer.id), custom_int2: String(u.gym_id), custom_int3: String(u.id),
@@ -3636,42 +4039,43 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       if (c.payment_id) await q("update payments set reference=$2 where id=$1 and reference like 'PayFast auto-%'", [c.payment_id, "PayFast " + ref]).catch(() => {});
       return autoReceipt(c, gross, ref);
     }
-    // Not confirmed in a day, and since then the head coach recorded a payment for them by hand (likely this one, as the email asked
-    // before): not recorded twice. The head coach is told, in case it was a different payment.
-    if (c.status === "unsure") {
-      const m = (await q(`select id, paid_on from payments where gym_id=$1 and user_id=$2 and source='manual' and status='confirmed' and ${FEES} and created_at > $3 order by id limit 1`, [c.gym_id, c.user_id, c.created_at])).rows[0];
-      if (m && (await q("update autopay_charges set status='paid', payment_id=$2, error='recorded by hand', updated_at=now() where id=$1 and status='unsure' returning id", [c.id, m.id])).rowCount) {
-        const x = (await q("select u.name, g.currency, g.timezone from users u join gyms g on g.id=$2 where u.id=$1", [c.user_id, c.gym_id])).rows[0];
-        if (x) toHead(c.gym_id, (name) => mail.templates.autopayByHand(name, x.name, fmtMoney(gross, x.currency), new Date(m.paid_on).toLocaleDateString("en-ZA", { day: "numeric", month: "long", timeZone: "UTC" })));
-        return;
-      }
-    }
+    if (await autoByHand(c, gross)) return;
     // Claimed, so a notification sent twice records it once. A charge marked failed or unsure that PayFast confirms after all still counts.
     const pay = await autoRecord(c, gross, d, sandbox, ["charging", "sent", "unsure", "failed"]);
     if (pay) await autoReceipt(c, gross, ref);
   }
+  // A charge not confirmed in a day, and since then the head coach recorded a payment for them by hand (likely this one, as the email
+  // asked before): not recorded twice (true). The head coach is told, in case it was a different payment.
+  async function autoByHand(c, gross, via = "PayFast") {
+    if (c.status !== "unsure") return false;
+    const m = (await q(`select id, paid_on from payments where gym_id=$1 and user_id=$2 and source='manual' and status='confirmed' and ${FEES} and created_at > $3 order by id limit 1`, [c.gym_id, c.user_id, c.created_at])).rows[0];
+    if (!m || !(await q("update autopay_charges set status='paid', payment_id=$2, error='recorded by hand', updated_at=now() where id=$1 and status='unsure' returning id", [c.id, m.id])).rowCount) return false;
+    const x = (await q("select u.name, g.currency, g.timezone from users u join gyms g on g.id=$2 where u.id=$1", [c.user_id, c.gym_id])).rows[0];
+    if (x) toHead(c.gym_id, (name) => mail.templates.autopayByHand(name, x.name, fmtMoney(gross, x.currency), new Date(m.paid_on).toLocaleDateString("en-ZA", { day: "numeric", month: "long", timeZone: "UTC" }), via));
+    return true;
+  }
   // Records a charge PayFast took (or the head coach says it did), once: claimed from one of the statuses in `from`. It pays the
   // months it was charged for (not older ones). Someone who's left the gym since: see autoLeft. The payment saved, or null.
-  async function autoRecord(c, gross, d, sandbox, from, how = "") {
+  async function autoRecord(c, gross, d, sandbox, from, how = "", ps = null) {
     const inGym = !!(await q("select 1 from users where id=$1 and gym_id=$2", [c.user_id, c.gym_id])).rows[0];
     if (!(await q("update autopay_charges set status=$2, error=$3, updated_at=now() where id=$1 and status = any($4) returning id", [c.id, inGym ? "paid" : "left", how, from])).rowCount) return null;
-    const pay = inGym ? await cardIn({ gymId: c.gym_id, uid: c.user_id, gross, d, sandbox, auto: true, after: chargeMonths(c)[0], note: how ? ` (${how})` : "" }) : await autoLeft(c, gross, d, sandbox);
+    const pay = inGym ? await cardIn({ gymId: c.gym_id, uid: c.user_id, gross, d, sandbox, auto: true, after: chargeMonths(c)[0], note: how ? ` (${how})` : "", ps }) : await autoLeft(c, gross, d, sandbox, ps);
     if (pay) await q("update autopay_charges set payment_id=$2 where id=$1", [c.id, pay.id]);
     return pay;
   }
-  async function autoReceipt(c, gross, ref) {
+  async function autoReceipt(c, gross, ref, via = "PayFast") {
     const x = (await q("select u.name, u.parent_name, a.payer_id, g.name as gym_name, g.currency from users u join gyms g on g.id=$2 left join autopay a on a.user_id=u.id where u.id=$1", [c.user_id, c.gym_id])).rows[0];
     const p = x ? await payerOf(c.user_id, x.payer_id) : {};
-    if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayPaid(first(p.name), x.gym_name, whoFor(x), fmtMoney(gross, x.currency), ref) });
+    if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayPaid(first(p.name), x.gym_name, whoFor(x), fmtMoney(gross, x.currency), ref, via) });
   }
   // A charge PayFast confirmed after the member left the gym: the gym has the money, so it's recorded against them for the months
   // it was for, it comes off what they left owing, and the head coach is told once (to refund it in PayFast, or keep it).
-  async function autoLeft(c, gross, d, sandbox) {
+  async function autoLeft(c, gross, d, sandbox, ps = null) {
     const g = await gymCtx(c.gym_id); if (!g) return null;
     const ms = chargeMonths(c), alloc = c.alloc && ms.length > 1 && Object.values(c.alloc).reduce((a, x) => a + x, 0) === gross ? c.alloc : null;
-    const r = (await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,status,months,for_month,alloc) values($1,$2,$3,$4,(now() at time zone $5)::date,$6,$7,'payfast','payfast',$8,$9,$10,$11)
-      on conflict do nothing returning *`, [c.gym_id, c.user_id, gross, g.currency || "ZAR", tzOf(g), "PayFast " + clean(d.pf_payment_id, 40), "Paid automatically from a saved card via PayFast, after they left the gym",
-      sandbox ? "test" : "confirmed", alloc ? ms.length : 1, ms[0] + "-01", alloc])).rows[0];
+    const r = (await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,status,months,for_month,alloc,fee_cents,psp_fee_cents) values($1,$2,$3,$4,(now() at time zone $5)::date,$6,$7,$12,$13,$8,$9,$10,$11,$14,$15)
+      on conflict do nothing returning *`, [c.gym_id, c.user_id, gross, g.currency || "ZAR", tzOf(g), ps ? ps.reference : "PayFast " + clean(d.pf_payment_id, 40), `Paid automatically from a saved card via ${ps ? "Paystack" : "PayFast"}, after they left the gym`,
+      sandbox ? "test" : "confirmed", alloc ? ms.length : 1, ms[0] + "-01", alloc, ps ? "paystack" : "payfast", ps ? "card" : "payfast", ps ? ps.feeCents || 0 : null, ps ? ps.pspFeeCents || 0 : null])).rows[0];
     if (!r || sandbox) return r || null;
     const lo = (await q("update left_owing set owed_cents=greatest(0, owed_cents-$3) where id=(select id from left_owing where gym_id=$1 and user_id=$2 order by left_at desc limit 1) returning *", [c.gym_id, c.user_id, gross])).rows[0];
     if (lo && lo.owed_cents <= 0) await q("delete from left_owing where id=$1", [lo.id]);
@@ -3688,8 +4092,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!c) fail(404, "That card payment doesn't exist.");
     if (c.status !== "unsure") fail(409, c.status === "paid" || c.status === "left" ? "PayFast has confirmed it since. It's recorded." : "PayFast has said since that it didn't go through.");
     if (!went) { await autoFailed(c.id, "not charged (" + CHECKED + ")", false); return res.json({ status: "failed" }); }
-    const p = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
-    const pay = await autoRecord(c, c.amount_cents, { pf_payment_id: "auto-" + c.id }, !!(p && p.sandbox), ["unsure"], CHECKED);
+    const p = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]), viaPs = c.provider === "paystack";
+    const pay = await autoRecord(c, c.amount_cents, { pf_payment_id: "auto-" + c.id }, viaPs ? false : !!(p && p.sandbox), ["unsure"], CHECKED,
+      viaPs ? { reference: c.ref || "Paystack auto-" + c.id, feeCents: paystack.feeOf(c.amount_cents), pspFeeCents: 0 } : null);
     res.json({ status: "paid", paymentId: pay ? String(pay.id) : null });
   }));
   api.post("/coach/money/card/:id/undo", wrap(async (req, res) => {
@@ -3702,28 +4107,31 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // A card saved: it pays for the login that saved it and their kids at the gym, from this month. Saving again (a new card) replaces
   // the old one, which is cancelled. What's owed for a month whose due day has come is charged straight away.
-  async function autopaySaved(gymId, payerId, token, merchantId) {
+  // opts (a Paystack card): provider "paystack", email: the email Paystack knows the card by, label: "Visa •••• 4081".
+  async function autopaySaved(gymId, payerId, token, merchantId, opts = {}) {
+    const prov = opts.provider || "payfast";
     const g = await gymCtx(gymId); if (!g) return;
     const today = await todayIn(g), th = sha(token), ppl = (await q("select id, name, parent_name from users where gym_id=$1 and role='student' and active and (id=$2 or parent_id=$2) order by id", [gymId, payerId])).rows;
     if (!ppl.length) return;
-    const old = (await q("select user_id, token, token_hash, merchant_id, stopped_at from autopay where user_id = any($1)", [ppl.map((x) => x.id)])).rows;
+    const old = (await q("select user_id, token, token_hash, merchant_id, stopped_at, provider from autopay where user_id = any($1)", [ppl.map((x) => x.id)])).rows;
     if (ppl.every((x) => old.some((o) => String(o.user_id) === String(x.id) && o.token_hash === th && !o.stopped_at))) return; // the same notification again
     const gone = old.filter((o) => o.token_hash !== th);
     // The card's limit for each of them: twice their monthly fee now, as they see it on their Pay sheet when they save the card (see autoCap).
     const usual = async (id) => { const x = (await q("select * from users where id=$1", [id])).rows[0], plan = x && x.plan_id ? (await q("select * from plans where id=$1", [x.plan_id])).rows[0] : null;
       return x ? 2 * membershipOf({ ...x, plan_status: "active" }, plan, g) : 0; };
-    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month,cap_cents) values($1,$2,$3,$4,$5,$6,$7,$8)
+    for (const x of ppl) await q(`insert into autopay(user_id,gym_id,payer_id,token,token_hash,merchant_id,from_month,cap_cents,provider,pay_email,card_label) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       on conflict (user_id) do update set gym_id=excluded.gym_id, payer_id=excluded.payer_id, token=excluded.token, token_hash=excluded.token_hash, merchant_id=excluded.merchant_id,
-        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null, cap_cents=excluded.cap_cents`,
-      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7), await usual(x.id)]);
+        from_month=case when autopay.gym_id=excluded.gym_id and autopay.stopped_at is null and autopay.provider=excluded.provider then least(autopay.from_month, excluded.from_month) else excluded.from_month end, stopped_at=null, cap_cents=excluded.cap_cents,
+        provider=excluded.provider, pay_email=excluded.pay_email, card_label=excluded.card_label`,
+      [x.id, gymId, payerId, payfast.seal(token), th, merchantId, today.slice(0, 7), await usual(x.id), prov, opts.email || null, clean(opts.label, 60)]);
     // The card it replaces: cancelled with PayFast once nothing uses it.
     const m = pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0]);
     const done = new Set();
     for (const o of gone) { if (done.has(o.token_hash)) continue; done.add(o.token_hash);
-      if (m && m.id === o.merchant_id && !(await q("select 1 from autopay where token_hash=$1", [o.token_hash])).rows[0]) await pfCancel({ what: "card", gymId, label: `a replaced saved card at ${g.gym_name}`, keys: m, token: payfast.open(o.token) }); }
+      if (provOf(o) === "payfast" && m && m.id === o.merchant_id && !(await q("select 1 from autopay where token_hash=$1", [o.token_hash])).rows[0]) await pfCancel({ what: "card", gymId, label: `a replaced saved card at ${g.gym_name}`, keys: m, token: payfast.open(o.token) }); }
     const p = await payerOf(payerId);
-    if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayOn(first(p.name), g.gym_name, andList(ppl.map(whoFor)), "the " + ordinal(dueDayOf(g.pay))) });
-    const live = autoLive(pfLive(m)); if (!live) return;
+    if (p.email) mail.sendLater({ to: p.email, ...mail.templates.autopayOn(first(p.name), g.gym_name, andList(ppl.map(whoFor)), "the " + ordinal(dueDayOf(g.pay)), prov === "paystack" ? "Paystack" : "PayFast") });
+    const live = autoProv((await q("select payfast, paystack from gyms where id=$1", [gymId])).rows[0]); if (!live || live.kind !== prov) return;
     const month = autoMonth(today, g.pay);
     for (const x of ppl) { try { await chargeOne(g, live, x.id, month); } catch (e) { console.warn("autopay:", e.message); } }
   }
@@ -3735,7 +4143,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // amounts it's for, before PayFast is asked, so it's charged once, from one server. 1 if PayFast took it.
   async function chargeOne(gc, p, userId, month) {
     const a = (await q("select * from autopay where user_id=$1 and gym_id=$2 and stopped_at is null", [userId, gc.gym_id])).rows[0];
-    if (!a || a.merchant_id !== String(p.id) || month < a.from_month) return 0;
+    if (!a || provOf(a) !== p.kind || a.merchant_id !== String(p.id) || month < a.from_month) return 0;
     if ((await q("select 1 from autopay_charges where user_id=$1 and month=$2", [userId, month])).rows[0]) return 0;
     const x = (await q("select * from users where id=$1 and gym_id=$2 and role='student' and active", [userId, gc.gym_id])).rows[0];
     if (!x) return 0;
@@ -3764,11 +4172,12 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const c = (await q("insert into autopay_charges(gym_id,user_id,month,amount_cents,alloc) values($1,$2,$3,$4,$5) on conflict do nothing returning *",
       [gc.gym_id, x.id, month, cents, Object.fromEntries(ms.map((o) => [o.month, o.cents]))])).rows[0];
     if (!c) return 0;
+    if (p.kind === "paystack") return psCharge(gc, p, a, c, x);
     const P = payfast.platform(), split = String(p.id) !== String(P.id) ? { merchant_id: Number(P.id), percentage: payfast.FEE_PCT() } : null;
     let r;
     // No answer (a timeout): the card may or may not have been charged, so it's never tried again. PayFast's notification records
     // it if it went through; after a day without one, the head coach is asked to check.
-    try { r = await payfast.chargeToken(p, payfast.open(a.token), { cents, item: `${gc.gym_name} fees`, mPaymentId: `auto-${c.id}`, split }); }
+    try { r = await payfast.chargeToken(p.keys, payfast.open(a.token), { cents, item: `${gc.gym_name} fees`, mPaymentId: `auto-${c.id}`, split }); }
     catch (e) { await q("update autopay_charges set error=$2, updated_at=now() where id=$1", [c.id, clean(e.message, 200)]); return 0; }
     if (r.ok) { await q("update autopay_charges set status='sent', updated_at=now() where id=$1 and status='charging'", [c.id]); return 1; }
     await autoFailed(c.id, r.reason); return 0;
@@ -3800,9 +4209,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // hasn't confirmed stays with the card until the head coach says it didn't go through (they may well have paid). Older months
   // aren't the card's: remindGym reminds about just those. A Map of id to from_month.
   async function autoHeld(gymId, month) {
-    if (!autoLive(pfLive(pfOf((await q("select payfast from gyms where id=$1", [gymId])).rows[0])))) return new Map();
-    return new Map((await q(`select a.user_id, a.from_month from autopay a where a.gym_id=$1 and a.stopped_at is null and a.from_month <= $2
-      and not exists (select 1 from autopay_charges c where c.user_id=a.user_id and c.month=$2 and c.status='failed')`, [gymId, month])).rows.map((r) => [String(r.user_id), r.from_month]));
+    const pv = autoProv((await q("select payfast, paystack from gyms where id=$1", [gymId])).rows[0]); if (!pv) return new Map();
+    return new Map((await q(`select a.user_id, a.from_month from autopay a where a.gym_id=$1 and a.stopped_at is null and a.from_month <= $2 and a.provider=$3
+      and not exists (select 1 from autopay_charges c where c.user_id=a.user_id and c.month=$2 and c.status='failed')`, [gymId, month, pv.kind])).rows.map((r) => [String(r.user_id), r.from_month]));
   }
   // The scheduled job (every 15 minutes; each gym once a day, from 7am gym time, before the fee reminders). Safe on several servers
   // at once: each gym's day is claimed, and each member's month is claimed before their card is charged. opts.hour, opts.day: tests.
@@ -3810,11 +4219,12 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   async function autopay(opts = {}) {
     await dropAutopay(`a.stopped_at < now() - interval '${AUTO_UNDO_MIN} minutes'`, []);
     for (const c of (await q("update autopay_charges set status='unsure', updated_at=now() where status in ('charging','sent') and created_at < now() - interval '1 day' returning *")).rows) await autoTell(c, "unsure");
-    const gyms = (await q(`select g.id, g.pay, g.payfast, to_char(now() at time zone coalesce(g.timezone,'Africa/Johannesburg'),'YYYY-MM-DD') as day,
+    await psRecheck().catch((e) => console.warn("paystack recheck:", e.message));
+    const gyms = (await q(`select g.id, g.pay, g.payfast, g.paystack, to_char(now() at time zone coalesce(g.timezone,'Africa/Johannesburg'),'YYYY-MM-DD') as day,
       extract(hour from now() at time zone coalesce(g.timezone,'Africa/Johannesburg'))::int as hour from gyms g where g.claim is null and exists (select 1 from autopay a where a.gym_id=g.id and a.stopped_at is null)`)).rows;
     let n = 0;
     for (const g of gyms) {
-      const p = autoLive(pfLive(pfOf(g))), day = opts.day || g.day; if (!p || (opts.hour ?? g.hour) < AUTO_HOUR) continue;
+      const p = autoProv(g), day = opts.day || g.day; if (!p || (opts.hour ?? g.hour) < AUTO_HOUR) continue;
       if (!(await q("update gyms set autopay_day=$2 where id=$1 and autopay_day is distinct from $2", [g.id, day])).rowCount) continue;
       const gc = await gymCtx(g.id), month = autoMonth(day, g.pay);
       const ids = (await q("select a.user_id from autopay a where a.gym_id=$1 and a.stopped_at is null and not exists (select 1 from autopay_charges c where c.user_id=a.user_id and c.month=$2) order by a.user_id", [g.id, month])).rows;
@@ -3951,7 +4361,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       payfastBroken: broken.map((g) => ({ id: String(g.id), name: g.name })),
       payfastOps: { trying: opsOpen, failed: ops.map((o) => ({ id: String(o.id), what: o.what, label: o.label, error: o.error, at: o.failed_at })) },
       payfastFlags: flags.map((f) => ({ id: String(f.id), kind: f.kind, gym: f.name || "", ref: f.ref, expectedCents: f.expected_cents, gotCents: f.got_cents, note: f.note, at: f.created_at })),
-      planSync: syncs.map((g) => ({ id: String(g.id), name: g.name, error: g.err })) };
+      planSync: syncs.map((g) => ({ id: String(g.id), name: g.name, error: g.err })),
+      // Paystack (member card payments): payout accounts to verify, open chargebacks, refunds that failed. null while it's off.
+      paystack: await psAdmin() };
     res.json(out);
   }));
   // The team did a PayFast cancel by hand, or checked a flagged payment: off the dashboard.
@@ -4203,7 +4615,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
   setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)));
   // PayFast cancels that didn't go through are tried again, and plans' amounts at PayFast follow their gyms' prices (syncPlans).
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, psRecheck, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
     await pfOps().catch((e) => console.warn("payfast ops:", e.message)); await syncPlans().catch((e) => console.warn("plan sync:", e.message)); } };
   return api;
 }
