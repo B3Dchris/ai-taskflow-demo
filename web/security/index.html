@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Secure payments | JitsFlow</title>
+<meta name="description" content="Card payments on JitsFlow go through Payfast&#39;s secure checkout. JitsFlow never sees or stores your card number. HTTPS everywhere.">
+<link rel="canonical" href="https://www.jitsflow.com/security/">
+<meta name="theme-color" content="#0E1A33">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JitsFlow">
+<meta property="og:title" content="Secure payments | JitsFlow">
+<meta property="og:description" content="Card payments on JitsFlow go through Payfast&#39;s secure checkout. JitsFlow never sees or stores your card number. HTTPS everywhere.">
+<meta property="og:url" content="https://www.jitsflow.com/security/">
+<meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/site.css?v=2b4ecfcd">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"JitsFlow","item":"https://www.jitsflow.com/"},{"@type":"ListItem","position":2,"name":"Secure payments","item":"https://www.jitsflow.com/security/"}]}</script>
+</head>
+<body>
+<header class="night"><div class="wrap top"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>JitsFlow</a>
+<nav class="toplinks"><a href="/techniques/">Techniques</a><a href="/positions/">Positions</a><a class="hide-s" href="/glossary/">Glossary</a><a class="btn primary sm" href="/app/" data-ev="open_app">Open the app</a></nav></div></header>
+<nav class="wrap crumbs" aria-label="Breadcrumb"><a href="/">JitsFlow</a><span aria-hidden="true">›</span><span aria-current="page">Secure payments</span></nav>
+<main class="wrap">
+<article class="stack-lg legal-doc"><header class="stack"><p class="eyebrow">Secure payments</p><h1>Secure payments</h1>
+<p class="lead">Card payments go through Payfast, a South African payment processor. Your card details go to Payfast only, never to JitsFlow.</p></header>
+<section><h2>How it works</h2><ul>
+<li>When you pay or add a card, JitsFlow sends you to Payfast's secure checkout, where you enter your card or choose another payment method. Payfast is PCI DSS compliant, the card industry's security standard.</li>
+<li>JitsFlow never sees, receives or stores your full card number or security code (CVV).</li>
+<li>For monthly billing or a saved card, Payfast gives us a token: a reference that lets us ask Payfast to charge that card or cancel it. A token isn't your card number and is useless outside Payfast. Saved-card tokens are encrypted when we store them.</li>
+<li>Every checkout is signed, and we only mark a payment as paid when Payfast's notification about it has a valid signature and Payfast confirms it directly.</li>
+<li>The whole site uses HTTPS (encrypted connections), and browsers are told to always use it (HSTS).</li></ul></section>
+<section><h2>Ways to pay</h2><p>Card (Visa and Mastercard) and the methods Payfast offers at checkout, including Instant EFT, Apple Pay and Google Pay. Which ones you see depends on your device and what the merchant has switched on. All amounts are in South African rand (ZAR).</p>
+<p>Gym plans are paid to JitsFlow. Membership fees are paid to your gym, through the gym's own Payfast account, or by EFT to the gym's bank account with your reference. Card payments for membership fees are coming soon.</p></section>
+<section><h2>Spotted a problem?</h2><p>If you see a charge you don't recognise, or think something isn't secure, email <a href="mailto:support@jitsflow.com">support@jitsflow.com</a> straight away.</p></section>
+<p class="small muted"><a href="/pricing/">Pricing</a> · <a href="/terms/">Terms</a> · <a href="/refunds/">Refunds</a> · <a href="/privacy/">Privacy</a> · <a href="/contact/">Contact</a></p></article>
+</main>
+<footer><div class="wrap">
+<nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
+<p>JitsFlow · No-gi technique library and flow map. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
+<nav class="foot legal" aria-label="Pricing and policies"><a href="/pricing/">Pricing</a><a href="/terms/">Terms</a><a href="/refunds/">Refunds</a><a href="/privacy/">Privacy</a><a href="/security/">Secure payments</a><a href="/contact/">Contact</a></nav>
+<p class="legalline">© 2026 JitsFlow, a product of B3D Projects (Pty) Ltd (trading as B-3 Data) · Company registration number 2022/519665/07 · 1646 Dainfern, Johannesburg, 2054, South Africa · <a href="mailto:support@jitsflow.com">support@jitsflow.com</a> · Payments are processed securely by Payfast.</p>
+<p class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
+</div></footer>
+<script>
+document.addEventListener("click",function(e){var b=e.target.closest(".vidbtn");if(b){var id=b.getAttribute("data-v");var f=document.createElement("iframe");f.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1";f.title=b.getAttribute("aria-label");f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.allowFullscreen=true;b.replaceWith(f);window.jfTrack&&jfTrack("video_start",{video_id:id});return}
+var s=e.target.closest("[data-share]");if(s){var u=location.href.split("#")[0],t=document.title;if(navigator.share){e.preventDefault();navigator.share({title:t,url:u}).then(function(){window.jfTrack&&jfTrack("share",{method:"native",content_type:s.getAttribute("data-share"),item_id:location.pathname})}).catch(function(){})}else{window.jfTrack&&jfTrack("share",{method:"whatsapp",content_type:s.getAttribute("data-share"),item_id:location.pathname})}return}
+var w=e.target.closest("[data-ev]");if(w&&window.jfTrack)jfTrack(w.getAttribute("data-ev"),{from:location.pathname})});
+var q=document.getElementById("tq");if(q)q.addEventListener("input",function(){var v=q.value.trim().toLowerCase();document.querySelectorAll("[data-find]").forEach(function(li){li.hidden=!!v&&li.getAttribute("data-find").indexOf(v)<0});document.querySelectorAll("[data-group]").forEach(function(g){g.hidden=!g.querySelector("[data-find]:not([hidden])")})});
+</script>
+</body>
+</html>
