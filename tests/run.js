@@ -48,6 +48,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/study today/i.test((document.querySelector('.tip')||{}).textContent||'')&&(lsGet('jf.tips.me')||{}).journal===-1),'leaving a tab marks its tip as seen; the next tab shows its own');
   await p.tap('nav.tabs [data-v="journal"]');ok(await ev(()=>!document.querySelector('.tip')),'a tip shows only once');
   await p.tap('nav.tabs [data-v="me"]');ok(await ev(()=>!!document.querySelector('.tip')),'Me tip on the first visit');
+  ok(await ev(()=>['pricing','terms','refunds','privacy','contact'].every(u=>!!document.querySelector(`.applegal a[href="https://www.jitsflow.com/${u}/"][target="_blank"]`))),'Me: Pricing, Terms, Refunds, Privacy and Contact links (to the website from the claude.ai version)');
   await p.tap('.tip [data-a="tipx"]');ok(await ev(()=>!document.querySelector('.tip')&&(lsGet('jf.tips.me')||{}).me===-1),'closing a tip hides it');
   await ev(()=>{const t=lsGet('jf.tips.me')||{};delete t.home;delete t.learn;lsSet('jf.tips.me',t)});
   for(const t of ['home','learn']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')),`a closed tip stays closed, and no other tab shows one (${t})`)}

@@ -113,7 +113,7 @@ function startSite() {
       r = await coach(m, u, m === "GET" ? undefined : { text: "x.com" }); ok(r.s === 403, `${m} ${u} is 403 for a coach (${r.s})`);
     }
     { const src = ["../backend/outreach.js", "../backend/api.js", "../backend/brand.js", "../server.js"].map((f) => fs.readFileSync(path.resolve(__dirname, f), "utf8")).join("\n");
-      const lits = (src.match(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+/gi) || []).filter((x) => !/^(hello|no-reply)@jitsflow\.com$|^pop-|@example\.com$/.test(x));
+      const lits = (src.match(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+/gi) || []).filter((x) => !/^(support|hello|no-reply)@jitsflow\.com$|^pop-|@example\.com$/.test(x));
       ok(/process\.env\.JF_ADMIN_EMAILS/.test(src) && !lits.length, "admins come from JF_ADMIN_EMAILS; no email address is written into the code: " + lits); }
     r = await admin("GET", "/admin/prospects"); ok(r.s === 200 && Array.isArray(r.j.prospects) && r.j.prospects.length === 0, "the admin sees the (empty) outreach list");
     r = await admin("POST", "/admin/prospects", { text: "x" }, { "x-jf": "" }); ok(r.s === 403, "adding needs the app's header like every other change");

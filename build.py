@@ -226,6 +226,8 @@ def build_web(app):
     landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap)
     counts = json.load(open(os.path.join(ROOT, "dist", "counts.json")))
     landing = landing.replace("@@NPOS@@", str(counts["positions"])).replace("@@NTECH@@", str(counts["techniques"]))
+    legal_foot = read("dist", "legal-foot.html")  # Pricing · Terms · Refunds · Privacy · Contact and the business line (tools/legal.js)
+    landing = landing.replace("@@LEGAL_FOOT@@", legal_foot)
     landing = landing.replace("@@LDJSON@@", landing_ld(landing))
     assert "@@" not in landing, "unfilled placeholder in landing page"
     write(landing, "web", "index.html")
@@ -233,12 +235,17 @@ def build_web(app):
     css = re.search(r"<style>\n(.*?)</style>", read("src", "landing.html"), re.S).group(1)
     js = re.search(r'<script id="media-js">\n(.*?)</script>', read("src", "landing.html"), re.S).group(1)
     coaches = read("src", "coaches.html").replace("@@LANDING_CSS@@", css).replace("@@MEDIA_JS@@", js).replace("@@NTECH@@", str(json.load(open(os.path.join(ROOT, "dist", "counts.json")))["techniques"]))
-    coaches = coaches.replace("@@LDJSON@@", page_ld(coaches, "/coaches/"))
+    coaches = coaches.replace("@@LEGAL_FOOT@@", legal_foot).replace("@@LDJSON@@", page_ld(coaches, "/coaches/"))
     assert "@@" not in coaches, "unfilled placeholder in coaches page"
     write(coaches, "web", "coaches", "index.html")
     version = hashlib.sha256((html + landing + coaches).encode()).hexdigest()[:10]
     write(read("tools", "sw.template.js").replace("__VERSION__", version), "web", "sw.js")
     return version
+
+
+def business_warning():
+    """Says loudly which business details (src/business.json) are still missing from the legal pages and footers."""
+    subprocess.run(["node", os.path.join(ROOT, "tools", "business.js")], check=False)
 
 
 if __name__ == "__main__":
@@ -254,3 +261,4 @@ if __name__ == "__main__":
         sys.exit("SEO pages failed to build (%s). Install Playwright: npm i -D playwright" % e)
     v = build_web(app)
     print("built dist/jitsflow-claude.html and web/ (version %s)" % v)
+    business_warning()

@@ -23,7 +23,45 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
       if(r.status!==200||!t.includes('<link rel="canonical" href="'+u+'">')||!/<title>[^<]{10,}<\/title>/.test(t)||!/name="description" content="[^"]{40,}"/.test(t)||!/og:image" content="https:\/\/www\.jitsflow\.com\/og\//.test(t)||!ld.length||!parsed)bad.push(u)}
     ok(!bad.length,'content pages have a title, description, canonical, share image and valid structured data '+bad.join(' '));
     {const t=await (await fetch(URL+'privacy/')).text();
-     ok(/proofs of payment/.test(t)&&/forwarded to a gym's payments address/.test(t)&&/WhatsApp group screenshots/.test(t)&&/PayFast/.test(t)&&/contacts the coach picks/.test(t)&&/parent's permission/.test(t)&&/competition/.test(t)&&/Leave gym/.test(t),'privacy page names Anthropic for proofs, emails and screenshots, PayFast, contacts, children, competitions and leaving a gym')}
+     ok(/proofs of payment/.test(t)&&/forwarded to a gym's payments address/.test(t)&&/WhatsApp group screenshots/.test(t)&&/Payfast is our payment processor/.test(t)&&/href="\/contact\/"/.test(t)&&/contacts the coach picks/.test(t)&&/parent's permission/.test(t)&&/competition/.test(t)&&/Leave gym/.test(t),'privacy page names Anthropic for proofs, emails and screenshots, Payfast as payment processor (and links to contact), contacts, children, competitions and leaving a gym')}
+    // pricing, terms, refunds, contact and secure payments (Payfast's site review), and the footer on every page
+    {const pf=require('../backend/payfast'),bt=require('../backend/beta'),{load}=require('../tools/business'),{biz}=load();
+     const R=c=>'R'+(c%100?(c/100).toFixed(2):String(Math.round(c/100))),P=R(pf.PRICE_CENTS()),BP=R(bt.AFTER_CENTS),F=pf.FEE_PCT()+'%',M=pf.TRIAL_MONTHS();
+     const txt=h=>h.replace(/<script[\s\S]*?<\/script>/g,' ').replace(/<style[\s\S]*?<\/style>/g,' ').replace(/<[^>]+>/g,' ').replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/\s+/g,' ');
+     const pg={};for(const u of ['pricing/','terms/','refunds/','contact/','security/']){const r=await fetch(URL+u);pg[u]={s:r.status,h:await r.text()};pg[u].t=txt(pg[u].h)}
+     ok(Object.values(pg).every(x=>x.s===200&&!/@@|\[[A-Z][^\]]*\]|undefined|NaN/.test(x.t)),'pricing, terms, refunds, contact and secure payments pages load, with no placeholders');
+     ok(['pricing/','terms/','refunds/','contact/','security/'].every(u=>locs.includes('https://www.jitsflow.com/'+u)),'sitemap lists the five policy pages');
+     const t=pg['pricing/'].t;
+     ok(/Simple pricing/i.test(t)&&t.includes(`${M} months free, then ${P}/month`)&&t.includes(`${bt.FREE_MONTHS} months free, then ${BP}/month`)&&t.includes(`${F} platform fee`)&&/Payfast Split Payments/.test(t)&&/coming soon/.test(t)&&/No JitsFlow fee/.test(t)&&/Cancel plan/.test(t)&&/30 days/.test(t)&&/South African rand/.test(t)&&/not VAT registered, so no VAT is added/.test(t),
+       `pricing page: ${P}/month after ${M} free months, beta ${BP}, ${F} split fee on Payfast payments, EFT free, cancel, ZAR and VAT line (from backend/payfast.js and beta.js)`);
+     const tt=pg['terms/'].t;
+     ok(/Terms of service/.test(tt)&&/Last updated: \d+ \w+ 20\d\d/.test(tt)&&tt.includes(biz.legalName)&&tt.includes(biz.regNo)&&tt.includes(biz.address)&&tt.includes(P)&&tt.includes(F)&&/Republic of South Africa/.test(tt)&&/POPIA|Protection of Personal Information Act/.test(tt)&&/Consumer Protection Act/.test(tt)&&/ECTA/.test(tt)&&/30 days' notice/.test(tt)&&/Cancel plan/.test(tt)&&/merchant/.test(tt)&&/YouTube/.test(tt)&&/tap early/.test(tt)&&/isn't medical advice/.test(tt),
+       'terms: who we are (business.json), billing, price-change notice, cancelling, member payments, safety, South African law');
+     const rf=pg['refunds/'].t;
+     ok(/Refund and cancellation policy/.test(rf)&&/Billing errors and duplicate charges/.test(rf)&&/7 to 10 business days/.test(rf)&&/Contact your gym first/.test(rf)&&/Chargebacks/.test(rf)&&/nothing is shipped/.test(rf)&&rf.includes(F)&&/mailto:support@jitsflow\.com/.test(pg['refunds/'].h),'refunds: cancel any time, errors refunded in full, member fees via the gym, chargebacks, delivery');
+     const c=pg['contact/'],ld=[...c.h.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m=>JSON.parse(m[1])),org=ld.find(o=>o['@type']==='Organization')||{};
+     ok(c.t.includes('B3D Projects (Pty) Ltd')&&c.t.includes('B-3 Data')&&c.t.includes('2022/519665/07')&&c.t.includes('Company registration number')&&c.t.includes('Not VAT registered')&&c.t.includes('1646 Dainfern, Johannesburg, 2054, South Africa')&&!/Cambourne/.test(c.h)
+       &&/href="mailto:support@jitsflow\.com"/.test(c.h)&&!/tel:|Phone/.test(c.t+c.h.replace(/<script[\s\S]*?<\/script>/g,''))&&/Payments are processed securely by Payfast/.test(c.t)&&['/terms/','/refunds/','/privacy/','/pricing/'].every(u=>c.h.includes(`href="${u}"`)),
+       'contact page: company, trading as, registration number, not VAT registered, the address, support email, no phone line while it is empty, Payfast, policy links');
+     ok(org.legalName==='B3D Projects (Pty) Ltd'&&org.email==='support@jitsflow.com'&&org.address&&org.address.streetAddress==='1646 Dainfern'&&org.address.postalCode==='2054'&&org.address.addressCountry==='ZA','contact page: Organization structured data with the address');
+     const s=pg['security/'].t;ok(/never sees, receives or stores your full card number/.test(s)&&/token/.test(s)&&/HSTS/.test(s)&&/Visa and Mastercard/.test(s)&&/Apple Pay and Google Pay/.test(s)&&!/card numbers? (is|are) (stored|kept)/i.test(s),'secure payments: Payfast checkout, tokens not card numbers, HTTPS/HSTS, ways to pay');
+     // every page: the footer's policy links and business line; nothing public says sandbox or test mode
+     const pages=[...locs.map(u=>u.replace('https://www.jitsflow.com/','')).filter(u=>u!=='app/'),'no-such-page'];let noFoot=[],testy=[],price=[];
+     for(const u of pages){const h=await (await fetch(URL+u)).text(),f=(h.match(/<footer[\s\S]*<\/footer>/)||[''])[0];
+       if(!['/pricing/','/terms/','/refunds/','/privacy/','/contact/'].every(x=>f.includes(`href="${x}"`))||!/Payments are processed securely by Payfast/.test(f)||!f.includes('B3D Projects (Pty) Ltd')||!f.includes('2022/519665/07'))noFoot.push(u);
+       if(/sandbox|test mode|test account|testing=true/i.test(txt(h)))testy.push(u);
+       for(const m of txt(h).matchAll(/\bR(\d+(?:\.\d\d)?) ?(?:a month|\/month|per month)/g))if(!['R'+m[1]].some(x=>x===P||x===BP))price.push(u+': R'+m[1])}
+     ok(pages.length>190&&!noFoot.length,`footer on all ${pages.length} pages: Pricing, Terms, Refunds, Privacy, Contact, company and Payfast `+noFoot.slice(0,5).join(' '));
+     ok(!testy.length,'no public page says sandbox or test mode '+testy.join(' '));
+     ok(!price.length,`every monthly price on the site is ${P} or the beta's ${BP} `+price.join(' '));
+     {const ap=await ctx.newPage();await ap.goto(URL+'app/');await ap.waitForTimeout(800);const it=await ap.evaluate(()=>document.body.innerText);await ap.close();ok(!/sandbox|test mode/i.test(it),'the app, signed out, never says sandbox or test mode')}
+     // build.py's warning about src/business.json
+     const fs=require('fs'),os=require('os');const tmp=path.join(os.tmpdir(),'jf-biz-'+process.pid+'.json');fs.writeFileSync(tmp,JSON.stringify({legalName:'[Legal name]',email:''}));
+     const {spawnSync}=require('child_process'),w=spawnSync('python3',['-c','import build;build.business_warning()'],{cwd:path.resolve(__dirname,'..'),env:{...process.env,JF_BUSINESS_JSON:tmp},encoding:'utf8'}),wo=w.stdout+w.stderr;
+     const g=spawnSync('python3',['-c','import build;build.business_warning()'],{cwd:path.resolve(__dirname,'..'),env:{...process.env},encoding:'utf8'}),go=g.stdout+g.stderr;fs.unlinkSync(tmp);
+     ok(/BUSINESS DETAILS MISSING/.test(wo)&&/legal name/.test(wo)&&/registration number/.test(wo)&&/physical address/.test(wo)&&/support email/.test(wo)&&/VAT statement/.test(wo),'build.py warns loudly, listing what is missing, when business.json is empty or has placeholders');
+     ok(/business details: complete/.test(go)&&!/MISSING/.test(go)&&/phone/.test(go),'build.py: the real business.json is complete (phone is optional and left off)');
+    }
     const og=await fetch(URL+'og/home.jpg');ok(og.status===200&&og.headers.get('content-type')==='image/jpeg','share images are served');
     ok(locs.includes('https://www.jitsflow.com/coaches/'),'sitemap lists the coaches page');
     {const r=await fetch(URL+'coaches/'),h=await r.text();const imgs=[...h.matchAll(/src="(\/img\/coach\/[^"]+)"/g)].map(m=>m[1]);

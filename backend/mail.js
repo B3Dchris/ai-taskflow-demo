@@ -2,7 +2,7 @@
 "use strict";
 const API_URL = () => process.env.RESEND_API_URL || "https://api.resend.com/emails"; // overridden in tests
 const FROM = () => process.env.MAIL_FROM || "JitsFlow <no-reply@jitsflow.com>";
-const REPLY_TO = () => process.env.MAIL_REPLY_TO || "hello@jitsflow.com";
+const REPLY_TO = () => process.env.MAIL_REPLY_TO || "support@jitsflow.com";
 // Links in emails always use this address, never the request's Host header (which a caller controls).
 const appUrl = () => (process.env.APP_URL || "https://www.jitsflow.com").replace(/\/+$/, "");
 const mailOn = () => !!process.env.RESEND_API_KEY;

@@ -212,6 +212,7 @@ const GYM_PASS = "gym pass phrase";
         const st = await phone("jo@auto.test");
         await st.tap('.feecard [data-a="mypay"]'); await st.waitForTimeout(500);
         ok(await ev(st, () => /Save my card and pay automatically/.test(document.getElementById("autopay")?.innerText || "") && /1st of each month/.test(document.getElementById("autopay").innerText)), "the Pay sheet offers 'Save my card and pay automatically', saying when it charges");
+        ok(await ev(st, () => { const t = document.querySelector("#autopay .payterms"); return !!t && /By saving your card, you agree to the Terms and Refund policy\. Payments are processed securely by Payfast\./.test(t.innerText) && !!t.querySelector('a[href="/terms/"][target="_blank"]') && !!t.querySelector('a[href="/refunds/"][target="_blank"]'); }), "saving a card: the Terms and Refund policy links and Payfast, right under the button");
         ok(await ev(st, () => document.documentElement.scrollWidth <= 390), "pay sheet: no sideways scroll");
         let posted = null; await st.route("**/eng/process", (rt) => { posted = rt.request().postData(); rt.fulfill({ status: 200, contentType: "text/html", body: "<p>PayFast</p>" }); });
         await st.tap('#autopay [data-a="autoon"]'); await st.waitForTimeout(1200);

@@ -265,6 +265,8 @@ h2{font-size:clamp(32px,4.4vw,46px)}
 .final .go{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}
 footer .footlinks a,footer .credit a{display:inline-block;padding:12px 2px;margin:-12px 0}
 footer .footlinks{line-height:2.6}
+footer .footlinks.legal a{color:var(--ink);font-weight:600}
+footer .legalline{font-size:13px}
 
 @media (min-width:560px){.cards.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.cards.links{grid-template-columns:1fr 1fr}}
 @media (max-width:759px){
@@ -379,7 +381,7 @@ footer .footlinks{line-height:2.6}
           <li>EFT with each member's own reference today; card, Apple Pay and Google Pay coming soon</li>
           <li>Kids and parents on one login</li>
         </ul>
-        <p class="price"><b>R99 a month</b> after 3 free months. No card to start, no contract, and free for your students.</p>
+        <p class="price"><b>R99 a month</b> after 3 free months. No card to start, no contract, and free for your students. <a href="/pricing/">See pricing</a></p>
         <div class="cta" style="margin-top:8px"><a class="btn primary" href="/coaches/">See JitsFlow for gyms</a><a class="btn" href="/app/?start=1">Start your gym</a></div>
       </div>
       <figure class="clip">
@@ -440,7 +442,8 @@ footer .footlinks{line-height:2.6}
   <div class="wrap">
     <span><b>JitsFlow</b> · No-gi attack chains and technique library, and software for the gyms that teach it. Made in Johannesburg.</span>
     <span>Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</span>
-    <span class="footlinks"><a href="/coaches/">For gyms</a> · <a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/glossary/">Glossary</a> · <a href="/privacy/">Privacy</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
+    <span class="footlinks"><a href="/coaches/">For gyms</a> · <a href="/techniques/">Techniques</a> · <a href="/positions/">Positions</a> · <a href="/belts/">Belts</a> · <a href="/glossary/">Glossary</a> · <a href="#" data-consent-open hidden>Cookie settings</a></span>
+    @@LEGAL_FOOT@@
     <span class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></span>
   </div>
 </footer>

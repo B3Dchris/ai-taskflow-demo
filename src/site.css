@@ -78,3 +78,19 @@ input[type=search]{font:inherit;font-size:17px;color:var(--ink);background:var(-
 footer{border-top:1px solid var(--line);padding-block:28px calc(28px + env(safe-area-inset-bottom,0px));font-size:15px;color:var(--ink-2)}
 footer .wrap{display:grid;gap:12px}
 .foot{display:flex;flex-wrap:wrap;gap:8px 18px}.foot a{color:var(--ink-2)}
+.foot.legal a{color:var(--ink);font-weight:600}
+.legalline{font-size:14px}
+/* pricing, terms, refunds, contact, secure payments */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+table.ptable{width:100%;border-collapse:collapse;font-size:16px;line-height:1.4}
+.ptable th,.ptable td{text-align:left;vertical-align:top;padding:12px 14px;border-top:1px solid var(--line)}
+.ptable thead th{border-top:0;font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);font-weight:500}
+.ptable td b{font-size:17px}
+@media (max-width:560px){.ptable thead{display:none}.ptable tr{display:grid;gap:2px;padding:12px 14px;border-top:1px solid var(--line)}.ptable tbody tr:first-child{border-top:0}.ptable th,.ptable td{border:0;padding:0}.ptable td.mut{color:var(--ink-2);font-size:15px}}
+.legal-doc h2{font-size:24px}
+.legal-doc section{display:grid;gap:10px}
+.legal-doc ul{margin:0;padding-left:22px;display:grid;gap:6px}
+dl.biz{margin:0;display:grid;gap:0}
+dl.biz div{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr);gap:4px 16px;border-top:1px solid var(--line);padding:10px 0}
+dl.biz dt{color:var(--ink-2);font-size:15px}dl.biz dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+@media (max-width:560px){dl.biz div{grid-template-columns:minmax(0,1fr)}}

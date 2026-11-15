@@ -364,7 +364,7 @@ function makeApi(pool, { secureCookies, build }) {
     const b = req.body || {};
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     const perIp = "gym:" + limitIp(req); // new gyms per address per day (each one sends a welcome email)
-    if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email hello@jitsflow.com.");
+    if (over(perIp, 10)) fail(429, "That's a lot of new gyms today. Try again tomorrow, or email support@jitsflow.com.");
     // The team looks at gyms through their links: a team address never claims one (only the owner does).
     if (b.prospect && outreach.isAdmin(clean(b.email, 254))) fail(403, TEAM_CLAIM);
     limited(perIp, Infinity, 24 * 3600e3); // counted now, before anything is awaited (several sent at once can't all get past the check)
@@ -376,7 +376,7 @@ function makeApi(pool, { secureCookies, build }) {
       const tz = (await validTz(b.timezone)) || "Africa/Johannesburg";
       // Claiming the gym outreach built for them: the account joins that gym (built now if it wasn't yet).
       gymId = pro ? await buildGym(pro.id, { claiming: true }) : null;
-      if (pro && !gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email hello@jitsflow.com.");
+      if (pro && !gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email support@jitsflow.com.");
       if (!gymId) gymId = (await q("insert into gyms(name,student_code,coach_code,timezone,bill_start,pop_token) values($1,$2,$3,$4,date_trunc('month', now() at time zone $4)::date,$5) returning id", [gymName, code(), code(), tz, popToken()])).rows[0].id;
       try { const nu = await newUser({ ...b, role: "coach", gymId, source: visits.signupSource(b.source, pro ? "outreach" : null) }); id = nu.id; detached = nu.off; }
       catch (e) { if (!pro) await q("delete from gyms where id=$1", [gymId]); throw e; }
@@ -472,7 +472,7 @@ function makeApi(pool, { secureCookies, build }) {
     const email = clean(req.body?.email, 254).toLowerCase();
     if (!isEmail(email)) fail(400, "Enter the email you signed up with.");
     checkSignIn(req, "reset:" + email);
-    if (!mail.mailOn()) fail(503, "Password reset by email isn't switched on yet. Ask your coach or email hello@jitsflow.com.");
+    if (!mail.mailOn()) fail(503, "Password reset by email isn't switched on yet. Ask your coach or email support@jitsflow.com.");
     // The same answer, just as fast, whether or not the email has an account: the email is made and sent after answering.
     (async () => {
       const r = await q("select u.id, u.name, u.parent_name, u.pass_hash is null as offline, g.name as gym from users u left join gyms g on g.id=u.gym_id where u.email=$1", [email]);
@@ -3918,7 +3918,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const pro = await takeProspect(req.body?.token);
     try {
       const gymId = await buildGym(pro.id, { claiming: true });
-      if (!gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email hello@jitsflow.com.");
+      if (!gymId) fail(409, "This gym can't be claimed right now. Try again in a minute, or email support@jitsflow.com.");
       await claimBuilt(gymId, lg.id, { tz: await validTz(req.body?.timezone) });
       await q("update users set gym_id=$1, role='coach', active=true, gym_joined_at=now() where id=$2", [gymId, lg.id]);
     } catch (e) { await untakeProspect(pro); throw e; }
@@ -4135,7 +4135,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Feedback from a beta gym: a few words and, if they like, a screenshot (stored like a proof of payment). The team gets an email.
   api.post("/coach/beta/feedback", once(async (req, res) => {
     const u = needCoach(req), b = await betaOf(u.gym_id);
-    if (!beta.active(b)) fail(403, "Feedback here is for gyms in the beta. Email hello@jitsflow.com any time.");
+    if (!beta.active(b)) fail(403, "Feedback here is for gyms in the beta. Email support@jitsflow.com any time.");
     const text = clean(req.body?.text, 4000), f = req.body?.file;
     let shot = null, type = null;
     if (f && f.data) { const pf = proofFile(f); if (!pf || !/^image\//.test(pf.type)) fail(400, "Attach a screenshot (a picture)."); shot = pf.data; type = pf.type; }

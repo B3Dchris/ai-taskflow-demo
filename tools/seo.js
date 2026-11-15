@@ -1,11 +1,13 @@
 // Builds the public, indexable pages of jitsflow.com from the app's own content:
 //   /techniques/ and one page per technique, /positions/ and one per position, /belts/<belt>/, /glossary/,
+//   /pricing/, /terms/, /refunds/, /contact/ and /security/ (tools/legal.js, with src/business.json),
 //   a share-card image per page (/og/...), sitemap.xml, robots.txt and 404.html.
 // The app is one JavaScript page that search engines barely see; these pages are what gets found and shared.
 // Usage: node tools/seo.js   (run by build.py after dist/jitsflow-claude.html is built; needs Playwright)
 "use strict";
 const fs = require("fs"); const path = require("path"); const crypto = require("crypto");
 const { chromium } = require("playwright");
+const legal = require("./legal");
 
 const ROOT = path.resolve(__dirname, ".."), WEB = path.join(ROOT, "web");
 const SITE = "https://www.jitsflow.com";
@@ -68,6 +70,7 @@ ${body}
 <footer><div class="wrap">
 <nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
 <p>JitsFlow · No-gi technique library and flow map. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
+${legal.legalFooter()}
 <p class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
 </div></footer>
 <script>
@@ -275,12 +278,15 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
 <section class="stack"><h2>Gyms we write to</h2><p>Sometimes we write to a gym's owner directly with a private preview of their gym on JitsFlow, made from the gym's public website: its name, logo, colour, timetable, coaches and prices, and the owner's name and email if we have them. We send one email and at most one follow-up. Every email has an opt-out link, and the preview has a "Not your gym? Remove this page" link. Either one deletes the preview and what we read. We keep only the website's address and the email address, so we never write again.</p></section>
 <section class="stack"><h2>Counting visits</h2><p>Our own server counts visits to the website, without cookies: which page was opened, the site or ad that linked to it, and the country (from Cloudflare). To count each visitor once a day it keeps a scrambled code made from your internet address and browser with a secret that changes every day and is then deleted, so visits can't be linked from one day to the next or traced back to you. Your internet address itself isn't stored. These counts are kept for 13 months.</p>
 <p>If you arrive from a link with a campaign tag or a Google Ads click, your browser remembers where you came from for 30 days (in its own storage, not a cookie). It's only sent to us if you sign up, and is kept with your account, so we can see which ads and links bring people to JitsFlow.</p></section>
-<section class="stack"><h2>Who else handles it</h2><ul class="ticks"><li>Render hosts the site and database in Frankfurt, Germany.</li><li>Resend sends account emails (welcome, password reset, invites).</li><li>Cloudflare routes traffic and email for jitsflow.com.</li><li>YouTube's player (in privacy-enhanced mode) loads when a technique video is on screen; YouTube says it doesn't set tracking cookies until you press play.</li><li>Anthropic (Claude) reads a gym's public website when a coach imports it, and answers "explain this" questions in the app. It also reads proofs of payment (to find the amount, date and reference), emails forwarded to a gym's payments address with their attachments, and WhatsApp group screenshots a coach uploads to add students (names and numbers in them).</li><li>PayFast handles card payments. When you pay by card we send PayFast your name, email and the amount. Your card details go only to PayFast, never to us.</li><li>Google Analytics counts visits and which pages are used, only if you tap Allow. You can change that any time with Cookie settings at the bottom of the page.</li></ul></section>
+<section class="stack"><h2>Who else handles it</h2><ul class="ticks"><li>Render hosts the site and database in Frankfurt, Germany.</li><li>Resend sends account emails (welcome, password reset, invites).</li><li>Cloudflare routes traffic and email for jitsflow.com.</li><li>YouTube's player (in privacy-enhanced mode) loads when a technique video is on screen; YouTube says it doesn't set tracking cookies until you press play.</li><li>Anthropic (Claude) reads a gym's public website when a coach imports it, and answers "explain this" questions in the app. It also reads proofs of payment (to find the amount, date and reference), emails forwarded to a gym's payments address with their attachments, and WhatsApp group screenshots a coach uploads to add students (names and numbers in them).</li><li>Payfast is our payment processor. It handles card payments for a gym's JitsFlow plan, and for members paying their gym once the gym switches that on. When you pay by card we send Payfast your name, email and the amount. Your card details go only to Payfast, never to us; for a saved card we keep only the token Payfast gives us (see <a href="/security/">secure payments</a>).</li><li>Google Analytics counts visits and which pages are used, only if you tap Allow. You can change that any time with Cookie settings at the bottom of the page.</li></ul></section>
 <section class="stack"><h2>How long we keep it</h2><ul class="ticks"><li>Proofs of payment: when someone deletes their account, the files they sent are deleted 90 days later. The payment itself stays in the gym's books, not linked to them.</li><li>Someone who left a gym still owing: kept on the gym's Money list for 18 months after they left.</li><li>Google Ads click ids on website visits: removed after 90 days. Where visitors came from is kept, without the id.</li><li>Sign-ins last up to 180 days, then you sign in again. Password reset and email links expire within a day and are then deleted. You can sign out on all your other devices from Settings › Your account.</li><li>"Stop emails from this gym" requests are kept, so the gym can't email you again.</li></ul></section>
 <section class="stack"><h2>Deleting it</h2><p>Signed in, go to Settings › Your account › Delete account. That removes your account, progress, training log and attendance straight away. Payment records your coach keeps for their gym are unlinked from you.</p>
 <p>To leave your gym but keep your account, tap Leave gym under Your account. Your coach's notes, plan and fee for you are cleared, and a new gym never sees them. A new gym's coaches only see training you log after you join.</p>
-<p>A coach closing their gym can delete it in the Gym tab. That deletes its classes, plans, payments and proofs, competitions, and the people it added who aren't on the app. Students with their own accounts keep them. For anything else, email <a href="mailto:hello@jitsflow.com">hello@jitsflow.com</a>.</p></section>
-<p class="small muted">Questions or requests under POPIA or GDPR: <a href="mailto:hello@jitsflow.com">hello@jitsflow.com</a>.</p></article>` }), 0.3);
+<p>A coach closing their gym can delete it in the Gym tab. That deletes its classes, plans, payments and proofs, competitions, and the people it added who aren't on the app. Students with their own accounts keep them. For anything else, email <a href="mailto:support@jitsflow.com">support@jitsflow.com</a>.</p></section>
+<p class="small muted">Questions or requests under POPIA or GDPR: <a href="mailto:support@jitsflow.com">support@jitsflow.com</a>. Who we are and how to reach us: <a href="/contact/">contact</a>. See also the <a href="/terms/">terms of service</a>, <a href="/refunds/">refund policy</a> and <a href="/pricing/">pricing</a>.</p></article>` }), 0.3);
+
+  // --- pricing, terms, refunds, contact, secure payments
+  legal.legalPages({ frame, add, SITE });
 
   // --- 404, sitemap, robots
   write("404.html", frame({ url: "/404", type: "website", title: "Page not found | JitsFlow", desc: "That page isn't here.", image: "/og/techniques.jpg",
@@ -292,6 +298,8 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   cards.push({ file: "og/coaches.jpg", eyebrow: "For gyms", title: "Run your gym from your phone", sub: "Timetable, bookings, waitlists, memberships, attendance insights, competitions and WhatsApp invites.", belt: "black" });
   cards.push({ file: "og/home.jpg", eyebrow: "No-gi BJJ study app", title: "Know what to do from every position", sub: `${D.tech.length} techniques, every position, attack chain and escape, white to black belt.`, belt: "black" });
   // What the home page's picture galleries link to (build.py reads it): each move and position with its page address.
+  // The home and coaches pages' footer lines (build.py fills @@LEGAL_FOOT@@ with it).
+  fs.writeFileSync(path.join(ROOT, "dist", "legal-foot.html"), legal.landingFooter());
   fs.writeFileSync(path.join(ROOT, "dist", "site-index.json"), JSON.stringify({
     tech: D.tech.map((t) => ({ id: t.id, n: t.n, slug: tS[t.id], belt: t.belt, cat: D.cats[t.c] || t.c, f: t.f })),
     pos: Object.fromEntries(posKeys.map((k) => [k, { l: D.pos[k].l, L: D.pos[k].L, r: D.pos[k].r, slug: pS[k] }])) }, null, 1));
@@ -300,7 +308,7 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
 
 (async () => {
   fs.copyFileSync(path.join(ROOT, "src", "site.css"), path.join(WEB, "site.css"));
-  for (const d of ["techniques", "positions", "belts", "glossary"]) fs.rmSync(path.join(WEB, d), { recursive: true, force: true });
+  for (const d of ["techniques", "positions", "belts", "glossary", "pricing", "terms", "refunds", "contact", "security"]) fs.rmSync(path.join(WEB, d), { recursive: true, force: true });
   const b = await chromium.launch(); const page = await b.newPage();
   const D = await loadData(page);
   const { pages, cards } = build(D);

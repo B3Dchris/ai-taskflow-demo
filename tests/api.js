@@ -205,7 +205,7 @@ function client(base) {
     r = await anon("GET", "/status"); ok(r.s === 200 && r.j.mail === true && r.j.ai === false, "status says email is on");
     await wait();
     const wc = sink.mails.find((m) => m.to[0] === "coach@example.com");
-    ok(wc && wc.subject === "Your gym is set up on JitsFlow" && wc.html.includes("Your gym is ready") && !wc.html.includes("JPB") && wc.html.includes("https://www.jitsflow.test/app/?join=" + sc) && /https:\/\/www\.jitsflow\.test\/app\/\?verify=[0-9a-f]{64}/.test(wc.text) && wc.from === "JitsFlow <no-reply@jitsflow.com>" && wc.reply_to === "hello@jitsflow.com" && wc.text, "coach gets a welcome email with the invite link and the email check (not the gym name they typed)");
+    ok(wc && wc.subject === "Your gym is set up on JitsFlow" && wc.html.includes("Your gym is ready") && !wc.html.includes("JPB") && wc.html.includes("https://www.jitsflow.test/app/?join=" + sc) && /https:\/\/www\.jitsflow\.test\/app\/\?verify=[0-9a-f]{64}/.test(wc.text) && wc.from === "JitsFlow <no-reply@jitsflow.com>" && wc.reply_to === "support@jitsflow.com" && wc.text, "coach gets a welcome email with the invite link and the email check (not the gym name they typed)");
     ok(sink.mails.some((m) => m.to[0] === "sam@example.com" && /Welcome/.test(m.subject)), "students get a welcome email");
     let n = sink.mails.length;
     r = await anon("POST", "/auth/forgot", { email: "nobody@example.com" }); await wait(); ok(r.s === 200 && sink.mails.length === n, "forgot-password for an unknown email looks the same and sends nothing");

@@ -431,7 +431,7 @@ function makePublic(pool) {
   r.post("/:token/remove", wrap(async (req, res) => {
     const p = await byToken(req.params.token);
     if (!p || p.status === "optedout") return page(res, 200, simplePage("Removed · JitsFlow", "This page is gone", ["We've deleted it and won't contact that website again."]));
-    if (p.status === "claimed") return page(res, 409, simplePage("Claimed · JitsFlow", "This gym has been claimed", ["It belongs to an account now, so it can't be removed from here. Email hello@jitsflow.com if something's wrong."]));
+    if (p.status === "claimed") return page(res, 409, simplePage("Claimed · JitsFlow", "This gym has been claimed", ["It belongs to an account now, so it can't be removed from here. Email support@jitsflow.com if something's wrong."]));
     await optOut(q, p, { withEmail: false });
     page(res, 200, simplePage("Removed · JitsFlow", "This page is gone", [`We've deleted the gym we set up and what we read from ${esc(p.domain)}, and we won't contact ${esc(p.domain)} again. Sorry for the bother.`]));
   }));

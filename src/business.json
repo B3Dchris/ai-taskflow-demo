@@ -1,0 +1,18 @@
+{
+  "_help": "Business details shown on /contact/, /terms/, /refunds/, /pricing/ and in every footer. An empty value, or one in [square brackets] (a placeholder), leaves its line off the pages; build.py warns about required ones. Run python3 build.py after editing.",
+  "legalName": "B3D Projects (Pty) Ltd",
+  "tradingAs": "B-3 Data",
+  "tradingName": "JitsFlow",
+  "entityType": "Private company",
+  "regNo": "2022/519665/07",
+  "directors": "",
+  "vatNo": "",
+  "vatNote": "Not VAT registered",
+  "priceNote": "Prices are in South African rand. We're not VAT registered, so no VAT is added.",
+  "address": "1646 Dainfern, Johannesburg, 2054, South Africa",
+  "city": "Johannesburg",
+  "country": "South Africa",
+  "email": "support@jitsflow.com",
+  "phone": "",
+  "hours": "Mon–Fri 08:00–17:00 SAST"
+}
