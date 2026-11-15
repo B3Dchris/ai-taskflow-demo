@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Secure payments | JitsFlow</title>
-<meta name="description" content="Card payments on JitsFlow go through Payfast&#39;s secure checkout. JitsFlow never sees or stores your card number. HTTPS everywhere.">
+<meta name="description" content="Card payments on JitsFlow go through Payfast&#39;s and Paystack&#39;s secure checkouts. JitsFlow never sees or stores your card number. HTTPS everywhere.">
 <link rel="canonical" href="https://www.jitsflow.com/security/">
 <meta name="theme-color" content="#0E1A33">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="JitsFlow">
 <meta property="og:title" content="Secure payments | JitsFlow">
-<meta property="og:description" content="Card payments on JitsFlow go through Payfast&#39;s secure checkout. JitsFlow never sees or stores your card number. HTTPS everywhere.">
+<meta property="og:description" content="Card payments on JitsFlow go through Payfast&#39;s and Paystack&#39;s secure checkouts. JitsFlow never sees or stores your card number. HTTPS everywhere.">
 <meta property="og:url" content="https://www.jitsflow.com/security/">
 <meta property="og:image" content="https://www.jitsflow.com/og/home.jpg">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
@@ -31,15 +31,16 @@
 <nav class="wrap crumbs" aria-label="Breadcrumb"><a href="/">JitsFlow</a><span aria-hidden="true">›</span><span aria-current="page">Secure payments</span></nav>
 <main class="wrap">
 <article class="stack-lg legal-doc"><header class="stack"><p class="eyebrow">Secure payments</p><h1>Secure payments</h1>
-<p class="lead">Card payments go through Payfast, a South African payment processor. Your card details go to Payfast only, never to JitsFlow.</p></header>
+<p class="lead">Card payments go through Payfast (a gym's JitsFlow plan) and Paystack (members paying their gym), both PCI DSS compliant payment processors. Your card details go to them only, never to JitsFlow.</p></header>
 <section><h2>How it works</h2><ul>
-<li>When you pay or add a card, JitsFlow sends you to Payfast's secure checkout, where you enter your card or choose another payment method. Payfast is PCI DSS compliant, the card industry's security standard.</li>
+<li>When you pay or add a card, JitsFlow sends you to Payfast's or Paystack's secure checkout, where you enter your card or choose another payment method. Both are PCI DSS compliant, the card industry's security standard.</li>
 <li>JitsFlow never sees, receives or stores your full card number or security code (CVV).</li>
-<li>For monthly billing or a saved card, Payfast gives us a token: a reference that lets us ask Payfast to charge that card or cancel it. A token isn't your card number and is useless outside Payfast. Saved-card tokens are encrypted when we store them.</li>
-<li>Every checkout is signed, and we only mark a payment as paid when Payfast's notification about it has a valid signature and Payfast confirms it directly.</li>
+<li>For monthly billing or a saved card, Payfast or Paystack gives us a token (Paystack calls it an authorization): a reference that lets us ask them to charge that card. A token isn't your card number and is useless outside the processor. Saved-card tokens are encrypted when we store them.</li>
+<li>We only mark a payment as paid when the processor's notification about it has a valid signature and the processor confirms it directly, for the amount and account the checkout asked for.</li>
+<li>Membership money is paid by Paystack straight into the gym's bank account. JitsFlow never holds it. A gym's bank and ID details are encrypted when we store them, and shown only by their last 4 digits.</li>
 <li>The whole site uses HTTPS (encrypted connections), and browsers are told to always use it (HSTS).</li></ul></section>
-<section><h2>Ways to pay</h2><p>Card (Visa and Mastercard) and the methods Payfast offers at checkout, including Instant EFT, Apple Pay and Google Pay. Which ones you see depends on your device and what the merchant has switched on. All amounts are in South African rand (ZAR).</p>
-<p>Gym plans are paid to JitsFlow. Membership fees are paid to your gym, through the gym's own Payfast account, or by EFT to the gym's bank account with your reference. Card payments for membership fees are coming soon.</p></section>
+<section><h2>Ways to pay</h2><p>Gym plans are paid to JitsFlow by card (Visa and Mastercard) or another method Payfast offers at its checkout. Which ones you see depends on your device. All amounts are in South African rand (ZAR).</p>
+<p><!--jf:soon-->Members pay their gym by EFT with their own reference today. Card, Apple Pay and Capitec Pay are coming soon: card payments will be processed by Paystack and paid by Paystack directly into the gym's bank account, so JitsFlow never holds membership money. JitsFlow's 2% platform fee and Paystack's processing fee will be deducted from each card payment.<!--/jf:soon--><!--jf:live-->Members pay their gym by card, Apple Pay, Capitec Pay or EFT. Card payments are processed by Paystack and paid by Paystack directly into the gym's bank account; JitsFlow never holds membership money. JitsFlow's 2% platform fee and Paystack's processing fee are deducted from each card payment.<!--/jf:live--> Paystack's checkout shows the methods it offers on your device.</p></section>
 <section><h2>Spotted a problem?</h2><p>If you see a charge you don't recognise, or think something isn't secure, email <a href="mailto:support@jitsflow.com">support@jitsflow.com</a> straight away.</p></section>
 <p class="small muted"><a href="/pricing/">Pricing</a> · <a href="/terms/">Terms</a> · <a href="/refunds/">Refunds</a> · <a href="/privacy/">Privacy</a> · <a href="/contact/">Contact</a></p></article>
 </main>
@@ -47,7 +48,7 @@
 <nav class="foot"><a href="/techniques/">All techniques</a><a href="/positions/">Positions</a><a href="/belts/">Belt curriculum</a><a href="/glossary/">Glossary</a><a href="/app/">Open the app</a><a href="/app/?signin=1">Coach sign in</a><a href="#" data-consent-open hidden>Cookie settings</a></nav>
 <p>JitsFlow · No-gi technique library and flow map. Train safely, tap early, and check techniques with your coach. Videos are hosted by YouTube and belong to their creators.</p>
 <nav class="foot legal" aria-label="Pricing and policies"><a href="/pricing/">Pricing</a><a href="/terms/">Terms</a><a href="/refunds/">Refunds</a><a href="/privacy/">Privacy</a><a href="/security/">Secure payments</a><a href="/contact/">Contact</a></nav>
-<p class="legalline">© 2026 JitsFlow, a product of B3D Projects (Pty) Ltd (trading as B-3 Data) · Company registration number 2022/519665/07 · 1646 Dainfern, Johannesburg, 2054, South Africa · <a href="mailto:support@jitsflow.com">support@jitsflow.com</a> · Payments are processed securely by Payfast.</p>
+<p class="legalline">© 2026 JitsFlow, a product of B3D Projects (Pty) Ltd (trading as B-3 Data) · Company registration number 2022/519665/07 · 1646 Dainfern, Johannesburg, 2054, South Africa · <a href="mailto:support@jitsflow.com">support@jitsflow.com</a> · Payments are processed securely by Payfast<!--jf:soon-->.<!--/jf:soon--><!--jf:live--> (JitsFlow plans) and Paystack (members' card payments).<!--/jf:live--></p>
 <p class="credit">Built and developed by <a href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
 </div></footer>
 <script>

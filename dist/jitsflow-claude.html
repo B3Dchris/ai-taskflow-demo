@@ -63,7 +63,7 @@ p{margin:0}
 .stack{display:flex;flex-direction:column;gap:12px}
 .stack-lg{display:flex;flex-direction:column;gap:26px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.row>input[type=checkbox]{flex:none;width:22px;height:22px;margin:0;accent-color:var(--blue)}
+.row>input[type=checkbox],.row>input[type=radio]{flex:none;width:22px;height:22px;margin:0;accent-color:var(--blue)}
 .vh{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;padding:0}
 .between{justify-content:space-between}
 
@@ -795,6 +795,9 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .paytile.dark{background:#000;color:#fff;border-color:#000}.paytile .pill{position:absolute;top:-8px;right:-4px;font-size:10px}
 .apmark{font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:1px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
 .gpmark{display:flex;align-items:center;gap:3px;font-size:19px;font-weight:600;color:var(--ink-2)}
+/* Capitec Pay (through Paystack): the bank's name over "Pay", in plain type (no logo) */
+.cpmark{display:flex;flex-direction:column;align-items:center;line-height:1;gap:2px}.cpmark b{font-size:14px;letter-spacing:.01em}.cpmark span{font-size:12px;font-weight:600;color:var(--ink-2)}
+.psrev{font-family:var(--f-mono);font-size:13px;background:var(--surface-2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all}
 .pvbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 12px;border-radius:14px;background:var(--night,#0e1a33);color:#fff;font-size:14px;line-height:1.3;box-shadow:0 6px 18px rgba(14,26,51,.18)}
 .pvbar span{flex:1;min-width:0;overflow-wrap:anywhere}.pvbar .btn,.pvbar .btn.primary{flex:none;white-space:nowrap;background:#fff;color:#0e1a33;border-color:#fff}
 .radrow{flex-wrap:nowrap!important;justify-content:flex-start!important;gap:8px!important}.radrow input{width:auto;flex:none;margin:0}
@@ -5121,7 +5124,13 @@ document.addEventListener("click",e=>{
     case "packcard": payByCard(v); break;
     case "packedit": S.ui.packEdit=v||null;render();break;
     case "ratefill": { const t=document.getElementById(el.dataset.for);if(t){t.value=v;el.parentNode.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed",String(b===el)))}break }
-    case "paysoon": toast("Card, Apple Pay and Google Pay are coming soon. For now, please pay by EFT."); break;
+    case "paysoon": toast(API.pay&&API.pay.provider==="paystack"?"Card, Apple Pay and Capitec Pay are coming soon. For now, please pay by EFT.":"Card, Apple Pay and Google Pay are coming soon. For now, please pay by EFT."); break;
+    case "psedit": S.ui.psEdit=v!=="0";render();break;
+    case "psreveal": psReveal(v);break;
+    case "psverify": el.disabled=true;psVerify(v);break;
+    case "psseen": (async()=>{const [k,id]=String(v).split(":");try{await api("POST",`/admin/paystack/${k}/${id}/seen`,{});await dashLoad()}catch(e){toast(e.message)}})();break;
+    case "refundask": refundSheet(v);break;
+    case "refundyes": el.disabled=true;refundGo(v);break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;
@@ -5215,7 +5224,10 @@ document.addEventListener("change",e=>{
   if(e.target.id==="pv-rep"){pvSum();return}
   if(e.target.name==="mode"&&e.target.form&&e.target.form.id==="accessform"){accessModeShow(e.target.form);return}
   if(e.target.id==="ppl-in"&&e.target.files&&e.target.files.length){const fs=[...e.target.files];e.target.value="";peopleFiles(fs);return}
-  if(e.target.id==="pf-soon"){const on=e.target.checked;api("PATCH","/coach/gym/pay-soon",{on}).then(()=>{if(COACH.payInfo&&COACH.payInfo.pay)COACH.payInfo.pay.cardSoon=on;toast(on?"Students now see a PayFast button marked “coming soon”.":"PayFast button hidden from students.")}).catch(x=>{e.target.checked=!on;toast(x.message)});return}
+  if(e.target.id==="pf-soon"){const on=e.target.checked,ps=COACH.ps&&COACH.ps.on;api("PATCH","/coach/gym/pay-soon",{on}).then(()=>{if(COACH.payInfo&&COACH.payInfo.pay)COACH.payInfo.pay.cardSoon=on;if(COACH.ps)COACH.ps.cardSoon=on;toast(ps?(on?"Members now see “Card payments coming soon”.":"Hidden from members."):on?"Students now see a PayFast button marked “coming soon”.":"PayFast button hidden from students.")}).catch(x=>{e.target.checked=!on;toast(x.message)});return}
+  // Get paid by card: the ID box follows the kind of number picked. Joining a plan by card: the amount is at least its price.
+  if(e.target.name==="idKind"&&e.target.closest("#psform")){const id=e.target.value==="id",i=document.querySelector('#psform [name="idNumber"]'),l=document.getElementById("ps-idlabel");if(l)l.textContent=id?"Owner's ID number":"Registration number";if(i){i.placeholder=id?"13 digits":"2019/123456/07";i.inputMode=id?"numeric":"text"}return}
+  if(e.target.id==="card-for"){const o=e.target.selectedOptions[0],a=document.getElementById("card-amt");if(o&&o.dataset.price&&a&&Number(a.value||0)*100<Number(o.dataset.price))a.value=Number(o.dataset.price)/100;return}
   if(e.target.id==="set-quiz"){P().settings.quiz=e.target.checked;saveProgress();toast(e.target.checked?"Quiz mode on: steps stay hidden until you tap.":"Steps show straight away in reviews.");return}
   // A pack picked on a payment: its price is the amount, and it doesn't cover months of fees.
   if(e.target.id==="p-pack"||e.target.id==="mypop-pack"){const o=e.target.selectedOptions[0],amt=document.getElementById(e.target.id==="p-pack"?"p-amt":"mypop-amt"),cv=document.getElementById("p-covers");
@@ -5250,7 +5262,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
-const FORMS=["outform","outedit","authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","packform","accessform","privpriceform","logform","kidform"];
+const FORMS=["outform","outedit","authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","psform","packform","accessform","privpriceform","logform","kidform"];
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
@@ -5281,6 +5293,7 @@ async function submitForm(fid,f,submitter){
   if(fid==="bankform")return saveBank(f);
   if(fid==="addstuform")return submitAddStudent(f);
   if(fid==="pfform")return savePf(f);
+  if(fid==="psform")return savePs(f);
   if(fid==="packform")return savePack(f);
   if(fid==="accessform")return saveAccess(f);
   if(fid==="privpriceform")return savePrivPrice(f);
@@ -5373,11 +5386,12 @@ async function acctInit(){
   // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
   // The gym outreach built for them (the email's link, and the older preview page's Claim button): the app opens as a preview of it.
   const cg=qs.get("gym")||qs.get("claimgym");if(cg){try{history.replaceState(null,"",location.pathname)}catch(e){}if(API.on)setTimeout(()=>previewInit(cg),50);else setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
-  // Back from PayFast
-  const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay");
-  if(paid||bill||ap){try{const k=new URLSearchParams(location.search);k.delete("paid");k.delete("billing");k.delete("autopay");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
-    if(ap==="on")setTimeout(()=>{toast("Card saved. Your fees are paid automatically from now on. You'll get a receipt each time.");setTimeout(()=>loadPay().then(render),8000)},400);
-    if(paid==="card")setTimeout(()=>{toast("Thanks! Your payment shows as paid once PayFast confirms it, usually within a minute.");setTimeout(()=>loadPay().then(render),8000)},400);
+  // Back from PayFast, or from Paystack (which adds its reference: asked about straight away, see psBack)
+  const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay"),pref=qs.get("reference")||qs.get("trxref");
+  if(paid||bill||ap){try{const k=new URLSearchParams(location.search);["paid","billing","autopay","reference","trxref"].forEach(x=>k.delete(x));history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
+    if(pref&&paid==="card")setTimeout(()=>psBack(pref,ap==="on"),300);
+    else if(ap==="on")setTimeout(()=>{toast("Card saved. Your fees are paid automatically from now on. You'll get a receipt each time.");setTimeout(()=>loadPay().then(render),8000)},400);
+    else if(paid==="card")setTimeout(()=>{toast("Thanks! Your payment shows as paid once PayFast confirms it, usually within a minute.");setTimeout(()=>loadPay().then(render),8000)},400);
     if(bill==="done")setTimeout(()=>{toast("Card saved with PayFast. Thanks!");COACH.bill=undefined;setTimeout(render,6000)},400);
     if(bill==="cancel")setTimeout(()=>toast("No card added. You can add one any time under Gym."),400)}
   const q=qs.get("join");
@@ -6191,7 +6205,7 @@ async function popAll(){const ids=(COACH.payments||[]).filter(popReady).map(p=>p
 function coachPayments(){
   const ps=COACH.payments||[],cur=COACH.roster.currency,ppl=students(),byId=Object.fromEntries((COACH.roster.people||[]).map(p=>[p.id,p])),ready=ps.filter(popReady);
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
-  const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},ok=ps.filter(p=>p.status==="confirmed"),pend=ps.filter(p=>p.status==="pending"),recent=ps.filter(p=>p.userId&&(p.status==="confirmed"||p.status==="test"));
+  const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},ok=ps.filter(p=>p.status==="confirmed"),pend=ps.filter(p=>p.status==="pending"),recent=ps.filter(p=>p.userId&&(p.status==="confirmed"||p.status==="test"||p.status==="refunded"));
   const mStart=new Date();mStart.setDate(1);const mk=ds(mStart);const month=ok.filter(p=>p.paidOn>=mk);
   const due=ppl.filter(p=>p.active&&owing(p)),unmatched=ok.filter(p=>!p.userId),og=S.ui.openG||{};
   return `<section class="stack"><div class="stats"><div class="stat"><b>${money(month.reduce((s,p)=>s+p.amountCents,0),cur)}</b><span>This month</span></div><div class="stat"><b>${ppl.filter(p=>p.active&&owesFees(p)&&!owing(p)).length}</b><span>Paid</span></div><div class="stat"><b>${due.length}</b><span>Due</span></div></div>
@@ -6202,8 +6216,11 @@ function coachPayments(){
     <p class="small muted" style="margin-top:-6px">Upload a PDF or screenshot someone sent you. JitsFlow reads the amount, date and reference and finds the student; you confirm.</p>
     ${unmatched.length?`<h2 class="label">Not matched to a student (${unmatched.length})</h2><div class="list">${unmatched.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div><span class="small muted">${esc(p.reference||p.emailSubject||"")}</span><select data-assign="${p.id}" aria-label="Assign to a student"><option value="">Assign to…</option>${ppl.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>`).join("")}</div>`:""}
     ${due.length?`<h2 class="label">Owing</h2><div class="list">${due.map(p=>`<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}</span><span class="meta">${esc(owedTxt(p,cur))}${p.pendingThisMonthCents?` · ${money(p.pendingThisMonthCents,cur)} to check`:""}</span></span><span class="pill due">${p.pendingThisMonthCents?"Checking":"Due"}</span></button>`).join("")}</div>`:""}
-    <h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.slice(0,40).map(p=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.packLessons?" · "+esc(packText(p)):coversText(p)}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":p.source==="student"?" · sent in the app":""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${p.family?`<span class="small">Part of a family payment of ${money(p.family.totalCents,p.currency)} · <button class="linkbtn small" data-a="payunsplit" data-v="${esc(p.family.of)}">Undo split</button></span>`:""}</div>`,{del:["paydelask",p.id]})).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}</section>`;
+    <h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.slice(0,40).map(p=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.packLessons?" · "+esc(packText(p)):coversText(p)}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":p.source==="student"?" · sent in the app":""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${p.source==="paystack"?psLine(p):""}${p.family?`<span class="small">Part of a family payment of ${money(p.family.totalCents,p.currency)} · <button class="linkbtn small" data-a="payunsplit" data-v="${esc(p.family.of)}">Undo split</button></span>`:""}</div>`,{del:["paydelask",p.id]})).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}</section>`;
 }
+// A card payment through Paystack, in Money: its fees, a refund (done or on its way), a chargeback, and Refund.
+function psLine(p){const c=p.currency,bits=[p.feeCents?`JitsFlow fee ${money(p.feeCents,c)}`:"",p.pspFeeCents?`Paystack fee ${money(p.pspFeeCents,c)}`:"",p.refundedCents?`${money(p.refundedCents,c)} refunded`:""].filter(Boolean);
+  return `<span class="small">${p.status==="refunded"?`<span class="pill">Refunded</span> `:""}${p.dispute==="open"?`<span class="pill due">Disputed</span> `:p.dispute==="lost"?`<span class="pill bad">Chargeback lost</span> `:p.dispute==="won"?`<span class="pill ok">Dispute won</span> `:""}${esc(bits.join(" · "))}${p.refundPending?`${bits.length?" · ":""}refund on its way`:(p.status==="confirmed"||p.status==="test")&&!p.dispute?`${bits.length?" · ":""}<button class="linkbtn small" data-a="refundask" data-v="${esc(p.id)}">Refund</button>`:""}</span>`}
 const ordinal=d=>`${d}${d===1||d===21?"st":d===2||d===22?"nd":d===3||d===23?"rd":"th"}`;
 function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG||{};
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -6218,7 +6235,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
         <label class="f">Note for students (optional)<input name="note" value="${esc(bank.note||"")}" placeholder="Fees are due by the 3rd of each month"></label>
         <button class="btn" type="submit">Save payment details</button></form></div></details>
     ${pi?`<div class="panel stack"><h2 class="label">Fee reminders</h2><label class="row small" style="flex-wrap:nowrap"><input id="m-auto" type="checkbox"${pi.autoRemind?" checked":""}> Email reminders automatically to everyone who owes, on the due day (the ${ordinal(bank.dueDay||1)}) and 7 days later. Not to anyone paused, on trial, or who paid this week.</label></div>`:""}
-    ${pfPanel()}
+    ${cardsPanel()}
     <details class="more" data-g="m-mail"${og["m-mail"]?" open":""}><summary><span><b>Forward proof-of-payment emails</b><br><span class="small muted">A Gmail or Outlook rule to your JitsFlow address</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
       ${pi?`${pi.popReady?"":`<p class="small warn-t">Email forwarding is being switched on. You can set up the rule now; emails are read once it's live.</p>`}
       <div class="codebox" style="word-break:break-all">${esc(pi.popAddress)}</div><input id="pop-addr" value="${esc(pi.popAddress)}" hidden><div class="row"><button class="btn sm" data-a="copytext" data-v="pop-addr">Copy address</button><button class="linkbtn small" data-a="popnewaddr">Get a new address</button></div>
@@ -6262,7 +6279,7 @@ async function leaveSheet(){if(!API.pay)await loadPay();const p=API.pay,g=esc((A
 async function loadPay(){if(!API.me||!API.me.gym||isCoach())return;try{API.pay=(await api("GET","/me/pay")).pay}catch(e){}}
 // What a student still has to pay: every month still owed (their running balance), less what their coach is checking.
 const myOwed=p=>!p?0:Math.max(0,(p.owedCents!==undefined?p.owedCents:p.dueCents-p.paidCents)-(p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents));
-const PSTAT={pending:["Checking","due"],confirmed:["Received","ok"],rejected:["Not accepted",""],test:["TEST",""]};
+const PSTAT={pending:["Checking","due"],confirmed:["Received","ok"],rejected:["Not accepted",""],test:["TEST",""],refunded:["Refunded",""]};
 const fullDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
 // A parent's family (brothers and sisters who share them) when another kid owes too: the family total and a line per kid.
 const famPay=p=>{const f=p&&p.family;return f&&f.totalCents>0&&f.kids.some(k=>!k.me&&k.owedCents>0)?f:null};
@@ -6292,12 +6309,16 @@ const autoWho=a=>a.names&&a.names.length>1?a.names.slice(0,-1).join(", ")+" and 
 // Months owed from before the card was saved aren't the card's: said plainly, so they pay those themselves.
 const autoBad=a=>a&&a.on&&a.last&&a.last.status==="failed";
 const autoWait=a=>a&&a.on&&a.last&&a.last.status==="unsure";
+// Who processes card payments for this member's gym: Paystack (JitsFlow's, paying the gym's bank account) or the gym's own PayFast.
+const viaPs=p=>!!p&&p.provider==="paystack";
+const viaName=p=>viaPs(p)?"Paystack":"PayFast";
 function autoLine(p){const a=p.autopay;if(!a||!a.on)return "";const old=(p.owedMonths||[]).filter(o=>a.from&&o.month<a.from),oc=old.reduce((t,o)=>t+o.cents,0);
-  return `<p class="small" id="autoline">${autoBad(a)?`<b>Your card payment for ${esc(longMon(a.last.month))} didn't go through.</b> Please pay it another way. `:autoWait(a)?`We're checking your card payment for ${esc(longMon(a.last.month))} with PayFast. There's nothing you need to do. `:""}Paid automatically by card on the ${ordinal(a.dueDay)}${a.names&&a.names.length>1?` for ${esc(autoWho(a))}`:""}. <button class="linkbtn small" data-a="autostop">Stop</button></p>${oc>0?`<p class="small" id="autoold"><b>Your card doesn't pay ${money(oc,p.currency)} for ${esc(monthsLong(old.map(o=>o.month)))}</b>, from before you saved it. Please pay that yourself.</p>`:""}`}
+  return `<p class="small" id="autoline">${autoBad(a)?`<b>Your card payment for ${esc(longMon(a.last.month))} didn't go through.</b> Please pay it another way. `:autoWait(a)?`We're checking your card payment for ${esc(longMon(a.last.month))} with ${viaName(p)}. There's nothing you need to do. `:""}Paid automatically by card on the ${ordinal(a.dueDay)}${a.names&&a.names.length>1?` for ${esc(autoWho(a))}`:""}. <button class="linkbtn small" data-a="autostop">Stop</button></p>${oc>0?`<p class="small" id="autoold"><b>Your card doesn't pay ${money(oc,p.currency)} for ${esc(monthsLong(old.map(o=>o.month)))}</b>, from before you saved it. Please pay that yourself.</p>`:""}`}
 function autoSec(p){const a=p.autopay;if(!a)return "";const d=ordinal(a.dueDay);
-  if(a.on)return `<section class="stack" id="autopay"><h2 class="label">Paid automatically</h2><p class="small">Your saved card pays ${esc(autoWho(a))} on the ${d} of each month: only what's owed, and nothing if it's paid or paused.</p><button class="btn" data-a="autostop">Stop paying automatically</button></section>`;
-  return `<section class="stack" id="autopay"><h2 class="label">Pay automatically</h2><button class="btn" data-a="autoon">Save my card and pay automatically</button><p class="small muted" style="margin-top:-6px">Secure with PayFast. On the ${d} of each month we charge only what you owe, and nothing if you've paid or your membership is paused. You get a receipt each time. Stop any time in Me.</p>${payTerms("By saving your card")}</section>`}
-async function autoOn(){toast("Opening PayFast…");try{const c=await api("POST","/me/autopay",{});jfTrack("autopay_on",{});payfastGo(c)}catch(e){toast(e.message)}}
+  if(a.on)return `<section class="stack" id="autopay"><h2 class="label">Paid automatically</h2><p class="small">Your saved card${a.card?` (${esc(a.card)})`:""} pays ${esc(autoWho(a))} on the ${d} of each month: only what's owed, and nothing if it's paid or paused.</p><button class="btn" data-a="autostop">Stop paying automatically</button></section>`;
+  // Paystack keeps a card from a payment: they pay what's due now (or a month ahead), and the card pays the months after.
+  return `<section class="stack" id="autopay"><h2 class="label">Pay automatically</h2><button class="btn" data-a="autoon">Save my card and pay automatically</button><p class="small muted" style="margin-top:-6px">${viaPs(p)?`Secure with Paystack. You pay ${myOwed(p)>=500?`what's due now (${money(myOwed(p),p.currency)})`:"a month's fees now"} and your card is kept. Then on the ${d} of each month we charge only what you owe`:`Secure with PayFast. On the ${d} of each month we charge only what you owe`}, and nothing if you've paid or your membership is paused. You get a receipt each time. Stop any time in Me.</p>${payTerms("By saving your card",viaName(p))}</section>`}
+async function autoOn(){toast(`Opening ${viaName(API.pay)}…`);try{const c=await api("POST","/me/autopay",{});jfTrack("autopay_on",{});if(c.url){location.href=c.url;return}payfastGo(c)}catch(e){toast(e.message)}}
 async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,back=owesBack(p),td=!back&&termOwed(p),left=td||myOwed(p),ks=p.packs||[],pls=p.plans||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
@@ -6317,8 +6338,10 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
         :`Pay the price of the plan you pick${left?` plus what's due now (${money(left,cur)})`:""}, with your reference.`} Tell your coach which plan it's for. They put you on the plan, then you can book privates.</p>${joinAsk(ja)}</section>`:""}
     ${parts.length?`<section class="stack"><h2 class="label">${td||back?"What's due":"This month"}</h2><div class="panel stack" style="gap:6px">${parts.map(x=>`<span class="small">${esc(x)}</span>`).join("")}<b class="small">Total: ${money(td||(back?p.owedCents:p.dueCents),cur)}</b></div></section>`:""}
     ${tiles?`<section class="stack" id="paymethods"><h2 class="label">Pay with</h2>
+      ${p.card&&viaPs(p)&&pls.length?`<label class="f">What's it for?<select id="card-for"><option value="">My fees</option>${pls.map(x=>`<option value="${x.id}" data-price="${x.priceCents}"${p.plan&&p.plan.id===x.id&&p.planStatus==="trial"?" selected":""}>Joining: ${esc(x.name)} · ${money(x.priceCents,cur)} ${esc(PERL[x.period]||"")}</option>`).join("")}</select></label>`:""}
       ${p.card?`<label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:p.dueCents?p.dueCents/100:""}"></label>`:""}${tiles}
-      <p class="small muted" style="margin-top:-6px">${p.card?`Apple Pay, Google Pay and card go through PayFast's secure checkout, and your coach sees it straight away. <button class="linkbtn small" data-a="paycard" data-v="ef">Or Instant EFT from your banking app</button>`:"Card, Apple Pay and Google Pay are coming soon. For now, pay by EFT."}</p>${p.card?payTerms():""}</section>`:""}
+      <p class="small muted" style="margin-top:-6px">${viaPs(p)?(p.card?"Card, Apple Pay and Capitec Pay go through Paystack's secure checkout, straight to your gym, and it shows as paid by itself.":"Card, Apple Pay and Capitec Pay are coming soon. For now, pay by EFT.")
+        :p.card?`Apple Pay, Google Pay and card go through PayFast's secure checkout, and your coach sees it straight away. <button class="linkbtn small" data-a="paycard" data-v="ef">Or Instant EFT from your banking app</button>`:"Card, Apple Pay and Google Pay are coming soon. For now, pay by EFT."}</p>${p.card?payTerms("By continuing",viaName(p)):""}</section>`:""}
     ${autoSec(p)}
     ${eft?`<div class="stack-lg" id="payeft">
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
@@ -6334,21 +6357,23 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
         <div class="row"><button class="btn" type="button" data-a="poppaste">Paste</button><label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label></div></div><input type="file" id="mypop" accept="image/*,application/pdf" hidden>
       <p class="small muted" style="margin-top:-6px">It shows as <b>Checking</b> until your coach confirms it.</p></section></div>`:""}
     ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.lessons} private lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · use within ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span>${p.card?`<button class="btn sm primary" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
-      <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p>${p.card?payTerms("By paying by card"):""}</section>`:""}
+      <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p>${p.card?payTerms("By paying by card",viaName(p)):""}</section>`:""}
     ${(p.payments||[]).length?`<section class="stack"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span></div>`}).join("")}</div></section>`:""}
   </div>`)}
 // The line under every card checkout button: the terms and refund policy (on the website), and who processes the payment.
 const legalA=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
-const payTerms=(what="By continuing")=>`<p class="small muted payterms">${what}, you agree to the ${legalA("/terms/","Terms")} and ${legalA("/refunds/","Refund policy")}. Payments are processed securely by Payfast.</p>`;
+const payTerms=(what="By continuing",via="Payfast")=>`<p class="small muted payterms">${what}, you agree to the ${legalA("/terms/","Terms")} and ${legalA("/refunds/","Refund policy")}. Payments are processed securely by ${via==="PayFast"?"Payfast":via}.</p>`;
 // Apple Pay only where the phone or Mac can use it; Google Pay everywhere else (PayFast shows each only where it works).
+// Through Paystack: Apple Pay (where it works), card and Capitec Pay; Paystack doesn't offer Google Pay in South Africa. Every
+// tile opens Paystack's checkout, which shows the methods it has for this device.
 function canApplePay(){try{return !!(window.ApplePaySession&&ApplePaySession.canMakePayments())}catch(e){return false}}
 const PAYICON={card:`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9.5h19" stroke="currentColor" stroke-width="2.4"/><path d="M6 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   bank:`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 10.5v6.5M10 10.5v6.5M14 10.5v6.5M18.5 10.5v6.5M3.5 19.5h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   g:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6z"/></svg>`};
 function payTiles(p,b){const live=!!p.card,soon=!live&&!!b.cardSoon;if(!live&&!soon)return "";
-  const a=live?"paycard":"paysoon",ap=canApplePay(),gp=!ap&&!/iPhone|iPad|iPod/.test(navigator.userAgent),badge=soon?`<span class="pill">Soon</span>`:"";
+  const a=live?"paycard":"paysoon",ps=viaPs(p),ap=canApplePay(),gp=!ps&&!ap&&!/iPhone|iPad|iPod/.test(navigator.userAgent),badge=soon?`<span class="pill">Soon</span>`:"";
   const t=(v,label,inner,cls="")=>`<button class="paytile ${cls}" data-a="${a}" data-v="${v}" aria-label="${label}${soon?" (coming soon)":""}">${inner}${badge}</button>`;
-  return `<div class="paytiles" role="group" aria-label="How to pay">${ap?t("ap","Apple Pay",`<span class="apmark"><span aria-hidden="true">\uF8FF</span>Pay</span>`,"dark"):""}${gp?t("gp","Google Pay",`<span class="gpmark">${PAYICON.g}<span>Pay</span></span>`):""}${t("cc","Card",`${PAYICON.card}<span>Card</span>`)}
+  return `<div class="paytiles" role="group" aria-label="How to pay">${ap?t("ap","Apple Pay",`<span class="apmark"><span aria-hidden="true">\uF8FF</span>Pay</span>`,"dark"):""}${gp?t("gp","Google Pay",`<span class="gpmark">${PAYICON.g}<span>Pay</span></span>`):""}${t("cc","Card",`${PAYICON.card}<span>Card</span>`)}${ps?t("cp","Capitec Pay",`<span class="cpmark"><b>Capitec</b><span>Pay</span></span>`):""}
     <button class="paytile${S.ui.payEft?" on":""}" data-a="payeft" aria-pressed="${!!S.ui.payEft}" aria-label="EFT: bank details and proof of payment">${PAYICON.bank}<span>EFT</span></button></div>`}
 // Proof of payment from the clipboard: the Paste button (asks the browser), or pasting/dropping anywhere on the Pay sheet.
 async function pasteProof(){try{for(const it of await navigator.clipboard.read()){const ty=it.types.find(x=>/^image\//.test(x));if(ty){const bl=await it.getType(ty);return sendMyProof(new File([bl],"proof."+(ty.split("/")[1]||"png"),{type:ty}))}}
@@ -7308,6 +7333,9 @@ function payfastGo(c){const f=document.createElement("form");f.method="POST";f.a
   document.body.appendChild(f);f.submit()}
 async function payByCard(packId,method){const amt=Math.round(Number((document.getElementById("card-amt")||{}).value||0)*100);
   if(!packId&&!(amt>=500)){toast("Enter the amount, from R5.");return}
+  // Paystack: its checkout opens on its own page and shows the ways to pay it has (card, Apple Pay, Capitec Pay…).
+  if(viaPs(API.pay)){const planId=!packId&&(document.getElementById("card-for")||{}).value||"";toast("Opening Paystack…");
+    try{const j=await api("POST","/me/pay/paystack",packId?{packId}:{amountCents:amt,...(planId?{planId}:{})});jfTrack("pay_card",{...(packId?{pack:1}:{cents:amt}),method:method||"any",via:"paystack"});location.href=j.url}catch(e){toast(e.message)}return}
   toast("Opening PayFast…");try{const c=await api("POST","/me/pay/payfast",{...(packId?{packId}:{amountCents:amt}),...(method?{method}:{})});jfTrack("pay_card",{...(packId?{pack:1}:{cents:amt}),method:method||"any"});payfastGo(c)}catch(e){toast(e.message)}}
 function pfPanel(){const og=S.ui.openG||{},pi=COACH.payInfo;
   if(COACH.pf===undefined){COACH.pf=null;api("GET","/coach/payfast").then(j=>{COACH.pf=j.payfast;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -7330,6 +7358,68 @@ async function savePf(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{})
   try{await api("PUT","/coach/payfast",{merchantId:v("merchantId"),merchantKey:v("merchantKey"),passphrase:v("passphrase")});COACH.pf=undefined;toast("PayFast connected. Students can now pay by card or Instant EFT.");render()}catch(e){toast(e.message)}}
 async function pfTest(){try{await api("PUT","/coach/payfast",{test:true});COACH.pf=undefined;toast("Test account connected. Payments go to PayFast's sandbox; no real money.");render()}catch(e){toast(e.message)}}
 async function pfRemove(){try{await api("DELETE","/coach/payfast");COACH.pf=undefined;toast("PayFast disconnected. Students can still pay by EFT.");render()}catch(e){toast(e.message)}}
+/* ============ PAYSTACK: members pay by card; Paystack pays the gym's bank account ============ */
+// Back from Paystack's checkout (/app/?paid=card&reference=…): JitsFlow asks Paystack about it straight away, then a few more
+// times while Paystack finishes (its webhook records it too, whichever comes first).
+async function psBack(ref,save){toast("Payment received — it shows once Paystack confirms");
+  for(let i=0;i<6;i++){let st="waiting";try{st=(await api("POST","/me/pay/paystack/check",{reference:ref})).status}catch(e){if(e.status===404||e.status===401)return}
+    if(st==="paid"){await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast(save?"Paid, and your card is saved for automatic payments. You'll get a receipt each time.":"Paid. Thanks! Your receipt is on its way by email.");jfTrack("pay_card_done",{save:save?1:0});return}
+    if(st==="failed"){toast("The payment didn't go through. Nothing was charged. Try again, or pay by EFT.");return}
+    await new Promise(r=>setTimeout(r,2500))}
+  await loadPay();render()}
+// Money › Settings: how card payments reach the gym. While JitsFlow's Paystack is on, the gym gives its bank account once (no
+// payment account of its own) and the JitsFlow team checks it; otherwise the gym connects its own PayFast (pfPanel), as before.
+function cardsPanel(){if(COACH.ps===undefined){COACH.ps=null;api("GET","/coach/paystack").then(j=>{COACH.ps=j.paystack;if(S.ui.tab==="coach")render()}).catch(()=>{COACH.ps={on:false}})}
+  const p=COACH.ps;if(!p)return "";return p.on?psPanel(p):pfPanel()}
+const PS_STATE={pending_verification:["due","Waiting for JitsFlow to verify"],active:["ok","Card payments are on"],disabled:["bad","Paused"]};
+function psPanel(p){const og=S.ui.openG||{},a=p.account,st=a?PS_STATE[a.status]||["",a.status]:null,edit=!a||S.ui.psEdit;
+  if(edit&&!API.preview&&COACH.psBanks===undefined){COACH.psBanks=null;api("GET","/coach/paystack/banks").then(j=>{COACH.psBanks=j.banks;if(S.ui.tab==="coach")render()}).catch(e=>{COACH.psBanks=[];toast(e.message)})}
+  const banks=COACH.psBanks||[],fee=p.feePct,bear=p.bearer==="account"?"JitsFlow pays that one for you":"taken from your share, like a card machine's fee";
+  return `<details class="more" data-g="m-ps" id="pspanel"${og["m-ps"]||!a&&og["m-ps"]!==false||a&&a.status!=="active"&&og["m-ps"]!==false?" open":""}><summary><span><b>Get paid by card</b><br><span class="small muted">${a?`${st[1]} · ${esc(a.bankName)} •••• ${esc(a.last4)}`:"Card, Apple Pay and Capitec Pay, paid into your bank account"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+    ${a&&a.status==="pending_verification"?`<div class="insight warn" id="ps-wait"><b>Waiting for JitsFlow to verify your bank account (usually within a day).</b> We'll email you when card payments are on. Until then, members pay by EFT.</div>`
+      :a&&a.status==="active"?`<div class="insight good" id="ps-on"><b>Card payments are on.</b> Paystack pays them into ${esc(a.bankName)} •••• ${esc(a.last4)} (${esc(a.holder)}).</div>`
+      :a&&a.status==="disabled"?`<div class="insight warn"><b>Card payments are paused for your gym.</b> Email support@jitsflow.com and we'll sort it out.</div>`:""}
+    <p class="small">Members pay by card, Apple Pay or Capitec Pay in the app. <b>Paystack pays your share straight into your bank account</b>, normally 2 working days after each payment, and the payment shows here as paid by itself. JitsFlow never holds your money, and you don't need a Paystack account.</p>
+    <p class="small">From each card payment: JitsFlow's ${fee}% platform fee and Paystack's processing fee (${esc(bear)}; see <a href="https://paystack.com/za/pricing" target="_blank" rel="noopener">paystack.com/za/pricing</a>). EFT payments have no fees.</p>
+    ${!a||a.status!=="active"?`<label class="row small" style="flex-wrap:nowrap"><input id="pf-soon" type="checkbox"${p.cardSoon?" checked":""}> Until then, show members “Card payments coming soon” on their Pay sheet.</label>`:""}
+    ${p.test?`<p class="small muted">Paystack test mode: no real money moves.</p>`:""}
+    ${API.preview?`<p class="small">Claim your gym first to add its bank account. It's free.</p>`:!edit?`<button class="btn" style="justify-self:start" data-a="psedit">Change bank account</button><p class="small muted" style="margin-top:-6px">Changing it pauses card payments until we've checked the new account.</p>`
+    :`<form id="psform" class="stack" novalidate>
+      <label class="f">Bank<select name="bankCode" required><option value="">${COACH.psBanks===null?"Loading banks…":"Pick your bank"}</option>${banks.map(b=>`<option value="${esc(b.code)}"${a&&a.bankCode===b.code?" selected":""}>${esc(b.name)}</option>`).join("")}</select></label>
+      <div class="grid2"><label class="f">Account number<input name="account" inputmode="numeric" autocomplete="off" placeholder="${a?"•••• "+esc(a.last4):"Digits only"}"></label><label class="f">Account holder<input name="holder" autocomplete="off" value="${esc(a?a.holder:"")}" placeholder="As the bank has it"></label></div>
+      <label class="f">Your gym's registered business name<input name="business" autocomplete="organization" value="${esc(a?a.business:API.me.gym.name)}"></label>
+      <fieldset class="stack" style="border:0;padding:0;margin:0;gap:6px"><legend class="small" style="font-weight:600;margin-bottom:6px">To check the account is the gym's</legend>
+        <label class="row small" style="flex-wrap:nowrap"><input type="radio" name="idKind" value="reg"${!a||a.idKind!=="id"?" checked":""}> Company registration number</label><label class="row small" style="flex-wrap:nowrap"><input type="radio" name="idKind" value="id"${a&&a.idKind==="id"?" checked":""}> Owner's SA ID number (not a company)</label></fieldset>
+      <label class="f"><span id="ps-idlabel">${a&&a.idKind==="id"?"Owner's ID number":"Registration number"}</span><input name="idNumber" autocomplete="off" inputmode="${a&&a.idKind==="id"?"numeric":"text"}" placeholder="${a&&a.idLast4?"•••• "+esc(a.idLast4):a&&a.idKind==="id"?"13 digits":"2019/123456/07"}"></label>
+      <p class="small muted" style="margin-top:-6px">Kept encrypted, only to check the account is your gym's. You'll only ever see the last 4 digits.</p>
+      <div class="row"><button class="btn primary" type="submit">${a?"Save new bank account":"Save bank account"}</button>${a?`<button class="linkbtn small" type="button" data-a="psedit" data-v="0">Cancel</button>`:""}</div></form>`}</div></details>`}
+async function savePs(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"",k=(form.querySelector('[name="idKind"]:checked')||{}).value||"reg";
+  try{const j=await api("PUT","/coach/paystack",{bankCode:v("bankCode"),account:v("account"),holder:v("holder"),business:v("business"),idKind:k,idNumber:v("idNumber")});
+    COACH.ps={...(COACH.ps||{}),account:j.paystack};S.ui.psEdit=false;render();
+    toast(j.same?"Nothing changed.":j.paystack.status==="active"?"Saved.":"Saved. JitsFlow checks your bank account, usually within a day. We'll email you when card payments are on.")}catch(e){toast(e.message)}}
+// A card payment refunded back to the card (head coach, Money): all of it, or part.
+function refundSheet(id){const p=(COACH.payments||[]).find(x=>x.id===id);if(!p)return;const cur=p.currency,left=(p.family?p.family.totalCents:p.amountCents),nm=((((COACH.roster||{}).people||[]).find(y=>y.id===p.userId))||{}).name||"the member";
+  S.ui.sheet={k:"refund"};S.ui.stack=[];
+  openSheet(`${sheetHead("Refund to the card")}<div class="stack-lg"><h1>Refund to the card</h1>
+    <p>${esc(money(left,cur))} from ${esc(nm)}, paid ${esc(fmtDate(p.paidOn))} by card (Paystack ${esc(p.reference)}).</p>
+    <label class="f">Amount to refund (${esc(cur)})<input id="refund-amt" type="number" inputmode="decimal" min="1" step="0.01" max="${left/100}" value="${left/100}"></label>
+    <p class="small">Paystack refunds it to the card it was paid with. Once Paystack confirms it (usually within minutes), it comes off what ${esc(first(nm))} paid here, and they're emailed. Banks take about 5 to 10 working days to show it.</p>
+    <p class="small muted">Paystack reverses the payment's split (your share and JitsFlow's fee) under its own refund rules.</p></div>`,false,
+    {act:`<button class="btn grow" data-a="close">Keep it</button><button class="btn danger grow" data-a="refundyes" data-v="${esc(id)}">Refund</button>`})}
+async function refundGo(id){const c=Math.round(Number((document.getElementById("refund-amt")||{}).value||0)*100);if(!(c>=100)){toast("Enter the amount to refund, from R1.");return}
+  try{await api("POST",`/coach/payments/${id}/refund`,{amountCents:c});hideSheet();await coachLoad("payments");render();toast("Refund sent to Paystack. It comes off the payment once Paystack confirms it.")}catch(e){toast(e.message)}}
+// The JitsFlow team's dashboard: gyms' bank accounts to check in Paystack's dashboard, then Mark verified.
+function dashPayouts(x){if(!x)return "";const list=x.toVerify||[];
+  return `<section class="panel stack" id="dashpayouts"><div class="row between"><h2 class="label">Card payouts to verify · ${nf(list.length)}</h2>${x.test?`<span class="pill">Paystack test mode</span>`:x.on?`<span class="pill ok">Paystack live</span>`:`<span class="pill">Paystack off</span>`}</div>
+    <p class="small muted">Check each one in <a href="${esc(x.dashboard)}" target="_blank" rel="noopener">Paystack › Subaccounts</a> (the code, bank, account number and name), then tap Mark verified. Card payments switch on for the gym and the head coach is emailed.</p>
+    ${list.length?list.map(g=>`<div class="dgym" id="psv-${esc(g.id)}"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><b class="dgname">${esc(g.gym)}</b><span class="pill due">${g.verifiedAt||g.createdAt!==g.updatedAt?"Changed":"New"}</span></div>
+      <p class="small"><b>${esc(g.holder)}</b> · ${esc(g.bankName)} •••• ${esc(g.last4)}<br>${esc(g.business)} · ${g.idKind==="id"?"Owner's ID":"Company reg."} •••• ${esc(g.idLast4)}<br>Subaccount <span class="mono">${esc(g.subaccount)}</span>${g.head?` · Head coach ${esc(g.head.name)}${g.head.email?` · <a href="mailto:${esc(g.head.email)}">${esc(g.head.email)}</a>`:""}`:""}</p>
+      <div id="psrev-${esc(g.id)}"></div>
+      <div class="row" style="gap:8px"><button class="btn sm" data-a="psreveal" data-v="${esc(g.id)}">Show full numbers</button><a class="btn sm" href="${esc(x.dashboard)}" target="_blank" rel="noopener">Open Paystack</a><button class="btn sm primary" data-a="psverify" data-v="${esc(g.id)}">Mark verified</button></div></div>`).join("")
+      :`<p class="small muted">Nothing to verify.</p>`}</section>`}
+async function psReveal(id){try{const j=await api("POST",`/admin/paystack/gyms/${id}/reveal`,{}),el=document.getElementById("psrev-"+id);
+  if(el)el.innerHTML=`<p class="psrev">Account ${esc(j.account)} · ${j.idKind==="id"?"ID":"Reg."} ${esc(j.idNumber)}</p>`}catch(e){toast(e.message)}}
+async function psVerify(id){try{await api("POST",`/admin/paystack/gyms/${id}/verify`,{});toast("Verified. Card payments are on for that gym, and the head coach has been emailed.");await dashLoad()}catch(e){toast(e.message)}}
 // The gym's own JitsFlow plan.
 function planPanel(){
   if(COACH.bill===undefined){COACH.bill=null;api("GET","/coach/billing").then(j=>{COACH.bill=j.billing;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -7498,7 +7588,11 @@ function dashSystem(y){if(!y)return "";const w=[];
   if(y.ai&&y.ai.paused)w.push(`<b>Reading with AI is paused for today:</b> the daily budget is used up. Proofs are kept for coaches to check by hand.`);
   const pfo=y.payfastOps||{},seen=(k,id)=>` <button class="linkbtn small" data-a="pfseen" data-v="${k}:${esc(id)}">Done</button>`;
   for(const o of pfo.failed||[])w.push(`<b>Cancel by hand in PayFast:</b> ${esc(o.label||"a subscription")}. JitsFlow tried for a day; PayFast said: ${esc(o.error||"no answer")}.${seen("op",o.id)}`);
-  for(const f of y.payfastFlags||[])w.push(`<b>Check a PayFast payment${f.gym?` (${esc(f.gym)})`:""}:</b> ${esc(f.note)}${seen("flag",f.id)}`);
+  for(const f of y.payfastFlags||[])w.push(`<b>Check a ${/^ps-/.test(f.kind)?"Paystack":"PayFast"} payment${f.gym?` (${esc(f.gym)})`:""}:</b> ${esc(f.note)}${seen("flag",f.id)}`);
+  const x=y.paystack,psSeen=(k,id)=>` <button class="linkbtn small" data-a="psseen" data-v="${k}:${esc(id)}">Done</button>`;
+  if(x&&x.test&&y.production)w.push(`<b>Member card payments are in Paystack's test mode.</b> PAYSTACK_SECRET_KEY is a test key, so no real money moves.`);
+  for(const d of (x&&x.disputes)||[])w.push(`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""}:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)})${d.status==="resolved"?`, resolved: ${esc(d.resolution||"")}`:d.dueAt?`, answer by ${esc(outDay(d.dueAt))}`:""}. Answer it in Paystack › Disputes with the gym's evidence (the head coach has been asked).${psSeen("dispute",d.id)}`);
+  for(const r of (x&&x.refundsFailed)||[])w.push(`<b>A refund failed${r.gym?` at ${esc(r.gym)}`:""}:</b> ${money(r.cents,"ZAR")} (Paystack ${esc(r.reference)}): ${esc(r.error||"no reason given")}. The head coach has been told.${psSeen("refund",r.id)}`);
   for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);
   if(pfo.trying)w.push(`${nf(pfo.trying)} PayFast cancel${pfo.trying===1?" is":"s are"} still being tried (every 15 minutes at first).`);
   if((y.payfastBroken||[]).length)w.push(`<b>PayFast needs reconnecting</b> for ${y.payfastBroken.map(g=>esc(g.name)).join(", ")}. Their saved keys can't be decrypted; the head coaches have been emailed.`);
@@ -7514,7 +7608,7 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
   const o=d.outreach,ppl=[[T.active1,"people used the app today"],[T.active7,"people used the app this week"],[T.active30,"people used the app in the last 30 days"],[T.coaches,"coaches"],[T.members,`students in gyms (${nf(T.membersOnApp)} on the app, the rest added by their coach)`],[T.kids,"kids on a parent's login"],[T.selfStudy,"people studying on their own, without a gym"],[T.new1,"signed up today"],[T.new7,"signed up this week"],[T.new30,"signed up in the last 30 days"]];
   openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash">
     <div class="stack" style="gap:4px"><h1>Dashboard</h1><p class="small muted">Updated ${esc(new Date(DASH.at).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}))} · <button class="linkbtn" data-a="dashload">Refresh</button></p></div>
-    ${dashSystem(d.system)}
+    ${dashSystem(d.system)}${dashPayouts(d.system&&d.system.paystack)}
     <div class="stats four dtiles">${tile(d.visitors.today,"Visitors today",`${nf(d.visitors.week)} this week`)}${tile(T.new7,"Sign-ups this week",`${nf(T.new1)} today`)}${tile(T.active7,"Used the app this week",`${nf(T.active1)} today`)}${tile(T.gyms,"Gyms",`${nf(T.gymsActive)} active this week`)}</div>
     ${seg}
     <section class="panel stack"><div class="row between"><h2 class="label">Website visitors</h2><span class="small muted">${nf(sum("visitors"))} in ${d.days} days</span></div>
