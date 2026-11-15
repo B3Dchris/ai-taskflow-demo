@@ -36,6 +36,8 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY  # optional; smarter gym website import
         sync: false
+      - key: PAYSTACK_SECRET_KEY # optional; members pay their gym by card through Paystack (sk_test_… first, then sk_live_…). See docs/paystack.md.
+        sync: false
       - key: GA_ID              # optional; Google Analytics 4 measurement ID (G-XXXXXXXXXX)
         sync: false
     # After you buy the domain, uncomment these two lines and push.
