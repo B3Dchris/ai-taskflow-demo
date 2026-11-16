@@ -47,7 +47,7 @@ function client(base, headers0 = {}) {
   await pool.query("drop schema public cascade; create schema public;");
   const sink = await mailSink();
   const port = 9600 + Math.floor(Math.random() * 90), ORIGIN = `http://127.0.0.1:${port}`, base = ORIGIN + "/api";
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, TRUST_PROXY: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test",
+  const env = { ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, TRUST_PROXY: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test",
     JF_ADMIN_EMAILS: "boss@jf.test", MAIL_GAP_MS: "0", PAYFAST_SANDBOX: "" }; delete env.ANTHROPIC_API_KEY; delete env.GA_ID;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 80; i++) { try { await fetch(ORIGIN + "/healthz"); break; } catch (e) { await wait(150); } }

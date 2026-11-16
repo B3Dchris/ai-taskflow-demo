@@ -53,7 +53,7 @@ function client(base) {
   const port = 9700 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const common = { DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0", JF_ADMIN_EMAILS: "boss@jf3.test",
     PAYFAST_VALIDATE_URL: PF + "/eng/query/validate", PAYFAST_API_URL: PF, PAYFAST_AUTOPAY_TEST: "1", TRUST_PROXY: "1" };
-  const env = { ...process.env, ...common, PORT: String(port) }; for (const k of ["ANTHROPIC_API_KEY", "PAYFAST_MERCHANT_ID", "JF_SECRET", "JF_SECRET_OLD", "NODE_ENV", "GA_ID"]) delete env[k];
+  const env = { ...process.env, ...common, PORT: String(port), JF_PLAN_CARD_TEST: "1" }; for (const k of ["ANTHROPIC_API_KEY", "PAYFAST_MERCHANT_ID", "JF_SECRET", "JF_SECRET_OLD", "NODE_ENV", "GA_ID"]) delete env[k];
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 80; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await wait(150); } }
   await wait(300);

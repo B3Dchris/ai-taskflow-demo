@@ -56,10 +56,13 @@ async function banks() {
   for (const b of Array.isArray(data) ? data : []) {
     const code = String(b.code || "").trim(), name = String(b.name || "").trim();
     if (!code || !name || b.active === false || b.is_deleted === true || seen.has(code)) continue;
+    // South Africa only for now: skip any bank Paystack lists for another country or currency.
+    if ((b.country && String(b.country).toLowerCase() !== "south africa") || (b.currency && String(b.currency).toUpperCase() !== "ZAR")) continue;
     seen.add(code); list.push({ name: name.slice(0, 80), code: code.slice(0, 20) });
   }
   list.sort((a, b) => a.name.localeCompare(b.name));
-  if (list.length) bankCache = { at: Date.now(), list };
+  if (!list.length) throw new PaystackError("Paystack has no South African banks for JitsFlow's account. The JitsFlow team has been told.", 200, false);
+  bankCache = { at: Date.now(), list };
   return list;
 }
 const forgetBanks = () => { bankCache = { at: 0, list: null }; };

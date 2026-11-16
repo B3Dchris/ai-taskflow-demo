@@ -28,7 +28,7 @@ function client(base) {
   const pfSrv = require("http").createServer((q, r) => { let b = ""; q.on("data", (c) => (b += c)); q.on("end", () => {
     if (q.url.startsWith("/subscriptions/")) { pfApi.push({ method: q.method, url: q.url, body: b }); r.writeHead(200, { "content-type": "application/json" }); return r.end('{"code":200,"status":"success","data":{"response":true}}'); }
     pfSrv.last = b; setTimeout(() => r.end(pfValid), pfDelay); }); }).listen(0);
-  const env = { PAYFAST_VALIDATE_URL: `http://127.0.0.1:${pfSrv.address().port}/eng/query/validate`, PAYFAST_API_URL: `http://127.0.0.1:${pfSrv.address().port}`, ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", INBOUND_SECRET: "test-inbound-secret" }; delete env.ANTHROPIC_API_KEY;
+  const env = { PAYFAST_VALIDATE_URL: `http://127.0.0.1:${pfSrv.address().port}/eng/query/validate`, PAYFAST_API_URL: `http://127.0.0.1:${pfSrv.address().port}`, ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", INBOUND_SECRET: "test-inbound-secret" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${port}/healthz`); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   try {

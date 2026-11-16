@@ -10,7 +10,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const sink = await startMailSink(), site = await startGymSite();
   const port = 9400 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
-  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_IMPORT_ALLOW_LOOPBACK: "1", ANTHROPIC_API_KEY: "" }, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await wait(150); } }
   const b = await chromium.launch(); const errs = [];
   const phone = async (name) => { const c = await b.newContext({ ...devices["iPhone 13"] }); await c.addInitScript(() => { if (!localStorage.getItem("rtb.progress")) localStorage.setItem("rtb.progress", JSON.stringify({ settings: { onboarded: true } })); }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(name + ": " + e.message)); return p; };

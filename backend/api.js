@@ -3212,10 +3212,12 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const u = needHead(req), b = await billingOf(u.gym_id), P = payfast.platform();
     const today = todayZA(), bt = beta.forGym(b.beta, today, payfast.PRICE_CENTS());
     res.json({ billing: { status: b.status || "trial", trialEnds: b.trialEnds, card: !!b.token, lastPaidAt: b.lastPaidAt || null, priceCents: b.priceCents, normalCents: payfast.PRICE_CENTS(),
-      feePct: payfast.FEE_PCT(), test: P.sandbox, due: today >= b.trialEnds && b.status !== "active" && b.priceCents > 0, beta: bt.status === "accepted" ? { line: bt.line, priceCents: bt.priceCents, feeUntil: bt.feeUntil, afterCents: bt.afterCents } : null } });
+      // cardOpen: the plan can be paid by card (Payfast live; JF_PLAN_CARD_TEST=1 lets tests use Payfast's sandbox).
+      feePct: payfast.FEE_PCT(), test: P.sandbox, cardOpen: !P.sandbox || process.env.JF_PLAN_CARD_TEST === "1", due: today >= b.trialEnds && b.status !== "active" && b.priceCents > 0, beta: bt.status === "accepted" ? { line: bt.line, priceCents: bt.priceCents, feeUntil: bt.feeUntil, afterCents: bt.afterCents } : null } });
   }));
   // Card details for the monthly plan. During the free months nothing is charged now; PayFast starts on the first day after them.
   api.post("/coach/billing/checkout", wrap(async (req, res) => {
+    if (payfast.platform().sandbox && process.env.JF_PLAN_CARD_TEST !== "1") fail(400, "Paying for your plan opens soon. Nothing is charged until then.");
     const u = needHead(req), b = await billingOf(u.gym_id, { save: true }), P = payfast.platform(), today = await todayIn(u);
     if (!b.priceCents && !beta.priceFor(b.beta, "9999-12-31", payfast.PRICE_CENTS())) fail(400, "Your beta deal is free: there's nothing to add a card for.");
     // A free beta stretch that ends later: the card starts on the day the beta price does.
@@ -3590,7 +3592,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
     if (paystack.memberCards() !== "paystack") fail(400, "Card payments aren't switched on yet.");
     const b = req.body || {}, bankCode = clean(b.bankCode, 20), account = String(b.account || "").replace(/[\s-]/g, ""), holder = clean(b.holder, 80), business = clean(b.business, 100);
-    const idKind = b.idKind === "id" ? "id" : "reg", idNo = String(b.idNumber || "").replace(/\s/g, "").toUpperCase();
+    const idKind = b.idKind === "id" ? "id" : "reg", rawId = String(b.idNumber || "").replace(/\s/g, "").toUpperCase(), rm = /^(\d{4})[\/.-]?(\d{6})[\/.-]?(\d{2})$/.exec(rawId);
+    const idNo = idKind === "reg" && rm ? `${rm[1]}/${rm[2]}/${rm[3]}` : rawId;
     if (!bankCode) fail(400, "Pick your bank.");
     if (!/^\d{6,16}$/.test(account)) fail(400, "Enter the account number: 6 to 16 digits, as on your bank statement.");
     if (holder.length < 2) fail(400, "Enter the account holder's name, as the bank has it.");

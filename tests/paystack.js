@@ -25,7 +25,7 @@ const SECRET = "sk_test_" + "f".repeat(40);
   const port = 9300 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`; ps.setApp(`http://127.0.0.1:${port}`);
   const common = { DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0", JF_ADMIN_EMAILS: "boss@jitsflow.test",
     PAYSTACK_SECRET_KEY: SECRET, PAYSTACK_API_URL: ps.url };
-  const env = { ...process.env, ...common, PORT: String(port) }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID; delete env.JF_PAYSTACK_LIVE; delete env.JF_MEMBER_PAYMENTS; delete env.PAYSTACK_FEE_BEARER;
+  const env = { ...process.env, ...common, PORT: String(port), JF_PLAN_CARD_TEST: "1" }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID; delete env.JF_PAYSTACK_LIVE; delete env.JF_MEMBER_PAYMENTS; delete env.PAYSTACK_FEE_BEARER;
   const logs = [];
   const start = (e) => { const s = spawn("node", [path.resolve(__dirname, "../server.js")], { env: e, stdio: ["ignore", "pipe", "pipe"] }); s.stdout.on("data", (d) => logs.push(String(d))); s.stderr.on("data", (d) => logs.push(String(d))); return s; };
   const up = async (p) => { for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${p}/healthz`); return; } catch (e) { await wait(150); } } };
@@ -84,7 +84,7 @@ const SECRET = "sk_test_" + "f".repeat(40);
     ok((await co2("GET", "/coach/paystack")).s === 403 && (await S.amy("GET", "/coach/paystack")).s === 403 && (await anon("GET", "/coach/paystack")).s === 401, "only the head coach sees it");
     r = await coach("GET", "/coach/paystack/banks"); await coach("GET", "/coach/paystack/banks");
     ok(r.s === 200 && r.j.banks.map((b) => b.name).join() === "Absa Bank,Capitec Bank,First National Bank,Standard Bank" && ps.calls.filter((c) => c.path === "/bank").length === 1,
-      "banks come from Paystack (South Africa, ZAR), inactive ones left out, sorted, asked for once a day: " + JSON.stringify(r.j));
+      "banks come from Paystack (South Africa, ZAR only: other countries' banks left out), inactive ones left out, sorted, asked for once a day: " + JSON.stringify(r.j));
     ok(ps.calls.find((c) => c.path === "/bank").query.country === "south africa" && ps.calls.find((c) => c.path === "/bank").query.currency === "ZAR" && ps.calls.every((c) => c.auth), "with country, currency and the secret key");
     const good = { bankCode: "470010", account: "1234 567 890", holder: "Stack BJJ (Pty) Ltd", business: "Stack BJJ (Pty) Ltd", idKind: "reg", idNumber: "2019/123456/07" };
     for (const [bad, why] of [[{ account: "12ab" }, "account"], [{ bankCode: "999999" }, "bank"], [{ idNumber: "2019-1234" }, "registration"], [{ idKind: "id", idNumber: "8001015009088" }, "ID"], [{ holder: "" }, "holder"], [{ business: "" }, "business"]]) {

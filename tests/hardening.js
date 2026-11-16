@@ -66,7 +66,7 @@ const healthMs = async (root) => { const t = Date.now(); await new Promise((ok) 
   const servers = [];
   const start = async (extra = {}) => {
     const port = 9100 + Math.floor(Math.random() * 800), logs = [];
-    const env = { ...process.env, DATABASE_URL: DB, PORT: String(port), TRUST_PROXY: "0", APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0", JF_IMPORT_ALLOW_LOOPBACK: "1",
+    const env = { ...process.env, DATABASE_URL: DB, PORT: String(port), JF_PLAN_CARD_TEST: "1", TRUST_PROXY: "0", APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0", JF_IMPORT_ALLOW_LOOPBACK: "1",
       RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, JF_ADMIN_EMAILS: "boss@jitsflow.test", PAYFAST_VALIDATE_URL: `http://127.0.0.1:${pf.address().port}/eng/query/validate`,
       PAYFAST_API_URL: `http://127.0.0.1:${pf.address().port}`, ...extra };
     for (const k of ["PAYFAST_AUTOPAY_TEST"]) if (!(k in extra)) delete env[k];

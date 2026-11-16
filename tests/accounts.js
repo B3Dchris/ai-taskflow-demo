@@ -8,7 +8,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
   await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
   const port = 9800 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`;
   const site = await startGymSite(), sink = await startMailSink();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
+  const env = { ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test" }; delete env.ANTHROPIC_API_KEY;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 40; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await new Promise((r) => setTimeout(r, 150)); } }
   const b = await chromium.launch(); const errs = [];

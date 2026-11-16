@@ -40,7 +40,7 @@ const GYM_PASS = "gym pass phrase";
   const port = 9500 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}/api`;
   const common = { DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0",
     PAYFAST_VALIDATE_URL: PF + "/eng/query/validate", PAYFAST_API_URL: PF, PAYFAST_AUTOPAY_TEST: "1" };
-  const env = { ...process.env, ...common, PORT: String(port) }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID;
+  const env = { ...process.env, ...common, PORT: String(port), JF_PLAN_CARD_TEST: "1" }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID;
   const start = (e) => spawn("node", [path.resolve(__dirname, "../server.js")], { env: e, stdio: ["ignore", "ignore", "inherit"] });
   const up = async (p) => { for (let i = 0; i < 40; i++) { try { await fetch(`http://127.0.0.1:${p}/healthz`); return; } catch (e) { await wait(150); } } };
   const srv = start(env); await up(port);

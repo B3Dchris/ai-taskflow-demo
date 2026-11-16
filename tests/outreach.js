@@ -89,7 +89,7 @@ function startSite() {
   await pool.query("drop table if exists beta_feedback, prospects, outreach_dnc, autopay_charges, autopay, class_skips, plan_breaks, notices, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade");
   const port = 9800 + Math.floor(Math.random() * 90), BASE = `http://127.0.0.1:${port}`, base = BASE + "/api";
   const site = await startSite(), sink = await startMailSink();
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test",
+  const env = { ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, JF_IMPORT_ALLOW_LOOPBACK: "1", RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: "https://www.jitsflow.test",
     JF_ADMIN_EMAILS: " Boss@JitsFlow.test, second@jitsflow.test ", MAIL_FROM: "JitsFlow <no-reply@jitsflow.test>" }; delete env.ANTHROPIC_API_KEY; delete env.GA_ID;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(BASE + "/healthz"); break; } catch (e) { await wait(150); } }

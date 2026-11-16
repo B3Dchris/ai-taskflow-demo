@@ -25,7 +25,7 @@ const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KH
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
 
 function start(port, extra = {}) {
-  const env = { ...process.env, PORT: String(port), DATABASE_URL: DB, TRUST_PROXY: "1", PAGEVIEW_FLUSH_MS: "300", APP_URL: "https://www.jitsflow.test",
+  const env = { ...process.env, PORT: String(port), JF_PLAN_CARD_TEST: "1", DATABASE_URL: DB, TRUST_PROXY: "1", PAGEVIEW_FLUSH_MS: "300", APP_URL: "https://www.jitsflow.test",
     JF_ADMIN_EMAILS: "boss@jitsflow.test", ...extra }; delete env.ANTHROPIC_API_KEY; delete env.GA_ID; delete env.RESEND_API_KEY;
   return spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
 }

@@ -27,7 +27,7 @@ function client(base) {
   const sink = await startMailSink(), ps = await startFakePaystack({ secret: SECRET });
   const port = 9600 + Math.floor(Math.random() * 90), URL = `http://localhost:${port}`, base = URL + "/api"; ps.setApp(`http://127.0.0.1:${port}`);
   const common = { DATABASE_URL: DB, RESEND_API_KEY: "test-key", RESEND_API_URL: sink.url, APP_URL: URL, MAIL_GAP_MS: "0", JF_ADMIN_EMAILS: "boss@jitsflow.test", PAYSTACK_SECRET_KEY: SECRET, PAYSTACK_API_URL: ps.url };
-  const env = { ...process.env, ...common, PORT: String(port) }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID; delete env.JF_PAYSTACK_LIVE; delete env.JF_MEMBER_PAYMENTS;
+  const env = { ...process.env, ...common, PORT: String(port), JF_PLAN_CARD_TEST: "1" }; delete env.ANTHROPIC_API_KEY; delete env.PAYFAST_MERCHANT_ID; delete env.JF_PAYSTACK_LIVE; delete env.JF_MEMBER_PAYMENTS;
   const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
   for (let i = 0; i < 60; i++) { try { await fetch(URL + "/healthz"); break; } catch (e) { await wait(150); } }
   Object.assign(process.env, common);

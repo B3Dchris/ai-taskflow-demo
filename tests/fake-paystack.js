@@ -48,7 +48,8 @@ function startFakePaystack({ secret }) {
     calls.push({ method: rq.method, path: p, query: Object.fromEntries(u.searchParams), body, auth });
     if (!auth) return no(rs, 401, "Invalid key");
     if (rq.method === "GET" && p === "/bank") return ok(rs, [{ id: 1, name: "Capitec Bank", code: "470010", active: true, is_deleted: false }, { id: 2, name: "First National Bank", code: "250655", active: true },
-      { id: 3, name: "Absa Bank", code: "632005", active: true }, { id: 4, name: "Gone Bank", code: "999999", active: false }, { id: 5, name: "Standard Bank", code: "051001", active: true }]);
+      { id: 3, name: "Absa Bank", code: "632005", active: true }, { id: 4, name: "Gone Bank", code: "999999", active: false }, { id: 5, name: "Standard Bank", code: "051001", active: true, country: "South Africa", currency: "ZAR" },
+      { id: 6, name: "Access Bank", code: "044", active: true, country: "Nigeria", currency: "NGN" }, { id: 7, name: "GCB Bank", code: "040100", active: true, country: "Ghana", currency: "GHS" }]);
     if (rq.method === "POST" && p === "/subaccount") {
       if (body.account_number === "0000000000") return no(rs, 400, "Account details are invalid");
       const code = "ACCT_" + crypto.randomBytes(5).toString("hex"); subs.set(code, { ...body, subaccount_code: code }); return ok(rs, { subaccount_code: code, ...body }, "Subaccount created");
