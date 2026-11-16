@@ -198,6 +198,14 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     await p.locator('.cta .btn').tap();await p.waitForTimeout(1200);
     ok(await p.evaluate(()=>location.pathname==='/app/'&&!/t=/.test(location.search)&&S.ui.sheet&&S.ui.sheet.k==='tech'&&/Kimura/i.test(document.getElementById('sheet').innerText)),'"Open in JitsFlow" opens that technique in the app');
   }catch(e){fail++;fails.push('CRASH '+e.message)}
+  // ---- official Apple Pay / Google Pay marks: served as images, and only shown where that way of paying is on
+  { const fs=require('fs'); const ap=await fetch(URL+'img/pay/apple-pay-mark.svg'),gp=await fetch(URL+'img/pay/google-pay-mark.png');
+    ok(ap.status===200&&/svg/.test(ap.headers.get('content-type'))&&gp.status===200&&/png/.test(gp.headers.get('content-type')),'the Apple Pay and Google Pay marks are served');
+    const raw=fs.readFileSync(path.join(__dirname,'..','web','pricing','index.html'),'utf8');
+    ok(/<!--jf:live-->[^]*?alt="Apple Pay"[^]*?<!--\/jf:live-->/.test(raw)&&/<!--jf:gpay-->[^]*?alt="Google Pay"[^]*?<!--\/jf:gpay-->/.test(raw),'pricing: Apple Pay mark only with live card payments, Google Pay mark only when Payfast has switched it on');
+    const shown=await (await fetch(URL+'pricing/')).text();
+    ok((process.env.JF_PAYSTACK_LIVE==='1'||/^sk_live_/.test(process.env.PAYSTACK_SECRET_KEY||''))||!/alt="Apple Pay"/.test(shown),'pricing: no Apple Pay mark while member card payments are coming soon');
+    ok(process.env.JF_PAYFAST_GOOGLE_PAY==='1'||!/alt="Google Pay"/.test(shown),'pricing: no Google Pay mark until Payfast switches it on'); }
   // ---- no belt animation on the home page (removed): nothing draws over it, nothing extra downloads
   { const home=await (await fetch(URL)).text(); ok(!/belt\.js|beltslot|<canvas|beltgl/.test(home),'home page: no belt animation, no canvas'); }
   // ---- Google Analytics: only with GA_ID, and nothing from Google loads until the visitor taps Allow

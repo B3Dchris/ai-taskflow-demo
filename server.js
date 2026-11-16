@@ -49,7 +49,9 @@ o.land=L.pathname.slice(0,120);o.t=Date.now();localStorage.setItem(K,JSON.string
 // (see tools/legal.js). Switching it is a restart with the setting changed; nothing is rebuilt.
 const CARDS = require("./backend/paystack").publicLive() ? "live" : "soon";
 const cardsCopy = (html) => html.replace(/<!--jf:(soon|live)-->([\s\S]*?)<!--\/jf:\1-->|\{\{jf:(soon|live)\}\}([\s\S]*?)\{\{\/jf:\3\}\}/g,
-  (m, a, x, b, y) => ((a || b) === CARDS ? (a ? x : y) : ""));
+  (m, a, x, b, y) => ((a || b) === CARDS ? (a ? x : y) : "")).replace(/<!--jf:gpay-->([\s\S]*?)<!--\/jf:gpay-->/g, (m, x) => (GPAY ? x : ""));
+// Google Pay for gym plans: only once Payfast has switched it on for JitsFlow's account (JF_PAYFAST_GOOGLE_PAY=1).
+const GPAY = process.env.JF_PAYFAST_GOOGLE_PAY === "1";
 const { cspFor, scriptHashes } = require("./backend/csp");
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",

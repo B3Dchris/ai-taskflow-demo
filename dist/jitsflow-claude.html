@@ -793,7 +793,7 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .paytile{position:relative;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;padding:8px 6px;cursor:pointer}
 .paytile:active{transform:scale(.98)}.paytile.on{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft);color:var(--blue)}
 .paytile.dark{background:#000;color:#fff;border-color:#000}.paytile .pill{position:absolute;top:-8px;right:-4px;font-size:10px}
-.apmark{font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:1px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+.apmark{display:block;height:34px;width:auto} /* Apple's official Apple Pay mark (web/img/pay), unmodified */
 .gpmark{display:flex;align-items:center;gap:3px;font-size:19px;font-weight:600;color:var(--ink-2)}
 /* Capitec Pay (through Paystack): the bank's name over "Pay", in plain type (no logo) */
 .cpmark{display:flex;flex-direction:column;align-items:center;line-height:1;gap:2px}.cpmark b{font-size:14px;letter-spacing:.01em}.cpmark span{font-size:12px;font-weight:600;color:var(--ink-2)}
@@ -6373,7 +6373,7 @@ const PAYICON={card:`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden
 function payTiles(p,b){const live=!!p.card,soon=!live&&!!b.cardSoon;if(!live&&!soon)return "";
   const a=live?"paycard":"paysoon",ps=viaPs(p),ap=canApplePay(),gp=!ps&&!ap&&!/iPhone|iPad|iPod/.test(navigator.userAgent),badge=soon?`<span class="pill">Soon</span>`:"";
   const t=(v,label,inner,cls="")=>`<button class="paytile ${cls}" data-a="${a}" data-v="${v}" aria-label="${label}${soon?" (coming soon)":""}">${inner}${badge}</button>`;
-  return `<div class="paytiles" role="group" aria-label="How to pay">${ap?t("ap","Apple Pay",`<span class="apmark"><span aria-hidden="true">\uF8FF</span>Pay</span>`,"dark"):""}${gp?t("gp","Google Pay",`<span class="gpmark">${PAYICON.g}<span>Pay</span></span>`):""}${t("cc","Card",`${PAYICON.card}<span>Card</span>`)}${ps?t("cp","Capitec Pay",`<span class="cpmark"><b>Capitec</b><span>Pay</span></span>`):""}
+  return `<div class="paytiles" role="group" aria-label="How to pay">${ap?t("ap","Apple Pay",`<img class="apmark" src="/img/pay/apple-pay-mark.svg" alt="" width="62" height="40">`):""}${gp?t("gp","Google Pay",`<span class="gpmark">${PAYICON.g}<span>Pay</span></span>`):""}${t("cc","Card",`${PAYICON.card}<span>Card</span>`)}${ps?t("cp","Capitec Pay",`<span class="cpmark"><b>Capitec</b><span>Pay</span></span>`):""}
     <button class="paytile${S.ui.payEft?" on":""}" data-a="payeft" aria-pressed="${!!S.ui.payEft}" aria-label="EFT: bank details and proof of payment">${PAYICON.bank}<span>EFT</span></button></div>`}
 // Proof of payment from the clipboard: the Paste button (asks the browser), or pasting/dropping anywhere on the Pay sheet.
 async function pasteProof(){try{for(const it of await navigator.clipboard.read()){const ty=it.types.find(x=>/^image\//.test(x));if(ty){const bl=await it.getType(ty);return sendMyProof(new File([bl],"proof."+(ty.split("/")[1]||"png"),{type:ty}))}}

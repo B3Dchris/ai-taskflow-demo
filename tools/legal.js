@@ -14,6 +14,11 @@ const UPDATED = "15 November 2026";
 // Both wordings, for server.js to pick from (see the top of this file). Only in page text: never in an attribute or <head>.
 const soonLive = (soon, live) => `<!--jf:soon-->${soon}<!--/jf:soon--><!--jf:live-->${live}<!--/jf:live-->`;
 // How members pay their gym, in the words every page uses.
+// The official Apple Pay and Google Pay marks (artwork from Apple's and Google's brand pages, unmodified), shown only where that way of
+// paying is really on: Apple Pay once members' card payments are live on Paystack; Google Pay for gym plans once Payfast has switched it
+// on for JitsFlow (JF_PAYFAST_GOOGLE_PAY=1, read by server.js, which drops the <!--jf:gpay--> block otherwise).
+const payMarks = () => `<!--jf:live--><figure class="paymarks"><img src="/img/pay/apple-pay-mark.svg" alt="Apple Pay" width="54" height="35" loading="lazy" decoding="async"><figcaption>Members' card payments</figcaption></figure><!--/jf:live-->` +
+  `<!--jf:gpay--><figure class="paymarks"><img src="/img/pay/google-pay-mark.png" alt="Google Pay" width="66" height="35" loading="lazy" decoding="async"><figcaption>Gym plans</figcaption></figure><!--/jf:gpay-->`;
 const memberPay = (fee) => soonLive(
   `Members pay their gym by EFT with their own reference today. Card, Apple Pay and Capitec Pay are coming soon: card payments will be processed by Paystack and paid by Paystack directly into the gym's bank account, so JitsFlow never holds membership money. JitsFlow's ${fee}% platform fee and Paystack's processing fee will be deducted from each card payment.`,
   `Members pay their gym by card, Apple Pay, Capitec Pay or EFT. Card payments are processed by Paystack and paid by Paystack directly into the gym's bank account; JitsFlow never holds membership money. JitsFlow's ${fee}% platform fee and Paystack's processing fee are deducted from each card payment.`);
@@ -79,6 +84,7 @@ function legalPages({ frame, add, SITE }) {
 <tr><th scope="row">Member fees paid by EFT</th><td><b>No JitsFlow fee</b></td><td class="mut">Members pay the gym's bank account with their own reference.</td></tr>
 <tr><th scope="row">Member fees paid by card</th><td><b>${fee}% platform fee</b></td><td class="mut">${soonLive("Card, Apple Pay and Capitec Pay are coming soon, through Paystack.", "Card, Apple Pay and Capitec Pay, through Paystack.")} Paystack pays the rest straight into the gym's bank account. Paystack's processing fee applies too (${PS_PRICING}).</td></tr>
 </tbody></table></div>
+<div class="paymarks-row">${payMarks()}</div>
 ${b.priceNote ? `<p>${esc(b.priceNote)}</p>` : b.vatNote ? `<p>All prices are in South African rand (ZAR). ${esc(b.vatNote)}.</p>` : `<p>All prices are in South African rand (ZAR).</p>`}</section>
 <section class="stack"><h2>What a gym gets</h2><ul class="ticks">
 <li>Timetable and calendar: plan a class once and repeat it weekly, or copy a whole week forward. Import it from your website.</li>
@@ -197,7 +203,7 @@ ${b.legalName ? `<p class="small muted">JitsFlow is a product of ${entity(b)}.</
 <li>Membership money is paid by Paystack straight into the gym's bank account. JitsFlow never holds it. A gym's bank and ID details are encrypted when we store them, and shown only by their last 4 digits.</li>
 <li>The whole site uses HTTPS (encrypted connections), and browsers are told to always use it (HSTS).</li></ul></section>
 <section><h2>Ways to pay</h2><p>Gym plans are paid to JitsFlow by card (Visa and Mastercard) or another method Payfast offers at its checkout. Which ones you see depends on your device. All amounts are in South African rand (ZAR).</p>
-<p>${memberPay(facts().fee)} Paystack's checkout shows the methods it offers on your device.</p></section>
+<p>${memberPay(facts().fee)} Paystack's checkout shows the methods it offers on your device.</p><div class="paymarks-row">${payMarks()}</div></section>
 <section><h2>Spotted a problem?</h2><p>If you see a charge you don't recognise, or think something isn't secure, email ${mail(b) || "us"} straight away.</p></section>
 ${policyLinks("/security/")}</article>` }), 0.3);
 }
