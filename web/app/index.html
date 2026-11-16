@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="3da60f1e57";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="b56c9e6bf1";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -599,6 +599,7 @@ details.grp,details.more,.classcard,.bookcard,.compcard,.calrows,.revealcard,.ho
 details.more>summary,details.grp>summary{border-radius:inherit}
 details.more>summary{list-style:none;justify-content:space-between;gap:12px;min-height:44px}
 details.more>summary::-webkit-details-marker{display:none}
+details.more>summary .chev{display:none} /* the panel's own arrow (::after) is the one shown */
 details.more>summary::after{content:"";flex:none;width:9px;height:9px;border-right:2px solid var(--ink-2);border-bottom:2px solid var(--ink-2);transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s var(--ease)}
 details.more[open]>summary::after{transform:rotate(225deg) translate(-2px,-2px)}
 .empty{border-radius:var(--r-md)}
@@ -7394,7 +7395,11 @@ async function psBack(ref,save){toast("Payment received — it shows once Paysta
   await loadPay();render()}
 // Money › Settings: how card payments reach the gym. While JitsFlow's Paystack is on, the gym gives its bank account once (no
 // payment account of its own) and the JitsFlow team checks it; otherwise the gym connects its own PayFast (pfPanel), as before.
-function cardsPanel(){if(COACH.ps===undefined){COACH.ps=null;api("GET","/coach/paystack").then(j=>{COACH.ps=j.paystack;if(S.ui.tab==="coach")render()}).catch(()=>{COACH.ps={on:false}})}
+// While the payout account waits for the team, look again now and then (at most every 30 s, when this screen is drawn): once the team
+// marks it verified, the coach sees "Card payments are on" without reloading.
+function cardsPanel(){const p0=COACH.ps,stale=p0&&p0.account&&p0.account.status==="pending_verification"&&Date.now()-(COACH.psAt||0)>30000&&!COACH.psBusy;
+  if(COACH.ps===undefined||stale){if(COACH.ps===undefined)COACH.ps=null;COACH.psBusy=true;api("GET","/coach/paystack").then(j=>{const was=COACH.ps&&COACH.ps.account&&COACH.ps.account.status;COACH.ps=j.paystack;COACH.psAt=Date.now();COACH.psBusy=false;
+    if(S.ui.tab==="coach"&&(!was||was!==(j.paystack.account&&j.paystack.account.status)))render()}).catch(()=>{COACH.psBusy=false;if(!COACH.ps)COACH.ps={on:false}})}
   const p=COACH.ps;if(!p)return "";return p.on?psPanel(p):pfPanel()}
 const PS_STATE={pending_verification:["due","Waiting for JitsFlow to verify"],active:["ok","Card payments are on"],disabled:["bad","Paused"]};
 function psPanel(p){const og=S.ui.openG||{},a=p.account,st=a?PS_STATE[a.status]||["",a.status]:null,edit=!a||S.ui.psEdit;

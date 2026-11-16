@@ -2045,7 +2045,11 @@ async function psBack(ref,save){toast("Payment received — it shows once Paysta
   await loadPay();render()}
 // Money › Settings: how card payments reach the gym. While JitsFlow's Paystack is on, the gym gives its bank account once (no
 // payment account of its own) and the JitsFlow team checks it; otherwise the gym connects its own PayFast (pfPanel), as before.
-function cardsPanel(){if(COACH.ps===undefined){COACH.ps=null;api("GET","/coach/paystack").then(j=>{COACH.ps=j.paystack;if(S.ui.tab==="coach")render()}).catch(()=>{COACH.ps={on:false}})}
+// While the payout account waits for the team, look again now and then (at most every 30 s, when this screen is drawn): once the team
+// marks it verified, the coach sees "Card payments are on" without reloading.
+function cardsPanel(){const p0=COACH.ps,stale=p0&&p0.account&&p0.account.status==="pending_verification"&&Date.now()-(COACH.psAt||0)>30000&&!COACH.psBusy;
+  if(COACH.ps===undefined||stale){if(COACH.ps===undefined)COACH.ps=null;COACH.psBusy=true;api("GET","/coach/paystack").then(j=>{const was=COACH.ps&&COACH.ps.account&&COACH.ps.account.status;COACH.ps=j.paystack;COACH.psAt=Date.now();COACH.psBusy=false;
+    if(S.ui.tab==="coach"&&(!was||was!==(j.paystack.account&&j.paystack.account.status)))render()}).catch(()=>{COACH.psBusy=false;if(!COACH.ps)COACH.ps={on:false}})}
   const p=COACH.ps;if(!p)return "";return p.on?psPanel(p):pfPanel()}
 const PS_STATE={pending_verification:["due","Waiting for JitsFlow to verify"],active:["ok","Card payments are on"],disabled:["bad","Paused"]};
 function psPanel(p){const og=S.ui.openG||{},a=p.account,st=a?PS_STATE[a.status]||["",a.status]:null,edit=!a||S.ui.psEdit;

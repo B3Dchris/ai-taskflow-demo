@@ -576,6 +576,7 @@ details.grp,details.more,.classcard,.bookcard,.compcard,.calrows,.revealcard,.ho
 details.more>summary,details.grp>summary{border-radius:inherit}
 details.more>summary{list-style:none;justify-content:space-between;gap:12px;min-height:44px}
 details.more>summary::-webkit-details-marker{display:none}
+details.more>summary .chev{display:none} /* the panel's own arrow (::after) is the one shown */
 details.more>summary::after{content:"";flex:none;width:9px;height:9px;border-right:2px solid var(--ink-2);border-bottom:2px solid var(--ink-2);transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s var(--ease)}
 details.more[open]>summary::after{transform:rotate(225deg) translate(-2px,-2px)}
 .empty{border-radius:var(--r-md)}
