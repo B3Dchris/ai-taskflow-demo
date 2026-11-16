@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="b56c9e6bf1";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="21b8f42887";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -7415,7 +7415,7 @@ function psPanel(p){const og=S.ui.openG||{},a=p.account,st=a?PS_STATE[a.status]|
     ${p.test?`<p class="small muted">Paystack test mode: no real money moves.</p>`:""}
     ${API.preview?`<p class="small">Claim your gym first to add its bank account. It's free.</p>`:!edit?`<button class="btn" style="justify-self:start" data-a="psedit">Change bank account</button><p class="small muted" style="margin-top:-6px">Changing it pauses card payments until we've checked the new account.</p>`
     :`<form id="psform" class="stack" novalidate>
-      <label class="f">Bank<select name="bankCode" required><option value="">${COACH.psBanks===null?"Loading banks…":"Pick your bank"}</option>${banks.map(b=>`<option value="${esc(b.code)}"${a&&a.bankCode===b.code?" selected":""}>${esc(b.name)}</option>`).join("")}</select></label>
+      <label class="f">Bank<select name="bankCode" required><option value="">${COACH.psBanks===null?"Loading banks…":"Pick your bank"}</option>${banks.map(b=>`<option value="${esc(b.code)}"${a&&a.bankCode===b.code?" selected":""}>${esc(b.name)}</option>`).join("")}</select></label><span class="small muted" style="margin-top:-8px">Bank not listed? Email ${esc((API.status&&API.status.support)||"support@jitsflow.com")} and we'll add it.</span>
       <div class="grid2"><label class="f">Account number<input name="account" inputmode="numeric" autocomplete="off" placeholder="${a?"•••• "+esc(a.last4):"Digits only"}"></label><label class="f">Account holder<input name="holder" autocomplete="off" value="${esc(a?a.holder:"")}" placeholder="As the bank has it"></label></div>
       <label class="f">Your gym's registered business name<input name="business" autocomplete="organization" value="${esc(a?a.business:API.me.gym.name)}"></label>
       <fieldset class="stack" style="border:0;padding:0;margin:0;gap:6px"><legend class="small" style="font-weight:600;margin-bottom:6px">To check the account is the gym's</legend>

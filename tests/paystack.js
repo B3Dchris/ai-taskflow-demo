@@ -83,8 +83,8 @@ const SECRET = "sk_test_" + "f".repeat(40);
     ok(r.s === 200 && r.j.paystack.on && r.j.paystack.test && r.j.paystack.feePct === 2 && r.j.paystack.bearer === "subaccount" && r.j.paystack.account === null, "the head coach sees Get paid by card, not set up yet: " + JSON.stringify(r.j));
     ok((await co2("GET", "/coach/paystack")).s === 403 && (await S.amy("GET", "/coach/paystack")).s === 403 && (await anon("GET", "/coach/paystack")).s === 401, "only the head coach sees it");
     r = await coach("GET", "/coach/paystack/banks"); await coach("GET", "/coach/paystack/banks");
-    ok(r.s === 200 && r.j.banks.map((b) => b.name).join() === "Absa Bank,Capitec Bank,First National Bank,Standard Bank" && ps.calls.filter((c) => c.path === "/bank").length === 1,
-      "banks come from Paystack (South Africa, ZAR only: other countries' banks left out), inactive ones left out, sorted, asked for once a day: " + JSON.stringify(r.j));
+    ok(r.s === 200 && r.j.banks.map((b) => b.name).join() === "Capitec Bank,First National Bank,Absa Bank,Standard Bank" && ps.calls.filter((c) => c.path === "/bank").length === 1,
+      "banks come from Paystack: South Africa only, the popular ones, most popular first; inactive and other countries' banks left out; asked for once a day: " + JSON.stringify(r.j));
     ok(ps.calls.find((c) => c.path === "/bank").query.country === "south africa" && ps.calls.find((c) => c.path === "/bank").query.currency === "ZAR" && ps.calls.every((c) => c.auth), "with country, currency and the secret key");
     const good = { bankCode: "470010", account: "1234 567 890", holder: "Stack BJJ (Pty) Ltd", business: "Stack BJJ (Pty) Ltd", idKind: "reg", idNumber: "2019/123456/07" };
     for (const [bad, why] of [[{ account: "12ab" }, "account"], [{ bankCode: "999999" }, "bank"], [{ idNumber: "2019-1234" }, "registration"], [{ idKind: "id", idNumber: "8001015009088" }, "ID"], [{ holder: "" }, "holder"], [{ business: "" }, "business"]]) {

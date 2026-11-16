@@ -66,6 +66,14 @@ async function banks() {
   return list;
 }
 const forgetBanks = () => { bankCache = { at: 0, list: null }; };
+// The banks most South African gyms use, most popular first: the only ones the app offers for now (the full list still checks a saved
+// account). Matched by name, so Paystack's own codes are used. If none match (Paystack renamed them), the full list is offered instead.
+const POPULAR = [/^capitec/i, /first national|^fnb\b/i, /^absa/i, /^standard bank/i, /^nedbank/i, /^tyme/i, /^discovery/i, /^african bank/i, /^investec/i];
+async function popularBanks() {
+  const all = await banks(), out = [];
+  for (const re of POPULAR) { const b = all.find((x) => re.test(x.name) && !out.includes(x)); if (b) out.push(b); }
+  return out.length ? out : all;
+}
 
 // A gym's subaccount: its bank account for payouts. percentage_charge 0: JitsFlow's fee is a flat transaction_charge on each payment.
 // Returns the subaccount code.
@@ -112,5 +120,5 @@ const newRef = (kind) => `jf${kind}-${Date.now().toString(36)}-${crypto.randomBy
 // "•••• 1234": the end of a number, never the rest.
 const last4 = (v) => String(v || "").replace(/\D/g, "").slice(-4);
 
-module.exports = { on, live, testMode, memberCards, bearer, publicLive, base, feeOf, DASHBOARD, IPS, PaystackError, api, banks, forgetBanks, createSubaccount, updateSubaccount,
+module.exports = { popularBanks, on, live, testMode, memberCards, bearer, publicLive, base, feeOf, DASHBOARD, IPS, PaystackError, api, banks, forgetBanks, createSubaccount, updateSubaccount,
   initialize, verify, chargeAuthorization, refund, signatureOk, subOf, newRef, last4 };

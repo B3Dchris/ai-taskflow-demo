@@ -3583,7 +3583,10 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   api.get("/coach/paystack/banks", wrap(async (req, res) => {
     needHead(req); if (paystack.memberCards() !== "paystack") fail(400, "Card payments aren't switched on yet.");
-    res.json({ banks: await paystack.banks().catch(psFail) });
+    // The popular banks only, for now (the full list still accepts a gym saved with another bank).
+    const all = await paystack.banks().catch(psFail), top = await paystack.popularBanks().catch(psFail), g = (await q("select paystack from gyms where id=$1", [req.user.gym_id])).rows[0];
+    const mine = g && g.paystack && all.find((x) => x.code === g.paystack.bankCode);
+    res.json({ banks: mine && !top.includes(mine) ? [...top, mine] : top });
   }));
   // The gym's bank account for card payouts. Saved with Paystack as the gym's subaccount (made the first time, changed after that).
   // New details wait for the JitsFlow team to check them, so card payments pause until then (Paystack holds the first payout to a new
