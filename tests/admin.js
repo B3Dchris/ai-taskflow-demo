@@ -131,7 +131,7 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
     const BG = (await pool.query(`insert into gyms(name, student_code, coach_code, claim) values('Built Gym', 'BLTS1', 'BLTC1', '{"prospectId":"x","builtAt":"2026-11-01T00:00:00Z"}') returning id`)).rows[0].id;
     await pool.query("update prospects set gym_id=$1 where token='t4'", [BG]);
     r = await admin("GET", "/admin/overview?days=7");
-    const d = r.j || {};
+    let d = r.j || {};
     ok(r.s === 200 && d.days === 7 && d.series.length === 7 && d.series[6].day === new Date().toISOString().slice(0, 10), "the admin gets the overview with 7 days of series");
     const T = d.totals || {};
     ok(T.gyms === 3 && T.coaches === 1 && T.members === 9 && T.membersOnApp === 8 && T.selfStudy === 2 && T.kids === 1, "totals: gyms, coaches, members (on the app), on their own, kids: " + JSON.stringify(T));
@@ -157,6 +157,50 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
     ok(d.countingSince === new Date().toISOString().slice(0, 10), "the day visitor counting started");
     r = await admin("GET", "/admin/overview?days=90"); ok(r.j.series.length === 90 && r.j.days === 90, "90 days");
     r = await admin("GET", "/admin/overview?days=5000"); ok(r.j.days === 30, "other ranges fall back to 30 days");
+
+    // ---------- only people a page actually opened for (the page's own signal, POST /hit) ----------
+    const hit = (body, { ua = IPHONE, ip = "198.51.100.1", headers = {} } = {}) => fetch(BASE + "/hit", { method: "POST",
+      headers: { "user-agent": ua, "x-forwarded-for": ip, "content-type": "text/plain;charset=UTF-8", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) }).then(async (x) => { await x.arrayBuffer(); return x.status; });
+    const home = await (await fetch(BASE + "/", { headers: { "user-agent": IPHONE } })).text();
+    ok(/sendBeacon\("\/hit"/.test(home) && /navigator|N\.webdriver/.test(home), "every page carries the opened-in-a-browser signal");
+    ok((await hit({ p: "/", q: "", r: "https://www.bing.com/" })) === 204, "the signal is accepted (204)");
+    await hit({ p: "/coaches/", q: "?utm_source=newsletter&utm_campaign=Nov", r: "https://mail.example.test/" }, { ua: MAC, ip: "203.0.113.90", headers: { "cf-ipcountry": "ZA" } }); // page from a cache: counted by its signal alone
+    await hit({ p: "/", q: "?gclid=EAIaIQ_ads-1&utm_campaign=Gym%20Owners", r: "https://www.google.com/" }, { ua: ANDROID, ip: "203.0.113.7", headers: { "cf-ipcountry": "ZA" } });
+    await hit({ p: "/app/", q: "", r: "" }, { ua: ANDROID, ip: "203.0.113.8" }); // someone opening the app: an app open, not a website visitor
+    // Not counted: robots, pages we don't have, the 404 page, broken or odd bodies.
+    await hit({ p: "/", q: "", r: "" }, { ua: "Mozilla/5.0 (compatible; Googlebot/2.1)", ip: "66.249.66.2" });
+    await hit({ p: "/no-such-page/", q: "", r: "" }, { ip: "203.0.113.91" }); await hit({ p: "/404.html" }, { ip: "203.0.113.92" });
+    await hit("not json", { ip: "203.0.113.93" }); await hit({ p: "javascript:alert(1)" }, { ip: "203.0.113.94" }); await hit("[1,2]", { ip: "203.0.113.95" });
+    ok((await hit("x".repeat(5000), { ip: "203.0.113.96" })) !== 500, "a too-big body is refused, not an error");
+    let codes = []; for (let i = 0; i < 130; i++) codes.push(hit({ p: "/coaches/" }, { ua: MAC, ip: "203.0.113.99" })); codes = await Promise.all(codes);
+    ok(codes.every((c) => c === 204), "a flood still gets 204s");
+    await wait(1500); await settle(); await wait(700);
+    const sv = Object.fromEntries((await pool.query("select path, views, seen from site_daily")).rows.map((x) => [x.path, x.seen]));
+    ok(sv["/"] === 2 && sv["/coaches/"] === 121 && sv["/app/"] === 1 && !sv["/no-such-page/"] && Object.keys(sv).length === 3, "pages that opened, per page (one address at most 120 a minute): " + JSON.stringify(sv));
+    r = await admin("GET", "/admin/overview?days=7"); d = r.j;
+    ok(d.seenSince === new Date().toISOString().slice(0, 10), "the day the signal started is known: " + d.seenSince);
+    ok(d.visitors.today === 4 && d.series[6].visitors === 4 && d.series[6].sentTo === 7, "visitors are the people a page opened for; pages were sent to more (scanners included, like the home page fetched above without opening it): " + JSON.stringify(d.visitors) + JSON.stringify(d.series[6]));
+    ok(d.series[6].views === 123 && d.series[6].appOpens === 1 && d.series[6].appPeople === 1, "pages viewed and app opens count the opened ones: " + JSON.stringify(d.series[6]));
+    const so2 = Object.fromEntries((d.sources || []).map((s) => [s.name, s.n]));
+    ok(so2["Google Ads"] === 1 && so2.Newsletter === 1 && so2.Bing === 1 && so2.Direct === 1 && !so2["Google search"], "sources: the page's own referrer fills one the server didn't get; people only: " + JSON.stringify(so2));
+    ok(d.countries.find((c) => c.code === "ZA").n === 2 && !d.countries.find((c) => c.code === "GB"), "countries: people only: " + JSON.stringify(d.countries));
+    ok(d.pages[0].path === "/coaches/" && d.pages[0].n === 121 && d.campaigns.length === 2, "top pages and campaigns: people only: " + JSON.stringify(d.pages) + JSON.stringify(d.campaigns));
+    // In a real browser: sent once someone scrolls; never by a browser run by automation (navigator.webdriver), like most scanners.
+    {
+      const bb = await chromium.launch();
+      for (const auto of [false, true]) {
+        const ctx = await bb.newContext({ ...devices["iPhone 13"] }), pg = await ctx.newPage(), sent = [];
+        if (!auto) await pg.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
+        pg.on("request", (q) => { if (q.url().endsWith("/hit")) sent.push(q.postData()); });
+        const errs = []; pg.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
+        await pg.goto(BASE + "/coaches/?utm_source=flyer"); await pg.waitForTimeout(600);
+        const before = sent.length; await pg.mouse.wheel(0, 400); await pg.evaluate(() => window.scrollBy(0, 300)); await pg.waitForTimeout(800);
+        if (!auto) ok(before === 0 && sent.length === 1 && JSON.parse(sent[0]).p === "/coaches/" && JSON.parse(sent[0]).q === "?utm_source=flyer" && !errs.some((e) => /Content Security Policy/i.test(e)), "a person: the signal goes once they scroll, once, with the page and its tags (no CSP errors): " + JSON.stringify(sent) + errs.join(" | "));
+        else ok(sent.length === 0, "a browser run by automation never sends it: " + JSON.stringify(sent));
+        await ctx.close();
+      }
+      await bb.close();
+    }
 
     // ---------- speed on a bigger database (4,000 people) ----------
     await pool.query(`insert into gyms(name, student_code, coach_code, created_at) select 'Gym ' || i, 'S' || i, 'C' || i, now() - (i || ' days')::interval from generate_series(1, 40) i`);

@@ -27,6 +27,15 @@ const TYPES = {
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
 };
+// "This page opened in a browser": sent once someone is looking at it (a tap, a scroll, a key, or 8 seconds on screen), so the
+// dashboard counts people, not the email scanners, ad checkers and scrapers that download pages while pretending to be Chrome
+// (they never run it, or close it straight away). No cookie and nothing stored in the browser; counted like the page itself
+// (backend/visits.js). Pages left within 8 seconds without a touch aren't counted.
+const BEACON_TAG = `<script>(function(){try{var N=navigator,D=document,L=location,sent=0;if(N.webdriver||!N.sendBeacon)return;
+function go(){if(sent||D.visibilityState!=="visible")return;sent=1;try{N.sendBeacon("/hit",JSON.stringify({p:L.pathname,q:L.search.slice(0,600),r:D.referrer.slice(0,400)}))}catch(e){}}
+function look(){if(D.visibilityState==="visible")setTimeout(go,8000)}
+["pointerdown","touchstart","keydown","scroll","wheel"].forEach(function(e){addEventListener(e,go,{passive:true,once:true})});
+look();D.addEventListener("visibilitychange",look)}catch(e){}})();</script>`;
 const COMPRESS = new Set([".html", ".js", ".json", ".webmanifest", ".css", ".svg", ".txt", ".xml"]);
 // Google Analytics 4: only when GA_ID looks like a real measurement ID. analytics.js waits for the visitor's consent.
 const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_ID || "") ? process.env.GA_ID : null;
@@ -72,7 +81,7 @@ const files = new Map();
     const rel = "/" + path.relative(ROOT, full).split(path.sep).join("/");
     const ext = path.extname(name).toLowerCase();
     let body = fs.readFileSync(full);
-    if (ext === ".html") body = Buffer.from(cardsCopy(body.toString("utf8")).replace("</head>", SRC_TAG + GA_TAG + "\n</head>"));
+    if (ext === ".html") body = Buffer.from(cardsCopy(body.toString("utf8")).replace("</head>", SRC_TAG + BEACON_TAG + GA_TAG + "\n</head>"));
     files.set(rel, { body, gz: COMPRESS.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null, ext,
       type: TYPES[ext] || "application/octet-stream", sec: ext === ".html" ? { ...SECURITY, "Content-Security-Policy": cspFor(scriptHashes(body.toString("utf8"))) } : SECURITY });
   }
@@ -196,6 +205,22 @@ async function main() {
     const jobs = () => api.jobs.run().catch((e) => console.warn("jobs:", e.message));
     jobs(); setInterval(jobs, 15 * 60e3).unref();
     counter = visits.makeCounter(pool, { clientIp, flushMs: Number(process.env.PAGEVIEW_FLUSH_MS) || 60e3, ownHost: (() => { try { return new URL(process.env.APP_URL || "https://www.jitsflow.com").hostname; } catch (e) { return ""; } })() }).start();
+    // A page saying it opened in a browser (BEACON_TAG). Only our own pages count; at most 120 a minute from one address.
+    const pageOf = (p) => {
+      if (!/^\/[\w\-./%]*$/.test(p)) return null;
+      if (p === "/app" || p.startsWith("/app/")) return "/app/";
+      const r = p === "/" ? "/index.html" : p.endsWith("/") ? p + "index.html" : p, f = files.get(r);
+      return f && f.ext === ".html" && r !== "/404.html" ? r.replace(/index\.html$/, "") : null;
+    };
+    let hits = new Map(); setInterval(() => { hits = new Map(); }, 60e3).unref();
+    const hitBody = express.text({ type: () => true, limit: "2kb" });
+    app.post("/hit", (req, res, next) => hitBody(req, res, (e) => (e ? res.status(204).set("Cache-Control", "no-store").end() : next())), (req, res) => {
+      res.set("Cache-Control", "no-store");
+      const ip = clientIp(req), n = (hits.get(ip) || 0) + 1;
+      if (hits.size < 50000) hits.set(ip, n);
+      if (n <= 120) { let b = null; try { b = JSON.parse(typeof req.body === "string" ? req.body : ""); } catch (e) {} counter.seen(req, b, pageOf); }
+      res.status(204).end();
+    });
     // Render stops the server with SIGTERM on each deploy: write the last minute's counts first.
     let stopping = false;
     for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { if (stopping) return; stopping = true;

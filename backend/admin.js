@@ -7,6 +7,13 @@ const RANGES = [7, 30, 90];
 // A website visitor: opened a public page, or arrived straight in the app from another site, an ad or a campaign link
 // (someone just opening the app they use every day isn't one: they're counted as app opens).
 const VIS = "(pages>0 or ref<>'' or utm_source<>'' or click<>'')";
+// From the first day pages sent their "opened in a browser" signal (backend/visits.js), only those count: a visitor is someone a
+// page opened for (or the app, arriving from another site or an ad). Days before that keep the old count (every page sent).
+// $2: that first day ('infinity' when there's none yet).
+const SEEN = "(js>0 or (js_app>0 and (ref<>'' or utm_source<>'' or click<>'')))";
+const realAt = (ph) => `(case when day >= ${ph}::date then ${SEEN} else ${VIS} end)`, REAL = realAt("$2");
+const APPP = "(case when day >= $2::date then js_app>0 else app>0 end)";
+const VIEWS = "(case when day >= $2::date then seen else views end)";
 const n = (v) => Number(v || 0);
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 
@@ -28,7 +35,8 @@ async function overview(q, { days = 30, bill } = {}) {
   const start = new Date(Date.parse(today + "T00:00:00Z") - (days - 1) * 864e5).toISOString().slice(0, 10);
   const since = "($1::date)::timestamp at time zone 'UTC'"; // the first day's start, as a time
   const day = (col) => `to_char((${col} at time zone 'UTC')::date, 'YYYY-MM-DD')`;
-  const P = [start];
+  const f = (await q("select to_char(min(day), 'YYYY-MM-DD') as d from site_daily where seen>0")).rows[0].d || null;
+  const P = [start, f || "infinity"];
   const [tot, signDays, gymDays, visDays, viewDays, pages, vSrc, camps, countries, sSrc, gyms, recent, out, first, last7] = await Promise.all([
     // Gyms outreach built that nobody has claimed aren't gyms yet: they're in the outreach funnel ("Built, not claimed").
     q(`select (select count(*) from gyms where claim is null) as gyms,
@@ -47,19 +55,20 @@ async function overview(q, { days = 30, bill } = {}) {
         count(*) filter (where pass_hash is not null and signed_up_at > now() - interval '30 days') as new30
       from users`),
     q(`select ${day("signed_up_at")} as d, count(*) filter (where role='coach') as coaches, count(*) filter (where role<>'coach') as students
-      from users where pass_hash is not null and signed_up_at >= ${since} group by 1`, P),
-    q(`select ${day("coalesce(claimed_at, created_at)")} as d, count(*) as n from gyms where claim is null and coalesce(claimed_at, created_at) >= ${since} group by 1`, P),
-    q(`select to_char(day, 'YYYY-MM-DD') as d, count(*) filter (where ${VIS}) as visitors, count(*) filter (where app>0) as app_people
+      from users where pass_hash is not null and signed_up_at >= ${since} group by 1`, [start]),
+    q(`select ${day("coalesce(claimed_at, created_at)")} as d, count(*) as n from gyms where claim is null and coalesce(claimed_at, created_at) >= ${since} group by 1`, [start]),
+    q(`select to_char(day, 'YYYY-MM-DD') as d, count(*) filter (where ${REAL}) as visitors, count(*) filter (where ${APPP}) as app_people,
+        count(*) filter (where ${VIS}) as sent_to
       from site_visitors where day >= $1::date group by day`, P),
-    q(`select to_char(day, 'YYYY-MM-DD') as d, sum(views) filter (where path<>'/app/') as views, sum(views) filter (where path='/app/') as app_opens
+    q(`select to_char(day, 'YYYY-MM-DD') as d, sum(${VIEWS}) filter (where path<>'/app/') as views, sum(${VIEWS}) filter (where path='/app/') as app_opens
       from site_daily where day >= $1::date group by day`, P),
-    q(`select path, sum(views) as n from site_daily where day >= $1::date and path<>'/app/' group by path order by n desc, path limit 12`, P),
-    q(`select ref, utm_source, utm_medium, click<>'' as click, count(*) as n from site_visitors where day >= $1::date and ${VIS} group by 1,2,3,4`, P),
-    q(`select utm_campaign as name, count(*) as n, bool_or(click<>'') as ads from site_visitors where day >= $1::date and utm_campaign<>'' group by 1 order by n desc limit 8`, P),
-    q(`select country, count(*) as n from site_visitors where day >= $1::date and ${VIS} group by 1 order by n desc limit 12`, P),
+    q(`select path, sum(${VIEWS}) as n from site_daily where day >= $1::date and path<>'/app/' group by path having sum(${VIEWS}) > 0 order by n desc, path limit 12`, P),
+    q(`select ref, utm_source, utm_medium, click<>'' as click, count(*) as n from site_visitors where day >= $1::date and ${REAL} group by 1,2,3,4`, P),
+    q(`select utm_campaign as name, count(*) as n, bool_or(click<>'') as ads from site_visitors where day >= $1::date and utm_campaign<>'' and ${REAL} group by 1 order by n desc limit 8`, P),
+    q(`select country, count(*) as n from site_visitors where day >= $1::date and ${REAL} group by 1 order by n desc limit 12`, P),
     q(`select signup_source->>'ref' as ref, signup_source->>'utm_source' as utm_source, signup_source->>'utm_medium' as utm_medium,
         coalesce(signup_source ? 'click', false) as click, signup_source->>'via' as via, role, count(*) as n
-      from users where pass_hash is not null and signed_up_at >= ${since} group by 1,2,3,4,5,6`, P),
+      from users where pass_hash is not null and signed_up_at >= ${since} group by 1,2,3,4,5,6`, [start]),
     q(`select g.id, g.name, g.created_at, g.claimed_at, g.billing, g.beta, g.currency, h.name as head_name, h.email as head_email,
         (select p.id from prospects p where p.gym_id=g.id limit 1) as prospect_id,
         coalesce(m.members,0) as members, coalesce(m.on_app,0) as on_app, coalesce(m.active7,0) as active7, coalesce(m.coaches,0) as coaches, m.last_seen,
@@ -84,7 +93,7 @@ async function overview(q, { days = 30, bill } = {}) {
     q(`select to_char(min(day), 'YYYY-MM-DD') as d from site_daily`),
     // Visitors today and over the last 7 days (each person counted once a day), whatever the range.
     q(`select count(*) filter (where day=(now() at time zone 'UTC')::date) as today, count(*) as week
-      from site_visitors where ${VIS} and day > (now() at time zone 'UTC')::date - 7`),
+      from site_visitors where ${realAt("$1")} and day > (now() at time zone 'UTC')::date - 7`, [P[1]]),
   ]);
 
   const T = tot.rows[0], byDay = (rows) => Object.fromEntries(rows.map((r) => [r.d, r]));
@@ -92,12 +101,12 @@ async function overview(q, { days = 30, bill } = {}) {
   const series = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(Date.parse(start + "T00:00:00Z") + i * 864e5).toISOString().slice(0, 10);
-    series.push({ day: d, visitors: n((V[d] || {}).visitors), views: n((W[d] || {}).views), appOpens: n((W[d] || {}).app_opens), appPeople: n((V[d] || {}).app_people),
+    series.push({ day: d, visitors: n((V[d] || {}).visitors), sentTo: n((V[d] || {}).sent_to), views: n((W[d] || {}).views), appOpens: n((W[d] || {}).app_opens), appPeople: n((V[d] || {}).app_people),
       students: n((S[d] || {}).students), coaches: n((S[d] || {}).coaches), gyms: n((G[d] || {}).n) });
   }
   const o = out.rows[0] || {};
   return {
-    days, from: start, to: today, countingSince: first.rows[0].d || null,
+    days, from: start, to: today, countingSince: first.rows[0].d || null, seenSince: f,
     visitors: { today: n(last7.rows[0].today), week: n(last7.rows[0].week) },
     totals: { gyms: n(T.gyms), gymsActive: n(T.gyms_active), coaches: n(T.coaches), members: n(T.members), membersOnApp: n(T.members_on_app), selfStudy: n(T.self_study),
       kids: n(T.kids), logins: n(T.logins), active1: n(T.active1), active7: n(T.active7), active30: n(T.active30), new1: n(T.new1), new7: n(T.new7), new30: n(T.new30) },

@@ -2285,6 +2285,9 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
   const T=d.totals,S7=d.series,sum=k=>S7.reduce((a,s)=>a+s[k],0),since=d.countingSince;
   const tile=(n,l,sub)=>`<div class="stat"><b>${nf(n)}</b><span>${l}</span>${sub?`<small>${sub}</small>`:""}</div>`;
   const vNote=!since?`Visitor counting starts with the next visit to the website.`:since>d.from?`Visitor counting started on ${dShort(since)}, so earlier days show nothing.`:"";
+  // Real people only (the page's own "opened in a browser" signal), and how many the server sent pages to, scanners and robots included.
+  const ss=d.seenSince,sNote=!ss?`These count every page sent, including email scanners and robots that pretend to be browsers.`
+    :`Counted only when a page opens in front of someone (a tap, a scroll or 8 seconds on screen), so email scanners and robots are left out. Pages were sent to ${nf(sum("sentTo"))} in these days, those included.${ss>d.from?` Before ${dShort(ss)}, every page sent counted.`:""}`;
   const sorts=[["members","Members"],["active","Active"],["seen","Last seen"],["newest","Newest"]];
   const o=d.outreach,ppl=[[T.active1,"people used the app today"],[T.active7,"people used the app this week"],[T.active30,"people used the app in the last 30 days"],[T.coaches,"coaches"],[T.members,`students in gyms (${nf(T.membersOnApp)} on the app, the rest added by their coach)`],[T.kids,"kids on a parent's login"],[T.selfStudy,"people studying on their own, without a gym"],[T.new1,"signed up today"],[T.new7,"signed up this week"],[T.new30,"signed up in the last 30 days"]];
   openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash">
@@ -2294,7 +2297,7 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
     ${seg}
     <section class="panel stack"><div class="row between"><h2 class="label">Website visitors</h2><span class="small muted">${nf(sum("visitors"))} in ${d.days} days</span></div>
       ${dashChart(S7,[["visitors","var(--chart)","visitors"]],"Website visitors")}
-      <p class="small muted">${nf(sum("views"))} pages viewed. The app was opened ${nf(sum("appOpens"))} times in a browser. ${vNote}</p></section>
+      <p class="small muted">${nf(sum("views"))} pages viewed. The app was opened ${nf(sum("appOpens"))} times in a browser. ${sNote} ${vNote}</p></section>
     <section class="panel stack"><div class="row between"><h2 class="label">Sign-ups</h2><span class="small muted">${nf(sum("students")+sum("coaches"))} in ${d.days} days · ${nf(sum("gyms"))} new gym${sum("gyms")===1?"":"s"}</span></div>
       ${dashChart(S7,[["students","var(--chart)","students"],["coaches","var(--good)","coaches"]],"Sign-ups")}</section>
     <section class="panel stack"><h2 class="label">Gyms · ${nf(d.gyms.length)}</h2>

@@ -2,6 +2,9 @@
 // A visitor is one browser on one day: sha256(today's secret + address + browser), cut short. The secret is random, made each
 // UTC day and deleted after it, so a visitor can't be followed from one day to the next and the hash can't be traced back.
 // Raw addresses and browser strings are never stored. Hits are counted in memory and written in one batch about once a minute.
+// Two counts: every page the server sends (views, pages, app), and the pages that then actually opened in a browser (seen, js,
+// js_app): a tiny signal the page sends itself (BEACON in server.js) once someone is looking at it. Email security scanners, ad
+// checkers and scrapers that pretend to be Chrome download pages but never send it, so the dashboard counts people by "seen".
 "use strict";
 const crypto = require("crypto");
 
@@ -85,11 +88,26 @@ function makeCounter(pool, { clientIp, flushMs = 60e3, ownHost = "" } = {}) {
   function count(h) {
     if (!needSalt(h.day)) { if (waiting.length < 5000) waiting.push(h); return; }
     const vhash = crypto.createHash("sha256").update(salt + "\n" + h.ip + "\n" + h.ua).digest("hex").slice(0, 20);
-    if (!h.app) { const k = h.day + "\t" + h.path; views.set(k, (views.get(k) || 0) + 1); }
-    else { const k = h.day + "\t/app/"; views.set(k, (views.get(k) || 0) + 1); }
+    const k = h.day + "\t" + (h.app ? "/app/" : h.path), pv = views.get(k) || { v: 0, s: 0 };
+    if (!views.has(k)) { if (views.size >= 20000) return; views.set(k, pv); }
+    if (h.seen) pv.s++; else pv.v++;
     const vk = h.day + "\t" + vhash; let v = visitors.get(vk);
-    if (!v) { if (visitors.size >= 100000) return; v = { day: h.day, vhash, first: h.path, ref: h.ref, s: h.s, m: h.m, c: h.c, click: h.click, cid: h.cid, country: h.country, pages: 0, app: 0 }; visitors.set(vk, v); }
-    if (h.app) v.app++; else v.pages++;
+    if (!v) { if (visitors.size >= 100000) return; v = { day: h.day, vhash, first: h.path, ref: h.ref, s: h.s, m: h.m, c: h.c, click: h.click, cid: h.cid, country: h.country, pages: 0, app: 0, js: 0, js_app: 0 }; visitors.set(vk, v); }
+    else if (!v.ref && !v.s && !v.click && h.ref) v.ref = h.ref; // the browser's own referrer, when the server's copy had none
+    if (h.seen) { if (h.app) v.js_app++; else v.js++; } else if (h.app) v.app++; else v.pages++;
+  }
+
+  // One hit: the page's path, its address's query (utm tags, ad click ids) and the referring address.
+  function hit(req, ua, path, app, search, referer, seen) {
+    const qp = new URLSearchParams(search);
+    let ref = hostOf(referer);
+    if (ref && (ref === own || ref === "jitsflow.com" || ref === String(req.headers.host || "").toLowerCase().split(":")[0].replace(/^www\./, ""))) ref = "";
+    let click = "", cid = "";
+    for (const k of CLICK_IDS) { const v = cleanId(qp.get(k)); if (v) { click = k; cid = v; break; } }
+    const cc = String(req.headers["cf-ipcountry"] || "").toUpperCase();
+    count({ day: today(), path: str(path, 200), app: !!app, ip: clientIp(req), ua: ua.slice(0, 400), ref, seen: !!seen,
+      s: cleanTag(qp.get("utm_source")), m: cleanTag(qp.get("utm_medium")), c: cleanTag(qp.get("utm_campaign")), click, cid,
+      country: /^[A-Z]{2}$/.test(cc) && cc !== "XX" && cc !== "T1" ? cc : "" });
   }
 
   // A page was served (200, HTML). app: the app's page (counted as an app open, not a website visit).
@@ -103,38 +121,48 @@ function makeCounter(pool, { clientIp, flushMs = 60e3, ownHost = "" } = {}) {
       // Only pages opened in a browser tab: not the service worker saving the pages for offline use (dest "empty").
       const dest = String(req.headers["sec-fetch-dest"] || "");
       if (dest && dest !== "document") return;
-      const u = new URL(req.url, "http://x"), qp = u.searchParams;
-      let ref = hostOf(req.headers.referer || req.headers.referrer || "");
-      if (ref && (ref === own || ref === "jitsflow.com" || ref === String(req.headers.host || "").toLowerCase().split(":")[0].replace(/^www\./, ""))) ref = "";
-      let click = "", cid = "";
-      for (const k of CLICK_IDS) { const v = cleanId(qp.get(k)); if (v) { click = k; cid = v; break; } }
-      const cc = String(req.headers["cf-ipcountry"] || "").toUpperCase();
-      count({ day: today(), path: str(path, 200), app: !!app, ip: clientIp(req), ua: ua.slice(0, 400), ref,
-        s: cleanTag(qp.get("utm_source")), m: cleanTag(qp.get("utm_medium")), c: cleanTag(qp.get("utm_campaign")), click, cid,
-        country: /^[A-Z]{2}$/.test(cc) && cc !== "XX" && cc !== "T1" ? cc : "" });
+      hit(req, ua, path, app, new URL(req.url, "http://x").search, req.headers.referer || req.headers.referrer || "", false);
     } catch (e) { /* counting never breaks a page */ }
+  }
+
+  // The page itself said it opened in a browser (POST /hit, sent by BEACON in server.js). b: { p: path, q: query, r: referrer }.
+  // pageOf(path): the page's name as record() counts it ("/coaches/", "/app/"), or null for anything that isn't one of our pages.
+  function seen(req, b, pageOf) {
+    try {
+      const ua = String(req.headers["user-agent"] || "");
+      if (isBot(ua) || !b || typeof b !== "object") return false;
+      const path = pageOf(str(b.p, 200));
+      if (!path) return false;
+      const q = str(b.q, 600);
+      hit(req, ua, path, path === "/app/", q.startsWith("?") ? q : "", str(b.r, 400), true);
+      return true;
+    } catch (e) { return false; }
   }
 
   async function flush() {
     const vw = views, vs = visitors; views = new Map(); visitors = new Map();
     try {
       if (vw.size) {
-        const d = [], p = [], n = []; for (const [k, c] of vw) { const [day, path] = k.split("\t"); d.push(day); p.push(path); n.push(c); }
-        await pool.query(`insert into site_daily(day, path, views) select * from unnest($1::date[], $2::text[], $3::int[])
-          on conflict (day, path) do update set views = site_daily.views + excluded.views`, [d, p, n]);
+        const d = [], p = [], n = [], sn = []; for (const [k, c] of vw) { const [day, path] = k.split("\t"); d.push(day); p.push(path); n.push(c.v); sn.push(c.s); }
+        await pool.query(`insert into site_daily(day, path, views, seen) select * from unnest($1::date[], $2::text[], $3::int[], $4::int[])
+          on conflict (day, path) do update set views = site_daily.views + excluded.views, seen = site_daily.seen + excluded.seen`, [d, p, n, sn]);
       }
       if (vs.size) {
-        const cols = [[], [], [], [], [], [], [], [], [], [], [], []];
-        for (const v of vs.values()) [v.day, v.vhash, v.first, v.ref, v.s, v.m, v.c, v.click, v.cid, v.country, v.pages, v.app].forEach((x, i) => cols[i].push(x));
-        await pool.query(`insert into site_visitors(day, vhash, first_path, ref, utm_source, utm_medium, utm_campaign, click, click_id, country, pages, app)
-          select * from unnest($1::date[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::int[], $12::int[])
-          on conflict (day, vhash) do update set pages = site_visitors.pages + excluded.pages, app = site_visitors.app + excluded.app`, cols);
+        const cols = [[], [], [], [], [], [], [], [], [], [], [], [], [], []];
+        for (const v of vs.values()) [v.day, v.vhash, v.first, v.ref, v.s, v.m, v.c, v.click, v.cid, v.country, v.pages, v.app, v.js, v.js_app].forEach((x, i) => cols[i].push(x));
+        // A visitor first counted by the page being sent (with no referrer or tags) can get them from its signal, which
+        // reads the browser's own referrer: blanks are filled, nothing already there is changed.
+        await pool.query(`insert into site_visitors(day, vhash, first_path, ref, utm_source, utm_medium, utm_campaign, click, click_id, country, pages, app, js, js_app)
+          select * from unnest($1::date[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::int[], $12::int[], $13::int[], $14::int[])
+          on conflict (day, vhash) do update set pages = site_visitors.pages + excluded.pages, app = site_visitors.app + excluded.app,
+            js = site_visitors.js + excluded.js, js_app = site_visitors.js_app + excluded.js_app,
+            ref = case when site_visitors.ref = '' and site_visitors.utm_source = '' and site_visitors.click = '' then excluded.ref else site_visitors.ref end`, cols);
       }
     } catch (e) {
       console.warn("visits: flush:", e.message);
       // Keep them for the next try (merged with anything counted since), unless the database has been away a long time.
-      for (const [k, c] of vw) if (views.size < 20000) views.set(k, (views.get(k) || 0) + c);
-      for (const [k, v] of vs) { const w = visitors.get(k); if (w) { w.pages += v.pages; w.app += v.app; } else if (visitors.size < 100000) visitors.set(k, v); }
+      for (const [k, c] of vw) { const w = views.get(k); if (w) { w.v += c.v; w.s += c.s; } else if (views.size < 20000) views.set(k, c); }
+      for (const [k, v] of vs) { const w = visitors.get(k); if (w) { w.pages += v.pages; w.app += v.app; w.js += v.js; w.js_app += v.js_app; } else if (visitors.size < 100000) visitors.set(k, v); }
     }
     // Once a day: the days' secrets go once the day is over, and counts older than 13 months are deleted.
     const t = today();
@@ -150,7 +178,7 @@ function makeCounter(pool, { clientIp, flushMs = 60e3, ownHost = "" } = {}) {
   const flushNow = () => (flushing = (flushing || Promise.resolve()).then(flush, flush));
   function start() { if (!timer) { timer = setInterval(flushNow, flushMs); timer.unref(); } needSalt(today()); return api; }
   async function stop() { if (timer) clearInterval(timer); timer = null; if (saltLoading) await saltLoading; await flushNow(); }
-  const api = { record, flush: flushNow, start, stop, pending: () => ({ views: views.size, visitors: visitors.size, waiting: waiting.length }) };
+  const api = { record, seen, flush: flushNow, start, stop, pending: () => ({ views: views.size, visitors: visitors.size, waiting: waiting.length }) };
   return api;
 }
 

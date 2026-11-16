@@ -635,6 +635,10 @@ alter table autopay_charges add column if not exists provider text not null defa
 alter table autopay_charges add column if not exists ref text;
 -- When a payment's member deleted their account (their proofs of payment are deleted 90 days later; the payment stays for the gym).
 alter table payments add column if not exists user_gone_at timestamptz;
+-- Pages that actually opened in a browser (the page's own signal: backend/visits.js), next to the pages the server sent.
+alter table site_daily add column if not exists seen int not null default 0;
+alter table site_visitors add column if not exists js int not null default 0;
+alter table site_visitors add column if not exists js_app int not null default 0;
 create or replace function jf_user_gone() returns trigger language plpgsql as $$
 begin update payments set user_gone_at=now() where user_id=old.id; return old; end $$;
 drop trigger if exists users_gone on users;
