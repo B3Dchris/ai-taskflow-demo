@@ -635,6 +635,8 @@ alter table autopay_charges add column if not exists provider text not null defa
 alter table autopay_charges add column if not exists ref text;
 -- When a payment's member deleted their account (their proofs of payment are deleted 90 days later; the payment stays for the gym).
 alter table payments add column if not exists user_gone_at timestamptz;
+-- Small secrets the app makes for itself, sealed (e.g. ads_feed: the Google Ads conversions file's password, backend/adsfeed.js).
+create table if not exists app_secrets(name text primary key, value text not null, updated_at timestamptz not null default now());
 -- Pages that actually opened in a browser (the page's own signal: backend/visits.js), next to the pages the server sent.
 alter table site_daily add column if not exists seen int not null default 0;
 alter table site_visitors add column if not exists js int not null default 0;
@@ -726,6 +728,7 @@ async function purgeRejected(pool) {
   await run("delete from pop_files f using payments p where f.payment_id=p.id and p.user_id is null and p.user_gone_at < now() - interval '90 days'");
   await run("delete from left_owing where left_at < now() - interval '18 months'");
   await run("update site_visitors set click_id='' where click_id<>'' and day < current_date - 90");
+  await run("update users set signup_source = signup_source - 'click_id' where signup_source ? 'click_id' and signed_up_at < now() - interval '91 days'");
   await run(`delete from sessions where expires_at < now() or created_at < now() - interval '${SESSION_MAX_DAYS} days'`);
   await run("delete from password_resets where expires_at < now()");
   await run("delete from email_verifications where expires_at < now()");

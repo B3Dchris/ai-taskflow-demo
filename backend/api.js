@@ -16,6 +16,7 @@ const brand = require("./brand");
 const outreach = require("./outreach");
 const visits = require("./visits");
 const adminDash = require("./admin");
+const adsfeed = require("./adsfeed");
 const beta = require("./beta");
 const { LONGEST, rollTimetable, SESSION_MAX_DAYS, popToken } = require("./db");
 
@@ -4370,7 +4371,28 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       planSync: syncs.map((g) => ({ id: String(g.id), name: g.name, error: g.err })),
       // Paystack (member card payments): payout accounts to verify, open chargebacks, refunds that failed. null while it's off.
       paystack: await psAdmin() };
+    out.ads = await adsfeed.summary(q);
     res.json(out);
+  }));
+  // Google Ads conversions (backend/adsfeed.js): the file Google Ads fetches every day with its username and password, which a
+  // signed-in admin can also download. Wrong passwords: 20 an hour from one address.
+  api.get("/admin/ads-conversions.csv", wrap(async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (req.headers.authorization) {
+      const k = "adsfeed:" + limitIp(req);
+      if (over(k, 20)) fail(429, "Too many tries. Wait an hour.");
+      if (!(await adsfeed.allowed(q, req))) { limited(k, 20, 3600e3); res.set("WWW-Authenticate", 'Basic realm="JitsFlow conversions"'); fail(401, "Wrong username or password."); }
+    } else needAdmin(req);
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="jitsflow-conversions.csv"' }).send(adsfeed.csv(await adsfeed.rows(q)));
+  }));
+  // The file's address, username and password for the dashboard (fresh: a new password; the old one stops working).
+  api.post("/admin/ads-feed/:what(reveal|new)", wrap(async (req, res) => {
+    const a = needAdmin(req);
+    if (limited("adsreveal:" + loginOf(a).id, 30, 3600e3)) fail(429, "Wait a few minutes.");
+    const fresh = req.params.what === "new";
+    if (fresh) console.log("ads feed: the team made a new password");
+    const base = String(process.env.APP_URL || "https://www.jitsflow.com").replace(/\/+$/, "");
+    res.json({ url: base + "/api/admin/ads-conversions.csv", user: adsfeed.USER, password: await adsfeed.password(q, { fresh }), names: adsfeed.NAMES });
   }));
   // The team did a PayFast cancel by hand, or checked a flagged payment: off the dashboard.
   api.post("/admin/payfast/:kind/:id/seen", wrap(async (req, res) => {

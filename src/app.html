@@ -2759,6 +2759,9 @@ document.addEventListener("click",e=>{
     case "outopen": outreachSheet();break;
     case "dashopen": dashOpen();break;
     case "dashload": dashLoad();break;
+    case "adsshow": adsFeed(false);break;
+    case "adsnew": if(!ADS.ask){ADS.ask=true;dashSheet(true)}else adsFeed(true);break;
+    case "adscopy": copyText(String(v||""));break;
     case "dashallgyms": DASH.allGyms=true;{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;
     case "dashdays": if(+v!==DASH.days){DASH.data=null;dashLoad(+v);dashSheet(true)}break;
     case "dashsort": DASH.sort=v;document.querySelectorAll('[data-a="dashsort"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===v)));{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;

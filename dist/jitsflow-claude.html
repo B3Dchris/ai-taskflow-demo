@@ -5022,6 +5022,9 @@ document.addEventListener("click",e=>{
     case "outopen": outreachSheet();break;
     case "dashopen": dashOpen();break;
     case "dashload": dashLoad();break;
+    case "adsshow": adsFeed(false);break;
+    case "adsnew": if(!ADS.ask){ADS.ask=true;dashSheet(true)}else adsFeed(true);break;
+    case "adscopy": copyText(String(v||""));break;
     case "dashallgyms": DASH.allGyms=true;{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;
     case "dashdays": if(+v!==DASH.days){DASH.data=null;dashLoad(+v);dashSheet(true)}break;
     case "dashsort": DASH.sort=v;document.querySelectorAll('[data-a="dashsort"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===v)));{const l=document.getElementById("dash-gyms");if(l)l.innerHTML=dashGyms()}break;
@@ -7604,6 +7607,21 @@ function dashSystem(y){if(!y)return "";const w=[];
   if((y.payfastBroken||[]).length)w.push(`<b>PayFast needs reconnecting</b> for ${y.payfastBroken.map(g=>esc(g.name)).join(", ")}. Their saved keys can't be decrypted; the head coaches have been emailed.`);
   const a=y.ai||{},aiLine=a.on?`<p class="small muted">AI today: ${nf(a.calls)} of ${nf(a.maxCalls)} reads, about ${nf(Math.round(a.tokens/1000))}k of ${nf(Math.round(a.maxTokens/1000))}k tokens.</p>`:"";
   return (w.length?`<section class="panel stack" id="dashsystem"><h2 class="label">Needs attention</h2>${w.map(x=>`<p class="small">${x}</p>`).join("")}</section>`:"")+aiLine}
+/* Google Ads conversions: sign-ups from ad clicks go back to Google Ads by themselves (it fetches a file daily: backend/adsfeed.js).
+   The file's address, username and password show here after a tap, with the one-time set-up in Google Ads. */
+const ADS={feed:null,ask:false};
+function dashAds(a){if(!a)return "";const f=ADS.feed,n=a.gym+a.member;
+  const line=(l,v)=>`<div class="stack" style="gap:2px"><span class="small muted">${l}</span><div class="row between" style="gap:12px;flex-wrap:nowrap;align-items:center"><code class="small" style="min-width:0;overflow-wrap:anywhere">${esc(v)}</code><button class="linkbtn small" data-a="adscopy" data-v="${esc(v)}">Copy</button></div></div>`;
+  return `<section class="panel stack" id="dashads"><div class="row between"><h2 class="label">Google Ads conversions</h2><span class="small muted">${nf(n)} sign-up${n===1?"":"s"} from ads in ${a.days} days</span></div>
+    <p class="small">Sign-ups that came from a Google Ads click go back to Google Ads by themselves once a day, so it learns which ads bring gyms (${nf(a.gym)}) and members (${nf(a.member)}). Only the ad's click id and the time are sent: no names or emails.</p>
+    ${f?`<div class="stack" style="gap:6px">${line("Address",f.url)}${line("Username",f.user)}${line("Password",f.password)}</div>
+    <details class="more"><summary>Set it up in Google Ads (once)</summary><ol class="small stack" style="gap:6px;padding-left:18px">
+      <li>Goals › Conversions › New conversion action › Import › <i>CRM, files or other data sources</i> › <i>Track conversions from clicks</i>. Make two, named exactly <b>${esc(f.names.gym)}</b> and <b>${esc(f.names.member)}</b>.</li>
+      <li>Goals › Uploads › Schedules › New schedule: source <i>HTTPS</i>, paste the address, username and password above, and pick <i>daily</i>.</li>
+      <li>Leave auto-tagging on (Admin › Account settings). It's on unless someone turned it off.</li></ol></details>
+    <div class="row"><a class="btn" href="/api/admin/ads-conversions.csv" download>Download the file</a><button class="btn" data-a="adsnew">${ADS.ask?"Sure? Google Ads needs the new one":"New password"}</button></div>`
+    :`<button class="btn" style="justify-self:start" data-a="adsshow">Show address and password</button>`}</section>`}
+async function adsFeed(fresh){try{ADS.feed=await api("POST","/admin/ads-feed/"+(fresh?"new":"reveal"),{});if(fresh)toast("New password made. Paste it into the schedule in Google Ads.")}catch(e){toast(e.message)}ADS.ask=false;if(S.ui.sheet&&S.ui.sheet.k==="dash")dashSheet(true)}
 function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
   const seg=`<div class="seg3" role="group" aria-label="Days shown">${[7,30,90].map(n=>`<button data-a="dashdays" data-v="${n}" aria-pressed="${DASH.days===n}">${n} days</button>`).join("")}</div>`;
   if(!d){openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg dash"><h1>Dashboard</h1>${seg}<p class="small muted">Loading…</p></div>`,keep);return}
@@ -7642,6 +7660,7 @@ function dashSheet(keep){S.ui.sheet={k:"dash"};S.ui.stack=[];const d=DASH.data;
     </div>
     <section class="panel stack"><h2 class="label">People</h2><div class="dppl">${ppl.map(([n,l])=>`<div><b class="mono">${nf(n)}</b><span>${esc(l)}</span></div>`).join("")}</div></section>
     <section class="panel stack"><h2 class="label">Beta</h2><p class="small muted">Gyms that applied for the beta, their deal and features, and their feedback.</p><div id="dash-beta" class="dgyms">${betaAdmin()}</div></section>
+    ${dashAds(d.ads)}
     <section class="panel stack"><h2 class="label">Outreach</h2>${o.added?dashBars([{name:"Gyms added",n:o.added},{name:"Built, not claimed",n:o.built||0},{name:"Emailed",n:o.sent},{name:"Opened their gym",n:o.opened},{name:"Claimed their gym",n:o.claimed}])+(o.optedOut?`<p class="small muted">${nf(o.optedOut)} opted out.</p>`:""):`<p class="small muted">No outreach yet.</p>`}</section>
     <p class="small muted">How visitors are counted: on JitsFlow's own server, without cookies, so it works whether or not someone allows Google Analytics. A visitor is one phone or computer on one day: the same person on two days counts twice. Bots and link previews aren't counted. No addresses are kept, and counts are kept for 13 months. Days run on UTC time (they start at 02:00 in South Africa). Counts update about once a minute.</p>
     </div>`,keep)}

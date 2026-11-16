@@ -202,6 +202,52 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
       await bb.close();
     }
 
+    // ---------- Google Ads conversions: the file Google Ads fetches daily (backend/adsfeed.js) ----------
+    {
+      const G1 = (await pool.query("select id from gyms where name='Lions BJJ'")).rows[0].id;
+      const add = (email, role, src, ago = "1 day", extra = "") => pool.query(`insert into users(gym_id, role, name, email, pass_hash, signed_up_at, signup_source${extra ? ", parent_id" : ""})
+        values($1, $2, 'Ads ' || $3, $3, 'x', now() - $4::interval, $5${extra ? ", " + extra : ""})`, [G1, role, email, ago, src]);
+      await add("adcoach@ads.test", "coach", { click: "gclid", click_id: "GCLID_coach-1", utm_source: "google" }, "2 hours");
+      await add("old@ads.test", "student", { click: "gclid", click_id: "GCLID_old" }, "95 days");
+      await add("ios@ads.test", "student", { click: "gbraid", click_id: "GBRAID_1" });
+      await add("odd@ads.test", "student", { click: "gclid", click_id: "bad,id\nx" });
+      await add("kid@ads.test", "student", { click: "gclid", click_id: "GCLID_kid" }, "1 day", "(select id from users where email='m1@lions.test')");
+      const raw = (u, pw, ip = "198.51.100.200") => fetch(base + "/admin/ads-conversions.csv", { headers: { authorization: "Basic " + Buffer.from(u + ":" + pw).toString("base64"), "x-forwarded-for": ip } })
+        .then(async (x) => ({ s: x.status, t: await x.text(), h: x.headers }));
+      r = await anon("GET", "/admin/ads-conversions.csv"); ok(r.s === 401, "the conversions file needs a password or an admin (" + r.s + ")");
+      r = await coach("GET", "/admin/ads-conversions.csv"); ok(r.s === 403, "a coach can't download it (" + r.s + ")");
+      r = await coach("POST", "/admin/ads-feed/reveal", {}); ok(r.s === 403, "a coach can't see its password (" + r.s + ")");
+      r = await admin("GET", "/admin/ads-conversions.csv");
+      const lines = r.t.split("\r\n");
+      ok(r.s === 200 && lines[0] === "Parameters:TimeZone=Africa/Johannesburg" && lines[1] === "Google Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency", "Google's file layout: " + JSON.stringify(lines.slice(0, 2)));
+      const body = lines.slice(2).filter(Boolean);
+      ok(body.length === 2 && body.some((l) => /^Cj0KCQiA_test-123,JitsFlow member sign-up,\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,,ZAR$/.test(l)) && body.some((l) => l.startsWith("GCLID_coach-1,JitsFlow gym sign-up,")),
+        "one row per sign-up from a Google Ads click, gym or member: " + JSON.stringify(body));
+      ok(!/GCLID_old|GBRAID|GCLID_kid|bad/.test(r.t) && !/@|Boss|Ads /.test(r.t), "not: older than 90 days, app (gbraid) clicks, kids, broken ids; and never names or emails");
+      const sast = new Date(Date.now() - 2 * 3600e3 + 2 * 3600e3).toISOString().slice(0, 13).replace("T", " ");
+      ok(body.find((l) => l.startsWith("GCLID_coach-1")).split(",")[2].startsWith(sast), "times are South African time (UTC+2): " + body.find((l) => l.startsWith("GCLID_coach-1")));
+      r = await admin("POST", "/admin/ads-feed/reveal", {}); const f1 = r.j;
+      ok(r.s === 200 && f1.url === "https://www.jitsflow.test/api/admin/ads-conversions.csv" && f1.user === "jitsflow" && f1.password.length >= 20 && f1.names.gym === "JitsFlow gym sign-up", "the dashboard gets the address, username and password: " + JSON.stringify({ ...f1, password: "…" }));
+      ok((await admin("POST", "/admin/ads-feed/reveal", {})).j.password === f1.password, "the same password each time");
+      const st = (await pool.query("select value from app_secrets where name='ads_feed'")).rows[0].value; ok(st && !st.includes(f1.password) && /^v2\./.test(st), "kept sealed, not as typed");
+      let g = await raw("jitsflow", f1.password); ok(g.s === 200 && g.t.split("\r\n").filter(Boolean).length === 4 && /text\/csv/.test(g.h.get("content-type")) && g.h.get("cache-control") === "no-store", "Google Ads (username and password) gets the file");
+      g = await raw("jitsflow", "wrong"); ok(g.s === 401 && /Basic/.test(g.h.get("www-authenticate") || ""), "a wrong password: 401 asking for one");
+      g = await raw("someone", f1.password); ok(g.s === 401, "a wrong username: 401");
+      for (let i = 0; i < 20; i++) await raw("jitsflow", "guess" + i, "198.51.100.201");
+      g = await raw("jitsflow", f1.password, "198.51.100.201"); ok(g.s === 429, "20 wrong tries from one address: it waits an hour (" + g.s + ")");
+      g = await raw("jitsflow", f1.password, "198.51.100.202"); ok(g.s === 200, "other addresses aren't affected");
+      for (let i = 0; i < 25; i++) await raw("jitsflow", f1.password, "198.51.100.203");
+      ok((await raw("jitsflow", f1.password, "198.51.100.203")).s === 200, "right passwords don't count towards the limit");
+      r = await admin("POST", "/admin/ads-feed/new", {}); const f2 = r.j;
+      ok(r.s === 200 && f2.password && f2.password !== f1.password, "a new password can be made");
+      ok((await raw("jitsflow", f1.password)).s === 401 && (await raw("jitsflow", f2.password)).s === 200, "the old one stops working, the new one works");
+      r = await admin("GET", "/admin/overview?days=7"); ok(r.j.ads && r.j.ads.gym === 1 && r.j.ads.member === 1 && r.j.ads.days === 90, "the dashboard counts the sign-ups from ads: " + JSON.stringify(r.j.ads));
+      await require("../backend/db").purgeRejected(pool);
+      const left = Object.fromEntries((await pool.query("select email, signup_source from users where email like '%@ads.test' or email='boss@jitsflow.test'")).rows.map((x) => [x.email, x.signup_source]));
+      ok(!("click_id" in left["old@ads.test"]) && left["old@ads.test"].click === "gclid" && left["adcoach@ads.test"].click_id === "GCLID_coach-1" && left["boss@jitsflow.test"].click_id, "a sign-up's click id goes after 90 days; that it was an ad stays: " + JSON.stringify(left["old@ads.test"]));
+      await pool.query("delete from users where email like '%@ads.test'");
+    }
+
     // ---------- speed on a bigger database (4,000 people) ----------
     await pool.query(`insert into gyms(name, student_code, coach_code, created_at) select 'Gym ' || i, 'S' || i, 'C' || i, now() - (i || ' days')::interval from generate_series(1, 40) i`);
     await pool.query(`insert into users(gym_id, role, name, email, pass_hash, last_seen, created_at, signed_up_at, signup_source)
@@ -254,6 +300,10 @@ const up = async (base) => { for (let i = 0; i < 80; i++) { try { await fetch(ba
       ok(/Dashboard/.test(t) && /Visitors today/i.test(t) && /Lions BJJ/.test(t) && /Google Ads/.test(t) && /Coach Kim/.test(t) && /kim@lions\.test/.test(t) && /Used the app this week/i.test(t), `${label}: the dashboard shows tiles, gyms, sources and head coaches: ` + t.slice(0, 200).replace(/\n/g, " | "));
       ok(await ev(p, (w) => document.documentElement.scrollWidth <= w && [...document.querySelectorAll("#sheet *")].every((e) => e.getBoundingClientRect().right <= w + 1), w), `${label}: no sideways scroll`);
       ok(await ev(p, () => document.querySelectorAll("#sheet .chart svg").length === 2 && document.querySelectorAll("#sheet .chart .bar").length === 60), `${label}: two charts, 30 days each`);
+      await p.click('#dashads [data-a="adsshow"]'); await wait(800);
+      ok(await ev(p, (w) => { const el = document.getElementById("dashads"); return !!el && /Password/.test(el.innerText) && /ads-conversions\.csv/.test(el.innerText) && /JitsFlow gym sign-up/.test(el.innerHTML)
+        && document.documentElement.scrollWidth <= w && [...el.querySelectorAll("*")].every((e) => e.getBoundingClientRect().right <= w + 1); }, w), `${label}: Google Ads conversions shows its address, username and password, fitting the screen`);
+      if (label === "phone" && process.env.ADS_SHOT) await p.locator("#dashads").screenshot({ path: process.env.ADS_SHOT }).catch(() => {});
       if (label === "phone") {
         await p.tap('[data-a="dashdays"][data-v="7"]'); await wait(1200);
         ok(await ev(p, () => DASH.days === 7 && document.querySelectorAll("#sheet .chart .bar").length === 14 && document.querySelector('[data-a="dashdays"][data-v="7"]').getAttribute("aria-pressed") === "true"), "the range switches to 7 days");
