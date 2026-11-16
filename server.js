@@ -138,7 +138,8 @@ function serveStatic(req, res) {
   if (!rel) {
     const nf = files.get("/404.html");
     if (nf && !path.extname(pathname)) { res.writeHead(404, { "Content-Type": nf.type, "Cache-Control": "no-cache", ...nf.sec }); return res.end(req.method === "HEAD" ? undefined : nf.body); }
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY });
+    // no-store: Cloudflare mustn't keep a "not found" (a request during a deploy would otherwise hide a new file for hours)
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...SECURITY });
     return res.end("Not found");
   }
 
