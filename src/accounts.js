@@ -62,6 +62,9 @@ async function acctInit(){
   // A gym owner's "Claim <gym>" button on their preview page: sign up (or, signed in without a gym, one tap) and the gym is theirs.
   // The gym outreach built for them (the email's link, and the older preview page's Claim button): the app opens as a preview of it.
   const cg=qs.get("gym")||qs.get("claimgym");if(cg){try{history.replaceState(null,"",location.pathname)}catch(e){}if(API.on)setTimeout(()=>previewInit(cg),50);else setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
+  // A fee reminder's "Pay now" button (/app/?pay=1): Me, with the Pay sheet open once they're signed in (signed out: Me after sign-in).
+  if(qs.get("pay")==="1"){try{const k=new URLSearchParams(location.search);k.delete("pay");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+"#me")}catch(e){}
+    const openPay=async n=>{if(!API.me){if(n<30)setTimeout(()=>openPay(n+1),400);return}if(isCoach()||!API.me.gym)return;if(!API.pay)await loadPay();if(API.pay){go("me");myPaySheet()}};setTimeout(()=>openPay(0),300)}
   // Back from PayFast, or from Paystack (which adds its reference: asked about straight away, see psBack)
   const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay"),pref=qs.get("reference")||qs.get("trxref");
   if(paid||bill||ap){try{const k=new URLSearchParams(location.search);["paid","billing","autopay","reference","trxref"].forEach(x=>k.delete(x));history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
@@ -974,7 +977,7 @@ function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!b
       :p.dueCents?`${money(p.paidCents,cur)} of ${money(p.dueCents,cur)} paid${p.pendingCents?`, ${money(p.pendingCents,cur)} being checked by your coach`:""}.`:"Your coach hasn't set a fee for you."} Your payment reference: <b class="mono">${esc(p.reference)}</b></p>
     ${p.creditCents>0?`<p class="small">You've paid <b>${money(p.creditCents,cur)}</b> ahead.</p>`:""}${autoLine(p)}${famPay(p)?`<p class="small">${famLine(famPay(p),cur)}</p>`:""}
     ${(td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:""}${privLeftLine(p)}
-    <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${ready||p.card?"Pay":"Send proof of payment"}</button></section>`}
+    <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||famPay(p)?"Pay":"Pay ahead"}</button></section>`}
 // "3 privates left" for students who've bought a pack (or have privates they still owe for).
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
@@ -997,6 +1000,8 @@ function autoSec(p){const a=p.autopay;if(!a)return "";const d=ordinal(a.dueDay);
 async function autoOn(){toast(`Opening ${viaName(API.pay)}…`);try{const c=await api("POST","/me/autopay",{});jfTrack("autopay_on",{});if(c.url){location.href=c.url;return}payfastGo(c)}catch(e){toast(e.message)}}
 async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
+// Proofs waiting for the coach (this month or any): then the sheet isn't "paid up" yet, it's being checked.
+const pend0=p=>(p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents)>0;
 function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,back=owesBack(p),td=!back&&termOwed(p),left=td||myOwed(p),ks=p.packs||[],pls=p.plans||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
   // How to pay: Apple Pay / Google Pay (whichever this phone has), card, EFT. EFT opens the bank details and proof of payment;
   // with no card payments at the gym (and no "coming soon"), EFT is the only way, so it's simply open.
@@ -1005,7 +1010,11 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
   const parts=td?termLines(p,cur):back?p.owedMonths.map(o=>`${longMon(o.month)}: ${money(o.cents,cur)}`):dueLines(p,cur);
   // Joining a plan to book privates: with one plan to pick, what to pay is its price plus what's due now, and the amounts below say so.
   const ja=p.privateAccess||API.privAccess,one=ja&&!ja.status&&ja.plans.length===1?ja.plans[0]:null,fam=famPay(p),amt=(fam?fam.totalCents:left)+(one?one.priceCents:0);
-  openSheet(`${sheetHead("Pay your fees")}<div class="stack-lg">
+  // Paid up (nothing owed, no family total, not joining a plan): say so first, and nothing is filled in to pay. They can still pay
+  // ahead, buy a pack or save a card, but never by one tap on an amount they don't owe.
+  const upToDate=amt<=0&&!pend0(p);
+  openSheet(`${sheetHead(upToDate?"Pay ahead":"Pay your fees")}<div class="stack-lg">
+    ${upToDate?`<section class="stack" id="paidup"><p class="small"><span class="pill ok">Paid</span> <b>You're paid up.</b> Nothing is due right now${p.planStatus==="trial"?" on your free trial":""}. You can pay ahead${(p.packs||[]).length?", buy a pack":""} or send a proof below if you like.</p></section>`:""}
     ${fam?`<section class="stack" id="payfamily"><h2 class="label">Your family</h2><div class="panel stack" style="gap:8px">${fam.kids.filter(k=>k.owedCents>0||k.me).map(k=>`<div class="row between" style="flex-wrap:nowrap"><span class="small"><b>${esc(k.name)}</b><br><span class="muted">Reference <span class="mono">${esc(k.reference)}</span></span></span><b class="small mono">${money(k.owedCents,cur)}</b></div>`).join("")}
       <b class="small">Family total: ${money(fam.totalCents,cur)}</b></div><p class="small">Pay it all in one go with any one of these references, and send one proof. It's split between your kids, oldest amount first.</p></section>`:""}
     ${ja&&ja.status?`<section class="stack" id="payjoin"><h2 class="label">Restart your membership</h2><p class="small"><b>${esc(ja.message)}</b></p><p class="small">Once it's active again, you can book privates.</p></section>`
@@ -1015,7 +1024,7 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
     ${parts.length?`<section class="stack"><h2 class="label">${td||back?"What's due":"This month"}</h2><div class="panel stack" style="gap:6px">${parts.map(x=>`<span class="small">${esc(x)}</span>`).join("")}<b class="small">Total: ${money(td||(back?p.owedCents:p.dueCents),cur)}</b></div></section>`:""}
     ${tiles?`<section class="stack" id="paymethods"><h2 class="label">Pay with</h2>
       ${p.card&&viaPs(p)&&pls.length?`<label class="f">What's it for?<select id="card-for"><option value="">My fees</option>${pls.map(x=>`<option value="${x.id}" data-price="${x.priceCents}"${p.plan&&p.plan.id===x.id&&p.planStatus==="trial"?" selected":""}>Joining: ${esc(x.name)} · ${money(x.priceCents,cur)} ${esc(PERL[x.period]||"")}</option>`).join("")}</select></label>`:""}
-      ${p.card?`<label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:p.dueCents?p.dueCents/100:""}"></label>`:""}${tiles}
+      ${p.card?`<label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:""}"${amt?"":` placeholder="Amount to pay ahead"`}></label>`:""}${tiles}
       <p class="small muted" style="margin-top:-6px">${viaPs(p)?(p.card?"Card, Apple Pay and Capitec Pay go through Paystack's secure checkout, straight to your gym, and it shows as paid by itself.":"Card, Apple Pay and Capitec Pay are coming soon. For now, pay by EFT.")
         :p.card?`Apple Pay, Google Pay and card go through PayFast's secure checkout, and your coach sees it straight away. <button class="linkbtn small" data-a="paycard" data-v="ef">Or Instant EFT from your banking app</button>`:"Card, Apple Pay and Google Pay are coming soon. For now, pay by EFT."}</p>${p.card?payTerms("By continuing",viaName(p)):""}</section>`:""}
     ${autoSec(p)}
@@ -2273,6 +2282,7 @@ function dashSystem(y){if(!y)return "";const w=[];
   const x=y.paystack,psSeen=(k,id)=>` <button class="linkbtn small" data-a="psseen" data-v="${k}:${esc(id)}">Done</button>`;
   if(x&&x.test&&y.production)w.push(`<b>Member card payments are in Paystack's test mode.</b> PAYSTACK_SECRET_KEY is a test key, so no real money moves.`);
   for(const d of (x&&x.disputes)||[])w.push(`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""}:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)})${d.status==="resolved"?`, resolved: ${esc(d.resolution||"")}`:d.dueAt?`, answer by ${esc(outDay(d.dueAt))}`:""}. Answer it in Paystack › Disputes with the gym's evidence (the head coach has been asked).${psSeen("dispute",d.id)}`);
+  for(const m of (x&&x.moveFailed)||[])w.push(`<b>${esc(m.gym)} can't take cards:</b> its payout account couldn't be moved to Paystack's live mode (${esc(m.error||"no reason given")}). JitsFlow tries again every hour; if it keeps failing, ask the head coach to save their bank details again under Money › Setup.`);
   for(const r of (x&&x.refundsFailed)||[])w.push(`<b>A refund failed${r.gym?` at ${esc(r.gym)}`:""}:</b> ${money(r.cents,"ZAR")} (Paystack ${esc(r.reference)}): ${esc(r.error||"no reason given")}. The head coach has been told.${psSeen("refund",r.id)}`);
   for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);
   if(pfo.trying)w.push(`${nf(pfo.trying)} PayFast cancel${pfo.trying===1?" is":"s are"} still being tried (every 15 minutes at first).`);

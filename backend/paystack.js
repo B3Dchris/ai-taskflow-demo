@@ -12,6 +12,9 @@ const secret = () => String(process.env.PAYSTACK_SECRET_KEY || "").trim();
 const on = () => /^sk_(test|live)_\w+$/.test(secret());
 const live = () => on() && /^sk_live_/.test(secret());
 const testMode = () => on() && !live();
+// Paystack's test and live modes are separate accounts: a subaccount or a saved card made in one doesn't exist in the other.
+// Each gym's payout account says which mode made it (see psMove in api.js).
+const mode = () => (live() ? "live" : "test");
 // Member card payments go through Paystack whenever it's switched on (JF_MEMBER_PAYMENTS=payfast keeps the gyms' own PayFast instead).
 const memberCards = () => (on() && String(process.env.JF_MEMBER_PAYMENTS || "paystack").toLowerCase() !== "payfast" ? "paystack" : "payfast");
 // Who pays Paystack's processing fee: the gym's subaccount (as with Payfast, the default) or JitsFlow's main account.
@@ -120,5 +123,5 @@ const newRef = (kind) => `jf${kind}-${Date.now().toString(36)}-${crypto.randomBy
 // "•••• 1234": the end of a number, never the rest.
 const last4 = (v) => String(v || "").replace(/\D/g, "").slice(-4);
 
-module.exports = { popularBanks, on, live, testMode, memberCards, bearer, publicLive, base, feeOf, DASHBOARD, IPS, PaystackError, api, banks, forgetBanks, createSubaccount, updateSubaccount,
+module.exports = { popularBanks, on, live, testMode, mode, memberCards, bearer, publicLive, base, feeOf, DASHBOARD, IPS, PaystackError, api, banks, forgetBanks, createSubaccount, updateSubaccount,
   initialize, verify, chargeAuthorization, refund, signatureOk, subOf, newRef, last4 };

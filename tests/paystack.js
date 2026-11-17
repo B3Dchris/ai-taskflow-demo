@@ -294,6 +294,42 @@ const SECRET = "sk_test_" + "f".repeat(40);
     ok(r.s === 200 && r.j.paystack.status === "pending_verification" && r.j.paystack.last4 === "5678" && ps.calls.filter((c) => c.method === "PUT" && /^\/subaccount\//.test(c.path)).length === 1, "new bank details update the same subaccount, and wait to be checked again");
     ok((await pay(S.amy)).card === false && to("boss@jitsflow.test", m0).some((x) => /Card payouts to verify/.test(x.subject)), "card payments pause until the team verifies it again");
     r = await admin("POST", `/admin/paystack/gyms/${gym}/verify`, {}); ok(r.s === 200 && (await pay(S.amy)).card === true, "verified again: back on");
+
+    // ---------- JitsFlow moves from Paystack's test key to its live key ----------
+    // Test-mode subaccounts and saved cards don't exist in live mode: each gym's payout account is made again in live mode from its
+    // saved details (verified stays verified), test cards stop quietly (no "declined" emails), and members pay by card at once.
+    {
+      const LIVE = "sk_live_" + "e".repeat(40), psl = await startFakePaystack({ secret: LIVE });
+      const before = (await pool.query("select paystack from gyms where id=$1", [gym])).rows[0].paystack;
+      ok(before.mode === "test" && before.status === "active", "a payout account made on the test key says so: " + before.mode);
+      // Accounts saved before the mode was recorded count as test ones.
+      await pool.query("update gyms set paystack = paystack - 'mode' where id=$1", [gym]);
+      const on0 = (await pool.query("select count(*)::int as n from autopay where gym_id=$1 and provider='paystack' and stopped_at is null", [gym])).rows[0].n;
+      for (const s0 of srvs) s0.kill(); await wait(300);
+      const lport = port + 100; psl.setApp(`http://127.0.0.1:${lport}`); const m1 = sink.mails.length;
+      srvs.push(start({ ...env, PORT: String(lport), PAYSTACK_SECRET_KEY: LIVE, PAYSTACK_API_URL: psl.url })); await up(lport);
+      let after = null; for (let i = 0; i < 40; i++) { after = (await pool.query("select paystack from gyms where id=$1", [gym])).rows[0].paystack; if (after.mode === "live") break; await wait(150); }
+      ok(after.mode === "live" && after.subaccount !== before.subaccount && after.prevSubaccount === before.subaccount && psl.subs.has(after.subaccount) && after.status === "active" && after.verifiedAt,
+        "on the live key, the gym's payout account is made again in live mode, still verified: " + JSON.stringify({ mode: after.mode, status: after.status }));
+      const sub = psl.calls.find((c) => c.method === "POST" && c.path === "/subaccount");
+      ok(sub && sub.body.account_number === "62012345678" && sub.body.settlement_bank === before.bankCode && sub.body.business_name === before.business, "from the details already saved");
+      ok(on0 > 0 && !(await pool.query("select 1 from autopay where gym_id=$1 and provider='paystack' and stopped_at is null", [gym])).rows[0], `test-mode saved cards stop (${on0})`);
+      ok(!sink.mails.slice(m1).some((x) => /declined|didn't go through/i.test(x.subject + " " + (x.text || ""))), "and nobody gets a declined email");
+      const lb = `http://127.0.0.1:${lport}/api`, amyL = client(lb);
+      r = await amyL("POST", "/auth/login", { email: "amy@ps.test", password: "studentpass1" });
+      const ap = (await amyL("GET", "/me/pay")).j.pay;
+      ok(r.s === 200 && ap.card === true && !(ap.autopay && ap.autopay.on), "members can pay by card on the live key straight away (and are offered to save a card again)");
+      r = await amyL("POST", "/me/pay/paystack", { amountCents: 85000 });
+      ok(r.s === 200 && psl.calls.filter((c) => c.path === "/transaction/initialize").slice(-1)[0].body.subaccount === after.subaccount, "a checkout goes to the live payout account: " + r.s + " " + JSON.stringify(r.j));
+      const coachLive = client(lb); r = await coachLive("POST", "/auth/login", { email: "ann@ps.test", password: "coachpass1" });
+      r = await coachLive("PUT", "/coach/paystack", { ...good, bankCode: "250655", account: "62012345678" });
+      ok(r.s === 200 && r.j.same === true && !psl.calls.some((c) => c.method === "PUT"), "saving the same details again on the live key: nothing changes, still verified: " + JSON.stringify(r.j));
+      const runs = psl.calls.filter((c) => c.method === "POST" && c.path === "/subaccount").length;
+      process.env.PAYSTACK_SECRET_KEY = LIVE; process.env.PAYSTACK_API_URL = psl.url;
+      ok((await jobs.psMove()) === 0 && psl.calls.filter((c) => c.method === "POST" && c.path === "/subaccount").length === runs, "done once: the jobs don't make it again");
+      process.env.PAYSTACK_SECRET_KEY = SECRET; process.env.PAYSTACK_API_URL = ps.url;
+      psl.close();
+    }
   } catch (e) { fail++; fails.push("crashed: " + (e.stack || e.message)); }
   finally { for (const s of srvs) s.kill(); await pool.end(); sink.close(); ps.close(); }
   console.log(`paystack: ${pass} passed, ${fail} failed`);

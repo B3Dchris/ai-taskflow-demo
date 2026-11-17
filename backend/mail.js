@@ -105,17 +105,18 @@ const templates = {
   // join: their own invite link, for someone the coach added who isn't on the app yet
   // kid: whose fees they are, when the reminder goes to a kid's parent ("Hi Thandi, ... R500 is due for Lerato for November").
   // stop: the link that stops this gym's emails to this address (as on its messages).
-  feeReminder: (name, gym, amount, month, ref, bankLines, join, parts, kid, stop) => ({ subject: `${gym}: ${kid ? `${kid}'s fees` : "fees"} for ${month}`, title: `Fees for ${month}`,
-    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due${kid && kid !== name ? ` for ${kid}` : ""} for ${month}.`, ...(parts && parts.length ? [parts.join("\n")] : []), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`,
+  // card: the gym takes cards in the app (Paystack): the button pays, and EFT is the other way.
+  feeReminder: (name, gym, amount, month, ref, bankLines, join, parts, kid, stop, card) => ({ subject: `${gym}: ${kid ? `${kid}'s fees` : "fees"} for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due${kid && kid !== name ? ` for ${kid}` : ""} for ${month}.`, ...(parts && parts.length ? [parts.join("\n")] : []), ...(card && !join ? ["Pay by card in the app: tap Pay now below."] : []), ...(bankLines.length ? [`${card && !join ? "Or pay" : "Pay"} by EFT to:\n${bankLines.join("\n")}`] : []), `Use your reference ${ref} so ${gym} knows it's you. Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`,
       ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
-    button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
+    button: join ? { label: "Join and send proof", url: join } : { label: card ? "Pay now" : "Pay or send proof", url: appUrl() + "/app/?pay=1" } }),
   // Brothers and sisters: one reminder to their parent, with one total, a line per kid and each kid's own reference.
-  familyReminder: (name, gym, amount, month, lines, refs, bankLines, join, stop) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
-    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for your kids at ${gym}:`, lines.join("\n"), ...(bankLines.length ? [`Pay by EFT to:\n${bankLines.join("\n")}`] : []),
+  familyReminder: (name, gym, amount, month, lines, refs, bankLines, join, stop, card) => ({ subject: `${gym}: fees for ${month}`, title: `Fees for ${month}`,
+    paras: [`Hi ${name},`, `A friendly reminder that ${amount} is due for your kids at ${gym}:`, lines.join("\n"), ...(card && !join ? ["Pay by card in the app: tap Pay now below."] : []), ...(bankLines.length ? [`${card && !join ? "Or pay" : "Pay"} by EFT to:\n${bankLines.join("\n")}`] : []),
       `Pay it all in one go if you like, with any one of these references. ${gym} splits it between them:\n${refs.join("\n")}`,
       `Already paid? ${join ? "Join JitsFlow with the button below and send your proof of payment there." : "Send your proof of payment in the app."}`,
       ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
-    button: join ? { label: "Join and send proof", url: join } : { label: "Pay or send proof", url: appUrl() + "/app/#book" } }),
+    button: join ? { label: "Join and send proof", url: join } : { label: card ? "Pay now" : "Pay or send proof", url: appUrl() + "/app/?pay=1" } }),
   // To a member the head coach paused because they stopped coming. Their fees are on hold; booking again starts them.
   missYou: (name, gym) => ({ subject: `We miss you at ${gym}`, title: "We miss you",
     paras: [`Hi ${name},`, `We haven't seen you on the mat for a while, and we miss you.`, "We've put your monthly fees on hold while you're away, so nothing new builds up.",

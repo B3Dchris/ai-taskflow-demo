@@ -1252,12 +1252,19 @@ function makeApi(pool, { secureCookies, build }) {
   const mAdd = (m, n) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7);
   const BACK = 24; // a running balance looks back at most two years
   const inBreak = (x, m) => (x.breaks || []).some((b) => b.from <= m && (!b.until || m <= b.until));
-  // Adds start and breaks to each person (they need id, created_at and bill_from). gym needs gym_bill_start.
+  // Adds start and breaks to each person (they need id, created_at and bill_from; gym_joined_at is looked up when it's missing).
+  // gym needs gym_bill_start. Billing starts in the latest of: the gym's first billed month, the month they joined this gym (their
+  // account may be older: made at another gym, or as a parent before they trained too; a member who left and came back starts again
+  // from coming back) and bill_from.
+  // The month someone joined this gym (gym_joined_at), or their account's month when that isn't known.
+  const joinedYm = (x, tz) => { const d = x.gym_joined_at || x.created_at; return d ? ymOf(dayIn(d, tz)) : ""; };
   async function withBreaks(gymId, xs, gym, tz) {
     const ids = xs.map((x) => x.id), by = {};
+    const need = xs.filter((x) => !("gym_joined_at" in x)).map((x) => x.id);
+    if (need.length) { const j = Object.fromEntries((await q("select id, gym_joined_at from users where id = any($1)", [need])).rows.map((r) => [String(r.id), r.gym_joined_at])); for (const x of xs) if (!("gym_joined_at" in x)) x.gym_joined_at = j[String(x.id)] || null; }
     if (ids.length) for (const b of (await q("select user_id, kind, to_char(from_month,'YYYY-MM') as f, to_char(until_month,'YYYY-MM') as t, ended_at is null as open, reason from plan_breaks where gym_id=$1 and user_id = any($2) order by from_month, id", [gymId, ids])).rows)
       (by[b.user_id] = by[b.user_id] || []).push({ kind: b.kind, from: b.f, until: b.t, open: b.open, reason: b.reason });
-    for (const x of xs) { x.breaks = by[x.id] || []; x.start = [ymOf(gym.gym_bill_start), x.created_at ? ymOf(dayIn(x.created_at, tz)) : "", ymOf(x.bill_from)].filter(Boolean).sort().pop() || null; }
+    for (const x of xs) { x.breaks = by[x.id] || []; x.start = [ymOf(gym.gym_bill_start), joinedYm(x, tz), ymOf(x.bill_from)].filter(Boolean).sort().pop() || null; }
     return xs;
   }
   // Which months a fee payment pays, and how much toward each: {"2026-11": 85000}.
@@ -1306,7 +1313,7 @@ function makeApi(pool, { secureCookies, build }) {
     const x = userId ? (await q("select u.*, to_jsonb(p) as plan from users u left join plans p on p.id=u.plan_id where u.id=$1 and u.gym_id=$2", [userId, gym.gym_id])).rows[0] : null;
     if (!x) return { for_month: (from || M) + "-01", months: monthsSet || 1, alloc: null };
     await withBreaks(gym.gym_id, [x], gym, tz);
-    const on = from || M, base = [ymOf(gym.gym_bill_start), ymOf(dayIn(x.created_at, tz))].filter(Boolean).sort().pop() || on;
+    const on = from || M, base = [ymOf(gym.gym_bill_start), joinedYm(x, tz)].filter(Boolean).sort().pop() || on;
     let billFrom = null;
     if (x.bill_from && on < ymOf(x.bill_from) && on >= base && on <= cur) { billFrom = on + "-01"; x.start = on; if (!opts.dry) await q("update users set bill_from=$2 where id=$1", [x.id, billFrom]); }
     const priv = (await privatesOf(gym.gym_id, [x.id], tz, today))[x.id], led = (await feeLedger(gym.gym_id, [x.id], skipId))[x.id];
@@ -2757,13 +2764,19 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const p = (await q("select * from payments where id=$1 and gym_id=$2", [intOr(req.params.id, 0), u.gym_id])).rows[0];
     if (!p) fail(404, "That payment doesn't exist.");
     const userId = b.userId === undefined ? p.user_id : b.userId ? (await ownStudent(u, b.userId)).id : null;
-    const amount = b.amountCents === undefined ? p.amount_cents : intOr(b.amountCents, NaN);
+    let amount = b.amountCents === undefined ? p.amount_cents : intOr(b.amountCents, NaN);
     if (!Number.isFinite(amount) || amount < 0 || amount > 100000000) fail(400, "Enter the amount paid.");
     const paidOn = b.paidOn === undefined ? p.paid_on : isDay(b.paidOn) ? b.paidOn : fail(400, "Pick the date it was paid.");
     const status = b.status === undefined ? p.status : PAY_STATUS.includes(b.status) ? b.status : fail(400, "Bad status.");
     const method = b.method === undefined ? p.method : METHODS.includes(b.method) ? b.method : "";
     if (status === "confirmed" && !(amount > 0)) fail(400, "Enter the amount before confirming.");
     if (status === "confirmed" && !userId) fail(400, "Pick the student this payment is from.");
+    // A confirmed family payment going back to being checked (Undo) or found not to be a payment: its brothers' and sisters' shares
+    // come back onto it first, so nobody stays paid from money that didn't come, and it shows its whole amount again.
+    if (p.status === "confirmed" && status !== "confirmed" && !p.split_of) {
+      const back = (await q("delete from payments where split_of=$1 and gym_id=$2 returning amount_cents", [p.id, u.gym_id])).rows.reduce((a, x) => a + x.amount_cents, 0);
+      if (back) { if (b.amountCents === undefined) amount += back; p.note = unNote(p.note); }
+    }
     // A pack: sent as an id to pick one (its lessons and expiry are copied now), null or "" for an ordinary payment, left out to keep it.
     let pk = [p.pack_id, p.pack_lessons, p.pack_months];
     if (b.packId !== undefined) { const k = b.packId ? (String(b.packId) === String(p.pack_id) ? null : await packIn(u.gym_id, b.packId)) : null; if (k) pk = [k.id, k.lessons, k.expiry_months]; else if (!b.packId) pk = [null, null, null]; }
@@ -2902,7 +2915,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     // Addresses that stopped this gym's emails (the stop link in its messages and reminders): Money says so, and WhatsApp still works.
     const stoppedMail = new Set((await q("select email from gym_mail_stops where gym_id=$1 and stopped_at is not null", [u.gym_id])).rows.map((r) => r.email));
     // Joined before the next month starts, by the gym's own clock (not UTC: someone added at 00:30 on the 1st joined that month).
-    const tz = tzOf(u); for (const x of rows) x.joinedDay = dayIn(x.created_at, tz);
+    const tz = tzOf(u); for (const x of rows) x.joinedDay = dayIn(x.gym_joined_at || x.created_at, tz); // joined this gym (see withBreaks)
     const joined = (x) => x.joinedDay, inMonth = rows.filter((x) => joined(x) < next), fam = familiesOf(inMonth);
     // family: brothers and sisters share it (the id of the family's oldest record), for one reminder between them.
     const students = inMonth.map((x) => { const s = { paid: x.led.paid[month], pending: x.led.pending[month] }, d = x.dues(month); return { id: String(x.id), name: x.name, parentName: x.parent_name || "", family: fam[String(x.id)] ? fam[String(x.id)][0] : null, email: x.email || "", phone: x.phone || "", offline: x.offline, plan: x.plan ? x.plan.name : null, term: x.term,
@@ -2941,8 +2954,10 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const join = x.offline && x.own_email && x.own_email === x.email ? await claimUrl(u, x) : null;
     // Like every email a gym sends: a link (and a List-Unsubscribe header) that stops this gym's emails to the address. Stopped: none.
     const stop = await stopLink(u.gym_id, x.email); if (!stop) return { skip: "stopped" };
-    return { mail: { to: x.email, replyTo: u.email, headers: stopHeaders(stop), ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, join, r.parts, kid, stop) } };
+    return { mail: { to: x.email, replyTo: u.email, headers: stopHeaders(stop), ...mail.templates.feeReminder(hi, u.gym_name, fmtMoney(r.due, u.currency), r.what, r.ref, bank, join, r.parts, kid, stop, await takesCards(u.gym_id)) } };
   }
+  // Does the gym take cards in the app (Paystack, set up and verified)? Then reminders say so, and their button pays.
+  const takesCards = async (gymId) => !!cardsOn((await q("select payfast, paystack from gyms where id=$1", [gymId])).rows[0]);
   // What a reminder asks someone for: the amount (due), what it's for, the lines that make it up and their reference. Or { skip }.
   async function remindInfo(u, x, month, running) {
     const got = x.led.paid[month] || 0, owed = running ? x.bal.months : [{ month, cents: Math.max(0, (x.fee || 0) - got) }].filter((o) => o.cents > 0);
@@ -2976,7 +2991,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const c = (v) => fmtMoney(v, u.currency), whats = [...new Set(items.map((i) => i.what))], off = items.find((i) => i.x.offline && i.x.own_email && i.x.own_email === to);
     const lines = items.map((i) => `${first(i.x.name)}: ${c(i.due)} for ${i.what}`);
     const m = mail.templates.familyReminder(hiOf(items[0].x), u.gym_name, c(items.reduce((a, i) => a + i.due, 0)), whats.length === 1 ? whats[0] : items[0].label, lines,
-      items.map((i) => `${first(i.x.name)}: ${i.ref}`), bank, off ? await claimUrl(u, off.x) : null, stop);
+      items.map((i) => `${first(i.x.name)}: ${i.ref}`), bank, off ? await claimUrl(u, off.x) : null, stop, await takesCards(u.gym_id));
     return { mail: { to, replyTo: u.email, headers: stopHeaders(stop), ...m }, xs: items.map((i) => i.x) };
   }
   // People to remind, with brothers and sisters together (see familiesOf).
@@ -3568,7 +3583,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // payment's split is set by JitsFlow when the checkout is made (the gym's subaccount, JitsFlow's fee as a flat transaction_charge),
   // never by the member. Nothing is credited until Paystack confirms it (/transaction/verify) for the amount, currency and subaccount
   // the checkout asked for. While Paystack is on, the gyms' own PayFast (above) isn't offered to members.
-  const psActive = (g) => { const s = g && g.paystack; return s && s.status === "active" && s.subaccount ? s : null; };
+  // Made in the other mode (test before JitsFlow went live): not usable until psMove makes it again in this one.
+  const psMode = (s) => (s && s.mode) || "test";
+  const psActive = (g) => { const s = g && g.paystack; return s && s.status === "active" && s.subaccount && psMode(s) === paystack.mode() ? s : null; };
   // Does this gym take card payments in the app now (g: its row with payfast and paystack)? Through Paystack while it's on, else its own PayFast.
   const cardsOn = (g) => (paystack.memberCards() === "paystack" ? psActive(g) : pfLive(pfOf(g)));
   // What the head coach (and the team) see of a gym's payout account: never the full account or ID number.
@@ -3607,14 +3624,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (limited("ps-sub:" + u.gym_id, 8, 24 * 3600e3)) fail(429, "That's a lot of changes today. Try again tomorrow, or email us.");
     const bank = (await paystack.banks().catch(psFail)).find((x) => x.code === bankCode) || fail(400, "Pick your bank.");
     const g = (await q("select name, paystack from gyms where id=$1", [u.gym_id])).rows[0], was = g.paystack && g.paystack.subaccount ? g.paystack : null;
-    // Nothing changed: nothing to send, and an account already verified stays verified.
-    if (was && was.bankCode === bankCode && payfast.open(was.accountSealed) === account && was.holder === holder && was.business === business && was.idKind === idKind && payfast.open(was.idSealed) === idNo)
+    // Nothing changed: nothing to send, and an account already verified stays verified. (An account from the other mode is made again.)
+    const sameMode = !!was && psMode(was) === paystack.mode();
+    if (was && sameMode && was.bankCode === bankCode && payfast.open(was.accountSealed) === account && was.holder === holder && was.business === business && was.idKind === idKind && payfast.open(was.idSealed) === idNo)
       return res.json({ paystack: psOut(was), same: true });
     const lg = loginOf(u), details = { business, bankCode, account, contact: clean(lg.name || u.name, 80), email: lg.email || "", description: clean(`JitsFlow gym ${u.gym_id}: ${g.name}`, 200) };
-    const code = await (was ? paystack.updateSubaccount(was.subaccount, details) : paystack.createSubaccount(details)).catch(psFail);
+    const code = await (sameMode ? paystack.updateSubaccount(was.subaccount, details) : paystack.createSubaccount(details)).catch(psFail);
     const now = new Date().toISOString();
     const s = { subaccount: code, bankName: bank.name, bankCode, last4: paystack.last4(account), accountSealed: payfast.seal(account), holder, business, idKind, idSealed: payfast.seal(idNo),
-      idLast4: paystack.last4(idNo), ownerId: String(u.id), status: "pending_verification", createdAt: (was && was.createdAt) || now, updatedAt: now, verifiedAt: null, verifiedBy: null };
+      idLast4: paystack.last4(idNo), ownerId: String(u.id), mode: paystack.mode(), status: "pending_verification", createdAt: (was && was.createdAt) || now, updatedAt: now, verifiedAt: null, verifiedBy: null };
     await q("update gyms set paystack=$1 where id=$2", [s, u.gym_id]);
     console.log(`paystack: gym ${u.gym_id} ${was ? "changed its" : "added a"} payout account (${bank.name} ending ${s.last4}), waiting for the team`);
     tellHead(u.gym_id, "payout", u.name, `${bank.name}, account ending ${s.last4}`);
@@ -3922,6 +3940,36 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!r.rows[0]) fail(404, "Not found."); res.json({ ok: true });
   }));
   // For the team's dashboard: Paystack's mode, accounts to verify, open chargebacks and refunds that failed.
+  // When JitsFlow moves from Paystack's test key to its live key, each gym's payout account (made in test mode) is made again in live
+  // mode from the details already saved: same bank account, same business, so a verified gym stays verified and its members can pay
+  // by card straight away, with nothing for the coach to do. Cards saved in test mode don't exist in live mode: those stop, and the
+  // Pay sheet offers to save a card again (no "declined" emails). Runs at startup and with the jobs; one that fails is tried again
+  // an hour later and shows on the team's dashboard. Safe on several servers: the swap only lands on the code it started from.
+  async function psMove() {
+    if (paystack.memberCards() !== "paystack") return 0;
+    const want = paystack.mode(), gs = (await q(`select id, name, paystack from gyms where paystack->>'subaccount' is not null and coalesce(paystack->>'mode','test') <> $1
+      and (paystack->>'moveTriedAt' is null or (paystack->>'moveTriedAt')::timestamptz < now() - interval '1 hour') order by id limit 50`, [want])).rows;
+    let n = 0;
+    for (const g of gs) {
+      const s = g.paystack, account = payfast.open(s.accountSealed);
+      const owner = s.ownerId ? (await q("select name, email from users where id=$1", [s.ownerId])).rows[0] : null;
+      try {
+        if (!account) throw new Error("its saved account number can't be read");
+        const code = await paystack.createSubaccount({ business: s.business, bankCode: s.bankCode, account, contact: clean((owner && owner.name) || "", 80), email: (owner && owner.email) || "",
+          description: clean(`JitsFlow gym ${g.id}: ${g.name}`, 200) });
+        const r = await q(`update gyms set paystack = (paystack - 'moveError' - 'moveTriedAt') || jsonb_build_object('subaccount', $2::text, 'mode', $3::text, 'movedAt', now(), 'prevSubaccount', paystack->>'subaccount')
+          where id=$1 and paystack->>'subaccount'=$4 returning id`, [g.id, code, want, s.subaccount]);
+        if (!r.rows[0]) continue;
+        const st = await q("update autopay set stopped_at=now() where gym_id=$1 and provider='paystack' and stopped_at is null", [g.id]);
+        console.log(`paystack: gym ${g.id}'s payout account made again in ${want} mode (${s.bankName} ending ${s.last4})${st.rowCount ? `; ${st.rowCount} saved test card${st.rowCount === 1 ? "" : "s"} stopped` : ""}`);
+        n++;
+      } catch (e) {
+        await q(`update gyms set paystack = paystack || jsonb_build_object('moveError', $2::text, 'moveTriedAt', now()) where id=$1`, [g.id, clean(e.message, 200)]);
+        console.error(`paystack: gym ${g.id}'s payout account couldn't be made in ${want} mode: ${e.message}`);
+      }
+    }
+    return n;
+  }
   async function psAdmin() {
     if (!paystack.on() && !(await q("select 1 from gyms where paystack is not null limit 1")).rows[0]) return null;
     const ver = (await q(`select g.id, g.name, g.paystack, h.name as head_name, h.email as head_email from gyms g left join users h on h.id=g.head_coach_id
@@ -3931,7 +3979,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     return { on: paystack.memberCards() === "paystack", test: paystack.testMode(), bearer: paystack.bearer(), dashboard: paystack.DASHBOARD,
       toVerify: ver.map((g) => ({ id: String(g.id), gym: g.name, head: g.head_name ? { name: g.head_name, email: g.head_email } : null, ...psOut(g.paystack), subaccount: g.paystack.subaccount })),
       disputes: disputes.map((d) => ({ id: d.id, gym: d.name || "", reference: d.reference, cents: d.amount_cents, status: d.status, resolution: d.resolution, dueAt: d.due_at, at: d.created_at })),
-      refundsFailed: refunds.map((r) => ({ id: String(r.id), gym: r.name || "", reference: r.reference, cents: r.amount_cents, error: r.error, at: r.updated_at })) };
+      refundsFailed: refunds.map((r) => ({ id: String(r.id), gym: r.name || "", reference: r.reference, cents: r.amount_cents, error: r.error, at: r.updated_at })),
+      // Payout accounts that couldn't be moved to the live key (psMove): those gyms can't take cards until it works.
+      moveFailed: (await q("select id, name, paystack->>'moveError' as err from gyms where paystack->>'moveError' is not null order by name limit 50")).rows.map((g) => ({ id: String(g.id), gym: g.name, error: g.err })) };
   }
 
   // ---------- card autopay: a member's saved card, charged what they owe on each due day ----------
@@ -4641,9 +4691,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Scheduled jobs (server.js runs them every 15 minutes; each is safe to run twice or on several servers).
   // Card autopay goes first, so on a due day members whose card pays aren't reminded too.
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
-  setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)));
+  setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)).then(() => psMove()).catch((e) => console.warn("paystack move:", e.message)));
   // PayFast cancels that didn't go through are tried again, and plans' amounts at PayFast follow their gyms' prices (syncPlans).
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, psRecheck, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, psRecheck, psMove, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await psMove().catch((e) => console.warn("paystack move:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
     await pfOps().catch((e) => console.warn("payfast ops:", e.message)); await syncPlans().catch((e) => console.warn("plan sync:", e.message)); } };
   return api;
 }
