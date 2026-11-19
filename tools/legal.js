@@ -40,7 +40,7 @@ const LINKS = [["Pricing", "/pricing/"], ["Terms", "/terms/"], ["Refunds", "/ref
 function legalLine() {
   const { biz: b } = facts();
   const parts = [`© ${new Date().getFullYear()} ${esc(b.tradingName)}${b.legalName ? `, a product of ${entity(b)}` : ""}`, b.regNo ? `Company registration number ${esc(b.regNo)}` : "",
-    esc(b.address), mail(b), "Payments are processed securely by Payfast" + soonLive(".", " (JitsFlow plans) and Paystack (members' card payments).")];
+    esc(b.address), mail(b), "Payments are processed securely by Payfast (JitsFlow plans) and Paystack (members' card payments to their gym" + soonLive(", coming soon).", ").")];
   return parts.filter(Boolean).join(" · ");
 }
 // For the content pages' frame (tools/seo.js).
@@ -183,7 +183,7 @@ ${policyLinks("/refunds/")}</article>` }), 0.3);
 <p class="lead">Questions about your account, your gym's plan, a payment or a refund? ${b.email ? `Email ${mail(b)}${b.phone ? ` or call ${tel(b)}` : ""}${b.hours ? ` (${esc(b.hours)})` : ""}.` : ""}</p></header>
 <section class="stack"><h2>Business details</h2><dl class="biz">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
 ${b.legalName ? `<p class="small muted">JitsFlow is a product of ${entity(b)}.</p>` : ""}</section>
-<section class="panel"><h2>Payments</h2><p>Payments are processed securely by Payfast${soonLive(".", " (JitsFlow plans) and Paystack (members' card payments to their gym).")} JitsFlow never sees or stores your card number. <a href="/security/">How payments are kept secure</a>.</p>
+<section class="panel"><h2>Payments</h2><p>Payments are processed securely by Payfast (JitsFlow plans) and Paystack (members' card payments to their gym${soonLive(", coming soon).", ").")} JitsFlow never sees or stores your card number. <a href="/security/">How payments are kept secure</a>.</p>
 <p>${memberPay(facts().fee)}</p></section>
 <section class="stack"><h2>Policies</h2><ul class="links"><li><a href="/pricing/">Pricing</a></li><li><a href="/terms/">Terms of service</a></li><li><a href="/refunds/">Refund and cancellation policy</a></li><li><a href="/privacy/">Privacy notice</a></li><li><a href="/security/">Secure payments</a></li></ul></section>
 <p class="small muted">Membership fees are paid to your gym. For a refund of a membership fee, contact your gym first; we'll help if you can't sort it out.</p>
