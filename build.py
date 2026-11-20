@@ -34,7 +34,7 @@ def build_app():
             parts.append("/* --- %s --- */\n" % name + read("src", name).strip())
     assert src.count("/*@@ADV_TECH@@*/") == 1, "content marker missing from src/app.html"
     assert src.count("/*@@ACCOUNTS@@*/") == 1, "accounts marker missing from src/app.html"
-    return (src.replace("/*@@ADV_TECH@@*/", "\n".join(parts)).replace("/*@@ACCOUNTS@@*/", read("src", "accounts.js")))
+    return (src.replace("/*@@ADV_TECH@@*/", "\n".join(parts)).replace("/*@@ACCOUNTS@@*/", read("src", "accounts.js") + "\n" + read("src", "programme.js")))
 
 
 def check_js(html):

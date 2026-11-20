@@ -595,7 +595,7 @@ function coachClasses(){
   const day=d=>`<section class="stack calday"><div class="row between"><h2 class="label">${esc(d===t?"Today":fromYmd(d).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"}))}</h2>${d>=t?`<button class="btn sm" data-a="classnewday" data-v="${d}">+ Add</button>`:""}</div>
     ${(API.comps||[]).filter(c=>c.startsOn<=d&&(c.endsOn||c.startsOn)>=d).map(c=>`<button class="compbar" data-a="compopen" data-v="${c.id}">🏆 ${esc(c.name)} <small>${c.entered} on the team</small></button>`).join("")}
     ${(g[d]||[]).length?`<div class="calrows">${g[d].map(calRow).join("")}</div>${(()=>{try{return localStorage.getItem("jf.swiped")}catch(e){return 1}})()?"":`<p class="swipetip">Tip: swipe a class right to edit it, left to delete it.</p>`}`:`<p class="small muted">No classes${d>=t?". Tap + Add to plan one.":"."}</p>`}</section>`;
-  return `<section class="stack">
+  return `<section class="stack">${typeof progSchedRow==="function"?progSchedRow():""}
     <div class="row" style="flex-wrap:nowrap"><button class="btn primary grow" data-a="classnew">+ Plan a class</button><button class="btn" data-a="privnew">+ Private slots</button></div>
     ${seg("Calendar view","calmode",[["week","Week"],["month","Month"]],st.mode,"seg2",' data-k="coach"')}
     ${calHeader("coach",st,g)}
@@ -664,7 +664,7 @@ function classForm(c,onDay){
     ${c?"":`<label class="f">Repeat<select id="c-repeat" name="repeat">${repeatOpts(date)}</select></label>`}
     <div class="grid2"><label class="f">Group or private<select id="c-kind" name="kind"><option value="class"${priv?"":" selected"}>Group class</option><option value="private"${priv?" selected":""}>Private lesson</option></select></label>
       <label class="f" id="c-price-wrap"${priv?"":" hidden"}>Price (${esc(API.me.gym.currency||"ZAR")})<input id="c-price" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c&&c.priceCents?c.priceCents/100:""}"></label></div>
-    <details class="planbox"${hasPlan?" open":""}><summary>Lesson plan (optional)</summary><div class="stack-lg" style="padding-top:12px">
+    ${typeof progClassHint==="function"&&!priv?progClassHint(date):""}<details class="planbox"${hasPlan?" open":""}><summary>Lesson plan (optional)</summary><div class="stack-lg" style="padding-top:12px">
       <label class="f">Focus<input id="c-focus" name="focus" value="${esc(c&&c.plan?c.plan.focus||"":"")}" placeholder="e.g. Half guard bottom: underhook and dogfight"></label>
       <div class="stack"><label class="f" for="c-add">Techniques to teach</label><select id="c-add" data-cplan="1"><option value="">Add a technique…</option>${techOptions()}</select><div class="chips" id="cplan-chips">${picked}</div></div>
       <div class="f"><span class="row between" style="flex-wrap:nowrap"><label for="c-notes">Notes</label>${micBtn("c-notes")}</span><textarea id="c-notes" name="notes" placeholder="Warm-up, drills, positional rounds…">${esc(c&&c.plan?c.plan.notes||"":"")}</textarea></div>
