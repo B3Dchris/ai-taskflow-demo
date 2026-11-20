@@ -99,8 +99,8 @@ function client(base) {
     await ev(am, () => { window.ApplePaySession = { canMakePayments: () => true }; return loadPay().then(() => myPaySheet()); }); await am.waitForTimeout(400);
     ok(await ev(am, () => { const ts = [...document.querySelectorAll("#paymethods .paytile")].map((x) => x.getAttribute("aria-label")); return ts.join() === "Apple Pay,Card,Capitec Pay,EFT: bank details and proof of payment"; }),
       "the Pay sheet: Apple Pay (on a device that has it), Card, Capitec Pay and EFT, with no Google Pay");
-    ok(await ev(am, () => /Payments are processed securely by Paystack\./.test(document.querySelector("#paymethods .payterms").innerText) && /Terms/.test(document.querySelector("#paymethods .payterms").innerText)), "with the Terms and Refund policy line, naming Paystack");
-    ok(await ev(am, () => /Secure with Paystack/.test(document.getElementById("autopay").innerText)), "and Save my card and pay automatically, through Paystack");
+    ok(await ev(am, () => document.querySelectorAll("#sheet .payterms").length === 1 && /Payments are processed securely by Paystack\./.test(document.querySelector("#sheet .payterms").innerText) && /Terms/.test(document.querySelector("#sheet .payterms").innerText) && /Refund policy/.test(document.querySelector("#sheet .payterms").innerText)), "with one Terms and Refund policy line at the foot, naming Paystack");
+    ok(await ev(am, () => !!document.querySelector('#autopay [data-a="autoon"]') && /with Paystack/.test(document.getElementById("autopay").textContent)), "and Save my card and pay automatically, through Paystack");
     await wide(am, "Pay sheet");
     await shot(am, "member-pay-sheet.png", "#sheet");
     await ev(am, () => { delete window.ApplePaySession; myPaySheet(); });

@@ -79,7 +79,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await mom.tap('[data-a="famopen"]'); await mom.waitForTimeout(400); await mom.tap(`#sheet [data-a="famswitch"][data-v="${ids.lerato}"]`); await mom.waitForTimeout(1500);
     await ev(mom, async () => { await loadPay(); myPaySheet(); }); await mom.waitForTimeout(400);
     t = await ev(mom, () => (document.getElementById("payfamily") || {}).innerText || "");
-    ok(/Lerato Dlamini/.test(t) && /Sipho Dlamini/.test(t) && /Kabelo Dlamini/.test(t) && /Family total:\s*R\s?1[\s ]500/.test(t) && (t.match(/JF[A-Z0-9]+/g) || []).length === 3, "the parent's Pay sheet shows the family total and each kid with their reference: " + t);
+    ok(/Lerato Dlamini/.test(t) && /Sipho Dlamini/.test(t) && /Kabelo Dlamini/.test(t) && /Family total:?\s*R\s?1[\s ]500/.test(t) && (t.match(/JF[A-Z0-9]+/g) || []).length === 3, "the parent's Pay sheet shows the family total and each kid with their reference: " + t);
     ok(await ev(mom, () => Number(document.getElementById("mypop-amt").value) === 1500), "the proof amount starts at the family total");
     await narrow(mom, "family Pay sheet");
 

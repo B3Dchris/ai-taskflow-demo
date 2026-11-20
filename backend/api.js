@@ -1546,13 +1546,17 @@ function makeApi(pool, { secureCookies, build }) {
   }
   // Fees, plans and payments are the head coach's: other coaches get the roster without them.
   const MONEY_KEYS = ["feeCents", "membershipCents", "accessCents", "privatesCents", "planId", "planName", "planStatus", "planStarted", "paidThisMonthCents", "pendingThisMonthCents", "lastPaid", "feeOverride", "payments",
-    "owedCents", "owedMonths", "nextMonth", "creditCents", "trialEnds", "pause", "billFrom", "dueCents"];
+    "owedCents", "owedMonths", "nextMonth", "creditCents", "trialEnds", "pause", "billFrom", "dueCents", "cardProcessing"];
   const noMoney = (o) => { const c = { ...o }; for (const k of MONEY_KEYS) delete c[k]; return c; };
   api.get("/coach/roster", wrap(async (req, res) => {
     const u = needCoach(req), seenP = isHead(u) ? seenSince(u.gym_id) : null; seenP && seenP.catch(() => {});
     const { plans, rows, raw } = await rosterRows(u);
     if (!isHead(u)) return res.json({ currency: u.currency, people: rows.map(noMoney) });
     const g = (await q("select pay, remind_log from gyms where id=$1", [u.gym_id])).rows[0], today = await todayIn(u), rl = g.remind_log;
+    // Card payments Paystack hasn't confirmed yet (as on Money): those members aren't counted as owing anywhere, so nobody's reminded twice.
+    const proc = Object.fromEntries((await q(`select distinct on (user_id) user_id, amount_cents, created_at from paystack_checkouts where gym_id=$1 and status='open' and checked_at is not null
+      and kind in ('fees','pack','plan') and user_id is not null and created_at > now() - interval '3 days' order by user_id, created_at desc`, [u.gym_id])).rows.map((r) => [String(r.user_id), { cents: r.amount_cents, at: r.created_at }]));
+    for (const x of rows) if (proc[x.id]) x.cardProcessing = proc[x.id];
     // For Home: the automatic reminders that went today, and the people who stopped coming.
     res.json({ gymFeeCents: u.gym_fee, accessFeeCents: accessFee(u), currency: u.currency, plans: plans.map(planOut), defaultPlans: await defaultPlans(u.gym_id), dueDay: dueDayOf(g.pay), today, people: rows,
       reminders: rl && rl.day === today ? { sent: rl.sent || 0, to: rl.to || [], noEmail: rl.noEmail || [], stopped: rl.stopped || [], failed: rl.done === false ? [] : rl.failed || [] } : null, idle: idleOf(raw, rows, await seenP, today) });
@@ -2731,7 +2735,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       let extra = 0; for (const k of kids) { const c = Math.min(k.owedCents, k.pending); k.owedCents -= c; extra += k.pending - c; delete k.pending; }
       for (const k of kids) { const c = Math.min(k.owedCents, extra); k.owedCents -= c; extra -= c; }
       family = { totalCents: kids.reduce((a, k) => a + k.owedCents, 0), kids }; }
-    res.json({ pay: { family, dueCents: d.dueCents, privateAccess: pa, membershipCents: d.membershipCents, accessCents: d.accessCents, privatesCents: d.privatesCents, privates: d.privates, term,
+    // The fees card's dots: the last four months up to this one, each paid, due, checking (a proof is being checked), processing
+    // (a card payment Paystack hasn't confirmed yet) or none (nothing billed: before they started, paused, on trial). What's being
+    // checked or processed covers the oldest months still owed first, like it's counted when it's confirmed.
+    let pool = led.pendingCents || 0, procPool = proc ? proc.amount_cents : 0; const dots = [];
+    for (let i = 3; i >= 0; i--) { const m = mAdd(month, -i), due = duesFor(u, plan, u, pv, m).dueCents, left = Math.max(0, due - (led.paid[m] || 0));
+      let st = !due ? "none" : !left ? "paid" : "due";
+      if (st === "due" && procPool > 0) { st = "processing"; procPool -= left; } else if (st === "due" && pool > 0) { st = "checking"; pool -= left; }
+      dots.push({ month: m, status: st, cents: left }); }
+    res.json({ pay: { family, dots, next: bal.next, dueDay: Math.min(28, Math.max(1, intOr((g.pay || {}).dueDay, 1))), dueCents: d.dueCents, privateAccess: pa, membershipCents: d.membershipCents, accessCents: d.accessCents, privatesCents: d.privatesCents, privates: d.privates, term,
       paidCents: Number(sums.paid), pendingCents: Number(sums.pending), currency: u.currency || "ZAR", privatesLeft: privOut(pv), packs,
       // the running balance: every month still owed ("R1 700 · Oct + Nov"), and everything sent that's still being checked
       owedCents: bal.owedCents, owedMonths: bal.months, creditCents: bal.creditCents, pendingAllCents: led.pendingCents, month, planStatus: u.plan_status, plan: plan ? planOut(plan) : null, plans: await pickablePlans(u, bal.owedCents), ...statusOut(u, month),

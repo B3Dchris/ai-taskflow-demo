@@ -106,8 +106,8 @@ const monthsAgo = (n) => { const d = new Date(); d.setUTCDate(10); d.setUTCMonth
     const phone = async (c) => { const ctx = await b.newContext({ ...devices["iPhone 13"] }); await ctx.addCookies([{ name: "jf_s", value: c.cookie(), url: BASE }]); return ctx.newPage(); };
     const ev = (pg, fn, arg) => pg.evaluate(fn, arg);
     let pg = await phone(sam); await pg.goto(BASE + "/app/#me"); await wait(1500);
-    await ev(pg, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("me"); }); await wait(400);
-    ok(await ev(pg, () => { const btn = document.querySelector('.feecard [data-a="mypay"]'); return !!btn && btn.textContent.trim() === "Pay ahead" && !btn.classList.contains("primary"); }), "paid up: Me offers Pay ahead, not a bold Pay");
+    await ev(pg, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("home"); }); await wait(1200);
+    ok(await ev(pg, () => { const btn = document.querySelector('.feecard [data-a="mypay"]'); return !!btn && btn.textContent.trim() === "Pay ahead" && !btn.classList.contains("primary") && /Paid/.test(document.querySelector(".feecard .pill").textContent); }), "paid up: Home's fees card says Paid and offers Pay ahead, not a bold Pay");
     await pg.click('.feecard [data-a="mypay"]'); await wait(500);
     ok(await ev(pg, () => { const t = document.getElementById("sheet").innerText, a = document.getElementById("card-amt");
       return /Pay ahead/.test(t) && /You're paid up/.test(t) && !/Pay your fees/.test(t) && a && a.value === "" && /pay ahead/i.test(a.placeholder); }), "the sheet says they're paid up, and no amount is filled in");

@@ -41,17 +41,11 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="learn"]');ok(await ev(()=>S.ui.learnView==='belt'),'Learn remembers the part you last had open');
   // --- old addresses open the new places
   for(const [h,want,lv] of [['flow','#learn-map','map'],['log','#journal'],['settings','#me'],['today','#home'],['learn','#learn','moves']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.learnView===lv),[want,lv]),`#${h} opens ${want}`)}
-  // --- first-visit tips: one line per tab, shown once (gone after you leave that tab); closing one turns them all off
+  // --- no tip banners restating the tab (they went: each tab's name says what it is), even on a first visit
   await ev(()=>lsSet('jf.tips.me',{}));
-  await p.tap('nav.tabs [data-v="journal"]');
-  ok(await ev(()=>/training journal/i.test((document.querySelector('.tip')||{}).textContent||'')),'Journal shows its tip on the first visit');
-  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/study today/i.test((document.querySelector('.tip')||{}).textContent||'')&&(lsGet('jf.tips.me')||{}).journal===-1),'leaving a tab marks its tip as seen; the next tab shows its own');
-  await p.tap('nav.tabs [data-v="journal"]');ok(await ev(()=>!document.querySelector('.tip')),'a tip shows only once');
-  await p.tap('nav.tabs [data-v="me"]');ok(await ev(()=>!!document.querySelector('.tip')),'Me tip on the first visit');
+  for(const t of ['journal','home','learn','me']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')&&!document.querySelector('[data-a="tipx"]')),`no tip banner on ${t}, even the first time`)}
   ok(await ev(()=>['pricing','terms','refunds','privacy','contact'].every(u=>!!document.querySelector(`.applegal a[href="https://www.jitsflow.com/${u}/"][target="_blank"]`))),'Me: Pricing, Terms, Refunds, Privacy and Contact links (to the website from the claude.ai version)');
-  await p.tap('.tip [data-a="tipx"]');ok(await ev(()=>!document.querySelector('.tip')&&(lsGet('jf.tips.me')||{}).me===-1),'closing a tip hides it');
-  await ev(()=>{const t=lsGet('jf.tips.me')||{};delete t.home;delete t.learn;lsSet('jf.tips.me',t)});
-  for(const t of ['home','learn']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')),`a closed tip stays closed, and no other tab shows one (${t})`)}
+  ok(await ev(()=>!/Your account, payments, gym and settings/.test(document.getElementById('app').innerText)),'Me doesn\'t restate itself');
   // --- every technique sheet
   const ids=await ev(()=>TECH.map(t=>t.id));
   for(const id of ids){await ev(id=>techSheet(id),id);const r=await ev(id=>({h:document.querySelector('#sheet h1')?.innerText,lead:document.querySelector('#sheet .lead')?.innerText||'',steps:document.querySelectorAll('#sheet ol.steps li').length,n:TM[id].s.length,name:TM[id].n,fig:!!document.querySelector('#sheet .posfig svg, #sheet .photo img, #sheet .posimg img, #sheet .ytembed iframe, #sheet a.ytpick'),yt:(document.querySelector('#sheet a.yt:not(.ytpick)')||{}).href||''}),id);

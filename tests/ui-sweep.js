@@ -75,10 +75,10 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       for (const scr of SCREENS[role]) {
         const [tab, sub] = scr.split(":");
         const ms = await p.evaluate(async ([tab, sub]) => { hideSheet(); if (sub === "month") calState("coach").mode = "month"; if (tab === "coach-schedule" && !sub) calState("coach").mode = "week";
-          if (tab === "coach-members") COACH.stuView = sub === "insights" ? "insights" : "list"; if (tab === "classes") S.ui.bookView = sub || "classes"; if (tab === "coach-money") COACH.moneyView = sub || "month";
-          const t = performance.now(); go(tab); return performance.now() - t; }, [tab, sub]);
+          if (tab === "coach-members") COACH.memFilter = "all"; if (tab === "classes") S.ui.bookView = sub || "classes"; if (tab === "coach-money") COACH.moneyView = sub || "month";
+          const t = performance.now(); go(tab); if (tab === "coach-members" && sub === "insights") insightsSheet(); return performance.now() - t; }, [tab, sub]);
         await p.waitForTimeout((tab === "coach-members" && sub === "insights") || (tab === "coach-money" && !sub) ? 1100 : 350);
-        const r = await p.evaluate(() => ({ w: document.documentElement.scrollWidth, vw: innerWidth, len: document.getElementById("app").innerText.length, loading: /Loading/.test(document.getElementById("app").innerText.slice(0, 400)), x: !!window.__x, raw: /onerror=/.test(document.getElementById("app").innerText) ? 1 : 0 }));
+        const r = await p.evaluate(() => { const root = document.getElementById(S.ui.sheet ? "sheet" : "app"); return { w: document.documentElement.scrollWidth, vw: innerWidth, len: root.innerText.length, loading: /Loading/.test(root.innerText.slice(0, 400)), x: !!window.__x, raw: /onerror=/.test(root.innerText) ? 1 : 0 }; });
         ok(r.w <= r.vw, `${tag} · ${scr}: nothing wider than the screen (${r.w} > ${r.vw})`);
         ok(r.len > 60 && !r.loading, `${tag} · ${scr}: screen has content (not stuck loading)`);
         ok(ms < 900, `${tag} · ${scr}: drew in ${Math.round(ms)} ms`);

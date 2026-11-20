@@ -280,7 +280,7 @@ function accountSection(){
   const ac=API.me.account||API.me,fam=API.me.family;
   return `<section class="panel"><h2 class="label">Your account</h2><div><b>${esc(ac.name)}</b><br><span class="small muted">${esc(ac.email||"")}</span></div>${verifyLine()}
     <form id="phoneform" class="row" style="flex-wrap:nowrap"><input id="a-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="WhatsApp number (optional)" value="${esc(API.me.phone||"")}" aria-label="WhatsApp number" style="flex:1"><button class="btn" type="submit">Save</button></form>
-    <p class="small muted" style="margin-top:-6px">${API.me.role==="coach"?"Shown to nobody; used for your own WhatsApp links.":"Lets your coach message you on WhatsApp. Only coaches see it."}</p>
+    <p class="small muted" style="margin-top:-6px">${API.me.role==="coach"?"Shown to nobody; used for your own WhatsApp links.":"So your coach can WhatsApp you. Only coaches see it."}</p>
     ${fam?`<div class="stack" style="gap:6px"><h3 class="label">On this login</h3>${fam.map(x=>`<div class="row between" style="flex-wrap:nowrap"><span>${esc(x.name)}${x.login?` <span class="small muted">(login)</span>`:""}</span>${x.id===API.me.id?`<span class="pill ok">Booking for</span>`:`<button class="linkbtn small" data-a="famswitch" data-v="${esc(x.id)}">Book for ${esc(first(x.name))}</button>`}</div>`).join("")}${kidForm()}</div>`
       :g&&API.me.role!=="coach"?`<details class="more"><summary>Add your kids</summary><div style="padding-top:8px">${kidForm()}</div></details>`:""}
     ${g?`<p class="small">${API.me.role==="coach"?"Coach at":fam?`${esc(first(API.me.name))} trains at`:"Training at"} <b>${esc(g.name)}</b>${API.me.role==="coach"?"":` · <button type="button" class="linkbtn small" data-a="leavegym">Leave gym</button>`}</p>`:`<form id="joinform" class="row" style="flex-wrap:nowrap"><input id="j-code" name="code" placeholder="Gym code from your coach" value="${esc(S.ui.joinCode||"")}" autocapitalize="characters" style="flex:1"><button class="btn" type="submit">Join gym</button></form>`}
@@ -327,31 +327,31 @@ async function coachLoad(what,around){
 }
 /* Coaches get their own app. Learn and Journal are for training: a coach opens them with "My training" on the Gym tab,
    and "Manage <gym>" at the top of Home brings them back. */
-// Coach tabs: Home (today), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
+// Coach tabs: Today (route coach-home), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
 const COACH_VIEWS=["home","schedule","members","comps","money","gym"];
 const coachMode=()=>{try{return localStorage.getItem("jf.coachMode")==="study"?"study":"manage"}catch(e){return "manage"}};
 const managing=()=>isCoach()&&(!!API.preview||coachMode()!=="study");
 function setCoachMode(m){try{if(m==="study")localStorage.setItem("jf.coachMode","study");else localStorage.removeItem("jf.coachMode")}catch(e){}}
-function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","list"],insights:["members","insights"],payments:["money"]};const l=legacy[v];
-  if(l){v=l[0];if(l[1])COACH.stuView=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
+function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","all"],insights:["members","risk"],payments:["money"]};const l=legacy[v];
+  if(l){v=l[0];if(l[1])COACH.memFilter=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
 function viewCoach(){
   if(!isCoach())return `${header()}<div class="empty">This part is for coaches. Start a gym in Me to use it.</div>`;
   if(!COACH.roster&&!COACH.loading)coachLoad();
   if(!GYM.data)loadGym(); // website timetable, coaches and prices: used by Classes, Money and Today, not just the Gym tab
   const v=COACH_VIEWS.includes(COACH.view)&&(COACH.view!=="money"||isHead())?COACH.view:"home";
-  const title={home:"Home",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Your gym"}[v];
+  const title={home:"Today",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Your gym"}[v];
   const body=!COACH.roster&&!(v==="home"&&COACH.classes)?`<div class="empty">Loading your gym…</div>`:v==="schedule"?coachClasses():v==="members"||v==="comps"?coachMembers(v):v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
   return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}${API.me.gym.beta==="accepted"?` <span class="pill ok betapill">Beta</span>`:""}</h1></div></div></section>${body}</div>`;
 }
-// Members: a switch between your members (roster or insights) and the competition team.
-function coachMembers(v){const up=API.comps?upcomingComps().length:0;
-  return `${seg("Show","coachgo",[["members","Members"],["comps",`Competitions${up?` (${up})`:""}`]],v==="comps"?"comps":"members","seg2")}${v==="comps"?coachComps():coachStudents()}`}
-function coachStudents(){const sv=COACH.stuView==="insights"?"insights":"list";
-  return `${seg("Members view","stuview",[["list","Roster"],["insights","Insights"]],sv,"segpills subseg")}${sv==="insights"?coachInsights():coachRoster()}`}
-/* ----- Money: This month (who owes what, reminders, history) · Payments (to check, record) · Setup (how students pay) ----- */
-function coachMoney(){const v=COACH.moneyView||"month",pend=(COACH.payments||[]).filter(p=>p.status==="pending").length;
-  return `${seg("Money view","moneyview",[["month","This month"],["payments",`Payments${pend?` (${pend})`:""}`],["setup","Setup"]],v)}
-    ${v==="payments"?coachPayments():v==="setup"?`${moneySetup()}${plansPanel()}${privatesPanel()}`:moneyMonth()}`}
+// Members: one list with filter chips. Competitions and the longer insights open from rows at the bottom.
+const backTo=(label,a,v)=>`<button class="linkbtn backlink" data-a="${a}" data-v="${v}">‹ ${esc(label)}</button>`;
+function coachMembers(v){return v==="comps"?`${backTo("Members","coachgo","members")}${coachComps()}`:coachRoster()}
+/* ----- Money: one page (what came in, who owes, what to check, recent payments). Setup and the full payments list open from rows at
+   the bottom, each with a way back. ----- */
+function coachMoney(){const v=COACH.moneyView||"month";
+  if(v==="setup")return `<section class="stack">${backTo("Money","moneyview","month")}<h2 class="pageh">Setup</h2></section>${moneySetup()}${plansPanel()}${privatesPanel()}`;
+  if(v==="payments")return `<section class="stack">${backTo("Money","moneyview","month")}<h2 class="pageh">All payments</h2></section>${coachPayments()}`;
+  return moneyMonth()}
 async function loadMoney(month){COACH.moneyLoading=true;try{COACH.money=await api("GET","/coach/money"+(month?`?month=${month}`:""));COACH.payAt=Date.now()}catch(e){toast(e.message)}COACH.moneyLoading=false;if(S.ui.tab==="coach"&&COACH.view==="money")render()}
 const monthLabel=m=>new Date(m+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
 const monthShift=(m,n)=>{const d=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7)-1+n,1));return d.toISOString().slice(0,7)};
@@ -401,33 +401,45 @@ function moneyMonth(){
   if((!M||(want&&M.month!==want))&&!COACH.moneyLoading){loadMoney(want);return `<div class="empty">Loading…</div>`}
   if(!M)return `<div class="empty">Loading…</div>`;
   const cur=M.currency,st=M.students.map(s=>({...s,status:moneyStatus(s,M)})),billed=st.filter(s=>s.feeCents>0),isCur=M.month===M.today.slice(0,7);
-  // This month, Owing and Outstanding are everyone's running balance (older months still owed count); an earlier month, just that month.
+  // This month, Owing and Still owed are everyone's running balance (older months still owed count); an earlier month, just that month.
   const left=s=>isCur&&s.owedCents!==undefined?s.owedCents:s.feeCents-s.paidCents;
-  const expected=billed.reduce((a,s)=>a+s.feeCents,0),owing=st.filter(s=>["due","late","part"].includes(s.status[0])),outstanding=owing.reduce((a,s)=>a+left(s),0);
-  const rate=expected?Math.min(100,Math.round(100*billed.reduce((a,s)=>a+Math.min(s.paidCents,s.feeCents),0)/expected)):0;
-  const f=COACH.moneyFilter||"owing",shown=f==="all"?st:f==="paid"?st.filter(s=>s.status[0]==="paid"):f==="checking"?st.filter(s=>s.status[0]==="checking"):owing;
+  const owing=st.filter(s=>["due","late","part"].includes(s.status[0])),outstanding=owing.reduce((a,s)=>a+left(s),0),rest=st.filter(s=>!["due","late","part"].includes(s.status[0]));
+  const ps=COACH.payments||[],pend=ps.filter(p=>p.status==="pending"),cards=M.cardCheck||[],unmatched=ps.filter(p=>p.status==="confirmed"&&!p.userId);
+  const ready=pend.filter(popReady),byId=Object.fromEntries(((COACH.roster||{}).people||[]).map(p=>[p.id,p])),ppl=students(),nCheck=pend.length+cards.length+unmatched.length;
   const max=Math.max(1,...M.history.map(h=>Math.max(h.expectedCents,h.collectedCents))),isNow=M.month>=M.today.slice(0,7);
-  const chip=(k,l,n)=>`<button class="chip" data-a="moneyfilter" data-v="${k}" aria-pressed="${f===k}">${l} <b>${n}</b></button>`,how=paidHow(),quick=isNow&&shown.some(s=>["due","late","part"].includes(s.status[0]));
-  return `<section class="stack">
+  const how=paidHow(),quick=isNow&&owing.length,tr=toRemind(owing),noWay=owing.filter(s=>!s.phone&&!s.email);
+  const recent=ps.filter(p=>p.userId&&["confirmed","test","refunded"].includes(p.status)).slice(0,3);
+  const side=(s,k,plan)=>[plan?s.plan:"",isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",
+    isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",isCur&&s.cardProcessing?`card payment of ${money(s.cardProcessing.cents,cur)} processing`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",s.mailStopped?"stopped emails · WhatsApp instead":"",
+    ["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),
+    s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:""].filter(Boolean).map(esc).join(" · ");
+  const owRow=s=>{const [k,l,tone]=s.status,ms=isCur?(s.owedMonths||[]).map(o=>o.month):[M.month],b=byId[s.id]||{};
+    return `<div class="mrow"><button class="mrow-main withav" data-a="student" data-v="${s.id}">${mav(s.name,b.belt)}<span class="mrow-t"><span class="nm">${esc(s.name)}${s.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small"><b class="mono">${money(left(s),cur)}</b> · ${esc(monthsTxt(ms))}</span>${side(s,k)?`<span class="small muted">${side(s,k)}</span>`:""}</span></button>
+      <span class="mrow-side rowside">${remindBtn(s,M)}${quick?`<button class="btn sm" data-a="paidnow" data-v="${s.id}" aria-label="${esc(s.name)} paid ${esc(money(paidAmount(s),cur))}">Paid</button>`:""}</span></div>`};
+  const chkRow=p=>{const who=p.userId?(byId[p.userId]||{}).name||"Former student":null,fl=proofFlags(p),r=p.read||{};
+    return `<div class="mrow popcard" data-pop="${p.id}"><div class="mrow-main withav">${mav(who||"?",(byId[p.userId]||{}).belt)}<span class="mrow-t"><span class="nm">${who?esc(who):`<span class="warn-t">Which student?</span>`}</span><span class="small"><b class="mono">${p.amountCents?money(p.amountCents,p.currency):"Amount?"}</b> · ${esc(PSRC_S[p.source]||"Proof")}${p.packLessons?` · ${esc(packText(p))}`:""} · ${esc(fmtDate(p.paidOn))}</span>${r.reading?`<span class="small muted">Reading the proof…</span>`:""}${fl?`<span class="row" style="gap:6px">${fl}</span>`:""}</span></div>
+      <div class="chkact">${p.userId&&p.amountCents&&!r.duplicateOf?`<button class="btn sm primary" data-a="popok" data-v="${p.id}">Confirm</button>`:""}<button class="btn sm" data-a="poprej" data-v="${p.id}">Not received</button>${p.hasProof?`<a class="btn sm" href="/api/payments/${p.id}/proof" target="_blank" rel="noopener" aria-label="View proof">View</a>`:""}<button class="btn sm" data-a="popcheck" data-v="${p.id}">${p.userId&&p.amountCents?"Edit":"Check"}</button></div></div>`};
+  const cardRow=c=>`<div class="mrow" id="cardchk-${esc(c.id)}"><span class="mrow-main withav">${mav(c.name)}<span class="mrow-t"><span class="nm">${esc(c.name)}</span><span class="small"><b class="mono">${money(c.cents,cur)}</b> · card for ${esc(longMon(c.month))} · PayFast hasn't confirmed it. Did it go through?</span></span></span><div class="chkact"><button class="btn sm primary" data-a="cardok" data-v="${esc(c.id)}">It went through</button><button class="btn sm" data-a="cardnot" data-v="${esc(c.id)}">It didn't</button></div></div>`;
+  const unRow=p=>`<div class="mrow"><span class="mrow-main withav">${mav("?")}<span class="mrow-t"><span class="nm">Not matched</span><span class="small"><b class="mono">${money(p.amountCents,p.currency)}</b> · ${esc(fmtDate(p.paidOn))}${p.reference||p.emailSubject?` · ${esc(p.reference||p.emailSubject)}`:""}</span></span></span><span class="mrow-side"><select data-assign="${p.id}" aria-label="Assign to a student"><option value="">Who paid?</option>${ppl.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></span></div>`;
+  return `<section class="stack moneypage">
     <div class="row between" style="flex-wrap:nowrap"><button class="btn sm" data-a="moneymonth" data-v="-1" aria-label="Previous month">‹</button><h2 style="margin:0">${esc(monthLabel(M.month))}</h2><button class="btn sm" data-a="moneymonth" data-v="1" aria-label="Next month"${isNow?" disabled":""}>›</button></div>
-    <div class="stats four"><div class="stat"><b>${money(M.collectedCents,cur)}</b><span>Collected</span></div><div class="stat"><b>${money(expected,cur)}</b><span>Expected</span></div><div class="stat"><b>${money(outstanding,cur)}</b><span>Outstanding</span></div><div class="stat"><b>${rate}%</b><span>Of fees paid</span></div></div>
+    <div class="mtiles money"><div class="mtile good"><b>${money(M.collectedCents,cur)}</b><span>collected</span></div><div class="mtile${owing.length?" bad":""}"><b>${money(outstanding,cur)}</b><span>still owed · ${owing.length}</span></div><div class="mtile${nCheck?" chk":""}"><b>${nCheck}</b><span>to check</span></div></div>
+    ${isCur&&owing.length?(tr.length?`<button class="btn primary full" data-a="remindall" id="remindtop">Remind the ${owing.length} who owe</button>`:`<p class="small muted" style="margin:0">Everyone with an email was reminded this week. Use WhatsApp on their row.</p>`):""}
     <figure class="mchart" aria-label="Collected against expected, last six months">${M.history.map(h=>`<button class="mcol${h.month===M.month?" on":""}" data-a="moneyjump" data-v="${h.month}" aria-label="${esc(monthLabel(h.month))}: ${money(h.collectedCents,cur)} of ${money(h.expectedCents,cur)}"><span class="mbar" style="height:${Math.round(100*Math.max(h.expectedCents,h.collectedCents)/max)}%"><i style="height:${h.expectedCents?Math.min(100,Math.round(100*h.collectedCents/Math.max(h.expectedCents,h.collectedCents))):100}%"></i></span><small>${esc(new Date(h.month+"-01T12:00:00").toLocaleDateString(undefined,{month:"short"}))}</small></button>`).join("")}
-      <figcaption class="small muted"><i class="mkey"></i> collected · outline: expected from current fees</figcaption></figure>
-    ${M.methods.length?`<p class="small muted">${M.methods.map(m=>`${esc(PMETH[m.method]||m.method)} ${money(m.cents,cur)} (${m.n})`).join(" · ")}</p>`:""}
-    ${(M.cardCheck||[]).map(c=>`<div class="insight warn" id="cardchk-${esc(c.id)}"><span class="small"><b>${esc(c.name)}</b>: PayFast hasn't confirmed the card payment of ${money(c.cents,cur)} for ${esc(longMon(c.month))}. Check your PayFast account. Did it go through?</span><div class="row" style="gap:8px"><button class="btn sm" data-a="cardok" data-v="${esc(c.id)}">It went through</button><button class="btn sm" data-a="cardnot" data-v="${esc(c.id)}">It didn't</button></div></div>`).join("")}
-    ${M.pendingCents?`<button class="insight warn" data-a="moneyview" data-v="payments" style="text-align:left;width:100%"><b>${money(M.pendingCents,cur)}</b> in proofs waiting to be checked ›</button>`:""}
-    ${M.unmatchedCents?`<button class="insight warn" data-a="moneyview" data-v="payments" style="text-align:left;width:100%"><b>${money(M.unmatchedCents,cur)}</b> paid but not matched to a student ›</button>`:""}
-    <div class="chips">${chip("owing","Owing",owing.length)}${chip("checking","Checking",st.filter(s=>s.status[0]==="checking").length)}${chip("paid","Paid",st.filter(s=>s.status[0]==="paid").length)}${chip("all","Everyone",st.length)}</div>
-    ${quick?`<div class="row small" style="gap:8px">Tapping <b>Paid</b> records it today, paid by <span class="seg2" role="group" aria-label="Paid by" style="display:inline-flex"><button data-a="paidhow" data-v="cash" aria-pressed="${how==="cash"}">Cash</button><button data-a="paidhow" data-v="eft" aria-pressed="${how==="eft"}">EFT</button></span></div>`:""}
-    ${shown.length?`<div class="list">${shown.map(s=>{const [k,l,tone]=s.status,back=isCur&&owesBack(s);
-      return `<div class="mrow"><button class="mrow-main" data-a="student" data-v="${s.id}"><span class="nm">${esc(s.name)}${s.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small muted">${[s.plan,back?owedTxt(s,cur):s.feeCents?`${money(s.paidCents,cur)} of ${money(s.feeCents,cur)}`:"",
-        isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",isCur&&s.cardProcessing?`card payment of ${money(s.cardProcessing.cents,cur)} processing: it shows once Paystack confirms`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",s.mailStopped?"stopped emails · WhatsApp instead":"",["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:"",s.lastPaid&&k!=="paid"?`last paid ${fmtDate(s.lastPaid)}`:""].filter(Boolean).map(esc).join(" · ")}</span></button>
-        <span class="mrow-side">${tone?`<span class="pill ${tone}">${esc(l)}</span>`:`<span class="small muted">${esc(l)}</span>`}${["due","late","part"].includes(k)?remindBtn(s,M):""}${quick&&["due","late","part"].includes(k)?`<button class="btn sm" data-a="paidnow" data-v="${s.id}" aria-label="${esc(s.name)} paid ${esc(money(paidAmount(s),cur))}">Paid</button>`:""}</span></div>`}).join("")}</div>`
-      :`<div class="empty">${f==="owing"?(billed.length?(isCur?"Nobody owes anything.":"Everyone's paid for this month."):"No fees set yet. Add membership plans under Setup and put students on them."):"Nobody here."}</div>`}
-    ${(M.left||[]).length?`<h2 class="label">Left the gym</h2><div class="list">${M.left.map(x=>`<div class="mrow"><span class="mrow-main"><span class="nm">${esc(x.name)}</span><span class="small muted">Left ${esc(fmtDate(x.leftOn))}</span></span><span class="mrow-side"><span class="pill bad">Left · owes ${esc(money(x.owedCents,cur))}</span></span></div>`).join("")}</div>`:""}
+      <figcaption class="small muted"><i class="mkey"></i> collected · outline: expected</figcaption></figure>
+    ${nCheck?`<section class="stack" id="tocheck"><div class="row between"><h2 class="label">To check (${nCheck})</h2>${ready.length>1?`<button class="btn sm primary" data-a="popall">Confirm ${ready.length} ready</button>`:""}</div>
+      <div class="list">${cards.map(cardRow).join("")}${pend.map(chkRow).join("")}${unmatched.map(unRow).join("")}</div></section>`:""}
+    <section class="stack" id="owing"><h2 class="label">Owing (${owing.length})</h2>
+      ${quick?`<div class="row small" style="gap:8px">Paid records it today, by <span class="seg2" role="group" aria-label="Paid by" style="display:inline-flex"><button data-a="paidhow" data-v="cash" aria-pressed="${how==="cash"}">Cash</button><button data-a="paidhow" data-v="eft" aria-pressed="${how==="eft"}">EFT</button></span></div>`:""}
+      ${owing.length?`<div class="list">${owing.map(owRow).join("")}</div>`:`<div class="empty">${billed.length?(isCur?"Nobody owes anything.":"Everyone's paid for this month."):"No fees set yet. Add plans in Setup below."}</div>`}
+      ${noWay.length?`<p class="small muted">No number or email for ${esc(noWay.map(s=>first(s.name)).join(", "))}.</p>`:""}</section>
+    ${rest.length?`<details class="more" data-g="m-rest"${(S.ui.openG||{})["m-rest"]?" open":""}><summary>Everyone else (${rest.length})</summary><div class="list">${rest.map(s=>{const [k,l,tone]=s.status,b=byId[s.id]||{};return `<div class="mrow"><button class="mrow-main withav" data-a="student" data-v="${s.id}">${mav(s.name,b.belt)}<span class="mrow-t"><span class="nm">${esc(s.name)}</span><span class="small muted">${side(s,k,1)}</span></span></button><span class="mrow-side">${tone?`<span class="pill ${tone==="due"&&k==="checking"?"chk":tone}">${esc(l)}</span>`:`<span class="small muted">${esc(l)}</span>`}</span></div>`}).join("")}</div></details>`:""}
+    ${(M.left||[]).length?`<h2 class="label">Left the gym</h2><div class="list">${M.left.map(x=>`<div class="mrow"><span class="mrow-main"><span class="mrow-t"><span class="nm">${esc(x.name)}</span><span class="small muted">Left ${esc(fmtDate(x.leftOn))}</span></span></span><span class="mrow-side"><span class="pill bad">Left · owes ${esc(money(x.owedCents,cur))}</span></span></div>`).join("")}</div>`:""}
+    <section class="stack" id="recentpays"><h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.map(p=>`<div class="mrow"><span class="mrow-main withav">${mav((byId[p.userId]||{}).name,(byId[p.userId]||{}).belt)}<span class="mrow-t"><span class="nm">${esc((byId[p.userId]||{}).name||"Former student")}</span><span class="small muted">${esc(fmtDate(p.paidOn))}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.status==="refunded"?" · refunded":""}</span></span></span><b class="mono small">${money(p.amountCents,p.currency)}</b></div>`).join("")}</div>`:`<p class="small muted">No payments yet.</p>`}
+      <button class="btn" data-a="moneyview" data-v="payments">All payments</button></section>
     <div class="grid2"><button class="btn primary" data-a="paynew">Record a payment</button><label class="btn" for="pop-up" style="cursor:pointer">Upload proof</label></div><input type="file" id="pop-up" accept="image/*,application/pdf" hidden>
-    <div class="grid2">${toRemind(owing).length?`<button class="btn" data-a="remindall">Email ${remindN(toRemind(owing))} reminder${remindN(toRemind(owing))>1?"s":""}</button>`:owing.some(s=>s.email)?`<span class="small muted" style="align-self:center">Everyone with an email was reminded this week.</span>`:"<span></span>"}<button class="btn" data-a="moneycsv">Download CSV</button></div>
-    ${owing.some(s=>!s.phone&&!s.email)?`<p class="small muted">No WhatsApp number or email for ${esc(owing.filter(s=>!s.phone&&!s.email).map(s=>s.name).join(", "))}. Add one on their student page.</p>`:""}
+    <div class="list navrows"><button class="navrow" data-a="moneyview" data-v="setup"><span><b>Setup</b><span class="small muted">Bank details, plans, cards, reminders</span></span><span class="chev" aria-hidden="true">›</span></button>
+      <button class="navrow" data-a="moneycsv"><span><b>Download CSV</b><span class="small muted">${esc(monthLabel(M.month))}, for your bookkeeper</span></span><span class="chev" aria-hidden="true">›</span></button></div>
   </section>`}
 // One tap on "Paid": the full amount they owe, today, by cash or EFT (the last one used). Undo takes it off again.
 const paidHow=()=>lsGet("jf.payMethod")==="eft"?"eft":"cash";
@@ -453,11 +465,13 @@ async function remindAll(auto){const M=COACH.money;if(!M||REMINDING)return;const
   REMINDING=true;try{const j=await api("POST","/coach/money/remind",{month:M.month,userIds:ids,...(typeof auto==="boolean"?{auto}:{})});M.autoRemind=j.autoRemind;if(COACH.payInfo)COACH.payInfo.autoRemind=j.autoRemind;hideSheet();
     toast(`Sent ${j.sent} reminder${j.sent===1?"":"s"}.${auto===true?" From now on they go by themselves. Turn it off in Money › Setup.":""}${(j.recent||[]).length?` ${j.recent.length} already had one this week.`:""}${(j.checking||[]).length?` Not sent to ${j.checking.join(", ")}: their family sent a payment this week, or one is being checked.`:""}${j.noEmail.length?` No email for ${j.noEmail.join(", ")}.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} stopped your gym's emails: WhatsApp them instead.`:""}`);jfTrack("fee_reminders",{count:j.sent,auto:auto===true});
     loadMoney(M.month===M.today.slice(0,7)?null:M.month)}catch(e){toast(e.message)}finally{REMINDING=false}}
+// Who "Remind the N who owe" can't email (no address, stopped your emails, or reminded this week): Remind on their row is WhatsApp.
+const remindGap=M=>{const ow=M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0])),n=ow.length-toRemind(ow).length;return n>0?` ${n} can't be emailed now: use Remind on their row for WhatsApp.`:""};
 // The first time the head coach emails reminders: once, whether to send them by themselves from now on.
 function remindAsk(){const M=COACH.money;if(!M)return;const n=remindN(toRemind(M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0]))));if(!n)return;
-  if(M.autoRemind!==null&&M.autoRemind!==undefined||M.month!==M.today.slice(0,7))return confirmSheet(`Email ${n} reminder${n>1?"s":""}?`,`Everyone who still owes ${M.month===M.today.slice(0,7)?"fees (this month, or months before it)":"for "+esc(monthLabel(M.month))} and has an email gets a friendly reminder with the amount and months, your bank details and their reference.`,["remindyes",""],"Send reminders");
+  if(M.autoRemind!==null&&M.autoRemind!==undefined||M.month!==M.today.slice(0,7))return confirmSheet(`Email ${n} reminder${n>1?"s":""}?`,`Everyone who still owes ${M.month===M.today.slice(0,7)?"":"for "+esc(monthLabel(M.month))+" "}and has an email gets a friendly reminder with the amount, your bank details and their reference.${remindGap(M)}`,["remindyes",""],"Send reminders");
   S.ui.sheet={k:"confirm"};S.ui.stack=[];
-  openSheet(`${sheetHead(`Email ${n} reminder${n>1?"s":""}`)}<div class="stack-lg"><h1>Send these automatically?</h1><p>We'll email everyone who still owes on the due day (the ${ordinal(M.dueDay||1)}) and 7 days later. Nobody who's paused, on trial, or paid in the last week. You can switch it off in Money › Setup.</p><p class="small muted">Either way, these ${n} go now.</p></div>`,false,
+  openSheet(`${sheetHead(`Email ${n} reminder${n>1?"s":""}`)}<div class="stack-lg"><h1>Send these automatically?</h1><p>We'll email everyone who still owes on the due day (the ${ordinal(M.dueDay||1)}) and 7 days later. Nobody who's paused, on trial, or paid in the last week. You can switch it off in Money › Setup.</p><p class="small muted">Either way, these ${n} go now.${remindGap(M)}</p></div>`,false,
     {act:`<button class="btn grow" data-a="remindyes" data-v="once">Just this once</button><button class="btn primary grow" data-a="remindyes" data-v="auto">Yes, automatically</button>`})}
 function moneyCSV(){const M=COACH.money;if(!M)return;const q=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`,r=c=>(c/100).toFixed(2);
   const rows=[["Student","Plan","Fee","Access fee","Privates","Paid","Checking","Owing","Owing in all","Months owed","Status","Reference","Email","WhatsApp"]].concat(M.students.map(s=>[s.name,s.plan||"",r(s.feeCents),r(s.accessCents||0),r(s.privatesCents||0),r(s.paidCents),r(s.pendingCents),r(Math.max(0,s.feeCents-s.paidCents)),r(s.owedCents||0),(s.owedMonths||[]).map(o=>o.month).join(" "),moneyStatus(s,M)[1],s.reference,s.email,s.phone]));
@@ -489,7 +503,7 @@ function noticesCard(){const N=API.notices;if(!N||!N.notices.length)return "";co
 function coachToday(){
   const t=todayK(),cs=COACH.classes||[],g=byDay(cs),todays=g[t]||[],ws=weekStart(t),week=cs.filter(c=>{const k=dayKey(c.startsAt);return k>=ws&&k<=addDays2(ws,6)});
   if(!API.comps)loadComps();
-  const ppl=students(),pendN=(COACH.payments||[]).filter(p=>p.status==="pending").length,due=ppl.filter(p=>p.active&&owing(p)&&!(p.pendingThisMonthCents>=p.owedCents)),fresh=ppl.filter(p=>Date.now()-new Date(p.joined).getTime()<7*864e5);
+  const ppl=students(),pendN=(COACH.payments||[]).filter(p=>p.status==="pending").length,due=ppl.filter(owesNow),fresh=ppl.filter(p=>Date.now()-new Date(p.joined).getTime()<7*864e5);
   const risk=ppl.filter(p=>p.visits&&p.visits.segment==="at_risk"),idle=(COACH.roster&&COACH.roster.idle)||[],rem=COACH.roster&&COACH.roster.reminders;
   const asking=upcomingComps().reduce((s,c)=>s+(c.requested||0),0);
   const full=cs.filter(c=>c.waiting&&clsEnd(c)>Date.now()&&dayKey(c.startsAt)<=addDays2(t,7));
@@ -497,20 +511,20 @@ function coachToday(){
   const needs=[
     asking&&item("warn",`<b>${asking}</b> asking to compete`,"coachgo","comps","Review"),
     ...full.slice(0,3).map(c=>item("warn",`<b>${esc(c.title)}</b> ${esc(dayLabel(c.startsAt).toLowerCase())} ${esc(fmtTime(c.startsAt))} is full with ${c.waiting} waiting`,"classopen",c.id,"Open")),
-    isHead()&&pendN&&item("warn",`<b>${pendN}</b> payment${pendN>1?"s":""} to check`,"moneygo","payments","Check"),
+    isHead()&&pendN&&item("warn",`<b>${pendN}</b> payment${pendN>1?"s":""} to check`,"moneygo","month","Check"),
     // Card refunds that failed (until tried again or dismissed), and chargebacks still open: what's at stake and the next step.
     ...(isHead()?(COACH.payments||[]).filter(p=>p.source==="paystack"&&psFailed(p)).slice(0,3).map(p=>{const f=psFailed(p),nm=(ppl.find(x=>x.id===p.userId)||{}).name||"a member";
       return `<div class="insight warn" id="needrefund-${esc(p.id)}"><div class="stack" style="gap:8px"><span><b>Refund of ${money(f.cents,p.currency)} to ${esc(first(nm))} failed</b>${f.reason?`: ${esc(f.reason)}`:""}. Nothing was refunded.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-a="refundask" data-v="${esc(p.id)}:retry">Try again</button><button class="btn sm" data-a="refunddismiss" data-v="${esc(p.id)}:${esc(f.id)}">Dismiss</button></span></div></div>`}):[]),
     ...(isHead()?(COACH.payments||[]).filter(p=>p.chargeback&&p.chargeback.status==="open").slice(0,3).map(p=>{const cb=p.chargeback,nm=(ppl.find(x=>x.id===p.userId)||{}).name||"a member";
       return item("warn",`<span id="needcb-${esc(p.id)}"><b>Chargeback: ${money(cb.cents,p.currency)} from ${esc(first(nm))}</b>${cb.dueAt?`, answer by ${esc(dayMon(cb.dueAt))}`:""}. Our team answers Paystack; we'll email you if we need proof.</span>`,"moneygo","payments","See")}):[]),
-    isHead()&&due.length&&item("warn",`<b>${due.length}</b> owe fees · ${money(due.reduce((a,p)=>a+p.owedCents,0),COACH.roster.currency)}`,"moneygo","month","See who"),
+    isHead()&&due.length&&item("warn",`<b>${due.length}</b> owe · ${money(due.reduce((a,p)=>a+p.owedCents,0),COACH.roster.currency)}`,"moneygo","month","See who"),
     // A trial that's run out: one tap to keep them (fees start this month) or to cancel.
     ...(isHead()?ppl.filter(p=>p.active&&p.planStatus==="trial"&&p.trialEnds&&p.trialEnds<t).slice(0,3).map(p=>`<div class="insight warn"><div class="row between" style="gap:10px"><span><b>${esc(first(p.name))}'s</b> trial ended.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-a="trialset" data-v="${p.id}:active" aria-label="Make ${esc(p.name)} active">Make active</button><button class="btn sm" data-a="trialset" data-v="${p.id}:cancelled" aria-label="Cancel ${esc(p.name)}'s membership">Cancel</button></span></div></div>`):[]),
     // People who stopped coming: one tap pauses their fees (until they book again), or Keep hides them for 30 days.
     isHead()&&idle.length&&`<div class="insight warn"><div class="stack" style="gap:8px"><span><b>${idle.length}</b> ${idle.length===1?"hasn't":"haven't"} trained in 60 days.<br><span class="small muted">${esc(idle.slice(0,4).map(p=>p.name).join(", "))}${idle.length>4?` and ${idle.length-4} more`:""}</span></span><span class="row" style="gap:6px"><button class="btn sm primary" data-a="idlepause">Pause their fees</button><button class="btn sm" data-a="idlekeep">Keep</button></span></div></div>`,
     risk.length&&item("warn",`<b>${risk.length}</b> student${risk.length>1?"s":""} at risk of dropping off`,"coachgo","insights","See who"),
     isHead()&&rem&&(rem.sent||(rem.failed||[]).length)&&item((rem.failed||[]).length?"warn":"good",`Reminders sent to <b>${rem.sent}</b> today${(rem.failed||[]).length?` · ${rem.failed.length} couldn't be sent`:""}${rem.noEmail.length?` · ${rem.noEmail.length} with no email`:""}`,"remindsee","","See who"),
-    fresh.length&&item("good",`<b>${fresh.length}</b> new student${fresh.length>1?"s":""} this week`,"coachgo","roster","Roster"),
+    fresh.length&&item("good",`<b>${fresh.length}</b> new student${fresh.length>1?"s":""} this week`,"memfilter","new","See"),
   ].filter(Boolean);
   const booked=week.filter(c=>c.kind!=="private").reduce((s,c)=>s+c.going,0);
   impLoad();
@@ -518,11 +532,11 @@ function coachToday(){
   if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(S.ui.tab==="coach"&&COACH.view==="home"&&!S.ui.sheet)render()})}
   return `${pvHome()}${dueBanner()}${impBanner()}${setupCard()}${noticesCard()}<section class="stack"><div class="row between"><h2 class="label">${esc(fromYmd(t).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</h2><button class="btn sm" data-a="classnewday" data-v="${t}">+ Add</button></div>
       ${todays.length?`<div class="calrows">${todays.map(calRow).join("")}</div>`:`<p class="small muted">No classes today.</p>`}</section>
-    <section class="stack"><h2 class="label">Needs you</h2>${!COACH.roster?`<p class="small muted">Loading…</p>`:needs.length?needs.join(""):`<p class="small muted">Nothing waiting. ${isHead()?"Everyone's paid, nobody's":"Nobody's"} stuck on a waitlist, no requests.</p>`}</section>
+    <section class="stack"><h2 class="label">Needs you</h2>${!COACH.roster?`<p class="small muted">Loading…</p>`:needs.length?needs.join(""):`<p class="small muted">All clear. Nothing needs you.</p>`}</section>
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${COACH.roster?ppl.filter(p=>p.active).length:"…"}</b><span>Students</span></div></div></section>
     <section class="stack"><h2 class="label">Quick actions</h2><div class="quick">
       <button class="btn primary" data-a="classnew">+ Add a class</button>${isHead()?`<button class="btn" data-a="paynew">Record a payment</button>`:`<button class="btn" data-a="addstu">+ Add a student</button>`}
-      ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}<button class="btn" data-a="coachgo" data-v="comps">+ Competition</button></div></section>`;
+      ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}</div></section>`;
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
 // Finding someone: by name or parent's name, accents or not ("Ane" finds Ané-Marié), or by a few digits of their phone ("082 001").
@@ -532,6 +546,23 @@ const personMatch=(p,q)=>{q=String(q||"").trim();if(!q)return true;if(!p)return 
 const owesFees=p=>p.feeCents>0&&p.planStatus!=="paused"&&p.planStatus!=="cancelled";
 // Owes something: this month or any month before it (the running balance).
 const owing=p=>p.owedCents>0;
+/* One answer to "who owes?", the same on Today ("9 owe"), Members (the Owing chip), Money (Owing, Remind) and a member's page:
+   something still owed for this month or a month before it, not counting anyone whose proof is being checked or whose card payment
+   is still processing (they've paid as far as they know, so they're not asked again). */
+const pendAll=p=>(p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingThisMonthCents)||0;
+const owesNow=p=>!!p&&p.active!==false&&p.owedCents>0&&!pendAll(p)&&!p.cardProcessing;
+// The fees pill on a member's row and page: [key, label, tone]. tone: ok (paid), due (amber), bad (owes from before), chk (being checked).
+function feeState(p){if(!p||p.owedCents===undefined)return null;const cur=todayK().slice(0,7);
+  if(p.owedCents>0){if(p.cardProcessing)return ["processing","Processing","due"];if(pendAll(p))return ["checking","Checking","chk"];
+    return (p.owedMonths||[]).some(o=>o.month<cur)?["owes","Owes","bad"]:["due","Due","due"]}
+  if(p.planStatus==="trial")return ["none","Trial",""];if(p.pause||p.planStatus==="paused")return ["none","Paused",""];
+  return p.feeCents>0||p.paidThisMonthCents>0?["paid","Paid","ok"]:["none","",""]}
+const feePill=p=>{const f=feeState(p);return f&&f[1]?`<span class="pill ${f[2]||"plain"} fpill" data-fee="${f[0]}"><i aria-hidden="true"></i>${esc(f[1])}</span>`:""};
+// Initials in a circle, edged in their belt colour (rows on Members and Money).
+const mav=(name,belt)=>`<span class="mav" style="--bc:${BCOL[belt]||"#D9D9D2"}" aria-hidden="true">${esc(initials(name||"?"))}</span>`;
+// "trained today", "trained Tue", "3 weeks ago", "not yet"
+function lastTrained(v){const l=v&&v.last;if(!l)return "not trained yet";const d=Math.round((fromYmd(todayK())-fromYmd(dayKey(l)))/864e5);
+  return d<=0?"trained today":d===1?"trained yesterday":d<7?"trained "+fromYmd(dayKey(l)).toLocaleDateString(undefined,{weekday:"short"}):d<14?"last week":d<60?`${Math.floor(d/7)} weeks ago`:`${Math.floor(d/30)} months ago`}
 // Home's "Reminders sent to N today · See who": who was emailed, who couldn't be, and who has no email (Money has their WhatsApp Remind).
 function remindSheet(){const R=COACH.roster&&COACH.roster.reminders;if(!R)return;const fl=R.failed||[],to=R.to||[];
   const list=(t,ns,note)=>ns.length?`<h2 class="label">${t}</h2>${note?`<p class="small muted">${note}</p>`:""}<div class="list">${ns.map(n=>`<div class="mrow"><span class="mrow-main"><span class="nm">${esc(n)}</span></span></div>`).join("")}</div>`:"";
@@ -735,8 +766,9 @@ function drawClassSheet(keep){
   openSheet(`${sheetHead("Class")}<div class="stack-lg"><div><h1>${esc(c.title)}</h1><p class="muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.shared?"":" · plan hidden from students"}</p></div>
     <section class="stack"><h2 class="label">The plan</h2>${p.focus?`<p><b>${esc(p.focus)}</b></p>`:""}${(p.ids||[]).filter(id=>TM[id]).length?`<div class="list">${p.ids.filter(id=>TM[id]).map(id=>tRow(TM[id])).join("")}</div>`:`<p class="small muted">No techniques picked yet.</p>`}${p.notes?`<p class="small">${esc(p.notes)}</p>`:""}</section>
     ${sug}
-    <section class="stack"><div class="row between"><h2 class="label">Who's coming</h2><span class="small muted mono">${going.length}${c.capacity?"/"+c.capacity:""} going</span></div>${rows||`<div class="empty">Nobody has booked yet. Students book from Classes or their Home screen.</div>`}${addPicker(c,attendees)}
-      ${going.some(a=>!a.attended)&&new Date(c.startsAt).getTime()-Date.now()<3*36e5?`<button class="btn" data-a="attendall">Check in everyone booked (${going.filter(a=>!a.attended).length})</button>`:""}</section>
+    <section class="stack"><div class="row between"><h2 class="label">Who's coming</h2><span class="small muted mono">${going.filter(a=>a.attended).length?`${attendees.filter(a=>a.attended).length} here · `:""}${going.length}${c.capacity?"/"+c.capacity:""} going</span></div>
+      ${going.some(a=>!a.attended)&&new Date(c.startsAt).getTime()-Date.now()<3*36e5?`<button class="btn primary" data-a="attendall">Mark all here (${going.filter(a=>!a.attended).length})</button>`:""}
+      ${rows||`<div class="empty">Nobody has booked yet. Students book from Classes or their Home screen.</div>`}${addPicker(c,attendees)}</section>
     ${waitlist.length?`<section class="stack"><h2 class="label">Waitlist (${waitlist.length})</h2><div class="list">${waitlist.map((a,i)=>`<div class="attrow"><span><b>${i+1}. ${esc(a.name)}</b> ${beltChip(a.belt,a.stripes)}</span><span class="small muted">gets the next spot</span></div>`).join("")}</div></section>`:""}
   </div>`,keep,{act:`<button class="btn grow" data-a="classedit" data-v="${c.id}">Edit plan</button>`});
 }
@@ -752,6 +784,11 @@ function addPicker(c,attendees){const have=new Set(attendees.filter(a=>a.going||
     <input id="cls-q" type="search" placeholder="Search your students" aria-label="Search your students" autocomplete="off" value="${esc(S.ui.clsQ||"")}">
     <p class="small muted" style="margin:0">${c.kind==="private"?"They're booked at their private price, like booking it themselves.":"They're booked like they booked it themselves."}${new Date(c.startsAt).getTime()<=Date.now()?" This class has started, so they're marked here.":""}</p>
     ${markAll}<div class="list addlist">${ppl.map((p,i)=>`${nr&&i===0?`<h3 class="label">Usually here</h3>`:nr&&i===nr?`<h3 class="label">Everyone else</h3>`:""}<button class="trow" data-a="clsadd" data-v="${p.id}"${personMatch(p,q)?"":" hidden"} style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.name)}${p.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small" style="color:var(--blue);font-weight:700">Add</span></button>`).join("")||`<p class="small muted">Everyone's already on it.</p>`}</div></div>`}
+// Mark all here: everyone booked who isn't ticked yet, in one tap, with Undo (unticks just those). Each person still has their own toggle.
+async function markAllHere(){const cd=S.ui.classData;if(!cd||markAllHere.busy)return;const c=cd.class,ids=cd.attendees.filter(a=>a.going&&!a.attended).map(a=>a.id);if(!ids.length)return;markAllHere.busy=true;
+  try{await api("PUT",`/coach/classes/${c.id}/attendance`,{userIds:ids,attended:true});cd.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=true});drawClassSheet(true);COACH.classes=null;coachLoad("classes");
+    toast(`Marked ${ids.length} here.`,{label:"Undo",fn:async()=>{try{await api("PUT",`/coach/classes/${c.id}/attendance`,{userIds:ids,attended:false});const d=S.ui.classData;if(d&&d.class.id===c.id){d.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=false});if(S.ui.sheet&&S.ui.sheet.k==="class")drawClassSheet(true)}COACH.classes=null;coachLoad("classes");toast("Undone.")}catch(e){toast(e.message)}}})}
+  catch(e){toast(e.message)}finally{markAllHere.busy=false}}
 async function classUsual(){const cd=S.ui.classData,c=cd.class,us=new Set(cd.usual||[]),have=new Set(cd.attendees.filter(a=>a.going||a.attended).map(a=>a.id));
   const ids=students().filter(p=>p.active&&us.has(p.id)&&!have.has(p.id)).map(p=>p.id);if(!ids.length)return;
   try{await api("PUT",`/coach/classes/${c.id}/attendance`,{userIds:ids,attended:true,going:true});
@@ -759,22 +796,39 @@ async function classUsual(){const cd=S.ui.classData,c=cd.class,us=new Set(cd.usu
 async function classAdd(id){const cd=S.ui.classData,c=cd.class,started=new Date(c.startsAt).getTime()<=Date.now(),p=students().find(x=>x.id===id);
   try{await api("PUT",`/coach/classes/${c.id}/attendance`,{userId:id,attended:started,going:true});
     S.ui.classData=await api("GET",`/coach/classes/${c.id}`);drawClassSheet(true);COACH.classes=null;coachLoad("classes");toast(`${p?p.name:"They"}${started?" marked here.":" added."}`)}catch(e){toast(e.message)}}
+// Who's on the comp team: entered in a competition that's still to come.
+function compTeamIds(){const s=new Set();upcomingComps().forEach(c=>(c.team||[]).forEach(x=>{if(x.status==="entered")s.add(String(x.id))}));return s}
+const MEMF=[["all","All"],["owing","Owing"],["risk","At risk"],["kids","Kids"],["comp","Comp team"],["coaches","Coaches"]];
 function coachRoster(){
-  const ppl=students(),cur=COACH.roster.currency,q=COACH.q;
-  const due=ppl.filter(p=>p.active&&owing(p));
-  const list=ppl.filter(p=>personMatch(p,q));
-  return `<section class="stack"><div class="stats"><div class="stat"><b>${ppl.filter(p=>p.active).length}</b><span>Students</span></div><div class="stat"><b>${ppl.filter(p=>p.attended30>0||p.n30>0).length}</b><span>Trained · 30d</span></div>${isHead()?`<div class="stat"><b>${due.length}</b><span>Fees due</span></div>`:`<div class="stat"><b>${ppl.filter(p=>p.active&&Date.now()-new Date(p.joined).getTime()<30*864e5).length}</b><span>New · 30d</span></div>`}</div>
-    <div class="row" style="flex-wrap:nowrap"><input id="r-q" type="search" placeholder="Search students" value="${esc(COACH.q)}" aria-label="Search students" style="flex:1"><button class="btn" data-a="addstu">+ Add</button></div>
-    <div class="list" id="roster-list">${list.map(p=>{const g=goalOf(p),r=readinessFor(p.mastery,g),paid=owing(p)?`<span class="pill due">Due</span>`:owesFees(p)?`<span class="pill ok">Paid</span>`:"";
-      const vs=p.visits||{};return `<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}${p.active?"":" (inactive)"}${p.offline?` <span class="pill">Not on app</span>`:""}${p.sameAs?` <span class="pill due">Possible duplicate</span>`:""}</span><span class="meta">${p.parentName?`<span>Kid · ${esc(p.parentName==="Parent"?"parent":p.parentName)}</span>`:""}${beltChip(p.belt,p.stripes)}${vs.segment?`<span class="segtag ${vs.segment}">${esc(SEG[vs.segment][0])}</span>`:""}<span>${vs.d28||0} classes / 4 wks</span>${p.parentName?"":`<span>${r}% → ${BELT[g].to}</span>`}${p.planName?`<span>${esc(p.planName)}${p.planStatus&&p.planStatus!=="active"?" ("+esc(p.planStatus)+")":""}</span>`:""}${p.privatesLeft?`<span>${privN(p.privatesLeft)} left</span>`:""}</span></span>${paid}</button>`}).join("")||`<div class="empty">${API.preview?"Your members go here. Once it's yours: send your invite link (members join in a tap), bring everyone over from your WhatsApp group with a screenshot of it, or add people who aren't on the app with + Add.":"No students yet. Send your invite link from the Gym tab, or tap + Add for someone who isn't on the app."}</div>`}</div></section>`;
+  const all=students(),head=isHead(),q=COACH.q,coaches=((COACH.roster||{}).people||[]).filter(p=>p.role==="coach");
+  if(!API.comps)loadComps();
+  const team=compTeamIds(),ws=weekStart(todayK()),act=all.filter(p=>p.active);
+  const sets={all,owing:head?all.filter(owesNow):[],risk:act.filter(p=>p.visits&&p.visits.segment==="at_risk"),kids:all.filter(p=>p.parentName),comp:all.filter(p=>team.has(p.id)),coaches,
+    new:act.filter(p=>Date.now()-new Date(p.joined).getTime()<30*864e5),week:act.filter(p=>p.visits&&p.visits.last&&dayKey(p.visits.last)>=ws)};
+  let f=COACH.memFilter||"all";if(!sets[f]||(f==="owing"&&!head))f="all";
+  const show=MEMF.filter(([k])=>k==="owing"?head:k==="coaches"?coaches.length>1:true);
+  const tile=(k,n,l,tone)=>`<button class="mtile${tone?" "+tone:""}" data-a="memfilter" data-v="${k}" aria-pressed="${f===k}"><b>${n}</b><span>${l}</span></button>`;
+  const list=sets[f].filter(p=>personMatch(p,q));
+  const ups=API.comps?upcomingComps().length:0;
+  return `<section class="stack">
+    <div class="mtiles">${tile("week",sets.week.length,"trained this week","")}${tile("risk",sets.risk.length,"at risk",sets.risk.length?"warn":"")}${tile("new",sets.new.length,"new","")}</div>
+    <div class="row" style="flex-wrap:nowrap"><input id="r-q" type="search" placeholder="Search" value="${esc(COACH.q)}" aria-label="Search members" style="flex:1"><button class="btn" data-a="addstu">+ Add</button></div>
+    <div class="chips memchips" role="group" aria-label="Show">${show.map(([k,l])=>`<button class="chip" data-a="memfilter" data-v="${k}" aria-pressed="${f===k}">${l} <b>${sets[k].length}</b></button>`).join("")}</div>
+    <div class="list" id="roster-list">${list.map(p=>{const vs=p.visits||{};
+      return `<button class="trow mem" data-a="student" data-v="${p.id}">${mav(p.name,p.belt)}<span><span class="nm">${esc(p.name)}${p.active?"":` <span class="pill plain">Inactive</span>`}${p.offline?` <span class="pill">Not on app</span>`:""}${p.sameAs?` <span class="pill due">Possible duplicate</span>`:""}</span><span class="meta">${beltChip(p.belt,p.stripes)}${p.role==="coach"?"<span>Coach</span>":`<span>${esc(lastTrained(vs))}</span>`}${p.parentName?`<span>Kid · ${esc(p.parentName==="Parent"?"parent":p.parentName)}</span>`:""}${vs.segment==="at_risk"?`<span class="segtag at_risk">At risk</span>`:""}</span></span>${head?feePill(p):""}</button>`}).join("")||`<div class="empty">${!all.length?(API.preview?"Your members go here. Once it's yours: send your invite link (members join in a tap), bring everyone over from your WhatsApp group with a screenshot of it, or add people who aren't on the app with + Add.":"No members yet. Send your invite link from the Gym tab, or tap + Add."):"Nobody here."}</div>`}</div>
+    <div class="list navrows"><button class="navrow" data-a="coachgo" data-v="comps"><span><b>Competitions</b><span class="small muted">${ups?`${ups} coming up`:"Add one, see who's entered"}</span></span><span class="chev" aria-hidden="true">›</span></button>
+      <button class="navrow" data-a="moreinsights"><span><b>More insights</b><span class="small muted">Visits, class times, belt reviews</span></span><span class="chev" aria-hidden="true">›</span></button></div></section>`;
 }
+// More insights: the charts and lists that used to be a tab of their own, in a sheet.
+function insightsSheet(keep){S.ui.sheet={k:"insights"};S.ui.stack=[];openSheet(`${sheetHead("Members")}<div class="stack-lg"><h1>More insights</h1>${coachInsights()}</div>`,keep)}
 async function studentSheet(id){
-  S.ui.sheet={k:"student",id};S.ui.stack=[];openSheet(`${sheetHead("Student")}<div class="empty">Loading…</div>`);
+  const from=S.ui.sheet&&S.ui.sheet.k==="insights"?"insights":null;S.ui.sheet={k:"student",id,from};S.ui.stack=from?["insights","student"]:[];openSheet(`${sheetHead("Student")}<div class="empty">Loading…</div>`,false,from?{back:"‹ Back"}:undefined);
   let j;try{j=await api("GET",`/coach/students/${id}`)}catch(e){toast(e.message);hideSheet();render();return}
   let claim=null;if(j.student.offline){try{claim=(await api("POST",`/coach/students/${id}/claim-link`)).url}catch(e){}}
   const s=j.student,g=goalOf(s),ar=areasFor(s.mastery,g),cur=COACH.roster.currency,dup=(((COACH.roster||{}).people||[]).find(p=>p.id===String(id))||{}).sameAs;
   const stuck=Object.entries(s.stuck||{}).filter(([k])=>POS[k]).sort((a,b)=>b[1]-a[1]).slice(0,3),tapped=Object.entries(s.tapped||{}).filter(([k])=>TM[k]).sort((a,b)=>b[1]-a[1]).slice(0,3);
-  openSheet(`${sheetHead(s.role==="coach"?"Coach":"Student")}<div class="stack-lg"><div><h1>${esc(s.name)}${s.head?` <span class="pill ok">Head coach</span>`:""}</h1><p class="muted small">${s.parentName?`Kid${s.parentName==="Parent"?"":` · parent ${esc(s.parentName)}`}${s.parentAccount?" (on the app)":""}${s.email?" · ":""}`:""}${esc(s.email)}${s.offline?`${s.email?" · ":""}<span class="pill">Not on the app</span>`:""}</p>
+  const rp=(((COACH.roster||{}).people||[]).find(p=>p.id===String(id)));
+  openSheet(`${sheetHead(s.role==="coach"?"Coach":"Student")}<div class="stack-lg"><div><h1>${esc(s.name)}${s.head?` <span class="pill ok">Head coach</span>`:""}${isHead()&&s.role==="student"?" "+feePill(rp):""}</h1><p class="muted small">${s.parentName?`Kid${s.parentName==="Parent"?"":` · parent ${esc(s.parentName)}`}${s.parentAccount?" (on the app)":""}${s.email?" · ":""}`:""}${esc(s.email)}${s.offline?`${s.email?" · ":""}<span class="pill">Not on the app</span>`:""}</p>
       ${s.parentAccount?`<p class="small muted">On ${esc(s.parentAccount)}'s login. <button class="linkbtn small" data-a="unlinkask" data-v="${esc(id)}">Unlink from this login</button></p>`:""}</div>
     ${dup?`<section class="panel accent stack"><p class="small"><b>Possible duplicate.</b> ${s.offline?`${esc(dup.name)} signed up on the app with the same name or number.`:`You also added ${esc(dup.name)}, who isn't on the app, with the same name or number.`} If it's the same person, ${isHead()?"merge them so their payments and classes are in one place.</p>":"ask your head coach to merge them, so their payments and classes are in one place.</p>"}${isHead()?`<button class="btn" style="justify-self:start" data-a="mergeask" data-v="${esc(s.offline?id:dup.id)},${esc(s.offline?dup.id:id)}">Merge</button>`:""}</section>`:""}
     ${s.offline?`<section class="panel stack"><p class="small">${esc(first(s.name))} isn't on the app yet. Their invite link signs them straight into this record, so their plan, payments and classes carry over.</p>${claim?`<div class="row">${s.phone?waBtn(`Hi ${hiName(s)}, join ${gymName()} on JitsFlow to book classes${s.parentName?` for ${first(s.name)}`:""}, see your membership and pay your fees: ${claim}`,"Invite on WhatsApp",{phone:s.phone,kind:"claim_invite"}):""}<input id="claim-url" value="${esc(claim)}" hidden><button class="btn" data-a="copytext" data-v="claim-url">Copy invite link</button></div>`:""}<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))}</button></section>`:""}
@@ -858,6 +912,7 @@ function syncCovers(k){const u=document.getElementById(k+"-user"),a=document.get
   const n=autoCovers(u.value,Math.round(Number(a.value||0)*100));if(![...m.options].some(o=>o.value===String(n)))m.insertAdjacentHTML("beforeend",`<option value="${n}">${n} months</option>`);m.value=String(n);
   const t=document.getElementById(k+"-cov-txt");if(t)t.querySelector("b").textContent=n===1?"1 month":`${n} months`;
   const box=document.getElementById(k+"-covers"),pk=document.getElementById(k+"-pack");if(box&&k==="pop")box.hidden=!!(pk&&pk.value)||!(termPlan(u.value)||n>1)}
+const PSRC_S={student:"EFT proof",email:"Emailed proof",upload:"Uploaded proof",manual:"By hand"};
 const PSRC={student:"Sent by the student in the app",email:"Forwarded email",upload:"You uploaded it",manual:"Recorded by hand"};
 // Big phone photos are shrunk to a JPEG before upload (this also turns iPhone HEIC photos into something every browser and Claude can read).
 async function fileToProof(file){
@@ -875,11 +930,6 @@ function proofLine(p){const r=p.read,cur=p.currency;if(!r)return "";if(r.reading
 function proofFlags(p){const r=p.read||{},f=[];if(r.duplicateOf)f.push("Looks like a payment you already have");if(r.isPayment===false)f.push("Doesn't look like a proof of payment");
   if(r.amountCents&&p.amountCents&&r.amountCents!==p.amountCents)f.push(`Proof shows ${money(r.amountCents,p.currency)}`);if(r.match==="name")f.push("Matched by name: check it's the right person");if(r.otherRef)f.push(`Reference ${r.otherRef} is another student's`);if(r.match==="several names")f.push("More than one student could match");
   return f.map(x=>`<span class="pill due">${esc(x)}</span>`).join("")}
-function popCard(p,byId){const who=p.userId?(byId[p.userId]||{}).name||"Former student":null,fl=proofFlags(p);
-  return `<div class="panel stack popcard" data-pop="${p.id}"><div class="row between" style="flex-wrap:nowrap"><b class="mono">${p.amountCents?money(p.amountCents,p.currency):"Amount?"}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div>
-    <div><b>${who?esc(who):`<span class="warn-t">Which student?</span>`}</b>${p.packLessons?` <span class="pill">${esc(packText(p))}</span>`:""}<br><span class="small muted">${esc(PSRC[p.source]||"")}${p.source==="email"&&p.emailFrom?`: ${esc(p.emailFrom)}`:""}</span></div>
-    ${proofLine(p)}${fl?`<div class="row" style="gap:6px">${fl}</div>`:""}
-    <div class="row">${p.hasProof?`<a class="btn sm" href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">View proof</a>`:""}<button class="btn sm" data-a="popcheck" data-v="${p.id}">Check &amp; edit</button>${p.userId&&p.amountCents&&!(p.read||{}).duplicateOf?`<button class="btn sm primary" data-a="popok" data-v="${p.id}">Confirm</button>`:""}</div></div>`}
 function bankRows(b){return [["Account holder",b.holder],["Bank",b.bank],["Account number",b.account,1],["Branch code",b.branch,1],["Account type",b.type]].filter(r=>r[1])
   .map(([k,v,c])=>`<div class="kv"><span class="small muted">${k}</span><span class="mono">${esc(v)}</span>${c?`<button class="linkbtn small" data-a="copy" data-v="${esc(String(v).replace(/\s/g,""))}">Copy</button>`:"<span></span>"}</div>`).join("")}
 // Proofs with the student and amount filled in and nothing to look at twice: these can be confirmed together.
@@ -894,16 +944,14 @@ function coachPayments(){
   const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},ok=ps.filter(p=>p.status==="confirmed"),pend=ps.filter(p=>p.status==="pending"),recent=ps.filter(p=>p.userId&&(p.status==="confirmed"||p.status==="test"||p.status==="refunded")),gone=ps.filter(p=>p.status==="rejected");
   const mStart=new Date();mStart.setDate(1);const mk=ds(mStart);const month=ok.filter(p=>p.paidOn>=mk);
   const due=ppl.filter(p=>p.active&&owing(p)),unmatched=ok.filter(p=>!p.userId),og=S.ui.openG||{};
-  return `<section class="stack"><div class="stats"><div class="stat"><b>${money(month.reduce((s,p)=>s+p.amountCents,0),cur)}</b><span>This month</span></div><div class="stat"><b>${ppl.filter(p=>p.active&&owesFees(p)&&!owing(p)).length}</b><span>Paid</span></div><div class="stat"><b>${due.length}</b><span>Due</span></div></div>
-    ${ready.length>1?`<button class="btn primary" data-a="popall">Confirm ${ready.length} ready</button><p class="small muted" style="margin-top:-6px">The ones with the student and amount filled in and nothing flagged. Check your bank app first.</p>`:""}
-    ${pend.length?`<h2 class="label">To check (${pend.length})</h2><div class="stack">${pend.map(p=>popCard(p,byId)).join("")}</div>`:""}
+  return `<section class="stack">
+    ${pend.length?`<p class="small"><b>${pend.length} to check</b> on the Money page. <button class="linkbtn small" data-a="moneyview" data-v="month">Check them</button></p>`:""}
     <div class="grid2"><label class="btn primary" for="pop-up" style="cursor:pointer">Upload proof</label><button class="btn" data-a="paynew">Record a payment</button></div>
     <input type="file" id="pop-up" accept="image/*,application/pdf" hidden>
-    <p class="small muted" style="margin-top:-6px">Upload a PDF or screenshot someone sent you. JitsFlow reads the amount, date and reference and finds the student; you confirm.</p>
+    <p class="small muted" style="margin-top:-6px">JitsFlow reads a proof's amount and reference and finds the student. You confirm.</p>
     ${unmatched.length?`<h2 class="label">Not matched to a student (${unmatched.length})</h2><div class="list">${unmatched.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div><span class="small muted">${esc(p.reference||p.emailSubject||"")}</span><select data-assign="${p.id}" aria-label="Assign to a student"><option value="">Assign to…</option>${ppl.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>`).join("")}</div>`:""}
-    ${due.length?`<h2 class="label">Owing</h2><div class="list">${due.map(p=>`<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}</span><span class="meta">${esc(owedTxt(p,cur))}${p.pendingThisMonthCents?` · ${money(p.pendingThisMonthCents,cur)} to check`:""}</span></span><span class="pill due">${p.pendingThisMonthCents?"Checking":"Due"}</span></button>`).join("")}</div>`:""}
     <h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.slice(0,40).map(p=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.packLessons?" · "+esc(packText(p)):coversText(p)}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":p.source==="student"?" · sent in the app":""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${p.source==="paystack"?psLine(p):""}${p.family?`<span class="small">Part of a family payment of ${money(p.family.totalCents,p.currency)} · <button class="linkbtn small" data-a="payunsplit" data-v="${esc(p.family.of)}">Undo split</button></span>`:""}</div>`,{del:["paydelask",p.id]})).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}
-    ${gone.length?`<h2 class="label">Not received (${gone.length})</h2><p class="small muted" style="margin-top:-6px">Proofs you set aside in the last 30 days. If the money turns up, restore it and confirm it.</p><div class="list">${gone.map(p=>goneRow(p,(byId[p.userId]||{}).name)).join("")}</div>`:""}</section>`;
+    ${gone.length?`<h2 class="label">Not received (${gone.length})</h2><p class="small muted" style="margin-top:-6px">Set aside in the last 30 days. Restore one if the money turns up.</p><div class="list">${gone.map(p=>goneRow(p,(byId[p.userId]||{}).name)).join("")}</div>`:""}</section>`;
 }
 // A proof marked Not received (Payments, and the member's sheet): greyed, with why, and Restore.
 const goneRow=(p,name)=>`<div class="sess gone" data-gone="${esc(p.id)}"><div class="row between"><b>${esc(name||(p.userId?"Former student":"No student"))}</b><b class="mono">${p.amountCents?money(p.amountCents,p.currency):"No amount"}</b></div>
@@ -926,7 +974,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
   return `<section class="stack">
     <details class="more" data-g="m-bank"${pi&&!bank.account&&!bank.link&&og["m-bank"]!==false||og["m-bank"]?" open":""}><summary><span><b>How students pay</b><br><span class="small muted">${bank.account?`${esc(bank.bank||"Bank")} · ${esc(bank.account)}`:bank.link?"Payment link":"Add your bank details"}</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
-      <p class="small">Students see these details in the app with their own reference (like JF7KQ3M), so every EFT tells you who paid.</p>
+      <p class="small">Members see these with their own reference, so every EFT says who paid.</p>
       <form id="bankform" class="stack" novalidate>
         <div class="grid2"><label class="f">Account holder<input name="holder" value="${esc(bank.holder||API.me.gym.name)}"></label><label class="f">Bank<input name="bank" value="${esc(bank.bank||"")}" placeholder="FNB, Capitec…"></label></div>
         <div class="grid2"><label class="f">Account number<input name="account" inputmode="numeric" value="${esc(bank.account||"")}"></label><label class="f">Branch code<input name="branch" inputmode="numeric" value="${esc(bank.branch||"")}"></label></div>
@@ -934,7 +982,7 @@ function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG
         <label class="f">Fees are due on<select name="dueDay">${Array.from({length:28},(_,i)=>i+1).map(d=>`<option value="${d}"${d===(bank.dueDay||1)?" selected":""}>the ${ordinal(d)} of the month</option>`).join("")}</select></label>
         <label class="f">Note for students (optional)<input name="note" value="${esc(bank.note||"")}" placeholder="Fees are due by the 3rd of each month"></label>
         <button class="btn" type="submit">Save payment details</button></form></div></details>
-    ${pi?`<div class="panel stack"><h2 class="label">Fee reminders</h2><label class="row small" style="flex-wrap:nowrap"><input id="m-auto" type="checkbox"${pi.autoRemind?" checked":""}> Email reminders automatically to everyone who owes, on the due day (the ${ordinal(bank.dueDay||1)}) and 7 days later. Not to anyone paused, on trial, or who paid this week.</label></div>`:""}
+    ${pi?`<div class="panel stack"><h2 class="label">Fee reminders</h2><label class="row small" style="flex-wrap:nowrap"><input id="m-auto" type="checkbox"${pi.autoRemind?" checked":""}> Email everyone who owes on the ${ordinal(bank.dueDay||1)}, and a week later</label><details class="learn small"><summary>Learn more</summary><p class="small muted">Not to anyone paused, on trial, or who paid this week. You can still remind people yourself from Money.</p></details></div>`:""}
     ${cardsPanel()}
     <details class="more" data-g="m-mail"${og["m-mail"]?" open":""}><summary><span><b>Forward proof-of-payment emails</b><br><span class="small muted">A Gmail or Outlook rule to your JitsFlow address</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
       ${pi?`${pi.popReady?"":`<p class="small warn-t">Email forwarding is being switched on. You can set up the rule now; emails are read once it's live.</p>`}
@@ -1027,21 +1075,34 @@ const fullDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"num
 // A parent's family (brothers and sisters who share them) when another kid owes too: the family total and a line per kid.
 const famPay=p=>{const f=p&&p.family;return f&&f.totalCents>0&&f.kids.some(k=>!k.me&&k.owedCents>0)?f:null};
 const famLine=(f,cur)=>`Family total: <b>${money(f.totalCents,cur)}</b> (${f.kids.filter(k=>k.owedCents>0).map(k=>`${esc(first(k.name))} ${money(k.owedCents,cur)}`).join(" · ")}).`;
+// The fees card (Home only): a pill for where they stand, the amount, a dot a month (paid, due, checking, processing), one Pay button.
+// Everything else (history, packs, saving a card, the bank details) is on the Pay sheet it opens.
+const DOTL={paid:"Paid",due:"Due",checking:"Checking",processing:"Processing",none:"Nothing due"};
+function feeDots(p){const ds=p.dots||[];if(!ds.some(d=>d.status!=="none"))return ""; // nothing billed in four months: no row of empty dots
+  return `<div class="feedots" role="list" aria-label="Your last ${ds.length} months">${ds.map(d=>`<span class="fd ${d.status}" role="listitem" aria-label="${esc(longMon(d.month))}: ${DOTL[d.status]||d.status}"><i aria-hidden="true"></i><small>${esc(shortMon(d.month))}</small></span>`).join("")}</div>`}
 function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!back&&termOwed(p),all=p.owedCents!==undefined?p.owedCents:Math.max(0,p.dueCents-p.paidCents),left=td||all,cur=p.currency,b=p.bank||{},ready=!!(b.account||b.link);
-  const mon=new Date().toLocaleDateString(undefined,{month:"long"}),ms=(p.owedMonths||[]).map(o=>o.month),pend=p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents;
-  const pr=procOf(p),state=pr&&left>0?`<span class="pill due">${pr.now?"Checking":"Processing"}</span>`:!p.dueCents&&!all?(p.planStatus==="trial"?`<span class="pill">Free trial</span>`:""):left<=0?`<span class="pill ok">Paid</span>`:pend?`<span class="pill due">Checking</span>`:`<span class="pill due">${money(left,cur)} due</span>`;
-  return `<section class="panel stack feecard"><div class="row between"><h2 class="label">Fees · ${esc(mon)}</h2>${state}</div>
-    ${p.plans&&p.plans.length&&!p.plan?`<p class="small"><b>Pick your plan</b> to start your membership.</p><button class="btn primary" data-a="planpick">Pick your plan</button>`:""}
-    <p class="small">${back?`You owe <b>${money(all,cur)}</b> for ${esc(monthsLong(ms))}${pend?`, ${money(pend,cur)} being checked by your coach`:""}.`
-      :td?`${esc(p.term.name)}: ${termTxt(p.term,cur)}.`:p.term&&p.term.renews&&left<=0?`${esc(p.term.name)}: paid. Renews ${esc(fullDate(p.term.renews))}.`
-      :p.planStatus==="trial"&&!p.dueCents?`You're on a free trial${p.trialEnds?` until ${esc(fullDate(p.trialEnds))}`:""}. Your membership starts when your coach confirms your first payment.`
-      :p.pause&&p.pause.idle&&!p.dueCents?"Your fees are on hold while you're away. Book a class and you're back."
-      :p.pause&&!p.dueCents?`Your membership is paused${p.pause.until?` to the end of ${esc(longMon(p.pause.until))}`:""}. No fees until then.`
-      :p.billFrom&&!p.dueCents?`Your fees in the app start in ${esc(longMon(p.billFrom))}.`
-      :p.dueCents?`${money(p.paidCents,cur)} of ${money(p.dueCents,cur)} paid${p.pendingCents?`, ${money(p.pendingCents,cur)} being checked by your coach`:""}.`:"Your coach hasn't set a fee for you."} Your payment reference: <b class="mono">${esc(p.reference)}</b></p>
-    ${procLine(p,cur)}${p.creditCents>0?`<p class="small">You've paid <b>${money(p.creditCents,cur)}</b> ahead.</p>`:""}${autoLine(p)}${famPay(p)?`<p class="small">${famLine(famPay(p),cur)}</p>`:""}
-    ${(td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:""}${privLeftLine(p)}
-    <button class="btn${left>0&&!p.pendingCents&&!pr?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||famPay(p)?"Pay":"Pay ahead"}</button></section>`}
+  const ms=(p.owedMonths||[]).map(o=>o.month),pend=p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents,dd=p.dueDay||b.dueDay||1;
+  const pr=procOf(p),fam=famPay(p),noPlan=p.plans&&p.plans.length&&!p.plan,trialFree=p.planStatus==="trial"&&!p.dueCents&&!all;
+  const state=pr&&left>0?`<span class="pill due">${pr.now?"Checking":"Processing"}</span>`:trialFree?`<span class="pill">Free trial</span>`:p.pause&&!left?`<span class="pill plain">Paused</span>`
+    :!p.dueCents&&!all?"":left<=0&&!fam?`<span class="pill ok">Paid</span>`:pend?`<span class="pill chk">Checking</span>`:`<span class="pill ${back?"bad":"due"}">${money(fam?fam.totalCents:left,cur)} due</span>`;
+  const nx=p.next,day=m=>`${dd} ${shortMon(m)}`;
+  // the big number and the one line under it
+  const big=left>0||fam?money(fam?fam.totalCents:left,cur):p.dueCents||p.paidCents?"Paid up":"";
+  const sub=td?`${esc(p.term.name)}: ${termTxt(p.term,cur)}`
+    :left>0?`${esc(monthsTxt(ms.length?ms:[p.month||todayK().slice(0,7)]))}${!back&&Number(todayK().slice(8,10))<=dd?` · due ${esc(day(ms[0]||todayK()))}`:""}${pend?` · ${money(pend,cur)} being checked`:""}`
+    :p.term&&p.term.renews?`${esc(p.term.name)} · renews ${esc(fullDate(p.term.renews))}`
+    :trialFree?`Free trial${p.trialEnds?` to ${esc(fullDate(p.trialEnds))}`:""}${(p.plans||[]).length>1&&p.plan?` · <button class="linkbtn small" data-a="planpick">Change plan</button>`:""}`
+    :p.pause&&p.pause.idle&&!p.dueCents?"On hold while you're away. Book a class to come back."
+    :p.pause&&!p.dueCents?`Paused${p.pause.until?` to end of ${esc(longMon(p.pause.until))}`:""}`
+    :p.billFrom&&!p.dueCents?`Starts in ${esc(longMon(p.billFrom))}`
+    :nx?`${p.plan?esc(p.plan.name)+" · ":""}next ${money(nx.cents,cur)} on ${esc(day(nx.month))}`:p.dueCents?"":"No fee set yet";
+  const lines=[procLine(p,cur),p.creditCents>0&&left<=0?`<p class="small">${money(p.creditCents,cur)} paid ahead.</p>`:"",autoLine(p),fam?`<p class="small">${famLine(fam,cur)}</p>`:"",
+    (td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:"",privLeftLine(p)].join("");
+  return `<section class="panel stack feecard" id="feecard"><div class="row between"><h2 class="label">Fees</h2>${state}</div>
+    ${noPlan?`<div class="stack" id="pickplan" style="gap:6px"><p class="small"><b>Pick your plan</b> to start. It's a free trial until your first payment is confirmed.</p>${planList(p.plans)}</div>`:""}
+    ${big||sub?`<div class="feeamt">${big?`<b class="mono">${big}</b>`:""}${sub?`<span class="small muted">${sub}</span>`:""}</div>`:""}
+    ${feeDots(p)}${lines}
+    <button class="btn full${left>0&&!pend&&!pr||fam?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||fam?"Pay":"Pay ahead"}</button></section>`}
 // "3 privates left" for students who've bought a pack (or have privates they still owe for).
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
@@ -1057,10 +1118,6 @@ const viaPs=p=>!!p&&p.provider==="paystack";
 const viaName=p=>viaPs(p)?"Paystack":"PayFast";
 function autoLine(p){const a=p.autopay;if(!a||!a.on)return "";const old=(p.owedMonths||[]).filter(o=>a.from&&o.month<a.from),oc=old.reduce((t,o)=>t+o.cents,0);
   return `<p class="small" id="autoline">${autoBad(a)?`<b>Your card payment for ${esc(longMon(a.last.month))} didn't go through.</b> Please pay it another way. `:autoWait(a)?`We're checking your card payment for ${esc(longMon(a.last.month))} with ${viaName(p)}. There's nothing you need to do. `:""}Paid automatically by card on the ${ordinal(a.dueDay)}${a.names&&a.names.length>1?` for ${esc(autoWho(a))}`:""}. <button class="linkbtn small" data-a="autostop">Stop</button></p>${oc>0?`<p class="small" id="autoold"><b>Your card doesn't pay ${money(oc,p.currency)} for ${esc(monthsLong(old.map(o=>o.month)))}</b>, from before you saved it. Please pay that yourself.</p>`:""}`}
-function autoSec(p){const a=p.autopay;if(!a)return "";const d=ordinal(a.dueDay);
-  if(a.on)return `<section class="stack" id="autopay"><h2 class="label">Paid automatically</h2><p class="small">Your saved card${a.card?` (${esc(a.card)})`:""} pays ${esc(autoWho(a))} on the ${d} of each month: only what's owed, and nothing if it's paid or paused.</p><button class="btn" data-a="autostop">Stop paying automatically</button></section>`;
-  // Paystack keeps a card from a payment: they pay what's due now (or a month ahead), and the card pays the months after.
-  return `<section class="stack" id="autopay"><h2 class="label">Pay automatically</h2><button class="btn" data-a="autoon">Save my card and pay automatically</button><p class="small muted" style="margin-top:-6px">${viaPs(p)?`Secure with Paystack. You pay ${myOwed(p)>=500?`what's due now (${money(myOwed(p),p.currency)})`:"a month's fees now"} and your card is kept. Then on the ${d} of each month we charge only what you owe`:`Secure with PayFast. On the ${d} of each month we charge only what you owe`}, and nothing if you've paid or your membership is paused. You get a receipt each time. Stop any time in Me.</p>${payTerms("By saving your card",viaName(p))}</section>`}
 async function autoOn(){toast(`Opening ${viaName(API.pay)}…`);try{const c=await api("POST","/me/autopay",{});jfTrack("autopay_on",{});if(c.url){location.href=c.url;return}payfastGo(c)}catch(e){toast(e.message)}}
 async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
@@ -1076,43 +1133,46 @@ function myPaySheet(keep){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.
   // with no card payments at the gym (and no "coming soon"), EFT is the only way, so it's simply open.
   const tiles=payTiles(p,b),eft=!tiles||S.ui.payEft;
   // Owing for more than this month: one line a month ("October: R850"). Otherwise what makes up this month's fees.
-  const parts=td?termLines(p,cur):back?p.owedMonths.map(o=>`${longMon(o.month)}: ${money(o.cents,cur)}`):dueLines(p,cur);
+  const parts=td?termLines(p,cur):back?p.owedMonths.map(o=>[longMon(o.month),money(o.cents,cur)]):dueLines(p,cur);
   // Joining a plan to book privates: with one plan to pick, what to pay is its price plus what's due now, and the amounts below say so.
   const ja=p.privateAccess||API.privAccess,one=ja&&!ja.status&&ja.plans.length===1?ja.plans[0]:null,fam=famPay(p),pr=procOf(p),amt=Math.max(0,(fam?fam.totalCents:left)+(one?one.priceCents:0)-(pr?pr.cents:0));
   // Paid up (nothing owed, no family total, not joining a plan): say so first, and nothing is filled in to pay. They can still pay
   // ahead, buy a pack or save a card, but never by one tap on an amount they don't owe.
-  const upToDate=amt<=0&&!pend0(p)&&!pr;
+  const upToDate=amt<=0&&!pend0(p)&&!pr,via=viaName(p),a=p.autopay;
+  const row=(l,r,cls="")=>`<div class="row between payline${cls}" style="flex-wrap:nowrap"><span class="small">${l}</span><b class="small mono">${r}</b></div>`;
   openSheet(`${sheetHead(upToDate?"Pay ahead":"Pay your fees")}<div class="stack-lg">${procLine(p,cur)}
-    ${upToDate?`<section class="stack" id="paidup"><p class="small"><span class="pill ok">Paid</span> <b>You're paid up.</b> Nothing is due right now${p.planStatus==="trial"?" on your free trial":""}. You can pay ahead${(p.packs||[]).length?", buy a pack":""} or send a proof below if you like.</p></section>`:""}
-    ${fam?`<section class="stack" id="payfamily"><h2 class="label">Your family</h2><div class="panel stack" style="gap:8px">${fam.kids.filter(k=>k.owedCents>0||k.me).map(k=>`<div class="row between" style="flex-wrap:nowrap"><span class="small"><b>${esc(k.name)}</b><br><span class="muted">Reference <span class="mono">${esc(k.reference)}</span></span></span><b class="small mono">${money(k.owedCents,cur)}</b></div>`).join("")}
-      <b class="small">Family total: ${money(fam.totalCents,cur)}</b></div><p class="small">Pay it all in one go with any one of these references, and send one proof. It's split between your kids, oldest amount first.</p></section>`:""}
-    ${ja&&ja.status?`<section class="stack" id="payjoin"><h2 class="label">Restart your membership</h2><p class="small"><b>${esc(ja.message)}</b></p><p class="small">Once it's active again, you can book privates.</p></section>`
+    ${upToDate?`<section class="stack" id="paidup"><div class="feeamt"><span class="pill ok">Paid</span><b>You're paid up.</b></div><p class="small muted">Pay ahead${ks.length?", buy a pack":""} or send a proof below.</p></section>`
+      :`<section class="stack" id="paydue"><div class="feeamt"><b class="mono">${money(amt,cur)}</b><span class="small muted">${pend0(p)?"Being checked by your coach":fam?"Family total":esc(back?monthsTxt(p.owedMonths.map(o=>o.month)):td?p.term.name:longMon(p.month||todayK().slice(0,7)))}</span></div>
+      ${!fam&&parts.length>1?`<div class="panel stack" style="gap:4px">${parts.map(x=>Array.isArray(x)?row(esc(x[0]),esc(x[1])):`<span class="small">${esc(x)}</span>`).join("")}</div>`:""}</section>`}
+    ${fam?`<section class="stack" id="payfamily"><div class="panel stack" style="gap:8px">${fam.kids.filter(k=>k.owedCents>0||k.me).map(k=>`<div class="row between" style="flex-wrap:nowrap"><span class="small"><b>${esc(k.name)}</b> · <span class="mono muted">${esc(k.reference)}</span></span><b class="small mono">${money(k.owedCents,cur)}</b></div>`).join("")}
+      <div class="row between"><b class="small">Family total</b><b class="small mono">${money(fam.totalCents,cur)}</b></div></div><p class="small muted">Pay it all at once with any one reference. We split it between your kids.</p></section>`:""}
+    ${ja&&ja.status?`<section class="stack" id="payjoin"><p class="small"><b>${esc(ja.message)}</b> Once it's active again, you can book privates.</p></section>`
     :ja?`<section class="stack" id="payjoin"><h2 class="label">Join to book privates</h2><p class="small"><b>${esc(ja.message)}</b></p>${ja.plans.length?joinPlans(ja,cur):""}
-      <p class="small">${one?`To join, pay <b>${money(one.priceCents,cur)}</b> for ${esc(one.name)}${left?` plus what's due now (${money(left,cur)}): <b>${money(amt,cur)}</b> in all`:""}, with your reference. The amounts below include it.`
-        :`Pay the price of the plan you pick${left?` plus what's due now (${money(left,cur)})`:""}, with your reference.`} Tell your coach which plan it's for. They put you on the plan, then you can book privates.</p>${joinAsk(ja)}</section>`:""}
-    ${parts.length?`<section class="stack"><h2 class="label">${td||back?"What's due":"This month"}</h2><div class="panel stack" style="gap:6px">${parts.map(x=>`<span class="small">${esc(x)}</span>`).join("")}<b class="small">Total: ${money(td||(back?p.owedCents:p.dueCents),cur)}</b></div></section>`:""}
+      <p class="small">${one?`Pay <b>${money(one.priceCents,cur)}</b> for ${esc(one.name)}${left?` plus ${money(left,cur)} due now: <b>${money(amt,cur)}</b>`:""}. The amounts below include it.`
+        :`Pay the plan's price${left?` plus ${money(left,cur)} due now`:""}.`} Tell your coach which plan; they put you on it.</p>${joinAsk(ja)}</section>`:""}
     ${tiles?`<section class="stack" id="paymethods"><h2 class="label">Pay with</h2>
       ${p.card&&viaPs(p)&&pls.length?`<label class="f">What's it for?<select id="card-for"><option value="">My fees</option>${pls.map(x=>`<option value="${x.id}" data-price="${x.priceCents}"${p.plan&&p.plan.id===x.id&&p.planStatus==="trial"?" selected":""}>Joining: ${esc(x.name)} · ${money(x.priceCents,cur)} ${esc(PERL[x.period]||"")}</option>`).join("")}</select></label>`:""}
       ${p.card?`<label class="f">Amount (${esc(cur)})<input id="card-amt" type="number" inputmode="decimal" min="5" step="0.01" value="${amt?amt/100:""}"${amt?"":` placeholder="Amount to pay ahead"`}></label>`:""}${tiles}
-      <p class="small muted" style="margin-top:-6px">${viaPs(p)?(p.card?"Card, Apple Pay and Capitec Pay go through Paystack's secure checkout, straight to your gym, and it shows as paid by itself.":"Card, Apple Pay and Capitec Pay are coming soon. For now, pay by EFT.")
-        :p.card?`Apple Pay, Google Pay and card go through PayFast's secure checkout, and your coach sees it straight away. <button class="linkbtn small" data-a="paycard" data-v="ef">Or Instant EFT from your banking app</button>`:"Card, Apple Pay and Google Pay are coming soon. For now, pay by EFT."}</p>${p.card?payTerms("By continuing",viaName(p)):""}</section>`:""}
-    ${autoSec(p)}
+      <p class="small muted" style="margin-top:-6px">${p.card?`Secure checkout with ${viaPs(p)?"Paystack":"PayFast"}. It shows as paid by itself.${viaPs(p)?"":` <button class="linkbtn small" data-a="paycard" data-v="ef">Instant EFT</button>`}`:"Card payments are coming soon. For now, pay by EFT."}</p></section>`:""}
     ${eft?`<div class="stack-lg" id="payeft">
     ${b.account?`<section class="stack"><h2 class="label">Pay by EFT</h2><div class="panel stack" style="gap:8px">${bankRows(b)}
       <div class="kv refrow"><span class="small muted">Reference</span><b class="mono">${esc(p.reference)}</b><button class="linkbtn small" data-a="copy" data-v="${esc(p.reference)}">Copy</button></div></div>
-      <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference. It tells your coach the payment is yours.${amt?` Amount: <b>${money(amt,cur)}</b>${one?` (${esc(one.name)} ${money(one.priceCents,cur)}${left?` + ${money(left,cur)} due now`:""})`:""}.`:""}</p></section>`:""}
+      <p class="small">Always use <b class="mono">${esc(p.reference)}</b> as the reference.${amt?` Amount: <b>${money(amt,cur)}</b>${one?` (${esc(one.name)} ${money(one.priceCents,cur)}${left?` + ${money(left,cur)} due now`:""})`:""}.`:""}</p></section>`:""}
     ${b.link?`<a class="btn${b.account?"":" primary"}" href="${esc(b.link)}" target="_blank" rel="noopener">Pay online</a>`:""}
-    ${!b.account&&!b.link?`<p class="small">Your coach hasn't added payment details yet. Ask them how to pay, then send your proof of payment here. Your reference is <b class="mono">${esc(p.reference)}</b>.</p>`:""}
+    ${!b.account&&!b.link?`<p class="small">Your coach hasn't added bank details yet. Ask them how to pay, then send the proof here. Your reference: <b class="mono">${esc(p.reference)}</b>.</p>`:""}
     ${b.note?`<p class="small muted">${esc(b.note)}</p>`:""}
-    <section class="stack"><h2 class="label">Already paid?</h2><p class="small">Send the proof of payment (the PDF from your bank, or a screenshot). Your coach checks it and marks you as paid.</p>
+    <section class="stack"><h2 class="label">Already paid?</h2>
       ${ks.length||pls.length?`<label class="f">What's it for?<select id="mypop-pack"><option value="">My fees</option>${ks.map(k=>`<option value="${k.id}" data-price="${k.priceCents}">${esc(k.name)}</option>`).join("")}${pls.map(x=>`<option value="plan:${x.id}" data-price="${x.priceCents}"${p.plan&&p.plan.id===x.id&&p.planStatus==="trial"?" selected":""}>Joining: ${esc(x.name)} · ${money(x.priceCents,cur)} ${esc(PERL[x.period]||"")}</option>`).join("")}</select></label>`:""}
       <label class="f">Amount you paid (${esc(cur)})<input id="mypop-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${amt?amt/100:p.plan&&p.planStatus==="trial"&&pls.length?p.plan.priceCents/100:""}"></label>
-      <div class="popzone" id="popzone"><b>Paste a screenshot of the payment</b><span class="small muted">or drop the PDF from your bank here</span>
-        <div class="row"><button class="btn" type="button" data-a="poppaste">Paste</button><label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label></div></div><input type="file" id="mypop" accept="image/*,application/pdf" hidden>
-      <p class="small muted" style="margin-top:-6px">It shows as <b>Checking</b> until your coach confirms it.</p></section></div>`:""}
-    ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.lessons} private lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · use within ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span>${p.card?`<button class="btn sm primary" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
-      <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p>${p.card?payTerms("By paying by card",viaName(p)):""}</section>`:""}
-    ${(p.payments||[]).length?`<section class="stack"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${payNote(x)}</div>`}).join("")}</div></section>`:""}
+      <div class="popzone" id="popzone"><b>Send the proof of payment</b><span class="small muted">A screenshot or your bank's PDF. Your coach checks it.</span>
+        <div class="row"><button class="btn" type="button" data-a="poppaste">Paste</button><label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label></div></div><input type="file" id="mypop" accept="image/*,application/pdf" hidden></section></div>`:""}
+    ${a?`<section class="stack" id="autopay"><h2 class="label">${a.on?"Paid":"Pay"} automatically</h2>${a.on?`<div class="row between" style="flex-wrap:nowrap"><span class="small">Your card${a.card?` (${esc(a.card)})`:""} pays ${esc(autoWho(a))} on the ${ordinal(a.dueDay)}. Only what's owed.</span><button class="btn sm" data-a="autostop">Stop paying automatically</button></div>`
+      :`<div class="row between" style="flex-wrap:nowrap"><span class="small">Only what you owe, on the ${ordinal(a.dueDay)} of each month. Stop any time.</span><button class="btn sm" data-a="autoon">Save my card and pay automatically</button></div>
+      <details class="learn small"><summary>Learn more</summary><p class="small muted">${viaPs(p)?`You pay ${myOwed(p)>=500?`what's due now (${money(myOwed(p),cur)})`:"a month's fees now"} with ${via} and your card is kept. Then each month we charge only what you owe`:`Each month ${via} charges only what you owe`}, and nothing if you've paid or are paused. You get a receipt each time.</p></details>`}</section>`:""}
+    ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${money(k.priceCents,cur)}${k.expiryMonths?` · ${k.expiryMonths} month${k.expiryMonths>1?"s":""} to use`:""}</span></span>${p.card?`<button class="btn sm" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
+      <p class="small muted">${p.card?"Or pay":"Pay"} by EFT and pick the pack when you send the proof.</p></section>`:""}
+    ${(p.payments||[]).length?`<section class="stack" id="mypayments"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${payNote(x)}</div>`}).join("")}</div></section>`:""}
+    ${p.card||a?payTerms("By paying by card or saving a card",via):""}
   </div>`,!!keep)}
 // The line under every card checkout button: the terms and refund policy (on the website), and who processes the payment.
 const legalA=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
@@ -1165,7 +1225,7 @@ const splitTxt=(sp,cur)=>sp&&sp.length?` More than they owed, so ${sp.map(x=>`${
 function splitToast(msg,j){const sp=j&&j.split,cur=(COACH.roster||{}).currency;if(!sp||!sp.length)return toast(msg);
   toast(msg+splitTxt(sp,cur),{label:"Undo split",fn:async()=>{try{await api("POST",`/coach/payments/${j.payment.id}/unsplit`,{});await coachLoad();toast("Undone. It's all on one kid again.")}catch(e){toast(e.message)}}})}
 function coachGym(){const g=API.me.gym;
-  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back here with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel()+betaPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
+  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel()+betaPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
     <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
@@ -1227,14 +1287,15 @@ function gymContact(p){const b=[];const L=(href,t)=>`<a class="btn" href="${esc(
 function gymTimetable(p){const tt=p.timetable||[];if(!tt.length)return "";const t=dayNow();
   return `<section class="stack"><h2 class="label">Weekly timetable</h2><div class="ttweek">${TTD.map((d,i)=>{const rows=tt.filter(r=>r.day===d);if(!rows.length)return "";
     return `<div class="ttday${i===t?" today":""}"><b>${TTDL[i]}${i===t?" · today":""}</b>${rows.map(r=>`<div class="ttline"><span class="mono">${esc(r.start)}${r.end?"–"+esc(r.end):""}</span><span>${esc(r.title)}${r.level?` <span class="muted small">· ${esc(r.level)}</span>`:""}${r.coach?`<br><span class="small muted">${esc(r.coach)}</span>`:""}</span></div>`).join("")}</div>`}).join("")}</div></section>`}
-function gymCard(forCoach){
+function gymCard(forCoach,noTimetable){
   if(inClaude()||!API.me||!API.me.gym)return "";
   if(!GYM.data){loadGym();return ""}
   const p=gymProfile(),g=API.me.gym,cur=g.currency;
   if(!hasProfile(p)&&!forCoach)return "";
+  if(noTimetable&&!(p.tagline||p.address||gymContact(p)||(p.rates||[]).length||(p.coaches||[]).length||p.notes))return ""; // only a timetable: that's on Classes
   return `<section class="panel stack gymcard"><div class="gymhead">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gymlogo">`:""}<div><h2 style="margin:0">${esc(g.name)}</h2>${p.tagline?`<p class="small muted">${esc(p.tagline)}</p>`:""}</div></div>
     ${p.address?`<p class="small">${esc(p.address)}</p>`:""}${gymContact(p)}
-    ${gymTimetable(p)}
+    ${noTimetable?"":gymTimetable(p)}
     ${(p.rates||[]).length?`<section class="stack"><h2 class="label">Rates</h2><div class="list">${p.rates.map(r=>`<div class="row between rate"><span><b>${esc(r.name)}</b>${r.note?`<br><span class="small muted">${esc(r.note)}</span>`:""}</span><span class="mono"><b>${esc(priceTxt(r,cur))}</b> <span class="small muted">${esc(PERL[r.period]||"")}</span></span></div>`).join("")}</div></section>`:""}
     ${(p.coaches||[]).length?`<section class="stack"><h2 class="label">Coaches</h2>${p.coaches.map(c=>`<div class="coachrow"><b>${esc(c.name)}</b>${c.rank?` <span class="small muted">· ${esc(c.rank)}</span>`:""}${c.bio?`<p class="small">${esc(c.bio)}</p>`:""}</div>`).join("")}</section>`:""}
     ${p.notes?`<p class="small">${esc(p.notes)}</p>`:""}
@@ -1399,16 +1460,11 @@ function bookCard(c){
       <span class="bc-body"><b>${esc(c.title)}</b><span class="small muted">${[typeTag(c),c.level,c.coach&&("with "+c.coach)].filter(Boolean).map(esc).join(" · ")}</span>
       <span class="small mono">${esc(spotsTxt(c))}</span>${fill!==null&&c.kind!=="private"?`<span class="cap" aria-hidden="true"><i style="width:${fill}%"></i></span>`:""}${whoLine(c)}</span></button>
     <div class="bc-act row">${bookActions(c)}</div></div>`}
-function membershipCard(){const m=API.mem;if(!m)return "";const p=m.plan;
-  // No plan yet: the gym's plans, one tap to pick (a free trial until the coach confirms the first payment).
-  if(!p&&(m.plans||[]).length)return `<section class="panel memcard stack" id="pickplan"><h2 class="label">Your membership</h2><p><b>Pick your plan</b></p>${planList(m.plans)}
-    <p class="small muted">It starts as a free trial. It's active once your coach confirms your first payment.</p></section>`;
-  return `<section class="panel memcard"><div class="row between"><h2 class="label">Your membership</h2>${m.status&&m.status!=="active"?`<span class="pill due">${esc(m.status==="trial"?"Free trial":cap1(m.status))}</span>`:""}</div>
-    ${m.status==="trial"?`<p class="small">Free trial${m.trialEnds?` until ${esc(fullDate(m.trialEnds))}`:""}. Pay with your reference and send the proof: once your coach confirms it, you're a member.${(m.plans||[]).length>1?` <button class="linkbtn small" data-a="planpick">Change plan</button>`:""}</p>`:""}
-    ${m.status==="paused"&&m.pause?`<p class="small">${m.pause.idle?"Your fees are on hold while you're away. Book a class and you're back.":`Paused${m.pause.until?` to the end of ${esc(longMon(m.pause.until))}. You're active again by yourself after that`:""}.`}</p>`:""}
-    <div class="row between" style="flex-wrap:nowrap"><div><b>${p?esc(p.name):"No plan set"}</b><br><span class="small muted">${p?`${money(p.priceCents,(API.me.gym||{}).currency)} ${esc(PERL[p.period]||"")}${p.classesPerWeek?` · ${p.classesPerWeek} classes a week`:" · unlimited classes"}`:"Your coach hasn't put you on a plan yet."}</span></div>
-    ${p&&p.classesPerWeek?`<div class="mono" style="text-align:right"><b>${m.bookedThisWeek}/${p.classesPerWeek}</b><br><span class="small muted">booked this week</span></div>`:""}</div>
-    <div class="stats"><div class="stat"><b>${m.visitsThisMonth}</b><span>Classes this month</span></div><div class="stat"><b>${m.streak}</b><span>Week streak</span></div><div class="stat"><b>${m.perWeek}</b><span>Per week</span></div></div></section>`}
+// One line, then "Learn more" for the detail that matters but needn't be read every time.
+const learnMore=(short,more)=>`<div class="small">${short}${more?` <details class="learn"><summary>Learn more</summary><p class="small muted">${more}</p></details>`:""}</div>`;
+// Classes: on a plan with a weekly limit, one line saying how many are booked this week (the plan and fees are on Home's fees card).
+function weekLimitLine(){const m=API.mem,p=m&&m.plan;if(!p||!p.classesPerWeek)return "";const full=m.bookedThisWeek>=p.classesPerWeek;
+  return `<p class="small weeklimit" id="weeklimit"><span class="pill ${full?"due":"plain"}">${m.bookedThisWeek}/${p.classesPerWeek}</span> booked this week on ${esc(p.name)}</p>`}
 const cap1=s=>String(s||"").charAt(0).toUpperCase()+String(s||"").slice(1);
 // New members pick their plan: when they join, or from their membership card. It's a trial until the coach confirms their first payment.
 const planList=ps=>{const cur=(API.me.gym||{}).currency;return `<div class="list">${ps.map(p=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(p.name)}</b><br><span class="small muted">${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}${p.classesPerWeek?` · ${p.classesPerWeek} classes a week`:""}</span></span><button class="btn sm primary" data-a="pickplan" data-v="${p.id}" aria-label="Pick ${esc(p.name)}">Pick</button></div>`).join("")}</div>`};
@@ -1439,7 +1495,7 @@ function viewBook(){
   const p=gymProfile();
   return `${header()}<div class="stack-lg"><section class="stack"><h1 style="font-size:34px">Classes</h1>
     ${noticesCard()}${seg("Show","bookview",[["classes","Classes"],["private",`Privates${openP.length?` (${openP.length})`:""}`],["comps",`Comps${API.comps&&upcomingComps().length?` (${upcomingComps().length})`:""}`]],v)}</section>
-    ${v==="comps"?compsList(false):v==="classes"?`${membershipCard()}
+    ${v==="comps"?compsList(false):v==="classes"?`${weekLimitLine()}
       ${(API.usual||[]).length?`<div class="stack" style="gap:6px"><button class="btn primary full" data-a="bookusual">Book my usual (${API.usual.length})</button><p class="small muted">Books this week's classes like the ones you did last week.</p></div>`:""}
       ${mine.length?`<p class="small"><b>You're booked for ${mine.filter(c=>c.myGoing).length} class${mine.filter(c=>c.myGoing).length===1?"":"es"}</b>${mine.some(c=>c.myWaitlisted)?` and waiting for ${mine.filter(c=>c.myWaitlisted).length}`:""}.</p>`:""}
       ${(()=>{if(!S.ui.bcal){const nx=cls.map(c=>dayKey(c.startsAt)).sort()[0];calState("book");if(nx&&nx>addDays2(weekStart(todayK()),6))S.ui.bcal.anchor=nx}/* nothing left this week (e.g. Sunday night): open on the week of the next class */
@@ -1484,7 +1540,7 @@ function afterBook(id){if(S.ui.sheet&&S.ui.sheet.k==="book")bookSheet(id);else r
 /* ----- coach: insights ----- */
 const SEG={regular:["Regulars","1.5+ classes a week"],occasional:["Occasional","Trains, but less than weekly-plus"],at_risk:["At risk","Stopped or dropped off"],new:["New","Joined in the last 30 days"],inactive:["Not training","Nothing in 60 days"]};
 const DOW=["","Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-async function loadInsights(){try{COACH.insights=await api("GET","/coach/insights")}catch(e){toast(e.message)}if(S.ui.tab==="coach"&&COACH.view==="members"&&COACH.stuView==="insights"&&!S.ui.sheet)render()}
+async function loadInsights(){try{COACH.insights=await api("GET","/coach/insights")}catch(e){toast(e.message)}if(S.ui.sheet&&S.ui.sheet.k==="insights")insightsSheet(true)}
 function weekChart(weeks){
   const max=Math.max(1,...weeks.map(w=>w.visits)),W=340,H=150,pad=22,bw=Math.floor((W-8)/weeks.length)-2;
   const bars=weeks.map((w,i)=>{const h=Math.round((H-pad-14)*w.visits/max),x=4+i*(bw+2),y=H-pad-h;const lbl=new Date(w.wk+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"});
@@ -1508,16 +1564,18 @@ function coachInsights(){
   const card=(tone,title,body,act)=>`<div class="insight ${tone}"><b>${title}</b><div class="small">${body}</div>${act?`<div class="row">${act}</div>`:""}</div>`;
   const nm=a=>a.slice(0,6).map(s=>`<button class="linkbtn tap" data-a="student" data-v="${s.id}">${esc(s.name)}</button>`).join(", ")+(a.length>6?` and ${a.length-6} more`:"");
   const byId={};st.forEach(x=>byId[x.id]=x);
+  // Who owes: the same people as Today, Money and the Owing chip (not anyone whose proof is being checked or card is processing).
+  const ros=Object.fromEntries(students().map(p=>[p.id,p])),unpaid=I.revenue?I.revenue.unpaid.filter(u=>!ros[u.id]||owesNow(ros[u.id])):[];
   const mailBtn=(kind,a)=>{const one=a.length===1&&byId[a[0].id]&&byId[a[0].id].phone;const m=MSG[kind]||MSG.blank;
     return (API.status.mail?`<button class="btn" data-a="msgnew" data-k="${kind}" data-v="${ids(a)}">Email ${a.length===1?"them":"all "+a.length}</button>`:"")+waBtn((one?`Hi ${hiName(byId[a[0].id])}, `:"")+m[1].replace(/\n\n/g,"\n\n"),one?"WhatsApp them":"WhatsApp",{phone:one||"",kind:"insight_"+kind})};
   const cards=[
     atRisk.length&&card("warn",`${atRisk.length} student${atRisk.length>1?"s":""} at risk of dropping off`,`${nm(atRisk)}. They used to come regularly but have stopped or halved in the last 4 weeks. A short personal message often brings people back.`,mailBtn("risk",atRisk)),
-    I.revenue&&I.revenue.unpaid.length&&card("warn",`${I.revenue.unpaid.length} haven't paid this month`,`${I.revenue.unpaid.slice(0,6).map(u=>`<button class="linkbtn tap" data-a="student" data-v="${u.id}">${esc(u.name)}</button> (${money(u.dueCents,cur)})`).join(", ")}.`,mailBtn("pay",I.revenue.unpaid)),
+    unpaid.length&&card("warn",`${unpaid.length} owe`,`${unpaid.slice(0,6).map(u=>`<button class="linkbtn tap" data-a="student" data-v="${u.id}">${esc(u.name)}</button> (${money(u.dueCents,cur)})`).join(", ")}${unpaid.length>6?` and ${unpaid.length-6} more`:""}.`,mailBtn("pay",unpaid)),
     review.length&&card("good",`${review.length} might be ready for a stripe or belt review`,`${review.slice(0,6).map(s=>`<button class="linkbtn tap" data-a="student" data-v="${s.id}">${esc(s.name)}</button> (${s.sinceRank} classes since last promotion, ${s.ready}% of their next-belt techniques)`).join(", ")}.`,""),
     newQuiet.length&&card("",`${newQuiet.length} new member${newQuiet.length>1?"s":""} haven't really started`,`${nm(newQuiet)} joined recently and have trained once or not at all. Getting them to a few classes early helps them stick.`,mailBtn("welcome",newQuiet)),
     ...busy.slice(0,3).map(s=>card("good",`${DOW[s.dow]} ${esc(s.hm)} ${esc(s.title)} is busy`,`${s.fill!==null?`Runs ${s.fill}% full on average`:`Averages ${s.avg} people`}${s.waitlisted?`, with a waitlist ${s.waitlisted} of the last ${s.n} weeks`:""}. Consider raising the limit or adding a second session.`,"")),
     ...quiet.slice(0,3).map(s=>card("",`${DOW[s.dow]} ${esc(s.hm)} ${esc(s.title)} is quiet`,`Averages ${s.avg} ${s.avg===1?"person":"people"} over the last ${s.n} weeks. Move it, merge it, or turn it into an open mat or privates.`,"")),
-    I.plans&&I.noPlan&&I.plans.length?card("",`${I.noPlan} student${I.noPlan>1?"s have":" has"} no membership plan`,`Put them on a plan in the Roster so fees and weekly limits work.`,`<button class="btn" data-a="coachgo" data-v="roster">Open roster</button>`):"",
+    I.plans&&I.noPlan&&I.plans.length?card("",`${I.noPlan} student${I.noPlan>1?"s have":" has"} no membership plan`,`Put them on a plan from their page in Members.`,`<button class="btn" data-a="coachgo" data-v="roster">Open Members</button>`):"",
   ].filter(Boolean);
   const list=st.filter(s=>!f||s.segment===f).sort((a,b)=>b.d28-a.d28||a.name.localeCompare(b.name));
   const ret=k.retention.base?Math.round(100*k.retention.retained/k.retention.base):null;
@@ -1564,7 +1622,7 @@ function plansPanel(){const ps=(COACH.roster&&COACH.roster.plans)||[],cur=API.me
     <label class="f">Private lesson price (${esc(cur)})<input id="pl-priv" name="priv" type="number" inputmode="decimal" min="0" step="0.01" value="${p&&p.privateCents!=null?p.privateCents/100:""}" placeholder="The slot's price"></label>${rateChips("pl-priv")}
     ${p?`<label class="row small"><input name="active" type="checkbox"${p.active?" checked":""}> Offered to new members</label>`:""}
     <div class="row"><button class="btn primary" type="submit">${p?"Save plan":"Add plan"}</button><button class="btn ghost" type="button" data-a="planedit" data-v="">Cancel</button></div></form>`;
-  return `<div class="panel stack"><h2 class="label">Membership plans</h2><p class="small">Put each student on a plan in the Roster. Weekly limits stop extra bookings, and Insights shows revenue by plan.</p>
+  return `<div class="panel stack"><h2 class="label">Membership plans</h2>${learnMore("Weekly limits stop extra bookings.","Put each student on a plan from their page in Members. More insights shows revenue by plan.")}
     ${ps.length?`<div class="list">${ps.map(p=>ed===p.id?form(p):`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(p.name)}</b>${p.active?"":" <span class='small muted'>(not offered)</span>"}<br><span class="small muted">${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}${p.classesPerWeek?` · ${p.classesPerWeek}/week`:" · unlimited"}${p.privateCents!=null?` · privates ${money(p.privateCents,cur)}`:""}</span></span><button class="btn ghost" data-a="planedit" data-v="${p.id}">Edit</button></div>`).join("")}</div>`:""}
     ${ed==="new"?form(null):`<div class="row"><button class="btn" data-a="planedit" data-v="new">+ Add a plan</button>${rates.length?`<button class="btn" data-a="plansfromrates">Use my website prices (${rates.length})</button>`:""}</div>`}</div>`}
 // "What's it for?" on a payment: fees, or one of the gym's private-lesson packs.
@@ -1576,7 +1634,7 @@ function packsPanel(){if(COACH.packs===undefined){COACH.packs=null;api("GET","/c
     <div class="grid2"><label class="f">Price (${esc(cur)})<input name="price" type="number" inputmode="decimal" min="5" step="0.01" value="${k?k.priceCents/100:""}"></label><label class="f">Expires after (months)<input name="exp" type="number" inputmode="numeric" min="0" max="36" value="${k&&k.expiryMonths?k.expiryMonths:""}" placeholder="Never"></label></div>
     ${k?`<label class="row small"><input name="active" type="checkbox"${k.active?" checked":""}> Students can buy it</label>`:""}
     <div class="row"><button class="btn primary" type="submit">${k?"Save pack":"Add pack"}</button><button class="btn ghost" type="button" data-a="packedit" data-v="">Cancel</button></div></form>`;
-  return `<div class="stack subpanel" id="packs-panel"><h2 class="label">Packs</h2><p class="small">Students buy a pack on their Pay sheet, by card or EFT. Once it's paid, each private they're checked into, or still booked on when it starts, uses one lesson. With none left, a private costs their price above, that month.</p>
+  return `<div class="stack subpanel" id="packs-panel"><h2 class="label">Packs</h2>${learnMore("Bought on the Pay sheet. Each private uses one lesson.","They pay by card or EFT. Once it's paid, each private they're checked into, or still booked on when it starts, uses one lesson. With none left, a private costs their price above, that month.")}
     ${ks.length?`<div class="list">${ks.map(k=>ed===k.id?form(k):`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b>${k.active?"":" <span class='small muted'>(not offered)</span>"}<br><span class="small muted">${k.lessons} lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · expires after ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span><button class="btn ghost" data-a="packedit" data-v="${k.id}">Edit</button></div>`).join("")}</div>`:""}
     ${ed==="new"?form(null):`<div class="row"><button class="btn" data-a="packedit" data-v="new">+ Add a pack</button></div>`}</div>`}
 async function savePack(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";const id=form.dataset.id;
@@ -1592,8 +1650,9 @@ function accessPanel(){const pi=COACH.payInfo;if(!pi)return "";const cur=API.me.
   return `<form id="accessform" class="stack subpanel" novalidate><h2 class="label">Clients who only take private lessons…</h2>
     <p class="small">${now}</p>
     ${opt("none","Pay nothing extra","Only their private lesson price.")}
-    ${opt("fee",`Pay an access fee${c?` of ${money(c,cur)}`:""} a month`,"In each month they book or attend a private. Only clients with no plan and no monthly fee pay it: anyone paying a plan, their own fee or the gym's standard fee doesn't. To charge it to someone, set their monthly fee override to 0.",`<label class="f">Access fee per month (${esc(cur)})<input id="acc-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${c?c/100:""}"></label>`)}
-    ${opt("membership","Need a membership to book","Only students on a plan you tick can book a private. They see how to join instead. You can still add anyone to a private yourself: open the slot in Schedule and tap Add a student.",ps.length?`<span class="small muted">Plans that allow privates</span>${ps.map(p=>`<label class="row small"><input type="checkbox" name="plan" value="${p.id}" style="width:auto;flex:none"${ids.includes(p.id)?" checked":""}> ${esc(p.name)} <span class="muted">· ${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}</span></label>`).join("")}`:`<p class="small muted">Add a membership plan above first.</p>`)}
+    ${opt("fee",`Pay an access fee${c?` of ${money(c,cur)}`:""} a month`,"In each month they book or attend a private.",`<label class="f">Access fee per month (${esc(cur)})<input id="acc-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${c?c/100:""}"></label>`)}
+    ${opt("membership","Need a membership to book","Only plans you tick can book a private.",ps.length?`<span class="small muted">Plans that allow privates</span>${ps.map(p=>`<label class="row small"><input type="checkbox" name="plan" value="${p.id}" style="width:auto;flex:none"${ids.includes(p.id)?" checked":""}> ${esc(p.name)} <span class="muted">· ${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}</span></label>`).join("")}`:`<p class="small muted">Add a membership plan above first.</p>`)}
+    <details class="learn small"><summary>Learn more</summary><p class="small muted">Access fee: only clients with no plan and no monthly fee pay it. To charge it to someone, set their monthly fee override to 0. Membership: they see how to join instead of Book. You can still add anyone to a private yourself from the slot in Schedule.</p></details>
     <div class="row"><button class="btn" type="submit">Save</button></div></form>`}
 function accessModeShow(form){const m=(form.querySelector("[name=mode]:checked")||{}).value;form.querySelectorAll("[data-acc]").forEach(x=>{x.hidden=x.dataset.acc!==m})}
 async function saveAccess(form){const mode=(form.querySelector("[name=mode]:checked")||{}).value||"none",body={mode},cur=API.me.gym.currency;
@@ -1615,7 +1674,7 @@ function rateChips(target){const rs=privRates();if(!rs.length)return "";
 function privatesPanel(){const pi=COACH.payInfo,cur=API.me.gym.currency||"ZAR",c=pi?pi.privateCents:null,ps=((COACH.roster&&COACH.roster.plans)||[]).filter(p=>p.active||p.privateCents!=null);
   const line=(a,b)=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span>${a}</span><b class="mono">${b}</b></div>`;
   return `<section class="panel stack" id="privates-panel"><h2 class="label">Private lessons</h2>
-    <p class="small">What a private costs each client. A pack lesson is used first, if they have one. Then members pay their plan's private price, and clients without a membership pay the price below. Without a membership means no plan and no monthly fee. With no price set, it's the slot's price. The price is fixed when they book: changing it later doesn't change privates already booked.</p>
+    ${learnMore("What a private costs. A pack lesson is used first.","Then members pay their plan's private price, and clients without a membership (no plan and no monthly fee) pay the price below. With no price set, it's the slot's price. The price is fixed when they book: changing it later doesn't change privates already booked.")}
     ${pi?`<form id="privpriceform" class="stack" novalidate><div class="row" style="flex-wrap:nowrap;align-items:flex-end"><label class="f" style="flex:1">Clients without a membership (${esc(cur)})<input id="pp-fee" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${c!=null?c/100:""}" placeholder="The slot's price"></label><button class="btn" type="submit">Save</button></div>${rateChips("pp-fee")}</form>`:`<p class="small muted">Loading…</p>`}
     <div class="stack" style="gap:0"><span class="small muted">Members, by plan</span>${ps.length?ps.map(p=>line(esc(p.name),p.privateCents!=null?esc(money(p.privateCents,cur)):`<span class="small muted">Slot price</span>`)).join(""):`<p class="small muted">No plans yet. Add one above, with its private lesson price.</p>`}
       ${ps.length?`<p class="small muted" style="margin-top:6px">Set a plan's private price with Edit, under Membership plans.</p>`:""}</div>
@@ -1940,10 +1999,10 @@ async function impReview(){const j=COACH.imp;if(!j||j.status!=="done")return;con
 /* ============ GETTING STARTED (new coaches) ============ */
 function welcomeSheet(){S.ui.sheet={k:"welcome"};S.ui.stack=[];
   openSheet(`${sheetHead("Welcome")}<div class="stack-lg"><h1>Welcome to JitsFlow</h1><p class="lead">${esc(API.me.gym.name)} is set up. Three things to know:</p>
-    <ol class="steps qrsteps"><li><span><b>Home</b> is your gym's day: classes, who's booked, and what needs you (payments to check, people who haven't paid, requests).</span></li>
-    <li><span><b>Members</b>: add your students one by one, from your phone's contacts, or paste a list. They don't need the app for you to track their plan and payments.</span></li>
-    <li><span><b>Getting started</b> on Home walks you through the rest, one tap at a time.</span></li></ol>
-    ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Home when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
+    <ol class="steps qrsteps"><li><span><b>Today</b> is your gym's day: classes, who's booked, and what needs you.</span></li>
+    <li><span><b>Members</b>: add students one by one, from your contacts, or paste a list. They don't need the app.</span></li>
+    <li><span><b>Getting started</b> on Today walks you through the rest.</span></li></ol>
+    ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Today when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
   api("PATCH","/coach/gym",{setup:{welcomed:true}}).then(j=>{API.me=j.me}).catch(()=>{})}
 function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roster)return "";
   if(COACH.payInfo===undefined&&isHead()){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{})}

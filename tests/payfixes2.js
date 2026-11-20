@@ -244,7 +244,7 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     ok((await pool.query("select status from payments where id=$1", [pid3])).rows[0].status === "pending", "Restore puts it back to be checked");
     await ev(cp, () => hideSheet());
     // Confirm, with Undo
-    await ev(cp, () => { COACH.moneyView = "payments"; render(); }); await cp.waitForTimeout(300);
+    await ev(cp, () => { COACH.moneyView = "month"; render(); }); await cp.waitForTimeout(300);
     await cp.tap(`.popcard[data-pop="${pid3}"] [data-a="popok"]`); await cp.waitForTimeout(900);
     ok(/Payment confirmed/.test(await toastTxt(cp)) && await ev(cp, () => /Undo/.test(document.querySelector('#toast [data-a="toastact"]').textContent)), "Confirm: an Undo toast");
     await cp.tap('#toast [data-a="toastact"]'); await cp.waitForTimeout(900);
@@ -262,10 +262,10 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     // ---------- 5. the member's screens update themselves ----------
     const pid5 = await proof(M.ivy, 85000);
     const fp = await phone(M.ivy); await fp.goto(BASE + "/app/#me"); await fp.waitForTimeout(1800);
-    await ev(fp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("me"); }); await fp.waitForTimeout(300);
-    ok(/Checking/.test(await ev(fp, () => document.querySelector(".feecard").innerText)), "Me: the fees card says Checking");
+    await ev(fp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("home"); }); await fp.waitForTimeout(1200);
+    ok(/Checking/.test(await ev(fp, () => document.querySelector(".feecard").innerText)) && await ev(fp, () => !!document.querySelector(".feecard .fd.checking")), "Home: the fees card says Checking, with the month's dot in Checking");
     await A("PATCH", `/coach/payments/${pid5}`, { status: "rejected", reason: "arrived" });
-    await ev(fp, () => go("home")); await fp.waitForTimeout(300); await ev(fp, () => { API.payAt = Date.now() - 60000; go("me"); }); await fp.waitForTimeout(1200);
+    await ev(fp, () => go("me")); await fp.waitForTimeout(300); await ev(fp, () => { API.payAt = Date.now() - 60000; go("home"); }); await fp.waitForTimeout(1200);
     ok(!/Checking/.test(await ev(fp, () => document.querySelector(".feecard").innerText)) && /R\s?850 due/.test(await ev(fp, () => document.querySelector(".feecard").innerText)), "the coach sets it aside, the member switches tabs: no longer Checking, without a reload");
     await A("POST", "/coach/payments", { userId: M.ivy.id, amountCents: 85000, paidOn: new Date().toISOString().slice(0, 10), method: "eft" });
     await fp.tap('.feecard [data-a="mypay"]'); await fp.waitForTimeout(1500);
@@ -313,7 +313,7 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     ok(/Checking your payment…/.test(await toastTxt(gp)), "Paystack still working on it: “Checking your payment…”");
     await gp.waitForTimeout(3500);
     ok(/still processing/.test(await toastTxt(gp)), "after the checks: it says it's still processing: " + (await toastTxt(gp)));
-    await ev(gp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("me"); }); await gp.waitForTimeout(300);
+    await ev(gp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("home"); }); await gp.waitForTimeout(1200);
     t = await ev(gp, () => document.querySelector(".feecard").innerText);
     ok(/Card payment processing \(R\s?200/.test(t) && /it shows here once Paystack confirms/i.test(t) && /Processing/.test(t), "the fees card shows it as processing: " + t);
     await shot(gp, "member-fees-processing.png", ".feecard");
@@ -321,7 +321,7 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     ok(/Card payment processing/.test(await sheetTxt(gp)) && /no need to pay again/i.test(await sheetTxt(gp)), "so does the Pay sheet");
     await gp.context().close();
     const cp2 = await phone(A); await cp2.goto(BASE + "/app/#coach-money"); await cp2.waitForTimeout(2200);
-    await ev(cp2, () => { COACH.moneyFilter = "all"; render(); }); await cp2.waitForTimeout(300); t = await appTxt(cp2);
+    await ev(cp2, () => { const d = document.querySelector('details[data-g="m-rest"]'); if (d) d.open = true; }); await cp2.waitForTimeout(300); t = await appTxt(cp2);
     await shot(cp2, "coach-money-processing.png", ".mrow");
     ok(/card payment of R\s?200 processing/.test(t) && /Processing/.test(t), "the coach's Money shows it as processing too");
     await cp2.context().close();

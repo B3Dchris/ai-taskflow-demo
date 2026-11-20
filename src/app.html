@@ -314,8 +314,6 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 #sync:not([data-s="err"]){display:none}
 .avatar{width:44px;height:44px;border-radius:50%;border:0;background:var(--blue);color:var(--on-blue);font-weight:700;font-size:16px;letter-spacing:.02em;display:grid;place-items:center;flex:none;padding:0}
 .top .row{flex-wrap:nowrap;margin-left:auto}
-.tip{display:flex;align-items:center;gap:10px;background:var(--blue-soft);color:var(--ink);border-radius:12px;padding:8px 6px 8px 14px;font-size:14px;margin-bottom:14px}
-.tip span{flex:1;min-width:0}.tip .tipx{flex:none;width:36px;height:36px;border:0;background:none;color:var(--ink-2);font-size:22px;line-height:1;border-radius:50%}
 .howpick{display:grid;gap:10px}
 .howbtn{display:grid;gap:4px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:18px 16px;min-height:84px;color:var(--ink)}
 .howbtn b{font-size:19px}.howbtn span{font-size:14px;color:var(--ink-2)}
@@ -608,9 +606,6 @@ a.btn{color:var(--ink)}
 .wday.sel,.mcell.sel{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}.wday.sel small,.wday.sel i{color:var(--on-primary)}
 
 /* tips */
-.tip{background:var(--surface);box-shadow:var(--sh-1);border:1px solid var(--edge);border-radius:var(--r-md);padding:8px 6px 8px 14px;color:var(--ink-2)}
-.tip::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--blue)}
-.tip .tipx{width:44px;height:44px}
 
 /* header */
 .top{padding-block:4px 12px}
@@ -831,6 +826,36 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .prgmv{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end}.prgmv .btn{min-width:44px;min-height:40px}
 .prgadd{border:1px dashed var(--line);border-radius:12px;padding:12px}.prgprev{display:flex;gap:10px;align-items:center}
 .prguse{width:100%;justify-content:flex-start;text-align:left;gap:10px;border-color:var(--blue);min-height:48px}.prguse b{overflow-wrap:anywhere}
+/* Simpler screens: tiles, a dot per month, rows with an avatar, rows that open a page */
+.pill.chk{background:var(--blue-soft);color:var(--blue)}.pill.plain{background:var(--surface-2);color:var(--ink-2)}
+.fpill{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.fpill i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+span.avatar{width:36px;height:36px;font-size:13px;background:var(--surface-2);color:var(--ink-2);cursor:default}
+.feecard .feeamt,#sheet .feeamt{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.feeamt>b.mono{font-family:var(--f-body);font-size:32px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.feeamt>b:not(.mono){font-size:17px}
+.feedots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.fd{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;border-radius:12px;background:var(--surface-2)}
+.fd i{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);background:transparent}.fd small{font-size:12px;color:var(--ink-2);font-weight:600}
+.fd.paid i{background:var(--good);border-color:var(--good)}.fd.due i{background:var(--bad);border-color:var(--bad)}.fd.checking i{background:var(--blue);border-color:var(--blue)}
+.fd.processing i{background:var(--warn);border-color:var(--warn)}.fd.due{background:var(--bad-soft)}.fd.due small{color:var(--bad)}
+.btn.full{width:100%}
+.mtiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mtile{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--surface);border:1px solid var(--edge);box-shadow:var(--sh-1);border-radius:var(--r-md);padding:10px 12px;min-width:0;color:var(--ink);font:inherit}
+.mtile b{font-family:var(--f-body);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15;overflow-wrap:anywhere}.mtile span{font-size:13px;color:var(--ink-2);line-height:1.2}
+.mtiles.money .mtile b{font-size:19px}
+.mtile.good{box-shadow:inset 0 3px 0 var(--good),var(--sh-1)}.mtile.bad{box-shadow:inset 0 3px 0 var(--bad),var(--sh-1)}.mtile.warn{box-shadow:inset 0 3px 0 var(--warn),var(--sh-1)}.mtile.chk{box-shadow:inset 0 3px 0 var(--blue),var(--sh-1)}
+button.mtile[aria-pressed="true"]{border-color:var(--blue);background:var(--blue-soft)}
+.memchips .chip{flex:none}
+.mav{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 3px var(--bc,var(--line));flex:none;letter-spacing:.02em}
+.trow.mem{grid-template-columns:36px minmax(0,1fr) auto}
+.mrow-main.withav{flex-direction:row;align-items:center;gap:10px}.mrow-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mrow.popcard,.mrow[id^="cardchk-"]{flex-wrap:wrap}.chkact{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:46px}.chkact .btn{min-height:36px}.mrow-side.rowside{flex-direction:row;align-items:center}
+.navrows{border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--edge);box-shadow:var(--sh-1);overflow:hidden}
+.navrow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 14px;color:var(--ink);font:inherit;min-height:52px}
+.navrow:first-child{border-top:0}.navrow>span:first-child{display:flex;flex-direction:column;gap:1px;min-width:0}.navrow .chev{font-size:22px;color:var(--ink-2)}
+.backlink{justify-self:start;align-self:flex-start;font-weight:700;padding:4px 0}.pageh{margin:0}
+details.learn>summary{color:var(--blue);font-weight:700;cursor:pointer;list-style:none;display:inline}details.learn>summary::-webkit-details-marker{display:none}details.learn[open]>summary{margin-bottom:4px}
+.weeklimit{display:flex;align-items:center;gap:8px;margin:0}
+.moneypage .mcol{grid-template-rows:64px auto}
+.payline{border-top:1px solid var(--line);padding-top:4px}.payline:first-child{border-top:0;padding-top:0}
 </style>
 
 <main class="wrap app" id="app"></main>
@@ -840,7 +865,7 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
   <button data-a="tab" data-v="learn"><svg viewBox="0 0 24 24"><path d="M4 5h11a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h6"/></svg>Learn</button>
   <button data-a="tab" data-v="journal"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4v3h6V4M9 12h6M9 16h4"/></svg>Journal</button>
   <button data-a="tab" data-v="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>Me</button>
-  <button data-a="tab" data-v="coach-home" hidden><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5h-6v5H4z"/></svg>Home</button>
+  <button data-a="tab" data-v="coach-home" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>Today</button>
   <button data-a="tab" data-v="coach-schedule" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Schedule</button>
   <button data-a="tab" data-v="coach-members" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Members</button>
   <button data-a="tab" data-v="coach-money" hidden><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/></svg>Money</button>
@@ -2147,22 +2172,8 @@ const initials=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);ret
 // Gym logo and name on the left; on the right a round initials button (Me for students, Gym for coaches). The save status only shows when something isn't saved.
 function header(){const g=API.me&&API.me.gym;
   const brand=g?`<div class="brand gymbrand">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gbl">`:""}<span><b>${esc(g.name)}</b><small>Powered by JitsFlow.com</small></span></div>`:`<div class="brand"><span class="mark" aria-hidden="true"></span>JitsFlow</div>`;
-  const who=API.me?`<button class="avatar" data-a="me" aria-label="${esc(initials(API.me.name))}: ${isCoach()?"your gym and account":"your account and settings"}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</button>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
-  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${pvBar()}${famBar()}${API.preview?"":tipBar()}`}
-/* First-visit tips: one line at the top of a tab saying what it's for. Each shows once: it's gone after you leave that tab
-   (per person, on this phone). Closing any tip turns them all off, so they don't pop up again on every tab. */
-const TIPS={home:"Your next class, anything you owe and one thing to study today.",classes:"Book group classes and private lessons. Tap a class to see who's going.",
-  learn:"Every move, the flow map and your belt goals. Switch between them at the top.",journal:"Your training journal. Log each session and JitsFlow works out what to study next.",
-  me:"Your account, payments, gym and settings.","coach-home":"What's on today and anything that needs you.","coach-schedule":"Add classes and private lessons. Students book them in the app.",
-  "coach-members":"Your students, who's training, and your competition team.","coach-money":"Who's paid, payments waiting for you, and how students pay you.","coach-gym":"Invite links, gym details, settings and your own training."};
-const TIP_SOLO="One thing to study today, your belt progress and your week plan."; // Home for someone with no gym: no classes or fees
-const tipKey=()=>S.ui.tab==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):S.ui.tab;
-const tipStore=()=>"jf.tips."+(API.me?API.me.id:"me");
-function tipSeen(k){if(!TIPS[k]||!document.querySelector("#app .tip")||document.getElementById("app").hidden)return;const t=lsGet(tipStore())||{};if(t[k]!==-1){t[k]=-1;lsSet(tipStore(),t)}}
-function tipBar(){const k=tipKey(),t=lsGet(tipStore())||{};if(!TIPS[k]||t[k]===-1||t["*"]===-1)return "";
-  return `<p class="tip" role="note"><span>${esc(k==="home"&&!(API.me&&API.me.gym)?TIP_SOLO:TIPS[k])}</span><button class="tipx" data-a="tipx" data-v="${k}" aria-label="Hide tips">×</button></p>`}
-function tipHide(k){const t=lsGet(tipStore())||{};t[k]=-1;t["*"]=-1;lsSet(tipStore(),t);const el=document.querySelector(".tip");if(el)el.remove();const h=document.querySelector("#app h1,#app h2");if(h){h.tabIndex=-1;h.focus()}}
-
+  const who=API.me?`<span class="avatar" role="img" aria-label="${esc(initials(API.me.name))}: signed in as ${esc(API.me.name)}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</span>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
+  return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${pvBar()}${famBar()}`}
 /* ============ VIEWS ============ */
 function viewToday(){
   autoLog();
@@ -2197,7 +2208,7 @@ function viewToday(){
   return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
   ${hero}
   ${isCoach()?`<button class="btn primary managebtn" data-a="coachmode" data-v="manage">Manage ${esc(API.me.gym.name)}</button>`:""}
-  ${typeof noticesCard==="function"?noticesCard():""}${typeof progHomeCard==="function"&&!isCoach()?progHomeCard():""}${nextClassCard()}${owes?feesCard():""}${lastClassCard()}${compTodayCard()}
+  ${typeof noticesCard==="function"?noticesCard():""}${typeof progHomeCard==="function"&&!isCoach()?progHomeCard():""}${inGym&&!isCoach()?feesCard():""}${nextClassCard()}${lastClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
     ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
     <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button></div></div></section>
@@ -2535,6 +2546,7 @@ function goBack(){const k=S.ui.sheet&&S.ui.sheet.k;
   if(k==="auth"&&REAUTH)return reauthDone(false);
   if(k==="onboard"||(k==="how"&&S.ui.sheet.step==="pick")){S.ui.fromHow=false;P().settings.onboarded=true;saveProgress();closeSheet();return}
   if(k==="outpro"){OUT.delAsk=null;return outreachSheet()}
+  if(k==="student"&&S.ui.sheet.from==="insights")return insightsSheet();
   if(typeof prgBack==="function"&&prgBack(k))return;
   if(k==="how"||(k==="auth"&&S.ui.fromHow&&!API.me))return howSheet(k==="auth"&&S.ui.authMode==="register"?"gym":"pick");
 const st=S.ui.stack||[];if(S.ui.sheet&&S.ui.sheet.k==="tech"&&st.length>1){st.pop();techSheet(st[st.length-1],true)}else closeSheet()}
@@ -2622,16 +2634,16 @@ function viewMe(){
   if(API.me&&API.me.gym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="me"&&!S.ui.sheet)render()})}
   const meName=API.me&&API.me.name,meGym=API.me&&API.me.gym&&API.me.gym.name;
   return `${header()}<div class="stack-lg"><section class="hero dk pagehero" aria-label="Me"><div class="hero-t"><span class="eyebrow">Me</span><h1>${meName?esc(meName):"Your settings"}</h1><p>${meGym?`Training at ${esc(meGym)}`:API.me?"Studying on your own":"Your account, belt, appearance and data"}</p></div></section>
+  ${API.me&&API.me.gym&&!isCoach()?`<div class="list navrows"><button class="navrow" data-a="mypay" id="mepay"><span><b>Payments and receipts</b><span class="small muted">${API.pay&&(API.pay.payments||[]).length?`${API.pay.payments.length} payment${API.pay.payments.length>1?"s":""}`:"History"}${API.pay&&(API.pay.packs||[]).length?" · packs":""}${API.pay&&API.pay.autopay?(API.pay.autopay.on?" · paid by card":" · pay automatically"):""}</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}
   ${accountSection()}
-  ${API.me&&API.me.gym&&!isCoach()&&API.pay?feesCard():""}
-  ${isCoach()?"":gymCard(false)}
+  ${isCoach()?"":gymCard(false,true)}
   ${studentWaSection()}
   ${appearanceSection()}
   <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on Home follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Home, ratings and focus blocks aim at.</p>
-  <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps, so I test myself first (one extra tap per move, better for remembering)</label></section>
-  <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2>${seg("Phone hand","hand",[["left","Left hand"],["right","Right hand"]],hand,"seg")}<p class="small muted">Back, Close and the Log button sit on this side so your thumb reaches them. Swipe right on any open page to go back.</p></section>
+  <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps</label></section>
+  <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2>${seg("Phone hand","hand",[["left","Left hand"],["right","Right hand"]],hand,"seg")}<p class="small muted">Back, Close and Log sit on this side.</p></section>
   <details class="more" data-g="set-hours"${(S.ui.openG||{})["set-hours"]?" open":""}><summary>Hours, targets and focus block</summary><div class="stack" style="padding-top:12px">
   <div class="grid2"><label class="f">Sessions per week<input id="s-pw" type="number" min="1" max="14" data-s="perWeek" value="${st.perWeek}"></label>
   <label class="f">Usual session (min)<input id="s-sm" type="number" min="30" max="300" data-s="sessionMins" value="${st.sessionMins}"></label>
@@ -2682,7 +2694,7 @@ function render(){
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
-  const was=tabHash(),wasTab=tipKey();if(r.tab!==S.ui.tab||r.cv&&r.cv!==COACH.view)tipSeen(wasTab);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
+  const was=tabHash();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
   render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()
   if(was!==tabHash()&&typeof payFresh==="function"){payFresh(30000);coachFresh(30000)}} // money a tab shows, if it's more than 30 s old
@@ -2697,7 +2709,7 @@ window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.g
   go(r.tab==="learn"&&!r.lv?"learn-moves":h||"home",true)});
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;const wk=tipKey();tipSeen(wk);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
@@ -2708,9 +2720,8 @@ document.addEventListener("click",e=>{
   const el=e.target.closest("[data-a]");if(!el)return;
   const a=el.dataset.a,v=el.dataset.v;
   switch(a){
-    case "tab": if(!document.getElementById("sheet").hidden)hideSheet(); go(v); break;
+    case "tab": if(!document.getElementById("sheet").hidden)hideSheet(); if(v==="coach-money")COACH.moneyView="month"; go(v); break; // a tab opens its main page (Setup and All payments are a row away)
     case "me": if(isCoach()){setCoachMode("manage");coachGo("gym")}else go("me"); break;
-    case "tipx": tipHide(v); break;
     case "how": howPick(v); break;
     case "open": techSheet(v); break;
     case "close": closeSheet(); break;
@@ -2731,14 +2742,16 @@ document.addEventListener("click",e=>{
     case "checkin": doCheckin(v);break;
     case "bookopen": bookSheet(v);break;
     case "bookview": S.ui.bookView=v;render();break;
-    case "segf": COACH.segFilter=v;render();break;
+    case "segf": COACH.segFilter=v;if(S.ui.sheet&&S.ui.sheet.k==="insights")insightsSheet(true);else render();break;
+    case "memfilter": COACH.memFilter=v;if(S.ui.tab==="coach"&&COACH.view==="members")render();else coachGo("members");break;
+    case "moreinsights": insightsSheet();break;
     case "msgnew": msgSheet(el.dataset.k,v.split(",").filter(Boolean));break;
     case "planedit": S.ui.planEdit=v||null;render();break;
     case "plansfromrates": api("POST","/coach/plans/from-rates",{}).then(async j=>{await coachLoad("roster");toast(`Added ${j.added} plan${j.added===1?"":"s"} from your website prices.`)}).catch(e=>toast(e.message));break;
     case "privnew": privSheet();break;
-    case "attendall": { const cd=S.ui.classData,ids=cd.attendees.filter(a=>a.going&&!a.attended).map(a=>a.id);api("PUT",`/coach/classes/${cd.class.id}/attendance`,{userIds:ids,attended:true}).then(()=>{cd.attendees.forEach(a=>{if(ids.includes(a.id))a.attended=true});drawClassSheet(true);toast(`Checked in ${ids.length}.`)}).catch(e=>toast(e.message));break }
-    case "coachview": case "coachgo": coachGo(v);break;
-    case "stuview": COACH.stuView=v;render();break;
+    case "attendall": markAllHere();break;
+    case "coachview": case "coachgo": if(S.ui.sheet)hideSheet();coachGo(v);break;
+    case "stuview": if(v==="insights")insightsSheet();else render();break;
     case "coachmode": setCoachMode(v);if(v==="study"){go("home");toast(`Your training. Tap Manage ${gymName()} on Home to go back.`);maybeOnboard()}else coachGo("home");break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
     case "classnewday": S.ui.cplan=null;classForm(null,v);break;
@@ -2842,14 +2855,14 @@ document.addEventListener("click",e=>{
     case "planpick": planPickSheet();break;
     case "bulkplan": {const b=S.ui.bulk;if(b){b.planOpen=!b.planOpen;bulkSheet()}break}
     case "paidhow": lsSet("jf.payMethod",v);render();break;
-    case "poprej": rejAsk(v);break;
+    case "poprej": if(!S.ui.sheet||S.ui.sheet.k!=="pop")popSheet(v);rejAsk(v);break;
     case "rejwhy": rejPick(v);break;
     case "rejback": rejBack();break;
     case "rejgo": el.disabled=true;rejGo(v).finally(()=>{el.disabled=false});break;
     case "payrestore": payRestore(v,el);break;
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
-    case "mypay": S.ui.payEft=false;myPaySheet();payFresh(0);break;
+    case "mypay": S.ui.payEft=false;if(API.pay)myPaySheet();else loadPay().then(()=>myPaySheet());payFresh(0);break;
     case "payeft": S.ui.payEft=!S.ui.payEft;myPaySheet();if(S.ui.payEft)setTimeout(()=>{const x=document.getElementById("payeft");if(x)x.scrollIntoView({behavior:"smooth",block:"start"})},60);break;
     case "poppaste": pasteProof();break;
     case "moneyview": COACH.moneyView=v;render();break;
