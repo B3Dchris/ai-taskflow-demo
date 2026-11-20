@@ -635,6 +635,18 @@ alter table autopay_charges add column if not exists provider text not null defa
 alter table autopay_charges add column if not exists ref text;
 -- When a payment's member deleted their account (their proofs of payment are deleted 90 days later; the payment stays for the gym).
 alter table payments add column if not exists user_gone_at timestamptz;
+-- A proof the head coach marked Not received: why (reject_reason: arrived, amount, member, other; reject_note: their words), when,
+-- and when the member was told (in the app and by email, a little after, so Undo can take it back first).
+alter table payments add column if not exists reject_reason text;
+alter table payments add column if not exists reject_note text;
+alter table payments add column if not exists rejected_at timestamptz;
+alter table payments add column if not exists reject_told_at timestamptz;
+-- When a payment was confirmed (a proof checked, or recorded by hand), and when its receipt went to the member (once, a little
+-- after, so Undo can take it back first).
+alter table payments add column if not exists confirmed_at timestamptz;
+alter table payments add column if not exists receipt_at timestamptz;
+-- A failed card refund the head coach dismissed on Home (coach_done_at), or tried again.
+alter table paystack_refunds add column if not exists coach_done_at timestamptz;
 -- Small secrets the app makes for itself, sealed (e.g. ads_feed: the Google Ads conversions file's password, backend/adsfeed.js).
 create table if not exists app_secrets(name text primary key, value text not null, updated_at timestamptz not null default now());
 -- Pages that actually opened in a browser (the page's own signal: backend/visits.js), next to the pages the server sent.
@@ -724,7 +736,7 @@ const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not e
 const SESSION_MAX_DAYS = 180;
 async function purgeRejected(pool) {
   const run = (sql) => pool.query(sql).catch((e) => console.warn("purge:", e.message));
-  await run("delete from payments where status='rejected' and created_at < now() - interval '30 days'");
+  await run("delete from payments where status='rejected' and coalesce(rejected_at, created_at) < now() - interval '30 days'");
   await run("delete from pop_files f using payments p where f.payment_id=p.id and p.user_id is null and p.user_gone_at < now() - interval '90 days'");
   await run("delete from left_owing where left_at < now() - interval '18 months'");
   await run("update site_visitors set click_id='' where click_id<>'' and day < current_date - 90");

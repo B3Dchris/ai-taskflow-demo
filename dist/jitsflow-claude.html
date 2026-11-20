@@ -276,7 +276,7 @@ details.grp .body{padding:0 14px 8px}
 .compcard{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:inherit;font:inherit;width:100%}
 .compcard.past{opacity:.7}.cc-date{display:grid;justify-items:center;align-content:start;background:var(--surface-2);border-radius:10px;padding:6px 0}.cc-date b{font-size:22px;line-height:1}.cc-date small{font-size:11px;text-transform:uppercase;color:var(--ink-2)}
 .cc-body{display:grid;gap:4px;min-width:0}.cc-body b{font-size:16px}.cc-body small{font-size:13px;color:var(--ink-2)}.cc-body .pill{justify-self:start}
-.warn-t{color:var(--warn)!important}.ok-t{color:var(--good)}
+.warn-t{color:var(--warn)!important}.bad-t{color:var(--bad)}.sess.gone{opacity:.62}.ok-t{color:var(--good)}
 .compbar{display:block;width:100%;text-align:left;border:1px dashed var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;font-weight:700}.compbar small{font-weight:500;color:var(--ink-2)}
 details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}details.more>summary{font-weight:700;cursor:pointer;min-height:32px;display:flex;align-items:center}
 .today-card{display:grid;gap:12px}
@@ -4368,9 +4368,10 @@ function beltSVG(pct,belt=goal()){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 /* #toast is a polite live region that's always there: hiding it only fades it out. The same message again is cleared first, so a screen reader reads it again.
-   A toast with Undo stays 10s, and waits while a finger or the keyboard is on it. */
-function toast(msg,act){const t=document.getElementById("toast"),put=()=>{t.textContent=msg;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`)};
-  clearTimeout(toast._s);toast._act=act?act.fn:null;toast._ms=act?10000:2800;
+   A toast with Undo stays 10s, and waits while a finger or the keyboard is on it. act.ms: how long it stays (one with no button,
+   like "Checking your payment…", can stay until the next toast replaces it). */
+function toast(msg,act){const t=document.getElementById("toast"),put=()=>{t.textContent=msg;if(act&&act.label)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`)};
+  clearTimeout(toast._s);toast._act=act&&act.label?act.fn:null;toast._ms=act&&act.ms||(act&&act.label?10000:2800);
   if(t.classList.contains("on")&&toast._msg===msg){t.textContent="";toast._s=setTimeout(put,60)}else put();toast._msg=msg;t.classList.add("on");toastWait()}
 function toastWait(){clearTimeout(toast._t);toast._t=setTimeout(toastHide,toast._ms)}
 function toastHide(){const t=document.getElementById("toast");clearTimeout(toast._t);t.classList.remove("on");t.textContent="";toast._act=null;toast._msg=null}
@@ -4918,7 +4919,8 @@ function render(){
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
   const was=tabHash(),wasTab=tipKey();if(r.tab!==S.ui.tab||r.cv&&r.cv!==COACH.view)tipSeen(wasTab);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
-  render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()}
+  render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()
+  if(was!==tabHash()&&typeof payFresh==="function"){payFresh(30000);coachFresh(30000)}} // money a tab shows, if it's more than 30 s old
 // The phone's Back button closes the open sheet, else goes back to the previous tab. A step left by a sheet that was closed in the app
 // changes nothing on screen, so it's skipped: every press of Back does something, and Back from the first screen leaves the app.
 window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.getElementById("sheet");
@@ -5075,10 +5077,14 @@ document.addEventListener("click",e=>{
     case "planpick": planPickSheet();break;
     case "bulkplan": {const b=S.ui.bulk;if(b){b.planOpen=!b.planOpen;bulkSheet()}break}
     case "paidhow": lsSet("jf.payMethod",v);render();break;
-    case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
+    case "poprej": rejAsk(v);break;
+    case "rejwhy": rejPick(v);break;
+    case "rejback": rejBack();break;
+    case "rejgo": el.disabled=true;rejGo(v).finally(()=>{el.disabled=false});break;
+    case "payrestore": payRestore(v,el);break;
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
-    case "mypay": S.ui.payEft=false;myPaySheet();break;
+    case "mypay": S.ui.payEft=false;myPaySheet();payFresh(0);break;
     case "payeft": S.ui.payEft=!S.ui.payEft;myPaySheet();if(S.ui.payEft)setTimeout(()=>{const x=document.getElementById("payeft");if(x)x.scrollIntoView({behavior:"smooth",block:"start"})},60);break;
     case "poppaste": pasteProof();break;
     case "moneyview": COACH.moneyView=v;render();break;
@@ -5134,7 +5140,8 @@ document.addEventListener("click",e=>{
     case "psverify": el.disabled=true;psVerify(v);break;
     case "psseen": (async()=>{const [k,id]=String(v).split(":");try{await api("POST",`/admin/paystack/${k}/${id}/seen`,{});await dashLoad()}catch(e){toast(e.message)}})();break;
     case "refundask": refundSheet(v);break;
-    case "refundyes": el.disabled=true;refundGo(v);break;
+    case "refundyes": refundGo(v,el);break;
+    case "refunddismiss": refundDismiss(v);break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;
@@ -5397,6 +5404,7 @@ async function acctInit(){
   const paid=qs.get("paid"),bill=qs.get("billing"),ap=qs.get("autopay"),pref=qs.get("reference")||qs.get("trxref");
   if(paid||bill||ap){try{const k=new URLSearchParams(location.search);["paid","billing","autopay","reference","trxref"].forEach(x=>k.delete(x));history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
     if(pref&&paid==="card")setTimeout(()=>psBack(pref,ap==="on"),300);
+    else if(paid==="cancel")setTimeout(()=>psCancelled(pref),300);
     else if(ap==="on")setTimeout(()=>{toast("Card saved. Your fees are paid automatically from now on. You'll get a receipt each time.");setTimeout(()=>loadPay().then(render),8000)},400);
     else if(paid==="card")setTimeout(()=>{toast("Thanks! Your payment shows as paid once PayFast confirms it, usually within a minute.");setTimeout(()=>loadPay().then(render),8000)},400);
     if(bill==="done")setTimeout(()=>{toast("Card saved with PayFast. Thanks!");COACH.bill=undefined;setTimeout(render,6000)},400);
@@ -5645,7 +5653,7 @@ async function coachLoad(what,around){
   if(all||what==="classes"){const base=fromYmd(around||(COACH.cal&&COACH.cal.anchor)||todayK()),f=new Date(base),t=new Date(base);f.setDate(f.getDate()-60);t.setDate(t.getDate()+100);
     jobs.push(api("GET",`/classes?from=${encodeURIComponent(f.toISOString())}&to=${encodeURIComponent(t.toISOString())}`).then(j=>{COACH.classes=j.classes;COACH.rFrom=f;COACH.rTo=t;API.classes=null;
       if(!COACH.roster&&S.ui.tab==="coach"&&COACH.view==="home")render()}))}
-  if((all||what==="payments")&&isHead())jobs.push(api("GET","/coach/payments").then(j=>{COACH.payments=j.payments}));
+  if((all||what==="payments")&&isHead())jobs.push(api("GET","/coach/payments").then(j=>{COACH.payments=j.payments;COACH.payAt=Date.now()}));
   if(all&&isHead())jobs.push(api("GET","/coach/packs").then(j=>{COACH.packs=j.packs}));
   try{await Promise.all(jobs)}catch(e){toast(e.message)}
   if(all||what==="payments"||what==="roster")COACH.money=null;
@@ -5679,7 +5687,7 @@ function coachStudents(){const sv=COACH.stuView==="insights"?"insights":"list";
 function coachMoney(){const v=COACH.moneyView||"month",pend=(COACH.payments||[]).filter(p=>p.status==="pending").length;
   return `${seg("Money view","moneyview",[["month","This month"],["payments",`Payments${pend?` (${pend})`:""}`],["setup","Setup"]],v)}
     ${v==="payments"?coachPayments():v==="setup"?`${moneySetup()}${plansPanel()}${privatesPanel()}`:moneyMonth()}`}
-async function loadMoney(month){COACH.moneyLoading=true;try{COACH.money=await api("GET","/coach/money"+(month?`?month=${month}`:""))}catch(e){toast(e.message)}COACH.moneyLoading=false;if(S.ui.tab==="coach"&&COACH.view==="money")render()}
+async function loadMoney(month){COACH.moneyLoading=true;try{COACH.money=await api("GET","/coach/money"+(month?`?month=${month}`:""));COACH.payAt=Date.now()}catch(e){toast(e.message)}COACH.moneyLoading=false;if(S.ui.tab==="coach"&&COACH.view==="money")render()}
 const monthLabel=m=>new Date(m+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
 const monthShift=(m,n)=>{const d=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7)-1+n,1));return d.toISOString().slice(0,7)};
 // This month: by their running balance (every month still owed), so someone who paid November but not October is Overdue, not Paid.
@@ -5687,6 +5695,7 @@ const monthShift=(m,n)=>{const d=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7)-1
 function moneyStatus(s,M){const cur=M.today.slice(0,7),now=M.month===cur&&s.owedCents!==undefined,left=now?s.owedCents:s.feeCents-s.paidCents;
   if(left<=0){if(now&&!s.feeCents&&!s.paidCents)return ["nofee",s.planStatus==="trial"?"Trial":s.pause?"Paused":s.billFrom?`From ${shortMon(s.billFrom)}`:s.planStatus==="cancelled"?"Cancelled":"No fee",""];
     return s.feeCents||s.paidCents?["paid","Paid","ok"]:["nofee","No fee",""]}
+  if(now&&s.cardProcessing)return ["checking","Processing","due"]; // a card payment Paystack hasn't confirmed yet: not Paid by hand, not reminded
   if(now?s.pendingAllCents:s.pendingCents)return ["checking","Checking","due"];
   const late=M.month<cur||(now&&(s.owedMonths||[]).some(o=>o.month<cur))||(M.month===cur&&Number(M.today.slice(8,10))>M.dueDay+6);return late?["late","Overdue","bad"]:s.paidCents?["part","Part paid","due"]:["due","Due","due"]}
 // "Oct + Nov" (or "Jun to Nov" for more than three months), and in full for messages: "October and November".
@@ -5747,7 +5756,7 @@ function moneyMonth(){
     ${quick?`<div class="row small" style="gap:8px">Tapping <b>Paid</b> records it today, paid by <span class="seg2" role="group" aria-label="Paid by" style="display:inline-flex"><button data-a="paidhow" data-v="cash" aria-pressed="${how==="cash"}">Cash</button><button data-a="paidhow" data-v="eft" aria-pressed="${how==="eft"}">EFT</button></span></div>`:""}
     ${shown.length?`<div class="list">${shown.map(s=>{const [k,l,tone]=s.status,back=isCur&&owesBack(s);
       return `<div class="mrow"><button class="mrow-main" data-a="student" data-v="${s.id}"><span class="nm">${esc(s.name)}${s.offline?` <span class="pill">Not on app</span>`:""}</span><span class="small muted">${[s.plan,back?owedTxt(s,cur):s.feeCents?`${money(s.paidCents,cur)} of ${money(s.feeCents,cur)}`:"",
-        isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",s.mailStopped?"stopped emails · WhatsApp instead":"",["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:"",s.lastPaid&&k!=="paid"?`last paid ${fmtDate(s.lastPaid)}`:""].filter(Boolean).map(esc).join(" · ")}</span></button>
+        isCur&&s.planStatus==="trial"&&s.trialEnds?`trial to ${fmtDate(s.trialEnds)}`:"",isCur&&s.pause?`paused ${s.pause.until?`to end of ${longMon(s.pause.until)}`:"until you restart it"}`:"",isCur&&s.billFrom?`billing starts ${longMon(s.billFrom)}`:"",isCur&&s.creditCents>0?`${money(s.creditCents,cur)} paid ahead`:"",isCur&&s.cardProcessing?`card payment of ${money(s.cardProcessing.cents,cur)} processing: it shows once Paystack confirms`:"",s.autopayFailed?"card payment didn't go through":s.autopayUnsure?"card payment not confirmed yet":s.autopay?"pays by card automatically":"",s.mailStopped?"stopped emails · WhatsApp instead":"",["due","late","part"].includes(k)&&s.remindedRecently?remindedTxt(s.remindedAt):"",(()=>{const fm=["due","late","part"].includes(k)&&famOwing(s,M);return fm&&fm[0].id!==s.id?`one reminder with ${first(fm[0].name)}`:""})(),s.accessCents?`access fee ${money(s.accessCents,cur)}`:"",s.privatesCents?`${privN(s.privates.length)} ${money(s.privatesCents,cur)}`:"",s.lastPaid&&k!=="paid"?`last paid ${fmtDate(s.lastPaid)}`:""].filter(Boolean).map(esc).join(" · ")}</span></button>
         <span class="mrow-side">${tone?`<span class="pill ${tone}">${esc(l)}</span>`:`<span class="small muted">${esc(l)}</span>`}${["due","late","part"].includes(k)?remindBtn(s,M):""}${quick&&["due","late","part"].includes(k)?`<button class="btn sm" data-a="paidnow" data-v="${s.id}" aria-label="${esc(s.name)} paid ${esc(money(paidAmount(s),cur))}">Paid</button>`:""}</span></div>`}).join("")}</div>`
       :`<div class="empty">${f==="owing"?(billed.length?(isCur?"Nobody owes anything.":"Everyone's paid for this month."):"No fees set yet. Add membership plans under Setup and put students on them."):"Nobody here."}</div>`}
     ${(M.left||[]).length?`<h2 class="label">Left the gym</h2><div class="list">${M.left.map(x=>`<div class="mrow"><span class="mrow-main"><span class="nm">${esc(x.name)}</span><span class="small muted">Left ${esc(fmtDate(x.leftOn))}</span></span><span class="mrow-side"><span class="pill bad">Left · owes ${esc(money(x.owedCents,cur))}</span></span></div>`).join("")}</div>`:""}
@@ -5824,6 +5833,11 @@ function coachToday(){
     asking&&item("warn",`<b>${asking}</b> asking to compete`,"coachgo","comps","Review"),
     ...full.slice(0,3).map(c=>item("warn",`<b>${esc(c.title)}</b> ${esc(dayLabel(c.startsAt).toLowerCase())} ${esc(fmtTime(c.startsAt))} is full with ${c.waiting} waiting`,"classopen",c.id,"Open")),
     isHead()&&pendN&&item("warn",`<b>${pendN}</b> payment${pendN>1?"s":""} to check`,"moneygo","payments","Check"),
+    // Card refunds that failed (until tried again or dismissed), and chargebacks still open: what's at stake and the next step.
+    ...(isHead()?(COACH.payments||[]).filter(p=>p.source==="paystack"&&psFailed(p)).slice(0,3).map(p=>{const f=psFailed(p),nm=(ppl.find(x=>x.id===p.userId)||{}).name||"a member";
+      return `<div class="insight warn" id="needrefund-${esc(p.id)}"><div class="stack" style="gap:8px"><span><b>Refund of ${money(f.cents,p.currency)} to ${esc(first(nm))} failed</b>${f.reason?`: ${esc(f.reason)}`:""}. Nothing was refunded.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-a="refundask" data-v="${esc(p.id)}:retry">Try again</button><button class="btn sm" data-a="refunddismiss" data-v="${esc(p.id)}:${esc(f.id)}">Dismiss</button></span></div></div>`}):[]),
+    ...(isHead()?(COACH.payments||[]).filter(p=>p.chargeback&&p.chargeback.status==="open").slice(0,3).map(p=>{const cb=p.chargeback,nm=(ppl.find(x=>x.id===p.userId)||{}).name||"a member";
+      return item("warn",`<span id="needcb-${esc(p.id)}"><b>Chargeback: ${money(cb.cents,p.currency)} from ${esc(first(nm))}</b>${cb.dueAt?`, answer by ${esc(dayMon(cb.dueAt))}`:""}. Our team answers Paystack; we'll email you if we need proof.</span>`,"moneygo","payments","See")}):[]),
     isHead()&&due.length&&item("warn",`<b>${due.length}</b> owe fees · ${money(due.reduce((a,p)=>a+p.owedCents,0),COACH.roster.currency)}`,"moneygo","month","See who"),
     // A trial that's run out: one tap to keep them (fees start this month) or to cancel.
     ...(isHead()?ppl.filter(p=>p.active&&p.planStatus==="trial"&&p.trialEnds&&p.trialEnds<t).slice(0,3).map(p=>`<div class="insight warn"><div class="row between" style="gap:10px"><span><b>${esc(first(p.name))}'s</b> trial ended.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-a="trialset" data-v="${p.id}:active" aria-label="Make ${esc(p.name)} active">Make active</button><button class="btn sm" data-a="trialset" data-v="${p.id}:cancelled" aria-label="Cancel ${esc(p.name)}'s membership">Cancel</button></span></div></div>`):[]),
@@ -6118,7 +6132,7 @@ async function studentSheet(id){
       <label class="row small"><input id="s-active" name="active" type="checkbox"${s.active?" checked":""}> Active student</label></form>
     ${s.role==="student"?privSection(j.privates,s):""}
     ${isHead()?`<section class="stack"><div class="row between"><h2 class="label">Payments</h2><button class="btn" data-a="paynew" data-v="${s.id}">Record payment</button></div>
-      ${j.payments.length?`<div class="list">${j.payments.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><span class="small muted">${esc(fmtDate(p.paidOn))}${coversText(p)}</span></div>${p.packName||p.packLessons?`<span class="small">${esc(packText(p))}</span>`:""}${p.reference?`<span class="small muted">${esc(p.reference)}</span>`:""}</div>`).join("")}</div>`:`<div class="empty">No payments recorded.</div>`}</section>`:""}
+      ${j.payments.length?`<div class="list">${j.payments.map(p=>p.status==="rejected"?goneRow(p,s.name):`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><span class="small muted">${esc(fmtDate(p.paidOn))}${coversText(p)}</span></div>${p.packName||p.packLessons?`<span class="small">${esc(packText(p))}</span>`:""}${p.reference?`<span class="small muted">${esc(p.reference)}</span>`:""}</div>`).join("")}</div>`:`<div class="empty">No payments recorded.</div>`}</section>`:""}
     ${(j.classes||[]).length?`<section class="stack"><h2 class="label">Recent classes</h2><div class="list">${j.classes.slice(0,8).map(x=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:6px"><span>${x.kind==="private"?"🔒 ":""}${esc(x.title)}</span><span class="small muted">${esc(fmtWhen(x.startsAt))}${x.attended?" · ✓":""}</span></div>`).join("")}</div></section>`:""}
     ${!s.offline&&s.role==="student"?`<button class="linkbtn small" style="color:var(--ink-2);justify-self:start" data-a="studelask" data-v="${s.id}">Remove ${esc(first(s.name))} from your gym</button>`:""}
     <section class="stack"><h2 class="label">Recent sessions</h2>${j.logs.length?j.logs.slice(0,8).map(l=>`<div class="sess"><b>${esc(fmtDate(l.date))} · ${esc(l.type||"Class")}</b><span class="small muted">${Number(l.mins)||0} min · ${Number(l.rolls)||0} rolls${(l.tapped||[]).filter(i=>TM[i]).length?" · tapped by "+l.tapped.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", "):""}</span>${l.fix?`<span class="small">Fix: ${esc(l.fix)}</span>`:""}</div>`).join(""):`<div class="empty">No sessions logged yet.</div>`}</section>
@@ -6212,7 +6226,7 @@ async function popAll(){const ids=(COACH.payments||[]).filter(popReady).map(p=>p
 function coachPayments(){
   const ps=COACH.payments||[],cur=COACH.roster.currency,ppl=students(),byId=Object.fromEntries((COACH.roster.people||[]).map(p=>[p.id,p])),ready=ps.filter(popReady);
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
-  const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},ok=ps.filter(p=>p.status==="confirmed"),pend=ps.filter(p=>p.status==="pending"),recent=ps.filter(p=>p.userId&&(p.status==="confirmed"||p.status==="test"||p.status==="refunded"));
+  const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},ok=ps.filter(p=>p.status==="confirmed"),pend=ps.filter(p=>p.status==="pending"),recent=ps.filter(p=>p.userId&&(p.status==="confirmed"||p.status==="test"||p.status==="refunded")),gone=ps.filter(p=>p.status==="rejected");
   const mStart=new Date();mStart.setDate(1);const mk=ds(mStart);const month=ok.filter(p=>p.paidOn>=mk);
   const due=ppl.filter(p=>p.active&&owing(p)),unmatched=ok.filter(p=>!p.userId),og=S.ui.openG||{};
   return `<section class="stack"><div class="stats"><div class="stat"><b>${money(month.reduce((s,p)=>s+p.amountCents,0),cur)}</b><span>This month</span></div><div class="stat"><b>${ppl.filter(p=>p.active&&owesFees(p)&&!owing(p)).length}</b><span>Paid</span></div><div class="stat"><b>${due.length}</b><span>Due</span></div></div>
@@ -6223,11 +6237,25 @@ function coachPayments(){
     <p class="small muted" style="margin-top:-6px">Upload a PDF or screenshot someone sent you. JitsFlow reads the amount, date and reference and finds the student; you confirm.</p>
     ${unmatched.length?`<h2 class="label">Not matched to a student (${unmatched.length})</h2><div class="list">${unmatched.map(p=>`<div class="sess"><div class="row between"><b>${money(p.amountCents,p.currency)}</b><span class="small muted">${esc(fmtDate(p.paidOn))}</span></div><span class="small muted">${esc(p.reference||p.emailSubject||"")}</span><select data-assign="${p.id}" aria-label="Assign to a student"><option value="">Assign to…</option>${ppl.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>`).join("")}</div>`:""}
     ${due.length?`<h2 class="label">Owing</h2><div class="list">${due.map(p=>`<button class="trow" data-a="student" data-v="${p.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="nm">${esc(p.name)}</span><span class="meta">${esc(owedTxt(p,cur))}${p.pendingThisMonthCents?` · ${money(p.pendingThisMonthCents,cur)} to check`:""}</span></span><span class="pill due">${p.pendingThisMonthCents?"Checking":"Due"}</span></button>`).join("")}</div>`:""}
-    <h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.slice(0,40).map(p=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.packLessons?" · "+esc(packText(p)):coversText(p)}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":p.source==="student"?" · sent in the app":""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${p.source==="paystack"?psLine(p):""}${p.family?`<span class="small">Part of a family payment of ${money(p.family.totalCents,p.currency)} · <button class="linkbtn small" data-a="payunsplit" data-v="${esc(p.family.of)}">Undo split</button></span>`:""}</div>`,{del:["paydelask",p.id]})).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}</section>`;
+    <h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.slice(0,40).map(p=>swipeWrap(`<div class="sess"><div class="row between"><b>${esc((byId[p.userId]||{}).name||"Former student")}${p.status==="test"?` <span class="pill">TEST</span>`:""}</b><b class="mono">${money(p.amountCents,p.currency)}</b></div><span class="small muted">${esc(fmtDate(p.paidOn))}${p.packLessons?" · "+esc(packText(p)):coversText(p)}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.reference?" · "+esc(p.reference):""}${p.source==="email"?" · from email":p.source==="student"?" · sent in the app":""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${p.source==="paystack"?psLine(p):""}${p.family?`<span class="small">Part of a family payment of ${money(p.family.totalCents,p.currency)} · <button class="linkbtn small" data-a="payunsplit" data-v="${esc(p.family.of)}">Undo split</button></span>`:""}</div>`,{del:["paydelask",p.id]})).join("")}</div>`:`<div class="empty">No payments recorded yet.</div>`}
+    ${gone.length?`<h2 class="label">Not received (${gone.length})</h2><p class="small muted" style="margin-top:-6px">Proofs you set aside in the last 30 days. If the money turns up, restore it and confirm it.</p><div class="list">${gone.map(p=>goneRow(p,(byId[p.userId]||{}).name)).join("")}</div>`:""}</section>`;
 }
+// A proof marked Not received (Payments, and the member's sheet): greyed, with why, and Restore.
+const goneRow=(p,name)=>`<div class="sess gone" data-gone="${esc(p.id)}"><div class="row between"><b>${esc(name||(p.userId?"Former student":"No student"))}</b><b class="mono">${p.amountCents?money(p.amountCents,p.currency):"No amount"}</b></div>
+  <span class="small muted">${esc(fmtDate(p.paidOn))} · Not received${rejLine(p)?` · ${esc(rejLine(p))}`:""}${p.hasProof?` · <a href="/api/payments/${p.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>
+  <button class="linkbtn small" style="align-self:flex-start" data-a="payrestore" data-v="${esc(p.id)}">Restore</button></div>`;
 // A card payment through Paystack, in Money: its fees, a refund (done or on its way), a chargeback, and Refund.
-function psLine(p){const c=p.currency,bits=[p.feeCents?`JitsFlow fee ${money(p.feeCents,c)}`:"",p.pspFeeCents?`Paystack fee ${money(p.pspFeeCents,c)}`:"",p.refundedCents?`${money(p.refundedCents,c)} refunded`:""].filter(Boolean);
-  return `<span class="small">${p.status==="refunded"?`<span class="pill">Refunded</span> `:""}${p.dispute==="open"?`<span class="pill due">Disputed</span> `:p.dispute==="lost"?`<span class="pill bad">Chargeback lost</span> `:p.dispute==="won"?`<span class="pill ok">Dispute won</span> `:""}${esc(bits.join(" · "))}${p.refundPending?`${bits.length?" · ":""}refund on its way`:(p.status==="confirmed"||p.status==="test")&&!p.dispute?`${bits.length?" · ":""}<button class="linkbtn small" data-a="refundask" data-v="${esc(p.id)}">Refund</button>`:""}</span>`}
+// A refund that failed says so plainly, with why and Try again (until it's tried again or dismissed). A chargeback says how much is
+// at risk, by when it's answered, and what happens next.
+const psFailed=p=>{const rs=p.refunds||[],last=rs[rs.length-1];return last&&last.status==="failed"&&!last.dismissed?last:null};
+const dayMon=d=>new Date(d).toLocaleDateString(undefined,{day:"numeric",month:"short"});
+function cbLine(p){const cb=p.chargeback,c=p.currency;if(!cb)return "";
+  if(cb.status==="open")return `<span class="small cbline"><span class="pill bad">Chargeback</span> <b>${money(cb.cents,c)} at risk</b>${cb.dueAt?` · answer by ${esc(dayMon(cb.dueAt))}`:""}<br><span class="muted">The member asked their bank for this money back. Our team answers Paystack for you, and emails you if we need proof (like their attendance).</span></span>`;
+  if(cb.status==="lost")return `<span class="small cbline"><span class="pill bad">Chargeback lost</span> The bank gave ${money(cb.cents,c)} back to the member, so it no longer counts as paid and they owe it again.</span>`;
+  return `<span class="small cbline"><span class="pill ok">Chargeback won</span> You keep it.</span>`}
+function psLine(p){const c=p.currency,bits=[p.feeCents?`JitsFlow fee ${money(p.feeCents,c)}`:"",p.pspFeeCents?`Paystack fee ${money(p.pspFeeCents,c)}`:"",p.refundedCents?`${money(p.refundedCents,c)} refunded`:""].filter(Boolean),f=psFailed(p);
+  const can=(p.status==="confirmed"||p.status==="test")&&p.dispute!=="open"&&p.dispute!=="lost"&&(p.refundLeftCents===undefined||p.refundLeftCents>0);
+  return `${cbLine(p)}${f?`<span class="small refundfail"><b class="bad-t">Refund of ${money(f.cents,c)} failed${f.reason?`: ${esc(f.reason)}`:""}.</b> Nothing was refunded.${can?` <button class="linkbtn small" data-a="refundask" data-v="${esc(p.id)}:retry">Try again</button>`:""} <button class="linkbtn small" data-a="refunddismiss" data-v="${esc(p.id)}:${esc(f.id)}">Dismiss</button></span>`:""}<span class="small">${p.status==="refunded"&&p.dispute!=="lost"?`<span class="pill">Refunded</span> `:""}${esc(bits.join(" · "))}${p.refundPending?`${bits.length?" · ":""}refund on its way`:can&&!f?`${bits.length?" · ":""}<button class="linkbtn small" data-a="refundask" data-v="${esc(p.id)}">Refund</button>`:""}</span>`}
 const ordinal=d=>`${d}${d===1||d===21?"st":d===2||d===22?"nd":d===3||d===23?"rd":"th"}`;
 function moneySetup(){const pi=COACH.payInfo,bank=(pi&&pi.pay)||{},og=S.ui.openG||{};
   if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach")render()}).catch(()=>{})}
@@ -6268,12 +6296,38 @@ function popSheet(id){const p=(COACH.payments||[]).find(x=>x.id===id);if(!p)retu
       <label class="f" id="pop-cov-pick" hidden>Covers<select id="pop-months" name="months">${coverOpts(n)}</select></label></div>
     <div class="grid2"><label class="f">Method<select name="method">${Object.entries(PMETH).map(([k,l])=>`<option value="${k}"${k===(p.method||"eft")?" selected":""}>${l}</option>`).join("")}</select></label><label class="f">Reference<input name="ref" value="${esc(p.reference||"")}"></label></div>
     ${packPick("pop-pack",p.packId)}
-    <label class="f">Note<input name="note" value="${esc(p.note||"")}"></label></form>`,false,{act:`<button class="btn danger" data-a="poprej" data-v="${p.id}">Not a payment</button><button class="btn primary grow" type="submit" form="popform">Confirm payment</button>`})}
+    <label class="f">Note<input name="note" value="${esc(p.note||"")}"></label></form>`,false,{act:`<button class="btn danger" data-a="poprej" data-v="${p.id}">Not received</button><button class="btn primary grow" type="submit" form="popform">Confirm payment</button>`})}
 async function savePop(form,status){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
   const pk=form.querySelector("[name=pack]"),cv=document.getElementById("pop-covers");
   try{const j=await api("PATCH",`/coach/payments/${v("id")}`,{userId:v("user")||null,amountCents:Math.round(Number(v("amount"))*100)||0,paidOn:v("date"),method:v("method"),reference:v("ref"),note:v("note"),status:status||"confirmed",...(pk?{packId:pk.value||null}:{}),...(cv&&!cv.hidden?{months:Number(v("months")||1)}:{})});
-    hideSheet();await coachLoad();status==="rejected"?toast("Marked as not a payment."):splitToast("Payment confirmed.",j)}catch(e){toast(e.message)}}
-async function popQuick(id,status){try{const j=await api("PATCH",`/coach/payments/${id}`,{status});await coachLoad();status==="confirmed"?splitToast("Payment confirmed.",j):toast("Marked as not a payment.")}catch(e){toast(e.message)}}
+    hideSheet();await coachLoad();confirmToast(j)}catch(e){toast(e.message)}}
+async function popQuick(id,status){try{const j=await api("PATCH",`/coach/payments/${id}`,{status});await coachLoad();confirmToast(j)}catch(e){toast(e.message)}}
+// Confirmed, with Undo (back under To check; a family payment's shares come back with it). The member's receipt goes a little
+// later, so Undo comes first.
+function confirmToast(j){const p=j&&j.payment,cur=(COACH.roster||{}).currency;if(!p)return toast("Payment confirmed.");
+  toast("Payment confirmed."+splitTxt(j.split,cur),{label:"Undo",fn:async()=>{try{await api("PATCH",`/coach/payments/${p.id}`,{status:"pending"});await coachLoad();toast("Undone. It's back under To check.")}catch(e){toast(e.message)}}})}
+/* Not received: a proof the money for didn't come (or not all of it, or not from them). The head coach picks why (and can add a
+   note) right there in the sheet, then it's set aside with Undo. The member is told why in the app and by email, with a link
+   to send a new proof; it stays on the coach's lists, greyed, for 30 days, with Restore. */
+const REJ_WHY=[["arrived","Money hasn't arrived"],["amount","Wrong amount"],["member","Not this member's"],["other","Other"]];
+const REJ_TXT={arrived:"money hasn't arrived",amount:"wrong amount",member:"not this member's",other:""};
+const rejLine=p=>[REJ_TXT[p.rejectReason]||"",p.rejectNote?`“${p.rejectNote}”`:""].filter(Boolean).join(" · ");
+function rejAsk(id){const sb=document.getElementById("sheetbar"),w=sb&&sb.querySelector(".wrap");if(!w)return;S.ui.rej={id,why:"",bar:w.innerHTML};
+  w.innerHTML=`<div class="rejpick stack" id="rejpick" style="gap:8px;padding-bottom:8px"><b class="small">Why wasn't it received?</b><div class="chips" role="group" aria-label="Why">${REJ_WHY.map(([k,l])=>`<button type="button" class="chip" data-a="rejwhy" data-v="${k}" aria-pressed="false">${l}</button>`).join("")}</div>
+    <label class="f small">Note for them (optional)<input id="rej-note" maxlength="300" placeholder="e.g. I can only see R500 from you"></label></div>
+    <div class="main"><button class="btn back" data-a="rejback">Back</button><button class="btn danger grow" data-a="rejgo" data-v="${esc(id)}">Mark as not received</button></div>`;
+  const c=w.querySelector('[data-a="rejwhy"]');if(c)c.focus()}
+function rejPick(k){if(!S.ui.rej)return;S.ui.rej.why=k;document.querySelectorAll('#rejpick [data-a="rejwhy"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===k)));
+  if(k==="other"){const n=document.getElementById("rej-note");if(n)n.focus()}}
+function rejBack(){const R=S.ui.rej,w=document.querySelector("#sheetbar .wrap");if(R&&w)w.innerHTML=R.bar;S.ui.rej=null}
+async function rejGo(id){const R=S.ui.rej||{},note=((document.getElementById("rej-note")||{}).value||"").trim();if(!R.why){toast("Pick why it wasn't received.");return}
+  const p=(COACH.payments||[]).find(x=>x.id===id),nm=p&&p.userId&&(students().find(x=>x.id===p.userId)||{}).name;
+  try{await api("PATCH",`/coach/payments/${id}`,{status:"rejected",reason:R.why,reasonNote:note});S.ui.rej=null;hideSheet();await coachLoad();
+    toast(`Marked as not received.${nm?` We'll tell ${first(nm)} why.`:""}`,{label:"Undo",fn:()=>payRestore(id)})}catch(e){toast(e.message)}}
+// Undo, or Restore later (Payments, or the member's sheet): back under To check, and the member isn't told (or no more than they were).
+async function payRestore(id,btn){if(btn)btn.disabled=true;
+  try{await api("PATCH",`/coach/payments/${id}`,{status:"pending"});await coachLoad();if(S.ui.sheet&&S.ui.sheet.k==="student")studentSheet(S.ui.sheet.id);toast("Restored. It's back under To check.")}
+  catch(e){toast(e.message);if(btn)btn.disabled=false}}
 
 /* ----- students: fees and paying by EFT ----- */
 // Leaving the gym. Someone who still owes is told how much first, with Pay now or Leave anyway (the coach still sees it in Money).
@@ -6283,17 +6337,34 @@ async function leaveSheet(){if(!API.pay)await loadPay();const p=API.pay,g=esc((A
   S.ui.sheet={k:"confirm"};S.ui.stack=[];
   openSheet(`${sheetHead("Leave your gym?")}<div class="stack-lg"><h1>Leave your gym?</h1><p class="insight warn"><b>You still owe ${money(owe,p.currency)} to ${g}.</b></p><p>${keep}</p></div>`,false,
     {act:`<button class="btn danger grow" data-a="leavegymyes">Leave anyway</button><button class="btn primary grow" data-a="mypay">Pay now</button>`})}
-async function loadPay(){if(!API.me||!API.me.gym||isCoach())return;try{API.pay=(await api("GET","/me/pay")).pay}catch(e){}}
+async function loadPay(){if(!API.me||!API.me.gym||isCoach())return;try{API.pay=(await api("GET","/me/pay")).pay;API.payAt=Date.now()}catch(e){}}
+/* Money screens stay current while the app is open (a coach confirms a proof, a card payment lands): a member's fees are asked for
+   again when the app comes back into view or they switch tabs, once they're more than 30 seconds old, and every time the Pay sheet
+   opens (what's known shows first, then it's updated in place). The head coach's Money and Payments the same way. One request at a
+   time; nothing is redrawn while someone's typing, or when nothing changed. */
+function payFresh(maxAge){if(!API.me||!API.me.gym||isCoach()||API.payBusy||!API.pay)return;if(maxAge&&Date.now()-(API.payAt||0)<maxAge)return;
+  const was=JSON.stringify(API.pay);API.payBusy=true;
+  loadPay().finally(()=>{API.payBusy=false;if(JSON.stringify(API.pay||null)===was)return;const sh=S.ui.sheet,a=document.activeElement,typing=a&&a.matches&&a.matches("input,textarea,select");
+    if(sh&&sh.k==="mypay"){if(!typing&&!document.getElementById("sheet").hidden)myPaySheet(true)}
+    else if(document.getElementById("sheet").hidden&&["home","me","classes"].includes(S.ui.tab))render()})}
+function coachFresh(maxAge){if(!API.me||!isHead()||COACH.payBusy||!COACH.payments||Date.now()-(COACH.payAt||0)<maxAge)return;COACH.payBusy=true;const M=COACH.money;
+  Promise.all([api("GET","/coach/payments").then(j=>{COACH.payments=j.payments;COACH.payAt=Date.now()}),M?api("GET","/coach/money"+(M.month&&M.month!==M.today.slice(0,7)?`?month=${M.month}`:"")).then(j=>{if(COACH.money===M)COACH.money=j}):null])
+    .catch(()=>{}).finally(()=>{COACH.payBusy=false;if(S.ui.tab==="coach"&&document.getElementById("sheet").hidden){const a=document.activeElement;if(!(a&&a.matches&&a.matches("input,textarea,select")))render()}})}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="visible")return;payFresh(30000);coachFresh(30000)});
 // What a student still has to pay: every month still owed (their running balance), less what their coach is checking.
 const myOwed=p=>!p?0:Math.max(0,(p.owedCents!==undefined?p.owedCents:p.dueCents-p.paidCents)-(p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents));
-const PSTAT={pending:["Checking","due"],confirmed:["Received","ok"],rejected:["Not accepted",""],test:["TEST",""],refunded:["Refunded",""]};
+const PSTAT={pending:["Checking","due"],confirmed:["Received","ok"],rejected:["Not received","bad"],test:["TEST",""],refunded:["Refunded",""]};
+// Under a payment in the member's own list: why a proof wasn't received (and what to do), or a card payment their bank took back.
+const REJ_MINE={arrived:"The money hasn't arrived in your gym's account yet.",amount:"The amount doesn't match what arrived.",member:"It looks like someone else's payment.",other:""};
+const payNote=x=>x.status==="rejected"?`<span class="small rejnote">${esc(REJ_MINE[x.rejectReason]||"")}${x.rejectNote?` Your coach says: “${esc(x.rejectNote)}”`:""} If you've paid, send a new proof of payment.</span>`
+  :x.dispute==="lost"?`<span class="small">Your bank gave this payment back to you, so it no longer counts as paid.</span>`:"";
 const fullDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
 // A parent's family (brothers and sisters who share them) when another kid owes too: the family total and a line per kid.
 const famPay=p=>{const f=p&&p.family;return f&&f.totalCents>0&&f.kids.some(k=>!k.me&&k.owedCents>0)?f:null};
 const famLine=(f,cur)=>`Family total: <b>${money(f.totalCents,cur)}</b> (${f.kids.filter(k=>k.owedCents>0).map(k=>`${esc(first(k.name))} ${money(k.owedCents,cur)}`).join(" · ")}).`;
 function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!back&&termOwed(p),all=p.owedCents!==undefined?p.owedCents:Math.max(0,p.dueCents-p.paidCents),left=td||all,cur=p.currency,b=p.bank||{},ready=!!(b.account||b.link);
   const mon=new Date().toLocaleDateString(undefined,{month:"long"}),ms=(p.owedMonths||[]).map(o=>o.month),pend=p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents;
-  const state=!p.dueCents&&!all?(p.planStatus==="trial"?`<span class="pill">Free trial</span>`:""):left<=0?`<span class="pill ok">Paid</span>`:pend?`<span class="pill due">Checking</span>`:`<span class="pill due">${money(left,cur)} due</span>`;
+  const pr=procOf(p),state=pr&&left>0?`<span class="pill due">${pr.now?"Checking":"Processing"}</span>`:!p.dueCents&&!all?(p.planStatus==="trial"?`<span class="pill">Free trial</span>`:""):left<=0?`<span class="pill ok">Paid</span>`:pend?`<span class="pill due">Checking</span>`:`<span class="pill due">${money(left,cur)} due</span>`;
   return `<section class="panel stack feecard"><div class="row between"><h2 class="label">Fees · ${esc(mon)}</h2>${state}</div>
     ${p.plans&&p.plans.length&&!p.plan?`<p class="small"><b>Pick your plan</b> to start your membership.</p><button class="btn primary" data-a="planpick">Pick your plan</button>`:""}
     <p class="small">${back?`You owe <b>${money(all,cur)}</b> for ${esc(monthsLong(ms))}${pend?`, ${money(pend,cur)} being checked by your coach`:""}.`
@@ -6303,9 +6374,9 @@ function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!b
       :p.pause&&!p.dueCents?`Your membership is paused${p.pause.until?` to the end of ${esc(longMon(p.pause.until))}`:""}. No fees until then.`
       :p.billFrom&&!p.dueCents?`Your fees in the app start in ${esc(longMon(p.billFrom))}.`
       :p.dueCents?`${money(p.paidCents,cur)} of ${money(p.dueCents,cur)} paid${p.pendingCents?`, ${money(p.pendingCents,cur)} being checked by your coach`:""}.`:"Your coach hasn't set a fee for you."} Your payment reference: <b class="mono">${esc(p.reference)}</b></p>
-    ${p.creditCents>0?`<p class="small">You've paid <b>${money(p.creditCents,cur)}</b> ahead.</p>`:""}${autoLine(p)}${famPay(p)?`<p class="small">${famLine(famPay(p),cur)}</p>`:""}
+    ${procLine(p,cur)}${p.creditCents>0?`<p class="small">You've paid <b>${money(p.creditCents,cur)}</b> ahead.</p>`:""}${autoLine(p)}${famPay(p)?`<p class="small">${famLine(famPay(p),cur)}</p>`:""}
     ${(td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:""}${privLeftLine(p)}
-    <button class="btn${left>0&&!p.pendingCents?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||famPay(p)?"Pay":"Pay ahead"}</button></section>`}
+    <button class="btn${left>0&&!p.pendingCents&&!pr?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||famPay(p)?"Pay":"Pay ahead"}</button></section>`}
 // "3 privates left" for students who've bought a pack (or have privates they still owe for).
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
@@ -6330,18 +6401,23 @@ async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
 // Proofs waiting for the coach (this month or any): then the sheet isn't "paid up" yet, it's being checked.
 const pend0=p=>(p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents)>0;
-function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,back=owesBack(p),td=!back&&termOwed(p),left=td||myOwed(p),ks=p.packs||[],pls=p.plans||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
+// A card payment on its way: being checked right now (back from Paystack's checkout), or one Paystack hasn't confirmed yet (the
+// server keeps it until it does). Shown on the fees card and the Pay sheet, and not asked for again, so nobody pays twice.
+const procOf=p=>API.psChecking?{cents:API.psChecking.cents||0,now:true}:p&&p.cardProcessing?{cents:p.cardProcessing.cents||0}:null;
+const procLine=(p,cur)=>{const pr=procOf(p);return !pr?"":pr.now?`<p class="small" id="feeproc"><b>Checking your card payment…</b> This takes a few seconds.</p>`
+  :`<p class="small insight warn" id="feeproc"><b>Card payment processing${pr.cents?` (${money(pr.cents,cur)})`:""}.</b> It shows here once Paystack confirms, so there's no need to pay again.</p>`};
+function myPaySheet(keep){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.currency,back=owesBack(p),td=!back&&termOwed(p),left=td||myOwed(p),ks=p.packs||[],pls=p.plans||[];S.ui.sheet={k:"mypay"};S.ui.stack=[];
   // How to pay: Apple Pay / Google Pay (whichever this phone has), card, EFT. EFT opens the bank details and proof of payment;
   // with no card payments at the gym (and no "coming soon"), EFT is the only way, so it's simply open.
   const tiles=payTiles(p,b),eft=!tiles||S.ui.payEft;
   // Owing for more than this month: one line a month ("October: R850"). Otherwise what makes up this month's fees.
   const parts=td?termLines(p,cur):back?p.owedMonths.map(o=>`${longMon(o.month)}: ${money(o.cents,cur)}`):dueLines(p,cur);
   // Joining a plan to book privates: with one plan to pick, what to pay is its price plus what's due now, and the amounts below say so.
-  const ja=p.privateAccess||API.privAccess,one=ja&&!ja.status&&ja.plans.length===1?ja.plans[0]:null,fam=famPay(p),amt=(fam?fam.totalCents:left)+(one?one.priceCents:0);
+  const ja=p.privateAccess||API.privAccess,one=ja&&!ja.status&&ja.plans.length===1?ja.plans[0]:null,fam=famPay(p),pr=procOf(p),amt=Math.max(0,(fam?fam.totalCents:left)+(one?one.priceCents:0)-(pr?pr.cents:0));
   // Paid up (nothing owed, no family total, not joining a plan): say so first, and nothing is filled in to pay. They can still pay
   // ahead, buy a pack or save a card, but never by one tap on an amount they don't owe.
-  const upToDate=amt<=0&&!pend0(p);
-  openSheet(`${sheetHead(upToDate?"Pay ahead":"Pay your fees")}<div class="stack-lg">
+  const upToDate=amt<=0&&!pend0(p)&&!pr;
+  openSheet(`${sheetHead(upToDate?"Pay ahead":"Pay your fees")}<div class="stack-lg">${procLine(p,cur)}
     ${upToDate?`<section class="stack" id="paidup"><p class="small"><span class="pill ok">Paid</span> <b>You're paid up.</b> Nothing is due right now${p.planStatus==="trial"?" on your free trial":""}. You can pay ahead${(p.packs||[]).length?", buy a pack":""} or send a proof below if you like.</p></section>`:""}
     ${fam?`<section class="stack" id="payfamily"><h2 class="label">Your family</h2><div class="panel stack" style="gap:8px">${fam.kids.filter(k=>k.owedCents>0||k.me).map(k=>`<div class="row between" style="flex-wrap:nowrap"><span class="small"><b>${esc(k.name)}</b><br><span class="muted">Reference <span class="mono">${esc(k.reference)}</span></span></span><b class="small mono">${money(k.owedCents,cur)}</b></div>`).join("")}
       <b class="small">Family total: ${money(fam.totalCents,cur)}</b></div><p class="small">Pay it all in one go with any one of these references, and send one proof. It's split between your kids, oldest amount first.</p></section>`:""}
@@ -6371,8 +6447,8 @@ function myPaySheet(){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.curr
       <p class="small muted" style="margin-top:-6px">It shows as <b>Checking</b> until your coach confirms it.</p></section></div>`:""}
     ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.lessons} private lessons · ${money(k.priceCents,cur)}${k.expiryMonths?` · use within ${k.expiryMonths} month${k.expiryMonths>1?"s":""}`:""}</span></span>${p.card?`<button class="btn sm primary" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
       <p class="small muted">${p.card?"Or pay":"Pay"} by EFT with your reference, then send the proof below and pick the pack. Each private you book uses one lesson.</p>${p.card?payTerms("By paying by card",viaName(p)):""}</section>`:""}
-    ${(p.payments||[]).length?`<section class="stack"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span></div>`}).join("")}</div></section>`:""}
-  </div>`)}
+    ${(p.payments||[]).length?`<section class="stack"><h2 class="label">Your payments</h2><div class="list">${p.payments.map(x=>{const st=PSTAT[x.status]||["",""];return `<div class="sess"><div class="row between"><b class="mono">${x.amountCents?money(x.amountCents,x.currency):"Amount being checked"}</b><span class="pill ${st[1]}">${st[0]}</span></div><span class="small muted">${esc(fmtDate(x.paidOn))}${x.packLessons?" · "+esc(packText(x)):x.status==="confirmed"?esc(coversText(x)):""}${x.method?" · "+esc(PMETH[x.method]||x.method):""}${x.hasProof?` · <a href="/api/payments/${x.id}/proof" target="_blank" rel="noopener">proof</a>`:""}</span>${payNote(x)}</div>`}).join("")}</div></section>`:""}
+  </div>`,!!keep)}
 // The line under every card checkout button: the terms and refund policy (on the website), and who processes the payment.
 const legalA=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
 const payTerms=(what="By continuing",via="Payfast")=>`<p class="small muted payterms">${what}, you agree to the ${legalA("/terms/","Terms")} and ${legalA("/refunds/","Refund policy")}. Payments are processed securely by ${via==="PayFast"?"Payfast":via}.</p>`;
@@ -7372,14 +7448,26 @@ async function savePf(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{})
 async function pfTest(){try{await api("PUT","/coach/payfast",{test:true});COACH.pf=undefined;toast("Test account connected. Payments go to PayFast's sandbox; no real money.");render()}catch(e){toast(e.message)}}
 async function pfRemove(){try{await api("DELETE","/coach/payfast");COACH.pf=undefined;toast("PayFast disconnected. Students can still pay by EFT.");render()}catch(e){toast(e.message)}}
 /* ============ PAYSTACK: members pay by card; Paystack pays the gym's bank account ============ */
-// Back from Paystack's checkout (/app/?paid=card&reference=…): JitsFlow asks Paystack about it straight away, then a few more
-// times while Paystack finishes (its webhook records it too, whichever comes first).
-async function psBack(ref,save){toast("Payment received — it shows once Paystack confirms");
-  for(let i=0;i<6;i++){let st="waiting";try{st=(await api("POST","/me/pay/paystack/check",{reference:ref})).status}catch(e){if(e.status===404||e.status===401)return}
-    if(st==="paid"){await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast(save?"Paid, and your card is saved for automatic payments. You'll get a receipt each time.":"Paid. Thanks! Your receipt is on its way by email.");jfTrack("pay_card_done",{save:save?1:0});return}
-    if(st==="failed"){toast("The payment didn't go through. Nothing was charged. Try again, or pay by EFT.");return}
-    await new Promise(r=>setTimeout(r,2500))}
-  await loadPay();render()}
+// Back from Paystack's checkout (/app/?paid=card&reference=…): "Checking your payment…" until Paystack says what happened. JitsFlow
+// asks straight away, then again less and less often for about 90 seconds (Paystack's webhook records it too, whichever comes first).
+// Paid: says so. Declined: says so, and that nothing was charged. Still not confirmed: the fees card and Pay sheet show it as
+// processing (the server keeps it) until Paystack confirms it, so they don't pay twice.
+const PS_WAITS=Array.isArray(window.jfPsWaits)?window.jfPsWaits:[1500,2000,2500,3000,4000,5000,6000,8000,10000,12000,15000,20000]; // (tests shorten it: jfPsWaits)
+function drawPay(){if(S.ui.sheet&&S.ui.sheet.k==="mypay"&&!document.getElementById("sheet").hidden)myPaySheet(true);else if(document.getElementById("sheet").hidden)render()}
+async function psBack(ref,save){API.psChecking={ref,cents:0};toast("Checking your payment…",{ms:120000});drawPay();let gone=0;
+  const done=async msg=>{API.psChecking=null;await loadPay();drawPay();if(msg)toast(msg)};
+  for(let i=0;i<=PS_WAITS.length;i++){let r={status:"waiting"};
+    try{r=await api("POST","/me/pay/paystack/check",{reference:ref})}catch(e){if(e.status===404||e.status===401)return done("");if(e.status===429)break}
+    if(r.status==="paid"){jfTrack("pay_card_done",{save:save?1:0});return done(save?"Paid, and your card is saved for automatic payments. You'll get a receipt each time.":"Paid. Thanks! Your receipt is on its way by email.")}
+    if(r.status==="declined")return done(`Your card was declined${r.reason?` (${r.reason})`:""}. Nothing was charged. Try again, or pay another way.`);
+    // Left the checkout: twice in a row, in case Paystack was still starting it.
+    if(r.status==="cancelled"){if(++gone>=2){API.psChecking=null;return psCancelled(null)}}else gone=0;
+    if(i<PS_WAITS.length)await new Promise(res=>setTimeout(res,PS_WAITS[i]))}
+  done("Your card payment is still processing. It shows here once Paystack confirms. There's no need to pay again.")}
+// Cancel on Paystack's checkout (/app/?paid=cancel&reference=…): nothing was charged, and the Pay sheet opens again.
+async function psCancelled(ref){toast("Payment cancelled. Nothing was charged.",{ms:6000});
+  if(ref)await api("POST","/me/pay/paystack/check",{reference:ref}).catch(()=>{}); // so it isn't kept as a payment on its way
+  const open=async n=>{if(!API.me){if(n<30)setTimeout(()=>open(n+1),400);return}if(isCoach()||!API.me.gym)return;await loadPay();if(API.pay){if(S.ui.tab!=="me")go("me");S.ui.payEft=false;myPaySheet()}};open(0)}
 // Money › Settings: how card payments reach the gym. While JitsFlow's Paystack is on, the gym gives its bank account once (no
 // payment account of its own) and the JitsFlow team checks it; otherwise the gym connects its own PayFast (pfPanel), as before.
 // While the payout account waits for the team, look again now and then (at most every 30 s, when this screen is drawn): once the team
@@ -7414,17 +7502,29 @@ async function savePs(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{})
   try{const j=await api("PUT","/coach/paystack",{bankCode:v("bankCode"),account:v("account"),holder:v("holder"),business:v("business"),idKind:k,idNumber:v("idNumber")});
     COACH.ps={...(COACH.ps||{}),account:j.paystack};S.ui.psEdit=false;render();
     toast(j.same?"Nothing changed.":j.paystack.status==="active"?"Saved.":"Saved. JitsFlow checks your bank account, usually within a day. We'll email you when card payments are on.")}catch(e){toast(e.message)}}
-// A card payment refunded back to the card (head coach, Money): all of it, or part.
-function refundSheet(id){const p=(COACH.payments||[]).find(x=>x.id===id);if(!p)return;const cur=p.currency,left=(p.family?p.family.totalCents:p.amountCents),nm=((((COACH.roster||{}).people||[]).find(y=>y.id===p.userId))||{}).name||"the member";
-  S.ui.sheet={k:"refund"};S.ui.stack=[];
+// A card payment refunded back to the card (head coach, Money): all of it, or part. Earlier tries show first (done, on its way, or
+// failed and why); what's left to refund counts only the ones done or on their way. Try again (v "id:retry") fills in what failed.
+const REFUND_TXT={done:["Refunded","ok"],pending:["On its way","due"],failed:["Failed","bad"]};
+function refundSheet(v){const [id,retry]=String(v).split(":"),p=(COACH.payments||[]).find(x=>x.id===id);if(!p)return;const cur=p.currency,rs=p.refunds||[],f=psFailed(p),
+  left=p.refundLeftCents!==undefined?p.refundLeftCents:(p.family?p.family.totalCents:p.amountCents),fill=retry&&f?Math.min(f.cents,left):left,nm=((((COACH.roster||{}).people||[]).find(y=>y.id===p.userId))||{}).name||"the member";
+  S.ui.sheet={k:"refund",id,key:Date.now().toString(36)+Math.random().toString(36).slice(2,8)};S.ui.stack=[];
   openSheet(`${sheetHead("Refund to the card")}<div class="stack-lg"><h1>Refund to the card</h1>
-    <p>${esc(money(left,cur))} from ${esc(nm)}, paid ${esc(fmtDate(p.paidOn))} by card (Paystack ${esc(p.reference)}).</p>
-    <label class="f">Amount to refund (${esc(cur)})<input id="refund-amt" type="number" inputmode="decimal" min="1" step="0.01" max="${left/100}" value="${left/100}"></label>
+    <p>${esc(money(p.amountCents+(p.refundedCents||0),cur))} from ${esc(nm)}, paid ${esc(fmtDate(p.paidOn))} by card (Paystack ${esc(p.reference)}).</p>
+    ${rs.length?`<section class="stack" id="refundtries"><h2 class="label">Refunds so far</h2><div class="list">${rs.map(r=>{const t=REFUND_TXT[r.status]||[r.status,""];return `<div class="row between" style="flex-wrap:nowrap;padding-block:6px"><span class="small"><b>${money(r.cents,cur)}</b> · ${esc(dayMon(r.at))}${r.status==="failed"&&r.reason?`<br><span class="muted">${esc(r.reason)}</span>`:""}</span><span class="pill ${t[1]}">${esc(t[0])}</span></div>`}).join("")}</div>
+      ${f?`<p class="small">The last one failed, so nothing was refunded then. You can try again below.</p>`:""}</section>`:""}
+    ${left>0?`<label class="f">Amount to refund (${esc(cur)})<input id="refund-amt" type="number" inputmode="decimal" min="1" step="0.01" max="${left/100}" value="${fill/100}"></label>
+    <p class="small muted" style="margin-top:-6px">Up to ${money(left,cur)}.</p>
     <p class="small">Paystack refunds it to the card it was paid with. Once Paystack confirms it (usually within minutes), it comes off what ${esc(first(nm))} paid here, and they're emailed. Banks take about 5 to 10 working days to show it.</p>
-    <p class="small muted">Paystack reverses the payment's split (your share and JitsFlow's fee) under its own refund rules.</p></div>`,false,
-    {act:`<button class="btn grow" data-a="close">Keep it</button><button class="btn danger grow" data-a="refundyes" data-v="${esc(id)}">Refund</button>`})}
-async function refundGo(id){const c=Math.round(Number((document.getElementById("refund-amt")||{}).value||0)*100);if(!(c>=100)){toast("Enter the amount to refund, from R1.");return}
-  try{await api("POST",`/coach/payments/${id}/refund`,{amountCents:c});hideSheet();await coachLoad("payments");render();toast("Refund sent to Paystack. It comes off the payment once Paystack confirms it.")}catch(e){toast(e.message)}}
+    <p class="small muted">Paystack reverses the payment's split (your share and JitsFlow's fee) under its own refund rules.</p>`:`<p><b>There's nothing left to refund.</b>${p.refundPending?" A refund is on its way.":""}</p>`}</div>`,false,
+    left>0?{back:"Keep it",act:`<button class="btn danger grow" data-a="refundyes" data-v="${esc(id)}">Refund</button>`}:{})}
+// One tap sends it once: the button waits while it's sent, and the same key goes with a second try, so the server refunds once.
+async function refundGo(id,btn){const c=Math.round(Number((document.getElementById("refund-amt")||{}).value||0)*100);if(!(c>=100)){toast("Enter the amount to refund, from R1.");return}
+  if(btn){if(btn.disabled)return;btn.disabled=true;btn.textContent="Sending…"}
+  const key=(S.ui.sheet&&S.ui.sheet.k==="refund"&&S.ui.sheet.key)||undefined;
+  try{await api("POST",`/coach/payments/${id}/refund`,{amountCents:c},key);hideSheet();await coachLoad("payments");render();toast("Refund sent to Paystack. It comes off the payment once Paystack confirms it.")}
+  catch(e){toast(e.message);if(btn&&btn.isConnected){btn.disabled=false;btn.textContent="Refund"}if(S.ui.sheet&&S.ui.sheet.k==="refund")S.ui.sheet.key=Date.now().toString(36)+Math.random().toString(36).slice(2,8)}}
+// A failed refund the head coach has dealt with another way: off Home's Needs you and the payment's line.
+async function refundDismiss(v){const [id,rid]=String(v).split(":");try{await api("POST",`/coach/payments/${id}/refunds/${rid}/dismiss`,{});await coachLoad("payments");render();toast("Dismissed.")}catch(e){toast(e.message)}}
 // The JitsFlow team's dashboard: gyms' bank accounts to check in Paystack's dashboard, then Mark verified.
 function dashPayouts(x){if(!x)return "";const list=x.toVerify||[];
   return `<section class="panel stack" id="dashpayouts"><div class="row between"><h2 class="label">Card payouts to verify · ${nf(list.length)}</h2>${x.test?`<span class="pill">Paystack test mode</span>`:x.on?`<span class="pill ok">Paystack live</span>`:`<span class="pill">Paystack off</span>`}</div>
@@ -7609,7 +7709,9 @@ function dashSystem(y){if(!y)return "";const w=[];
   for(const f of y.payfastFlags||[])w.push(`<b>Check a ${/^ps-/.test(f.kind)?"Paystack":"PayFast"} payment${f.gym?` (${esc(f.gym)})`:""}:</b> ${esc(f.note)}${seen("flag",f.id)}`);
   const x=y.paystack,psSeen=(k,id)=>` <button class="linkbtn small" data-a="psseen" data-v="${k}:${esc(id)}">Done</button>`;
   if(x&&x.test&&y.production)w.push(`<b>Member card payments are in Paystack's test mode.</b> PAYSTACK_SECRET_KEY is a test key, so no real money moves.`);
-  for(const d of (x&&x.disputes)||[])w.push(`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""}:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)})${d.status==="resolved"?`, resolved: ${esc(d.resolution||"")}`:d.dueAt?`, answer by ${esc(outDay(d.dueAt))}`:""}. Answer it in Paystack › Disputes with the gym's evidence (the head coach has been asked).${psSeen("dispute",d.id)}`);
+  // An open chargeback stays here (no Done) until Paystack resolves it; a resolved one can be marked done.
+  for(const d of (x&&x.disputes)||[])w.push(d.status==="resolved"?`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""} resolved:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)}), ${esc(d.resolution||"no resolution given")}.${psSeen("dispute",d.id)}`
+    :`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""}:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)})${d.dueAt?`, answer by ${esc(outDay(d.dueAt))}`:""}. Answer it in Paystack › Disputes with the gym's evidence (the head coach has been asked). <span class="muted">Stays here until Paystack resolves it.</span>`);
   for(const m of (x&&x.moveFailed)||[])w.push(`<b>${esc(m.gym)} can't take cards:</b> its payout account couldn't be moved to Paystack's live mode (${esc(m.error||"no reason given")}). JitsFlow tries again every hour; if it keeps failing, ask the head coach to save their bank details again under Money › Setup.`);
   for(const r of (x&&x.refundsFailed)||[])w.push(`<b>A refund failed${r.gym?` at ${esc(r.gym)}`:""}:</b> ${money(r.cents,"ZAR")} (Paystack ${esc(r.reference)}): ${esc(r.error||"no reason given")}. The head coach has been told.${psSeen("refund",r.id)}`);
   for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);

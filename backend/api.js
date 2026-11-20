@@ -1712,7 +1712,8 @@ function makeApi(pool, { secureCookies, build }) {
     const u = needCoach(req), st = await ownStudent(u, req.params.id);
     const s = (await summaries(u.gym_id, [st.id]))[st.id];
     const logs = await q(`select id,data from training_logs t where user_id=$1 and ${SINCE_JOINED} order by date desc nulls last limit 30`, [st.id, u.gym_id]);
-    const pays = await q("select * from payments where user_id=$1 and gym_id=$2 and status<>'rejected' order by paid_on desc limit 24", [st.id, u.gym_id]);
+    // Proofs marked Not received in the last 30 days show too (greyed, with why, and Restore).
+    const pays = await q(`select * from payments where user_id=$1 and gym_id=$2 and (status<>'rejected' or coalesce(rejected_at, created_at) > now() - interval '30 days') order by paid_on desc, id desc limit 24`, [st.id, u.gym_id]);
     const { visits } = await visitStats(u.gym_id, tzOf(u));
     const recent = await q(`select c.title, c.starts_at, c.kind, a.attended from attendance a join classes c on c.id=a.class_id
       where a.user_id=$1 and c.gym_id=$2 and (a.attended or a.going) order by c.starts_at desc limit 12`, [st.id, u.gym_id]);
@@ -2465,6 +2466,55 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // ---------- coach: payments ----------
   const METHODS = ["eft", "cash", "card", "snapscan", "payfast", "other"];
   const PAY_STATUS = ["pending", "confirmed", "rejected"];
+  // Why a proof was marked Not received, in the words the member is told.
+  const REJECT_WHY = { arrived: "the money hasn't arrived in the gym's account", amount: "the amount doesn't match what arrived", member: "it looks like someone else's payment", other: "" };
+  // The member hears about a proof marked Not received, and gets a receipt for a payment confirmed, TELL_MS after the head coach's
+  // tap (so Undo, which lasts 10 seconds, takes it back before they hear). One receipt per payment, ever; one email per member
+  // for payments confirmed together. Emails respect the member's "stop emails from this gym". Run soon after a tap (payTellSoon),
+  // and with the 15-minute jobs (after a restart, say).
+  const TELL_MS = Math.max(0, intOr(process.env.JF_PAY_TELL_MS, 30000)), RECEIPT_SRC = ["student", "upload", "email", "manual"];
+  let tellTimer = null;
+  function payTellSoon() { if (tellTimer) return; tellTimer = setTimeout(() => { tellTimer = null; payTell().catch((e) => console.warn("pay tell:", e.message)); }, TELL_MS + 300); if (tellTimer.unref) tellTimer.unref(); }
+  const dayShort = (d) => (d ? new Date(String(d).slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" }) : "");
+  async function payTell() {
+    const secs = TELL_MS / 1000, sent = { receipts: 0, rejected: 0 };
+    const who = async (userId, gymId) => (await q(`select u.name, u.parent_name, coalesce(nullif(u.parent_name,''), u.name) as payer, ${EMAIL("u")} as email, g.name as gym_name, g.currency,
+      (select h.email from users h where h.id=g.head_coach_id) as head_email from users u join gyms g on g.id=$2 where u.id=$1 and u.gym_id=$2`, [userId, gymId])).rows[0];
+    const due = (await q(`select id, user_id, gym_id from payments where status='confirmed' and confirmed_at is not null and receipt_at is null and split_of is null and user_id is not null and source = any($2)
+      and confirmed_at <= now() - make_interval(secs => $1) and confirmed_at > now() - interval '2 days' order by id limit 300`, [secs, RECEIPT_SRC])).rows;
+    const groups = new Map(); for (const r of due) { const k = r.gym_id + ":" + r.user_id; groups.set(k, [...(groups.get(k) || []), r]); }
+    for (const rs of groups.values()) {
+      const ps = (await q("update payments set receipt_at=now() where id = any($1::bigint[]) and receipt_at is null and status='confirmed' returning *", [rs.map((r) => r.id)])).rows;
+      if (!ps.length) continue;
+      const x = await who(ps[0].user_id, ps[0].gym_id); if (!x || !x.email) continue;
+      const shares = (await q("select x.amount_cents, u.name from payments x left join users u on u.id=x.user_id where x.split_of = any($1::bigint[]) and x.status='confirmed'", [ps.map((p) => p.id)])).rows;
+      const total = ps.reduce((a, p) => a + p.amount_cents, 0) + shares.reduce((a, r) => a + r.amount_cents, 0);
+      const packs = ps.filter((p) => p.pack_id).length ? (await q("select name from packs where id = any($1::bigint[])", [ps.filter((p) => p.pack_id).map((p) => p.pack_id)])).rows.map((r) => r.name) : [];
+      const kids = [...new Set([...(x.parent_name ? [first(x.name)] : []), ...shares.map((r) => first(r.name)).filter(Boolean)])];
+      const what = [kids.length ? `${kids.length > 1 ? kids.slice(0, -1).join(", ") + " and " + kids[kids.length - 1] : kids[0]}'s fees` : ps.some((p) => !p.pack_id) ? "fees" : "", ...packs].filter(Boolean).join(" and ");
+      const stop = await stopLink(ps[0].gym_id, x.email); if (!stop) continue;
+      mail.sendLater({ to: x.email, ...(x.head_email ? { replyTo: x.head_email } : {}), headers: stopHeaders(stop),
+        ...mail.templates.paymentReceipt(first(x.payer), x.gym_name, fmtMoney(total, x.currency), what, [...new Set(ps.map((p) => dayShort(p.paid_on)))].join(", "), stop) });
+      sent.receipts++;
+    }
+    const rej = (await q(`select id from payments where status='rejected' and rejected_at is not null and reject_told_at is null and user_id is not null
+      and rejected_at <= now() - make_interval(secs => $1) and rejected_at > now() - interval '2 days' order by id limit 300`, [secs])).rows;
+    for (const r0 of rej) {
+      const p = (await q("update payments set reject_told_at=now() where id=$1 and reject_told_at is null and status='rejected' returning *", [r0.id])).rows[0]; if (!p) continue;
+      const x = await who(p.user_id, p.gym_id); if (!x) continue;
+      const why = REJECT_WHY[p.reject_reason] || "", note = clean(p.reject_note || "", 300), amount = p.amount_cents ? fmtMoney(p.amount_cents, x.currency) : "", when = dayShort(p.paid_on);
+      await q("insert into notices(gym_id,user_id,kind,title,body) values($1,$2,'payment',$3,$4)", [p.gym_id, p.user_id, "Payment not received",
+        `${x.gym_name} couldn't mark the proof you sent${amount ? ` for ${amount}` : ""}${when ? ` (${when})` : ""} as paid${why ? `: ${why}` : ""}.${note ? ` They said: “${note}”` : ""} If you've paid, send a new proof on your Pay sheet.`]);
+      sent.rejected++;
+      if (!x.email) continue;
+      const stop = await stopLink(p.gym_id, x.email); if (!stop) continue;
+      mail.sendLater({ to: x.email, ...(x.head_email ? { replyTo: x.head_email } : {}), headers: stopHeaders(stop), ...mail.templates.proofRejected(first(x.payer), x.gym_name, amount, when, why, note, x.parent_name ? first(x.name) : "", stop) });
+    }
+    // Some were tapped too recently to tell yet: look again once they're due.
+    if ((await q(`select 1 from payments where user_id is not null and ((status='confirmed' and confirmed_at > now() - make_interval(secs => $1) and receipt_at is null and split_of is null and source = any($2))
+      or (status='rejected' and rejected_at > now() - make_interval(secs => $1) and reject_told_at is null)) limit 1`, [secs, RECEIPT_SRC])).rows[0]) payTellSoon();
+    return sent;
+  }
   function payOut(p) {
     const a = p.ai || {};
     return { id: String(p.id), userId: p.user_id ? String(p.user_id) : null, amountCents: p.amount_cents, currency: p.currency, paidOn: p.paid_on,
@@ -2474,12 +2524,29 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       packId: p.pack_id ? String(p.pack_id) : null, packLessons: p.pack_lessons || null, packName: p.pack_name || null,
       family: p.family_cents ? { of: String(p.split_of || p.id), totalCents: Number(p.family_cents) } : null,
       // card payments through Paystack: JitsFlow's fee, Paystack's fee, what's been refunded, and a chargeback (open, won, lost)
-      ...(p.source === "paystack" ? { feeCents: p.fee_cents || 0, pspFeeCents: p.psp_fee_cents || 0, refundedCents: p.refunded_cents || 0, dispute: p.dispute || null, refundPending: !!p.refund_pending } : {}),
+      ...(p.source === "paystack" ? psPayOut(p) : {}),
+      // a proof marked Not received: why, and the coach's note (the member sees these too)
+      ...(p.status === "rejected" ? { rejectReason: p.reject_reason || "", rejectNote: p.reject_note || "", rejectedAt: p.rejected_at || null } : {}),
       read: p.ai ? { amountCents: a.amountCents || 0, date: a.date || "", reference: a.reference || "", payer: a.payer || "", bank: a.bank || "", match: a.match || "", isPayment: a.method === "claude" ? a.isPayment !== false : true, duplicateOf: a.duplicateOf || null, otherRef: a.otherRef || null, reading: !!a.reading, error: a.error ? (/^(Not read automatically|Too long to read)/.test(a.error) ? a.error : "Couldn't read it automatically.") : "" } : null };
+  }
+  // A card payment through Paystack: JitsFlow's fee, Paystack's fee, what's been refunded, each refund asked for (on its way,
+  // done, or failed and why: dismissed once the head coach has dealt with it), what's left to refund (left out: failed ones), and
+  // a chargeback (open, won, lost: how much, and Paystack's deadline to answer).
+  const REFUND_ST = { pending: "pending", processed: "done", failed: "failed" };
+  function psPayOut(p) {
+    const refunds = (p.ps_refunds || []).map((r) => ({ id: String(r.id), cents: r.cents, status: REFUND_ST[r.status] || r.status, reason: r.status === "failed" ? r.error || "" : "", at: r.at, dismissed: !!r.done }));
+    const pending = refunds.filter((r) => r.status === "pending").reduce((a, r) => a + r.cents, 0), live = ["confirmed", "test"].includes(p.status);
+    const d = p.ps_dispute || null;
+    return { feeCents: p.fee_cents || 0, pspFeeCents: p.psp_fee_cents || 0, refundedCents: p.refunded_cents || 0, dispute: p.dispute || null, refundPending: pending > 0, refunds,
+      refundLeftCents: live ? Math.max(0, p.amount_cents + Number(p.share_cents || 0) - pending) : 0,
+      chargeback: p.dispute ? { status: p.dispute, cents: d && d.cents != null ? d.cents : p.amount_cents, dueAt: d ? d.due : null } : null };
   }
   // family_cents: for a family payment split between brothers and sisters (see familySplit), on the payment and on each share: the whole amount.
   const PAY_COLS = `p.*, exists(select 1 from pop_files f where f.payment_id=p.id) as has_proof, (select name from packs k where k.id=p.pack_id) as pack_name,
-    (p.source='paystack' and exists(select 1 from paystack_refunds r where r.payment_id=p.id and r.status='pending')) as refund_pending,
+    (case when p.source='paystack' then (select json_agg(json_build_object('id', r.id, 'cents', r.amount_cents, 'status', r.status, 'error', r.error, 'at', r.updated_at, 'done', r.coach_done_at is not null) order by r.id)
+      from paystack_refunds r where r.payment_id=p.id) end) as ps_refunds,
+    (case when p.source='paystack' then (select coalesce(sum(x.amount_cents),0) from payments x where x.split_of=p.id and x.status in ('confirmed','test')) end) as share_cents,
+    (case when p.source='paystack' and p.dispute is not null then (select json_build_object('cents', d.amount_cents, 'due', d.due_at) from paystack_disputes d where d.payment_id=p.id order by d.created_at desc limit 1) end) as ps_dispute,
     (select o.amount_cents + sum(x.amount_cents) from payments o join payments x on x.split_of=o.id where o.id=coalesce(p.split_of, p.id) group by o.id) as family_cents`;
   const todayIn = async (u) => (await q("select to_char(now() at time zone $1,'YYYY-MM-DD') as d", [tzOf(u)])).rows[0].d;
   async function payRef(userId) {
@@ -2643,6 +2710,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const { today, month, plan, pv, led, d, bal } = await feesOf(u, u), sums = { paid: led.paid[month] || 0, pending: led.pending[month] || 0 };
     const recent = (await q(`select ${PAY_COLS} from payments p where p.user_id=$1 and p.gym_id=$2 and p.paid_on > $3::date - 200 order by p.paid_on desc, p.id desc limit 12`, [u.id, u.gym_id, today])).rows;
     const pa = await privateAccess(u);
+    // A card payment they came back from that Paystack hasn't confirmed yet: shown as processing, so nobody pays twice.
+    const proc = (await q(`select amount_cents, created_at from paystack_checkouts where user_id=$1 and gym_id=$2 and status='open' and checked_at is not null and kind in ('fees','pack','plan')
+      and created_at > now() - interval '3 days' order by created_at desc limit 1`, [u.id, u.gym_id])).rows[0];
     // Someone the gym's rule doesn't let book a private isn't offered packs they couldn't use.
     const packs = pa ? [] : (await q("select * from packs where gym_id=$1 and active order by lessons, price_cents", [u.gym_id])).rows.map(packOut);
     // On a year or term plan: what it really costs ("R8 500 for the year"), and when what they've paid runs out.
@@ -2666,7 +2736,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       // the running balance: every month still owed ("R1 700 · Oct + Nov"), and everything sent that's still being checked
       owedCents: bal.owedCents, owedMonths: bal.months, creditCents: bal.creditCents, pendingAllCents: led.pendingCents, month, planStatus: u.plan_status, plan: plan ? planOut(plan) : null, plans: await pickablePlans(u, bal.owedCents), ...statusOut(u, month),
       // card: the gym takes card payments in the app now; provider: through whom (paystack, or the gym's own payfast).
-      reference: await payRef(u.id), bank: g.pay || {}, card: !!cardsOn(g), provider: paystack.memberCards(), autopay: await autopayOut(u, g, bal), payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; return o; }) } });
+      cardProcessing: proc ? { cents: proc.amount_cents, at: proc.created_at } : null,
+      reference: await payRef(u.id), bank: g.pay || {}, card: !!cardsOn(g), provider: paystack.memberCards(), autopay: await autopayOut(u, g, bal), payments: recent.map((p) => { const o = payOut(p); delete o.read; delete o.emailFrom; delete o.emailSubject; delete o.refunds; return o; }) } });
   }));
   api.post("/me/pay/proof", wrap(async (req, res) => {
     const u = needUser(req); if (!u.gym_id || u.role !== "student") fail(403, "Join a gym first.");
@@ -2710,7 +2781,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // ---------- coach: payments ----------
   api.get("/coach/payments", wrap(async (req, res) => {
     const u = needHead(req);
-    const r = await q(`select ${PAY_COLS} from payments p where p.gym_id=$1 and (p.status<>'rejected' or p.created_at > now() - interval '30 days') order by (p.status='pending') desc, p.paid_on desc, p.id desc limit 400`, [u.gym_id]);
+    const r = await q(`select ${PAY_COLS} from payments p where p.gym_id=$1 and (p.status<>'rejected' or coalesce(p.rejected_at, p.created_at) > now() - interval '30 days') order by (p.status='pending') desc, p.paid_on desc, p.id desc limit 400`, [u.gym_id]);
     res.json({ payments: r.rows.map(payOut) });
   }));
   const fmtMoney = (c, currency) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: currency || "ZAR" }).format(c / 100);
@@ -2743,9 +2814,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     // More than they owe, for one of a family: the rest pays their brothers and sisters (unless the coach said which months it's for).
     const parts = !pack && userId && b.months === undefined && !isMonth(b.forMonth) ? await familySplit(u, userId, amount) : [], keep = amount - splitSum(parts);
     const fm = pack ? { for_month: null, months: 1, alloc: null } : await feeMonths(u, userId, keep, paidOn, 0, b.months === undefined ? 0 : coverMonths(b.months), { from: b.forMonth });
-    const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,submitted_by,months,pack_id,pack_lessons,pack_months,for_month,alloc) values($1,$2,$3,$4,$5,$6,$7,'manual',$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
+    const r = await q(`insert into payments(gym_id,user_id,amount_cents,currency,paid_on,reference,note,source,method,submitted_by,months,pack_id,pack_lessons,pack_months,for_month,alloc,confirmed_at) values($1,$2,$3,$4,$5,$6,$7,'manual',$8,$9,$10,$11,$12,$13,$14,$15,now()) returning *`,
       [u.gym_id, userId, keep, u.currency || "ZAR", paidOn, clean(b.reference, 140), clean(b.note, 500), method, u.id, fm.months, pack ? pack.id : null, pack ? pack.lessons : null, pack ? pack.expiry_months : null, fm.for_month, fm.alloc]);
-    await saveSplit(u, r.rows[0], parts);
+    await saveSplit(u, r.rows[0], parts); if (userId) payTellSoon();
     res.status(201).json({ payment: payOut((await q(`select ${PAY_COLS} from payments p where p.id=$1`, [r.rows[0].id])).rows[0]), split: splitOut(parts) });
   }));
   // Coach uploads a proof (e.g. a screenshot a student WhatsApped them): read it now so they can confirm straight away.
@@ -2793,9 +2864,17 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     else if (nowFee && (first || String(userId) !== String(p.user_id) || amount !== p.amount_cents || paidOn !== p.paid_on || b.months !== undefined))
       fm = await feeMonths(u, userId, keep, paidOn, p.id, b.months !== undefined ? coverMonths(b.months) : 0);
     else if (b.months !== undefined) fm = { for_month: p.for_month, months: coverMonths(b.months), alloc: null };
-    const row = (await q("update payments set user_id=$1, amount_cents=$2, paid_on=$3, status=$4, method=$5, reference=$6, note=$7, months=$8, pack_id=$10, pack_lessons=$11, pack_months=$12, for_month=$13, alloc=$14 where id=$9 returning *",
-      [userId, keep, paidOn, status, method, b.reference === undefined ? p.reference : clean(b.reference, 140), b.note === undefined ? p.note : clean(b.note, 500), fm.months, p.id, ...pk, fm.for_month, fm.alloc])).rows[0];
+    // Not received: why (one of REJECT_WHY, and the coach's own words if they add some). The member is told a little later (payTell),
+    // so Undo (back to being checked) takes it back before they hear. Confirmed: their receipt goes a little later too.
+    const rejecting = status === "rejected" && p.status !== "rejected", why = rejecting ? (REJECT_WHY[b.reason] ? b.reason : "other") : null;
+    const row = (await q(`update payments set user_id=$1, amount_cents=$2, paid_on=$3, status=$4, method=$5, reference=$6, note=$7, months=$8, pack_id=$10, pack_lessons=$11, pack_months=$12, for_month=$13, alloc=$14,
+        reject_reason = case when $4='rejected' then coalesce($15, reject_reason) end, reject_note = case when $4='rejected' then coalesce($16, reject_note) end,
+        rejected_at = case when $4<>'rejected' then null when $17 then now() else rejected_at end, reject_told_at = case when $4='rejected' and not $17 then reject_told_at end,
+        confirmed_at = case when $4<>'confirmed' then null when status<>'confirmed' then now() else confirmed_at end where id=$9 returning *`,
+      [userId, keep, paidOn, status, method, b.reference === undefined ? p.reference : clean(b.reference, 140), b.note === undefined ? p.note : clean(b.note, 500), fm.months, p.id, ...pk, fm.for_month, fm.alloc,
+        why, rejecting ? clean(b.reasonNote, 300) : null, rejecting])).rows[0];
     await saveSplit(u, row, parts);
+    if (status !== p.status && (status === "rejected" || status === "confirmed")) payTellSoon();
     res.json({ payment: payOut((await q(`select ${PAY_COLS} from payments p where p.id=$1`, [p.id])).rows[0]), split: splitOut(parts) });
   }));
   // Undo a family payment's split: the brothers' and sisters' shares go back on the payment it came from.
@@ -2914,6 +2993,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const lastEver = Object.fromEntries((await q("select user_id, max(paid_on) as last from payments where gym_id=$1 and status='confirmed' and user_id is not null group by user_id", [u.gym_id])).rows.map((r) => [String(r.user_id), r.last]));
     // Addresses that stopped this gym's emails (the stop link in its messages and reminders): Money says so, and WhatsApp still works.
     const stoppedMail = new Set((await q("select email from gym_mail_stops where gym_id=$1 and stopped_at is not null", [u.gym_id])).rows.map((r) => r.email));
+    // Card payments members came back from that Paystack hasn't confirmed yet: shown as processing, so nobody marks them paid twice.
+    const proc = Object.fromEntries((await q(`select distinct on (user_id) user_id, amount_cents, created_at from paystack_checkouts where gym_id=$1 and status='open' and checked_at is not null
+      and kind in ('fees','pack','plan') and user_id is not null and created_at > now() - interval '3 days' order by user_id, created_at desc`, [u.gym_id])).rows.map((r) => [String(r.user_id), { cents: r.amount_cents, at: r.created_at }]));
     // Joined before the next month starts, by the gym's own clock (not UTC: someone added at 00:30 on the 1st joined that month).
     const tz = tzOf(u); for (const x of rows) x.joinedDay = dayIn(x.gym_joined_at || x.created_at, tz); // joined this gym (see withBreaks)
     const joined = (x) => x.joinedDay, inMonth = rows.filter((x) => joined(x) < next), fam = familiesOf(inMonth);
@@ -2924,7 +3006,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       owedCents: x.bal.owedCents, owedMonths: x.bal.months, nextMonth: x.bal.next, creditCents: x.bal.creditCents, pendingAllCents: x.led.pendingCents, ...statusOut(x, today.slice(0, 7)),
       // the last fee reminder (by email, from the app or the daily job): nobody is emailed twice within 6 days
       remindedAt: x.reminded_at || null, remindedRecently: !!x.reminded_at && Date.now() - new Date(x.reminded_at).getTime() < RECENT_DAYS * DAY,
-      autopay: autos.has(String(x.id)), ...autoFlags(chs[String(x.id)], x.bal), ...(x.email && stoppedMail.has(String(x.email).toLowerCase()) ? { mailStopped: true } : {}) }; });
+      autopay: autos.has(String(x.id)), ...autoFlags(chs[String(x.id)], x.bal), ...(x.email && stoppedMail.has(String(x.email).toLowerCase()) ? { mailStopped: true } : {}),
+      ...(proc[String(x.id)] ? { cardProcessing: proc[String(x.id)] } : {}) }; });
     const methods = (await q(`select coalesce(nullif(method,''),'other') as m, sum(amount_cents) as c, count(*) as n from payments where gym_id=$1 and status='confirmed' and paid_on >= $2 and paid_on < $3 group by 1 order by 2 desc`, [u.gym_id, start, next])).rows.map((r) => ({ method: r.m, cents: Number(r.c), n: Number(r.n) }));
     const total = (await q(`select coalesce(sum(amount_cents) filter (where status='confirmed'),0) as c, coalesce(sum(amount_cents) filter (where status='confirmed' and user_id is null),0) as unmatched,
       coalesce(sum(amount_cents) filter (where status='pending'),0) as pending from payments where gym_id=$1 and paid_on >= $2 and paid_on < $3`, [u.gym_id, start, next])).rows[0];
@@ -3658,8 +3741,11 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     await q(`insert into paystack_checkouts(reference,gym_id,user_id,payer_id,kind,amount_cents,fee_cents,subaccount,pack_id,plan_id,save) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [reference, u.gym_id, u.id, payer.id || u.id, kind, cents, fee, s.subaccount, pack ? pack.id : null, plan ? plan.id : null, save]);
     try {
+      // Cancel on Paystack's checkout comes back to the app with a marker (its cancel_action), so the app says nothing was charged
+      // and opens the Pay sheet again.
       const r = await paystack.initialize({ email, cents, reference, subaccount: s.subaccount, feeCents: fee, callbackUrl: mail.appUrl() + (save ? "/app/?paid=card&autopay=on" : "/app/?paid=card"),
         metadata: { userId: String(u.id), gymId: String(u.gym_id), kind, ...(pack ? { packId: String(pack.id) } : {}), ...(plan ? { planId: plan.id } : {}), ...(save ? { save: true } : {}),
+          cancel_action: mail.appUrl() + "/app/?paid=cancel&reference=" + encodeURIComponent(reference),
           custom_fields: [{ display_name: "Gym", variable_name: "gym", value: clean(g.name, 100) }, { display_name: "Member", variable_name: "member", value: clean(u.name, 100) }] },
         // A card is the only way to pay that can be saved: the checkout to save one offers cards only.
         channels: save ? ["card"] : undefined });
@@ -3679,7 +3765,15 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const co = ref ? (await q("select * from paystack_checkouts where reference=$1 and (user_id::text = any($2) or payer_id::text = any($2))", [ref, ids])).rows[0] : null;
     if (!co) fail(404, "We couldn't find that payment.");
     const r = await psSettle(ref).catch((e) => { console.warn("paystack check:", e.message); return { status: "unsure" }; });
-    res.json({ status: r.status === "paid" ? "paid" : ["failed", "abandoned", "reversed"].includes(r.status) ? "failed" : "waiting" });
+    // paid; cancelled (they left the checkout: nothing was charged); declined (the bank said no: nothing was charged, and why);
+    // waiting (Paystack hasn't confirmed it yet: the Pay sheet shows it as processing until it does).
+    if (r.status === "paid") return res.json({ status: "paid" });
+    if (r.status === "abandoned") return res.json({ status: "cancelled" });
+    if (r.status === "failed" || r.status === "reversed") {
+      const e = ((await q("select error from paystack_checkouts where reference=$1", [ref])).rows[0] || {}).error || "";
+      return res.json({ status: "declined", reason: /^(failed|reversed|declined)$/i.test(e) ? "" : clean(e, 120) });
+    }
+    res.json({ status: "waiting" });
   }));
 
   // Paystack's webhook. Its signature (an HMAC of the raw body with the secret key) is checked first; then the answer goes straight
@@ -3805,24 +3899,50 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // A card payment through Paystack refunded, in full or in part, back to the card. Paystack does it (and reverses the split by its
   // own rules); when it says it's processed (its webhook), the payment comes off what the member paid: a full refund takes the
   // payment (and any family shares of it) out of their balance, a part refund makes it smaller (the payer's own part first).
-  api.post("/coach/payments/:id/refund", wrap(async (req, res) => {
+  // Claimed before Paystack is asked: the payment is locked while what's left is worked out and the refund is saved as on its way,
+  // so two taps (or two phones) can't refund it twice. Paystack says no: the claim goes again (the head coach sees why). Paystack
+  // doesn't answer: it stays on its way (it may have gone through), and Paystack's webhook settles it. Sent twice with the same
+  // key (x-jf-key): the first answer again.
+  api.post("/coach/payments/:id/refund", once(async (req, res) => {
     const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
     if (!paystack.on()) fail(400, "Card refunds aren't switched on.");
-    const p = (await q("select * from payments where id=$1 and gym_id=$2 and source='paystack'", [intOr(req.params.id, 0), u.gym_id])).rows[0];
-    if (!p) fail(404, "That card payment doesn't exist.");
-    if (!["confirmed", "test"].includes(p.status)) fail(409, "That payment has been refunded already.");
-    const shares = Number((await q("select coalesce(sum(amount_cents),0)::int as c from payments where split_of=$1 and status in ('confirmed','test')", [p.id])).rows[0].c);
-    const pending = Number((await q("select coalesce(sum(amount_cents),0)::int as c from paystack_refunds where payment_id=$1 and status='pending'", [p.id])).rows[0].c);
-    const left = p.amount_cents + shares - pending, raw = req.body && req.body.amountCents;
-    const cents = raw === undefined || raw === null || raw === "" ? left : intOr(raw, NaN);
-    if (left <= 0) fail(409, "That payment's refund is on its way already.");
-    if (!(cents >= 100 && cents <= left)) fail(400, `Enter an amount from R1 to ${fmtMoney(left)}.`);
     if (limited("psrefund:" + u.gym_id, 20, 24 * 3600e3)) fail(429, "That's a lot of refunds today. Try again tomorrow, or email us.");
-    const d = await paystack.refund({ reference: p.reference, cents }).catch(psFail);
-    const r = (await q("insert into paystack_refunds(gym_id,payment_id,reference,amount_cents,status,by_user,ps_id) values($1,$2,$3,$4,'pending',$5,$6) on conflict do nothing returning *",
-      [u.gym_id, p.id, p.reference, cents, u.id, d && d.id != null ? String(d.id) : null])).rows[0];
-    if (r && d && d.status === "processed") await psRefundDone(r.id, null);
-    res.json({ refund: r ? { id: String(r.id), cents, status: d && d.status === "processed" ? "processed" : "pending" } : null });
+    const db = await pool.connect(); let p, r, cents;
+    try {
+      await db.query("begin");
+      p = (await db.query("select * from payments where id=$1 and gym_id=$2 and source='paystack' for update", [intOr(req.params.id, 0), u.gym_id])).rows[0];
+      if (!p) fail(404, "That card payment doesn't exist.");
+      if (!["confirmed", "test"].includes(p.status)) fail(409, "That payment has been refunded already.");
+      if (p.dispute === "open") fail(409, "That payment is being disputed by the member's bank. It can't be refunded until that's settled.");
+      const shares = Number((await db.query("select coalesce(sum(amount_cents),0)::int as c from payments where split_of=$1 and status in ('confirmed','test')", [p.id])).rows[0].c);
+      const pending = Number((await db.query("select coalesce(sum(amount_cents),0)::int as c from paystack_refunds where payment_id=$1 and status='pending'", [p.id])).rows[0].c);
+      const left = p.amount_cents + shares - pending, raw = req.body && req.body.amountCents;
+      cents = raw === undefined || raw === null || raw === "" ? left : intOr(raw, NaN);
+      if (left <= 0) fail(409, "That payment's refund is on its way already.");
+      if (!(cents >= 100 && cents <= left)) fail(400, `Enter an amount from R1 to ${fmtMoney(left)}.`);
+      r = (await db.query("insert into paystack_refunds(gym_id,payment_id,reference,amount_cents,status,by_user) values($1,$2,$3,$4,'pending',$5) returning *", [u.gym_id, p.id, p.reference, cents, u.id])).rows[0];
+      // Trying again deals with the refunds that failed before (they leave Home's Needs you).
+      await db.query("update paystack_refunds set coach_done_at=now() where payment_id=$1 and status='failed' and coach_done_at is null", [p.id]);
+      await db.query("commit");
+    } catch (e) { await db.query("rollback").catch(() => {}); throw e; } finally { db.release(); }
+    let d;
+    try { d = await paystack.refund({ reference: p.reference, cents }); }
+    catch (e) {
+      if (e.unsure) await q("update paystack_refunds set error=$2, updated_at=now() where id=$1", [r.id, "Paystack didn't answer straight away"]);
+      else await q("delete from paystack_refunds where id=$1 and status='pending' and ps_id is null", [r.id]);
+      return psFail(e);
+    }
+    const psId = d && d.id != null ? String(d.id) : null;
+    if (psId) await q("update paystack_refunds set ps_id=coalesce(ps_id,$2), updated_at=now() where id=$1 and not exists(select 1 from paystack_refunds x where x.ps_id=$2 and x.id<>$1)", [r.id, psId]);
+    if (d && d.status === "processed") await psRefundDone(r.id, null);
+    res.json({ refund: { id: String(r.id), cents, status: d && d.status === "processed" ? "processed" : "pending" } });
+  }));
+  // The head coach dealt with a failed refund another way (paid them back by EFT, say): it leaves Home's Needs you.
+  api.post("/coach/payments/:id/refunds/:rid/dismiss", wrap(async (req, res) => {
+    const u = needHead(req);
+    const r = await q("update paystack_refunds set coach_done_at=coalesce(coach_done_at, now()) where id=$1 and payment_id=$2 and gym_id=$3 and status='failed' returning id", [intOr(req.params.rid, 0), intOr(req.params.id, 0), u.gym_id]);
+    if (!r.rows[0]) fail(404, "That refund doesn't exist.");
+    res.json({ ok: true });
   }));
   // Paystack's refund webhooks. A refund JitsFlow didn't ask for (made in Paystack's dashboard) is recorded too: the member has the money back.
   async function psRefundEvent(t, d) {
@@ -3904,6 +4024,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
         if (lost && ["confirmed", "test"].includes(p.status)) {
           await q("update payments set status='refunded', note=$2 where id=$1", [p.id, noteWith(p.note, "Chargeback: the member's bank took the payment back.")]);
           await q("update payments set status='refunded' where split_of=$1 and status in ('confirmed','test')", [p.id]);
+          // The member sees it plainly in the app: the money went back to them, so what it paid is owed again.
+          if (p.user_id) await q("insert into notices(gym_id,user_id,kind,title,body) values($1,$2,'payment',$3,$4)", [p.gym_id, p.user_id, "A card payment went back to you",
+            `Your bank gave your card payment of ${fmtMoney(cents, p.currency)} back to you, so it no longer counts as paid. What it paid for is owed again: pay it on your Pay sheet.`]);
         }
       }
       if (gymId) toHead(gymId, (name) => mail.templates.psDisputeResolved(name, who, fmtMoney(cents), lost));
@@ -3936,6 +4059,9 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   api.post("/admin/paystack/:kind/:id/seen", wrap(async (req, res) => {
     needAdmin(req); const t = { dispute: "paystack_disputes", refund: "paystack_refunds" }[req.params.kind]; if (!t) fail(404, "Not found.");
+    // A chargeback stays on the dashboard while it's open: only a resolved one can be marked done.
+    if (t === "paystack_disputes" && (await q("select 1 from paystack_disputes where id=$1 and status<>'resolved'", [clean(req.params.id, 60)])).rows[0])
+      fail(409, "That chargeback is still open. It can be marked done once Paystack resolves it.");
     const r = await q(`update ${t} set seen_at=now() where id::text=$1 and seen_at is null returning id`, [clean(req.params.id, 60)]);
     if (!r.rows[0]) fail(404, "Not found."); res.json({ ok: true });
   }));
@@ -3974,7 +4100,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     if (!paystack.on() && !(await q("select 1 from gyms where paystack is not null limit 1")).rows[0]) return null;
     const ver = (await q(`select g.id, g.name, g.paystack, h.name as head_name, h.email as head_email from gyms g left join users h on h.id=g.head_coach_id
       where g.paystack->>'status' in ('pending_verification') order by g.paystack->>'updatedAt' limit 50`)).rows;
-    const disputes = (await q(`select d.*, g.name from paystack_disputes d left join gyms g on g.id=d.gym_id where d.seen_at is null order by d.created_at desc limit 50`)).rows;
+    const disputes = (await q(`select d.*, g.name from paystack_disputes d left join gyms g on g.id=d.gym_id where d.seen_at is null or d.status<>'resolved' order by (d.status<>'resolved') desc, d.due_at nulls last, d.created_at desc limit 50`)).rows;
     const refunds = (await q(`select r.*, g.name from paystack_refunds r left join gyms g on g.id=r.gym_id where r.status='failed' and r.seen_at is null order by r.id desc limit 50`)).rows;
     return { on: paystack.memberCards() === "paystack", test: paystack.testMode(), bearer: paystack.bearer(), dashboard: paystack.DASHBOARD,
       toVerify: ver.map((g) => ({ id: String(g.id), gym: g.name, head: g.head_name ? { name: g.head_name, email: g.head_email } : null, ...psOut(g.paystack), subaccount: g.paystack.subaccount })),
@@ -4693,7 +4819,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // Unclaimed gyms nobody opened are tidied away (see tidyUnclaimed).
   setImmediate(() => sealAgain().catch((e) => console.warn("payfast seal again:", e.message)).then(() => psMove()).catch((e) => console.warn("paystack move:", e.message)));
   // PayFast cancels that didn't go through are tried again, and plans' amounts at PayFast follow their gyms' prices (syncPlans).
-  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, psRecheck, psMove, run: async () => { await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await psMove().catch((e) => console.warn("paystack move:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
+  api.jobs = { autoRemind, tellMissed, autopay, tidyUnclaimed, sealAgain, pfOps, syncPlans, syncPlan, psRecheck, psMove, payTell, run: async () => { await payTell().catch((e) => console.warn("pay tell:", e.message)); await sealAgain().catch((e) => console.warn("payfast seal again:", e.message)); await psMove().catch((e) => console.warn("paystack move:", e.message)); await tellMissed(); await autopay().catch((e) => console.warn("autopay:", e.message)); await autoRemind(); await tidyUnclaimed().catch((e) => console.warn("unclaimed:", e.message));
     await pfOps().catch((e) => console.warn("payfast ops:", e.message)); await syncPlans().catch((e) => console.warn("plan sync:", e.message)); } };
   return api;
 }

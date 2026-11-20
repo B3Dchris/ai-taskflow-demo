@@ -276,7 +276,7 @@ details.grp .body{padding:0 14px 8px}
 .compcard{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:inherit;font:inherit;width:100%}
 .compcard.past{opacity:.7}.cc-date{display:grid;justify-items:center;align-content:start;background:var(--surface-2);border-radius:10px;padding:6px 0}.cc-date b{font-size:22px;line-height:1}.cc-date small{font-size:11px;text-transform:uppercase;color:var(--ink-2)}
 .cc-body{display:grid;gap:4px;min-width:0}.cc-body b{font-size:16px}.cc-body small{font-size:13px;color:var(--ink-2)}.cc-body .pill{justify-self:start}
-.warn-t{color:var(--warn)!important}.ok-t{color:var(--good)}
+.warn-t{color:var(--warn)!important}.bad-t{color:var(--bad)}.sess.gone{opacity:.62}.ok-t{color:var(--good)}
 .compbar{display:block;width:100%;text-align:left;border:1px dashed var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;font-weight:700}.compbar small{font-weight:500;color:var(--ink-2)}
 details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}details.more>summary{font-weight:700;cursor:pointer;min-height:32px;display:flex;align-items:center}
 .today-card{display:grid;gap:12px}
@@ -2105,9 +2105,10 @@ function beltSVG(pct,belt=goal()){
   return `<svg class="belt" viewBox="0 0 330 46" role="img" aria-label="${cur} belt with ${n} of 4 skill stripes"><rect class="b ${cur}" x="1" y="10" width="328" height="26" rx="3"/><rect class="bar" x="242" y="10" width="60" height="26"/>${st}</svg>`;
 }
 /* #toast is a polite live region that's always there: hiding it only fades it out. The same message again is cleared first, so a screen reader reads it again.
-   A toast with Undo stays 10s, and waits while a finger or the keyboard is on it. */
-function toast(msg,act){const t=document.getElementById("toast"),put=()=>{t.textContent=msg;if(act)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`)};
-  clearTimeout(toast._s);toast._act=act?act.fn:null;toast._ms=act?10000:2800;
+   A toast with Undo stays 10s, and waits while a finger or the keyboard is on it. act.ms: how long it stays (one with no button,
+   like "Checking your payment…", can stay until the next toast replaces it). */
+function toast(msg,act){const t=document.getElementById("toast"),put=()=>{t.textContent=msg;if(act&&act.label)t.insertAdjacentHTML("beforeend",` <button class="toastbtn" data-a="toastact">${esc(act.label)}</button>`)};
+  clearTimeout(toast._s);toast._act=act&&act.label?act.fn:null;toast._ms=act&&act.ms||(act&&act.label?10000:2800);
   if(t.classList.contains("on")&&toast._msg===msg){t.textContent="";toast._s=setTimeout(put,60)}else put();toast._msg=msg;t.classList.add("on");toastWait()}
 function toastWait(){clearTimeout(toast._t);toast._t=setTimeout(toastHide,toast._ms)}
 function toastHide(){const t=document.getElementById("toast");clearTimeout(toast._t);t.classList.remove("on");t.textContent="";toast._act=null;toast._msg=null}
@@ -2655,7 +2656,8 @@ function render(){
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
   const was=tabHash(),wasTab=tipKey();if(r.tab!==S.ui.tab||r.cv&&r.cv!==COACH.view)tipSeen(wasTab);S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
-  render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()}
+  render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()
+  if(was!==tabHash()&&typeof payFresh==="function"){payFresh(30000);coachFresh(30000)}} // money a tab shows, if it's more than 30 s old
 // The phone's Back button closes the open sheet, else goes back to the previous tab. A step left by a sheet that was closed in the app
 // changes nothing on screen, so it's skipped: every press of Back does something, and Back from the first screen leaves the app.
 window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.getElementById("sheet");
@@ -2812,10 +2814,14 @@ document.addEventListener("click",e=>{
     case "planpick": planPickSheet();break;
     case "bulkplan": {const b=S.ui.bulk;if(b){b.planOpen=!b.planOpen;bulkSheet()}break}
     case "paidhow": lsSet("jf.payMethod",v);render();break;
-    case "poprej": {const f=document.getElementById("popform");if(f)savePop(f,"rejected");else popQuick(v,"rejected");break}
+    case "poprej": rejAsk(v);break;
+    case "rejwhy": rejPick(v);break;
+    case "rejback": rejBack();break;
+    case "rejgo": el.disabled=true;rejGo(v).finally(()=>{el.disabled=false});break;
+    case "payrestore": payRestore(v,el);break;
     case "popnewaddr": confirmSheet("Get a new forwarding address?","The current address stops working. Update your Gmail or Outlook rule with the new one.",["popnewyes",""],"Get a new address");break;
     case "popnewyes": api("POST","/coach/gym/pay/new-address").then(j=>{hideSheet();COACH.payInfo={...(COACH.payInfo||{}),popAddress:j.popAddress,popNotice:null};render();toast("New address ready. Update your email rule.")}).catch(e=>toast(e.message));break;
-    case "mypay": S.ui.payEft=false;myPaySheet();break;
+    case "mypay": S.ui.payEft=false;myPaySheet();payFresh(0);break;
     case "payeft": S.ui.payEft=!S.ui.payEft;myPaySheet();if(S.ui.payEft)setTimeout(()=>{const x=document.getElementById("payeft");if(x)x.scrollIntoView({behavior:"smooth",block:"start"})},60);break;
     case "poppaste": pasteProof();break;
     case "moneyview": COACH.moneyView=v;render();break;
@@ -2871,7 +2877,8 @@ document.addEventListener("click",e=>{
     case "psverify": el.disabled=true;psVerify(v);break;
     case "psseen": (async()=>{const [k,id]=String(v).split(":");try{await api("POST",`/admin/paystack/${k}/${id}/seen`,{});await dashLoad()}catch(e){toast(e.message)}})();break;
     case "refundask": refundSheet(v);break;
-    case "refundyes": el.disabled=true;refundGo(v);break;
+    case "refundyes": refundGo(v,el);break;
+    case "refunddismiss": refundDismiss(v);break;
     case "cpick": cpToggle(+v); break;
     case "cpdone": cpDone(); break;
     case "billcard": billCard(); break;

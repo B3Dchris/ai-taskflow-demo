@@ -220,6 +220,17 @@ const templates = {
   cardReceipt: (name, gym, amount, what, ref) => ({ subject: `Receipt: ${amount} to ${gym}`, title: "Payment received",
     paras: [`Hi ${name},`, `You paid ${gym} ${amount} by card${what ? ` for ${what}` : ""}.`, `Paystack reference: ${ref}.`, "It's marked as paid. There's nothing else to do."],
     button: { label: "See your payments", url: appUrl() + "/app/#me" } }),
+  // A payment the gym confirmed (a proof checked, or recorded by hand): what came in, for what, and when it was paid.
+  paymentReceipt: (name, gym, amount, what, when, stop) => ({ subject: `Receipt: ${amount} to ${gym}`, title: "Payment received",
+    paras: [`Hi ${name},`, `${gym} received your payment of ${amount}${what ? ` for ${what}` : ""}${when ? ` (paid ${when})` : ""}.`, "It's marked as paid in the app. There's nothing else to do.",
+      ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
+    button: { label: "See your payments", url: appUrl() + "/app/?pay=1" } }),
+  // A proof the gym marked Not received: why, their note, and how to send a new one (the button opens the Pay sheet).
+  proofRejected: (name, gym, amount, when, why, note, kid, stop) => ({ subject: `${gym}: payment not received`, title: "Payment not received",
+    paras: [`Hi ${name},`, `${gym} checked the proof of payment you sent${kid ? ` for ${kid}` : ""}${amount ? ` (${amount}${when ? `, ${when}` : ""})` : when ? ` (${when})` : ""} and couldn't mark it as paid${why ? `: ${why}` : ""}.`,
+      ...(note ? [`They said: “${note}”`] : []), "If you've paid, send a new proof of payment (the PDF from your bank works best). If you haven't yet, you can pay in the app.",
+      ...(stop ? [`Sent by ${gym} through JitsFlow. Don't want emails from them? Stop them here: ${stop}`] : [])],
+    button: { label: "Send a new proof", url: appUrl() + "/app/?pay=1" } }),
   psVerifyAdmin: (gym, bank, last4, changed) => ({ subject: `Card payouts to verify: ${gym}`, title: "A payout account to verify",
     paras: [`${gym} ${changed ? "changed" : "added"} the bank account Paystack pays its card payments into (${bank}, ending ${last4}).`,
       "Check the subaccount in Paystack's dashboard (Subaccounts), then tap Mark verified on the JitsFlow dashboard. Card payments switch on for the gym then."],

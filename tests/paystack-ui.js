@@ -110,7 +110,7 @@ function client(base) {
     ok(/Pay R850\.00/.test(await am.textContent("h1")) && /capitec_pay/.test(await am.textContent("#channels")), "Card opens Paystack's checkout for R850, which offers its own methods");
     await Promise.all([am.waitForURL(/\/app\//, { timeout: 8000 }), am.tap("#pay")]);
     await am.waitForTimeout(400);
-    ok(/Payment received — it shows once Paystack confirms|Paid\. Thanks!/.test(await toast(am)), "back in the app: “Payment received — it shows once Paystack confirms”: " + (await toast(am)));
+    ok(/Checking your payment…|Paid\. Thanks!/.test(await toast(am)), "back in the app: “Checking your payment…” (not “received” before it's checked): " + (await toast(am)));
     await am.waitForTimeout(1500);
     ok(/Paid\. Thanks!/.test(await toast(am)) && await ev(am, () => !/[?&](paid|reference)=/.test(location.search)), "then “Paid” once Paystack confirms (and the address is tidied)");
     await ev(am, () => loadPay().then(() => myPaySheet())); await am.waitForTimeout(400);

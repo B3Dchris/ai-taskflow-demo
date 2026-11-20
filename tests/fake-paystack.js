@@ -4,6 +4,10 @@
 //   POST /refund: as Paystack's docs describe them (Bearer secret key, JSON, amounts in cents).
 // - GET /checkout/:code: a checkout page with Pay and Cancel buttons. Pay marks the transaction a success, sends Paystack's signed
 //   charge.success webhook to the app (setApp) and returns to the callback_url with trxref and reference, as Paystack does.
+//   Cancel goes to the checkout's metadata.cancel_action when it has one (as Paystack does), else to the callback_url without
+//   a reference. Decline: the bank says no (status failed, "Declined"), back to the callback_url with the reference. Slow: back
+//   to the callback_url with the reference while Paystack is still working on it (status ongoing, no webhook): succeed(ref) and
+//   hook() finish it later.
 // mode: { authorization code: "fail" | "down" | "pending" } for saved-card charges; tweak(ref, fn): change what verify will say.
 "use strict";
 const http = require("http"); const crypto = require("crypto");
@@ -29,13 +33,17 @@ function startFakePaystack({ secret }) {
     const u = new URL(rq.url, "http://x"), raw = Buffer.concat(chunks).toString(); let body = {}; try { body = raw && /json/.test(rq.headers["content-type"] || "") ? JSON.parse(raw) : {}; } catch (e) {}
     const p = u.pathname;
     // the checkout pages the member sees (no key needed: it's a browser page)
-    let m = p.match(/^\/checkout\/([\w-]+)(\/(pay|cancel))?$/);
+    let m = p.match(/^\/checkout\/([\w-]+)(\/(pay|cancel|decline|slow))?$/);
     if (m) {
       const t = [...txs.values()].find((x) => x.access_code === m[1]); if (!t) return send(rs, 404, "No such checkout", "text/plain");
       if (!m[2]) return send(rs, 200, `<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>Paystack checkout</title></head><body style="font-family:sans-serif;padding:20px">
         <h1>Pay R${(t.amount / 100).toFixed(2)}</h1><p id="email">${t.email}</p><p id="channels">${(t.channels || ["card", "apple_pay", "capitec_pay", "eft"]).join(", ")}</p>
-        <form method="post" action="/checkout/${t.access_code}/pay"><button id="pay" type="submit">Pay</button></form><form method="post" action="/checkout/${t.access_code}/cancel"><button id="cancel" type="submit">Cancel</button></form></body></html>`, "text/html");
-      if (m[3] === "cancel") { t.status = "abandoned"; rs.writeHead(302, { location: t.callback_url.split("?")[0] }); return rs.end(); }
+        <form method="post" action="/checkout/${t.access_code}/pay"><button id="pay" type="submit">Pay</button></form><form method="post" action="/checkout/${t.access_code}/cancel"><button id="cancel" type="submit">Cancel</button></form>
+        <form method="post" action="/checkout/${t.access_code}/decline"><button id="decline" type="submit">Decline</button></form><form method="post" action="/checkout/${t.access_code}/slow"><button id="slow" type="submit">Slow</button></form></body></html>`, "text/html");
+      const back = () => t.callback_url + (t.callback_url.includes("?") ? "&" : "?") + `trxref=${t.reference}&reference=${t.reference}`;
+      if (m[3] === "cancel") { t.status = "abandoned"; rs.writeHead(302, { location: (t.metadata && t.metadata.cancel_action) || t.callback_url.split("?")[0] }); return rs.end(); }
+      if (m[3] === "decline") { t.status = "failed"; t.gateway_response = "Declined"; rs.writeHead(302, { location: back() }); return rs.end(); }
+      if (m[3] === "slow") { t.status = "ongoing"; t.gateway_response = "Transaction ongoing"; rs.writeHead(302, { location: back() }); return rs.end(); }
       t.status = "success"; t.paid_at = new Date().toISOString(); t.fees = Math.round(t.amount * 0.029) + 100; t.channel = "card";
       const code = "AUTH_" + (++n).toString(36) + crypto.randomBytes(3).toString("hex");
       t.authorization = { authorization_code: code, reusable: true, last4: "4081", brand: "visa", card_type: "visa", exp_month: "12", exp_year: "2030", channel: "card", bank: "TEST BANK" };
