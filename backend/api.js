@@ -177,7 +177,7 @@ function makeApi(pool, { secureCookies, build }) {
   // preview (unknown, opted out, claimed) is a 404. Tokens are 192 random bits, looked up by their hash (see outreach.findToken).
   const PREVIEW_GETS = [/^\/me$/, /^\/status$/, /^\/classes$/, /^\/me\/notices$/, /^\/coach\/classes\/\d+$/, /^\/coach\/roster$/, /^\/coach\/plans$/, /^\/coach\/insights$/,
     /^\/competitions$/, /^\/gym$/, /^\/coach\/import\/job$/, /^\/coach\/gym\/pay$/, /^\/coach\/packs$/, /^\/coach\/payments$/, /^\/coach\/payments\/months$/, /^\/coach\/money$/,
-    /^\/coach\/billing$/, /^\/coach\/payfast$/, /^\/coach\/paystack$/, /^\/coach\/beta$/];
+    /^\/coach\/billing$/, /^\/coach\/payfast$/, /^\/coach\/paystack$/, /^\/coach\/beta$/, /^\/programme$/];
   const CLAIM_FIRST = "Claim your gym first. It's free: make your account and it's yours.";
   // The stand-in head coach of an unclaimed gym: no account behind it (id null), the gym's own settings. extra: more of its fields.
   async function standIn(gymId, extra = {}) {
@@ -4678,6 +4678,8 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     res.set({ "Content-Type": r.shot_type, "Content-Security-Policy": "default-src 'none'", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" }).send(r.shot);
   }));
 
+  // The gym's monthly programme (backend/programme.js).
+  require("./programme").mount(api, { q, wrap, once, fail, clean, needUser, needCoach, isCoach, isHead, tzOf, todayIn, VISIT, dayIn });
   api.use((req, res) => res.status(404).json({ error: "Not found." }));
   // eslint-disable-next-line no-unused-vars
   api.use((err, req, res, next) => {

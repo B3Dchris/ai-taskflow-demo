@@ -641,6 +641,33 @@ create table if not exists app_secrets(name text primary key, value text not nul
 alter table site_daily add column if not exists seen int not null default 0;
 alter table site_visitors add column if not exists js int not null default 0;
 alter table site_visitors add column if not exists js_app int not null default 0;
+-- The gym's monthly programme (backend/programme.js): a theme per month, with up to 5 weeks (each starting on a Monday of that month),
+-- each with a title, a short note, YouTube videos (the video's id and the coach's title) and techniques from the library.
+-- Members see a month once it's published (published_at). notice_id: the "programme is up" notice it made, removed with the month.
+create table if not exists programmes(
+  id bigserial primary key,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  month date not null,
+  title text not null default '',
+  summary text not null default '',
+  weeks jsonb not null default '[]',
+  published_at timestamptz,
+  notice_id bigint,
+  updated_by bigint references users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(gym_id, month)
+);
+-- Weeks a member marked "Caught up" (week: its Monday), so they leave the catch-up list.
+create table if not exists programme_caught(
+  user_id bigint not null references users(id) on delete cascade,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  week date not null,
+  created_at timestamptz not null default now(),
+  primary key(user_id, gym_id, week)
+);
+-- Who sees the programme: 'all' members for now (a paid add-on can set something else later; anything but 'all' hides it from members).
+alter table gyms add column if not exists programme_access text not null default 'all';
 create or replace function jf_user_gone() returns trigger language plpgsql as $$
 begin update payments set user_gone_at=now() where user_id=old.id; return old; end $$;
 drop trigger if exists users_gone on users;
