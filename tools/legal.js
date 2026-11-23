@@ -10,7 +10,7 @@ const { load } = require("./business");
 const payfast = require("../backend/payfast");
 const beta = require("../backend/beta");
 
-const UPDATED = "15 November 2026";
+const UPDATED = "23 November 2026";
 // Both wordings, for server.js to pick from (see the top of this file). Only in page text: never in an attribute or <head>.
 const soonLive = (soon, live) => `<!--jf:soon-->${soon}<!--/jf:soon--><!--jf:live-->${live}<!--/jf:live-->`;
 // How members pay their gym, in the words every page uses.
@@ -139,7 +139,8 @@ ${b.priceNote ? `<p>${esc(b.priceNote)}</p>` : b.vatNote ? `<p>All prices are in
 <li>A gym that takes card payments gives its bank account in the app and confirms it's the gym's own account. We check it before card payments switch on, and Paystack may hold the first payout to a new or changed account until it's verified.</li>
 <li>Questions or disputes about membership fees, refunds, classes or cancellations are between the member and the gym. We'll help where we can: email us.</li></ul></section>
 <section><h2>6. Acceptable use</h2><p>Don't use JitsFlow to break the law, send spam, harass anyone, upload things you don't have the right to share, collect other people's details without permission, get into accounts or data that aren't yours, overload or probe our systems, or copy the app or its content in bulk.</p></section>
-<section><h2>7. Your content and data</h2><p>What you add (notes, training logs, a gym's timetable, members and payments) stays yours. You let us store and show it only to run JitsFlow for you. For the details a gym keeps about its members, the gym is responsible for them under the Protection of Personal Information Act (POPIA) and we process them on the gym's behalf. How we handle personal information is in the <a href="/privacy/">privacy notice</a>.</p></section>
+<section><h2>7. Your content and data</h2><p>What you add (notes, training logs, a gym's timetable, members and payments) stays yours. You let us store and show it only to run JitsFlow for you. For the details a gym keeps about its members, the gym is responsible for them under the Protection of Personal Information Act (POPIA) and we process them on the gym's behalf. How we handle personal information is in the <a href="/privacy/">privacy notice</a>.</p>
+<p>JitsFlow support can access a gym's account to help when needed. Every change is logged, and the gym's owner is told.</p></section>
 <section><h2>8. Techniques and videos</h2><p>The technique text, flow map and curriculum are ours. Technique videos are embedded from YouTube and belong to their creators; they're shown with YouTube's player and remain subject to YouTube's terms.</p></section>
 <section><h2>9. Train safely</h2><p>Jiu-Jitsu is a contact sport with a real risk of injury. JitsFlow is a study aid: it doesn't replace a qualified coach and isn't medical advice. Learn and drill techniques under a qualified coach, tap early, release submissions when your partner taps, and see a doctor about injuries. You train at your own risk.</p></section>
 <section><h2>10. Availability and changes</h2><p>We work to keep JitsFlow running, but it may sometimes be unavailable for maintenance or reasons beyond our control. The study parts of the app keep working offline. We may improve or change features; if we remove something a paying gym relies on, we'll tell you first.</p></section>

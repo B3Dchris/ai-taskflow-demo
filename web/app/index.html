@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="55c795896c";</script>
+<script>window.JF_IMG={"pos": ["back_top"], "belts": [], "hero": false, "tech": ["arm_tri_def", "back_control", "bodylock_def", "duck_under", "hw_guillotine", "kimura_trap_def", "stance_motion"]};window.JF_BUILD="ca5066c84b";</script>
 <title>JitsFlow</title>
 <script>/* Appearance chosen in Settings (this device): set before the page draws so it never flashes the wrong colours. */
 try{var jt=localStorage.getItem("jf.theme");if(jt==="light"||jt==="dark")document.documentElement.setAttribute("data-theme",jt)}catch(e){}</script>
@@ -818,6 +818,15 @@ html[data-dir="back"]::view-transition-new(chainstage){animation-name:vt-in-back
 .cpmark{display:flex;flex-direction:column;align-items:center;line-height:1;gap:2px}.cpmark b{font-size:14px;letter-spacing:.01em}.cpmark span{font-size:12px;font-weight:600;color:var(--ink-2)}
 .psrev{font-family:var(--f-mono);font-size:13px;background:var(--surface-2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all}
 .pvbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 12px;border-radius:14px;background:var(--night,#0e1a33);color:#fff;font-size:14px;line-height:1.3;box-shadow:0 6px 18px rgba(14,26,51,.18)}
+/* Support mode (accounts.js, supStart): amber, on every screen and sheet, in the page's flow so it never covers tabs or a sheet's buttons. */
+.supbar{position:sticky;top:0;z-index:30;background:#F2B233;color:#241800;padding-top:env(safe-area-inset-top,0px);box-shadow:0 2px 10px rgba(36,24,0,.18)}
+.supbar .wrap{display:flex;align-items:center;gap:10px;padding-block:8px;font-size:14px;line-height:1.3}
+.supbar .suptxt{flex:1;min-width:0;overflow-wrap:anywhere}.supbar .btn{flex:none;background:#241800;color:#FFF6E0;border-color:#241800}
+html.support .sheet .wrap{padding-top:8px}
+.supnote{display:block;color:var(--warn);font-weight:600;margin:0}
+html.support [data-sup][disabled]{opacity:.45;cursor:not-allowed}
+.supitem{display:grid;gap:6px;border-top:1px solid var(--line);padding-block:10px}.supitem:first-child{border-top:0}
+.suplist{margin:0;padding-left:18px;display:grid;gap:3px}
 .pvbar span{flex:1;min-width:0;overflow-wrap:anywhere}.pvbar .btn,.pvbar .btn.primary{flex:none;white-space:nowrap;background:#fff;color:#0e1a33;border-color:#fff}
 .radrow{flex-wrap:nowrap!important;justify-content:flex-start!important;gap:8px!important}.radrow input{width:auto;flex:none;margin:0}
 .pvcard{border:2px solid var(--blue)}.pvlist{margin:0;padding-left:20px;display:grid;gap:4px}.pvlist li{line-height:1.4}.betapill{font-size:13px;vertical-align:6px;font-family:inherit;letter-spacing:0}
@@ -5089,6 +5098,10 @@ document.addEventListener("click",e=>{
     case "copy": copyText(v);break;
     case "outopen": outreachSheet();break;
     case "dashopen": dashOpen();break;
+    case "supask": supAsk(v);break;
+    case "supgo": supGo(v,el);break;
+    case "supexit": supExit(el);break;
+    case "supend": supEnd();break;
     case "dashload": dashLoad();break;
     case "adsshow": adsFeed(false);break;
     case "adsnew": if(!ADS.ask){ADS.ask=true;dashSheet(true)}else adsFeed(true);break;
@@ -5408,12 +5421,15 @@ async function api(method,url,body,key){
   // The preview of a gym outreach built (see previewInit): reads carry its link; a change asks them to claim it instead.
   const pv=!!API.preview&&!PV_FREE.test(url);
   if(pv){if(method!=="GET"){pvAsk();const err=new Error("Claim your gym first. It's free.");err.status=403;err.preview=true;throw err}h["x-jf-preview"]=API.preview.token}
+  if(API.support)h["x-jf-support"]=API.support.id; // support mode: the server refuses anything once it has ended (never runs it as you)
   let r;try{r=await fetch("/api"+url,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin"})}
   catch(e){const err=new Error("No signal right now. Try again when you're back online.");err.offline=true;throw err}
   let j={};try{j=await r.json()}catch(e){}
   // Signed out while using the app: sign in on top of what's open, then send this again.
   if(r.status===401&&j.signedOut&&API.me&&!url.startsWith("/auth/"))return reauth().then(()=>api(method,url,body,key));
   if(pv&&j.previewGone){pvExit();render()}
+  if(j.supportEnded&&API.support)supEnded(j.error);
+  if(j.supportOther){toast(j.error);setTimeout(()=>location.reload(),1500)}
   if(!r.ok){const err=new Error(j.error||"Something went wrong. Try again.");err.status=r.status;err.data=j;throw err}
   return j;
 }
@@ -5446,9 +5462,13 @@ const beltChip=(b,st)=>`<span class="beltchip" style="--bc:${BCOL[b]||"#F4F4F0"}
 async function acctInit(){
   if(inClaude()||!/^https?:$/.test(location.protocol))return;
   try{const j=await api("GET","/me");API.on=true;API.me=j.me;api("GET","/status").then(x=>{API.status=x}).catch(()=>{});
-    if(API.me)await startSync();else if(lsGet("rtb.owner")){if(pendingLogs().size){S.ui.authMode="login";S.ui.deep=true;setTimeout(()=>{authSheet();toast("Sign in to send the sessions saved on this phone to your account.")},50)}else wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone (unless it hasn't reached the account yet)
+    if(API.me&&API.me.support){API.support=API.me.support;supStart()}
+    else if(API.me)await startSync();else if(lsGet("rtb.owner")){if(pendingLogs().size){S.ui.authMode="login";S.ui.deep=true;setTimeout(()=>{authSheet();toast("Sign in to send the sessions saved on this phone to your account.")},50)}else wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone (unless it hasn't reached the account yet)
   catch(e){API.on=false}
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
+  // Into support mode (/app/?support=1, a fresh load as the gym's head coach), and back out (/app/?dash=1: the team's dashboard again).
+  if(qs.has("dash")||qs.has("support")){try{const k=new URLSearchParams(location.search);k.delete("dash");k.delete("support");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
+    if(qs.get("dash")==="1"&&API.me&&API.me.admin&&!API.support){S.ui.deep=true;setTimeout(dashOpen,80)}}
   S.ui.deep=["signin","start","join","claim","reset","claimgym","gym"].some(k=>qs.has(k)); // invite and sign-in links skip the "How are you using JitsFlow?" screen
   if(want){try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
     if(API.on&&!API.me){S.ui.authMode=want;setTimeout(authSheet,50)}else if(!API.on)setTimeout(()=>toast("Sign-in isn't switched on for this site yet."),400)}
@@ -5525,7 +5545,7 @@ function reloadIfIdle(){const a=document.activeElement;if(!API.stale||!document.
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="visible")return;checkVersion();flushLogs()});
 async function signedIn(me,opts){API.me=me;S.ui.fromHow=false;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();if(isCoach())setCoachMode("manage");else maybeOnboardAfterSync();isCoach()?coachGo("home"):go("home");toast(`Signed in as ${(me.account||me).name}.`)}
 // A kid on a parent's login isn't asked the study questions: the parent is there to book and pay for them.
-function maybeOnboardAfterSync(){S.ui.obChecked=false;const f=API.me&&API.me.family;if(S.ui.claim&&S.ui.authKid)return; // about to offer the kid whose link they opened
+function maybeOnboardAfterSync(){S.ui.obChecked=false;if(API.support)return;const f=API.me&&API.me.family;if(S.ui.claim&&S.ui.authKid)return; // about to offer the kid whose link they opened
   if(f&&!(f.find(x=>x.id===API.me.id)||{}).login)return;if(!P().settings.onboarded)maybeOnboard()}
 async function signOut(){try{await api("POST","/auth/logout",{})}catch(e){}API.me=null;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;COACH.roster=COACH.classes=COACH.payments=COACH.insights=null;COACH.packs=COACH.payInfo=COACH.pf=COACH.bill=undefined;wipeLocal();S.mode="local";setSync("Saved on this device","local");go("home");toast("Signed out. Your progress is saved in your account, not on this phone.")}
 
@@ -5731,7 +5751,7 @@ async function coachLoad(what,around){
 // Coach tabs: Today (route coach-home), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
 const COACH_VIEWS=["home","schedule","members","comps","money","gym"];
 const coachMode=()=>{try{return localStorage.getItem("jf.coachMode")==="study"?"study":"manage"}catch(e){return "manage"}};
-const managing=()=>isCoach()&&(!!API.preview||coachMode()!=="study");
+const managing=()=>isCoach()&&(!!API.preview||!!API.support||coachMode()!=="study");
 function setCoachMode(m){try{if(m==="study")localStorage.setItem("jf.coachMode","study");else localStorage.removeItem("jf.coachMode")}catch(e){}}
 function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","all"],insights:["members","risk"],payments:["money"]};const l=legacy[v];
   if(l){v=l[0];if(l[1])COACH.memFilter=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
@@ -6639,7 +6659,7 @@ function coachGym(){const g=API.me.gym;
       ${isHead()?`<label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label>`:""}<button class="btn primary" type="submit">Save gym</button></form>
     <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
     <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p>
-    ${accountSection()}${appearanceSection()}
+    ${accountSection()}${supportPanel()}${appearanceSection()}
     ${gymDelPanel()}</section>`}
 // Closing the gym (head coach only): deletes it and everything it keeps. People with their own accounts keep them, with no gym.
 function gymDelPanel(){const g=API.me.gym;if(!isHead())return "";
@@ -7822,6 +7842,7 @@ function dashGyms(){const d=DASH.data;if(!d)return "";const q=DASH.q.trim().toLo
     return `<div class="dgym"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><b class="dgname">${esc(g.name)}</b>${b[1]?`<span class="pill ${b[0]}">${b[1]}</span>`:""}</div>
       <div class="dgstats"><span><b class="mono">${nf(g.members)}</b>members</span><span><b class="mono">${nf(g.active7)}</b>used the app this week</span><span><b class="mono">${nf(g.classes7)}</b>classes next 7 days</span><span><b class="mono">${nf(g.bookings7)}</b>bookings last 7 days</span></div>
       <p class="small">${g.head?`Head coach <b>${esc(g.head.name)}</b>${g.head.email?` · <a href="mailto:${esc(g.head.email)}">${esc(g.head.email)}</a>`:""}`:"No head coach"}</p>
+      ${g.support?`<button class="btn sm" style="justify-self:start" data-a="supask" data-v="${esc(g.id)}">Manage as support</button>`:""}
       <p class="small muted">${esc(billTxt(g.billing))}. ${esc(pay)}. ${g.onApp} of ${g.members} member${g.members===1?"":"s"} on the app · ${g.coaches} coach${g.coaches===1?"":"es"} · started ${esc(outDay(g.createdAt))} · last active ${esc(dAgo(g.lastSeen))}</p></div>`}).join("")+(many?`<button class="btn" style="justify-self:start" data-a="dashallgyms">Show all ${list.length} gyms</button>`:"")}
 const roleTxt=u=>u.role==="coach"?"Coach":u.parent?"Parent":u.kid?"Kid":u.gym?"Student":"On their own";
 // Settings the team needs to fix, at the top of the dashboard (nothing shows when all is well), and today's AI use.
@@ -7968,6 +7989,67 @@ document.addEventListener("click",e=>{if(!API.preview)return;const el=e.target.c
   if(el.dataset.a&&!PV_BLOCK.has(el.dataset.a)&&!el.matches("[data-wa]"))return;
   e.preventDefault();e.stopImmediatePropagation();previewClaim()},true);
 document.addEventListener("submit",e=>{if(!API.preview||e.target.id==="authform")return;e.preventDefault();e.stopImmediatePropagation();previewClaim()},true);
+
+/* ============ SUPPORT MODE (the JitsFlow team helping a gym, as its head coach) ============ */
+/* The team starts it from the dashboard's gym list (Manage as support). The server then runs this phone's requests as the gym's
+   head coach (it keeps who is really there, and logs every change) until Exit or 2 hours. The app shows the gym exactly as its head
+   coach sees it, with an amber bar on every screen. Every request says it's support mode (x-jf-support), so a change never runs as
+   the team member's own account after it ends. Nothing is synced to or from the phone: the owner's own training stays theirs.
+   What support can't do (bank details, payouts, refunds, the owner's login, the gym's ownership and plan) is refused by the server;
+   here those buttons are switched off with the reason, before anyone taps them. */
+const SUP_NO="Support can't change this. Ask the owner.";
+const SUP_A=new Set(["billcard","billcancel","pfremove","pftest","psedit","refundask","refundyes","refunddismiss","headask","gymdel","signout","signoutall","delacct","leavegym","verifysend","betaopen","betaleave","betafb","popnewaddr","famswitch","kidclaim","astok","astsay","coachmode","supend"]);
+const SUP_F=new Set(["bankform","pfform","psform","delform","gymdelform","phoneform","joinform","kidform","kidsform","betaform","fbform","astform"]);
+const supLeft=()=>{const s=API.support;if(!s)return 0;return Math.max(0,new Date(s.endsAt)-Date.now())};
+const supLeftTxt=()=>{const m=Math.ceil(supLeft()/60000);if(m<=0)return "time's up";const h=Math.floor(m/60),r=m%60;return (h?`${h} h ${r?r+" min":""}`:`${r} min`).trim()+" left"};
+function supStart(){const s=API.support;if(!s)return;let bar=document.getElementById("supbar");
+  if(!bar){bar=document.createElement("div");bar.id="supbar";bar.className="supbar";bar.setAttribute("role","region");document.body.insertBefore(bar,document.getElementById("app"))}
+  bar.setAttribute("aria-label",`Support mode for ${s.gym}`);
+  bar.innerHTML=`<div class="wrap"><span class="suptxt">Managing <b>${esc(s.gym)}</b> as JitsFlow support · <span id="suptime">${esc(supLeftTxt())}</span></span><button class="btn sm" data-a="supexit">Exit</button></div>`;
+  document.documentElement.classList.add("support");
+  clearInterval(supStart._t);supStart._t=setInterval(()=>{const t=document.getElementById("suptime");if(t)t.textContent=supLeftTxt();if(supLeft()<=0){clearInterval(supStart._t);api("GET","/me").catch(()=>{})}},20000);
+  if(!supStart._mo){supStart._mo=new MutationObserver(()=>{if(!supStart._q){supStart._q=1;requestAnimationFrame(()=>{supStart._q=0;supGuard()})}});supStart._mo.observe(document.body,{childList:true,subtree:true})}
+  supGuard()}
+// Guarded buttons and forms: switched off (dimmed), with the reason once per card, under its title (the server refuses them anyway).
+function supGuard(){if(!API.support)return;
+  const note=el=>{const box=el.closest("details,.panel,.sheet .wrap,section")||el.parentElement;if(!box||box.querySelector(":scope > .supnote"))return;
+    const h=box.tagName==="DETAILS"?box.querySelector(":scope > summary"):box.querySelector(":scope > h2.label,:scope > .row > h2.label");const html=`<p class="supnote small" role="note">${SUP_NO}</p>`;
+    if(h)(h.parentElement===box?h:h.parentElement).insertAdjacentHTML("afterend",html);else box.insertAdjacentHTML("afterbegin",html)};
+  const off=x=>{x.disabled=true;x.dataset.sup="1";x.setAttribute("aria-disabled","true");x.title=SUP_NO};
+  document.querySelectorAll("[data-a]").forEach(el=>{if(!SUP_A.has(el.dataset.a)||el.dataset.sup||el.closest("#supbar"))return;off(el);note(el)});
+  SUP_F.forEach(id=>{const f=document.getElementById(id);if(!f||f.dataset.sup)return;f.dataset.sup="1";f.querySelectorAll("input,select,textarea,button").forEach(off);
+    const sub=document.querySelector(`[form="${id}"]`);if(sub)off(sub);note(f)})}
+// Just in case something guarded is reached another way (a keyboard, an old screen): it says why instead.
+document.addEventListener("click",e=>{if(!API.support)return;const el=e.target.closest("[data-a]");if(!el||!SUP_A.has(el.dataset.a)||el.closest("#supbar"))return;e.preventDefault();e.stopImmediatePropagation();toast(SUP_NO)},true);
+document.addEventListener("submit",e=>{if(!API.support||!SUP_F.has(e.target.id))return;e.preventDefault();e.stopImmediatePropagation();toast(SUP_NO)},true);
+// Support ended (Exit, 2 hours, or signed out elsewhere): back to their own app, on the dashboard.
+function supEnded(msg){if(supEnded._d)return;supEnded._d=1;API.support=null;clearInterval(supStart._t);toast(msg||"Support mode has ended.");setTimeout(()=>location.replace("/app/?dash=1"),1400)}
+async function supExit(el){if(el){el.disabled=true;el.textContent="Exiting…"}
+  try{await api("POST","/admin/support/exit",{})}catch(e){}supEnded._d=1;API.support=null;location.replace("/app/?dash=1")}
+// The dashboard's gym list: "Manage as support", asked once (the owner gets an email, and everything is logged).
+function supAsk(id){const g=((DASH.data||{}).gyms||[]).find(x=>x.id===id);if(!g)return;S.ui.sheet={k:"supask"};S.ui.stack=[];
+  openSheet(`${sheetHead("JitsFlow team")}<div class="stack-lg"><h1>Manage ${esc(g.name)}?</h1><p>You'll see and change ${esc(g.name)} as its head coach${g.head?`, ${esc(g.head.name)}`:""}, for up to 2 hours.</p>
+    <ul class="pvlist small"><li>${g.head?esc(first(g.head.name)):"The head coach"} gets an email that you're helping, and sees every change you make.</li><li>You can't change bank details, payouts or PayFast, refund, change their login, hand over or delete the gym, or change their JitsFlow plan.</li></ul></div>`,false,
+    {act:`<button class="btn primary grow" data-a="supgo" data-v="${esc(id)}">Manage as support</button>`})}
+async function supGo(id,el){if(el){el.disabled=true;el.textContent="One moment…"}
+  try{await api("POST",`/admin/gyms/${encodeURIComponent(id)}/support`,{});location.replace("/app/?support=1#coach-home")}catch(e){toast(e.message);if(el){el.disabled=false;el.textContent="Manage as support"}}}
+// The head coach's Gym tab: who from JitsFlow support opened the gym, when, and what they changed.
+const SUPP={data:undefined};
+function supportPanel(){if(!isHead())return "";
+  if(SUPP.data===undefined){SUPP.data=null;api("GET","/coach/support").then(j=>{SUPP.data=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{SUPP.data=undefined})}
+  const ss=(SUPP.data&&SUPP.data.sessions)||[];
+  const when=d=>{try{return new Date(d).toLocaleString(undefined,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}catch(e){return d}};
+  const tm=d=>{try{return new Date(d).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}catch(e){return ""}};
+  return `<section class="panel stack" id="supportacc"><h2 class="label">Support access</h2>
+    <p class="small">JitsFlow support can open your gym to help when needed. You get an email each time, and every change shows here.</p>
+    ${!SUPP.data?`<p class="small muted">Loading…</p>`:!ss.length?`<p class="small muted">No support sessions yet.</p>`:`<div class="list supsess">${ss.map(x=>`<div class="supitem"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><span><b>${esc(when(x.startedAt))}</b><br><span class="small">${esc(x.who)}${x.email?` · ${esc(x.email)}`:""}</span></span>${x.live?`<span class="pill due">On now</span>`:""}</div>
+      ${x.changes.length?supChanges(x.changes,tm):`<p class="small muted">No changes.</p>`}
+      ${x.live?`<button class="linkbtn small" data-a="supend" style="justify-self:start">End support access now</button>`:""}</div>`).join("")}</div>`}
+    <p class="small muted">Questions? Write to support@jitsflow.com.</p></section>`}
+// A session's changes, oldest first: the first 8, the rest one tap away.
+function supChanges(cs,tm){const li=c=>`<li${c.blocked?' class="muted"':""}><span class="mono muted">${esc(tm(c.at))}</span> ${esc(c.summary)}</li>`;
+  return `<ul class="small suplist">${cs.slice(0,8).map(li).join("")}</ul>${cs.length>8?`<details class="more"><summary class="small">Show ${cs.length-8} more</summary><ul class="small suplist">${cs.slice(8).map(li).join("")}</ul></details>`:""}`}
+async function supEnd(){try{const j=await api("POST","/coach/support/end",{});SUPP.data=undefined;render();toast(j.ended?"Support access ended.":"Support had already finished.")}catch(e){toast(e.message)}}
 
 /* ============ THE BETA ("FOUNDING GYMS") ============ */
 // Head coach, in the Gym tab: apply in one tap (with what they'd want built), see where it stands, send feedback once in.

@@ -115,6 +115,50 @@ const TEAM_CLAIM = "The JitsFlow team can't claim a gym from its link: only its 
 const NOT_YET = "This gym isn't on JitsFlow yet. Ask your coach for the invite link once they've set it up.";
 const EMAIL = (a) => `coalesce(${a}.email, (select pe.email from users pe where pe.id=${a}.parent_id))`;
 
+// Support mode (see supportGate in makeApi): what support can never do, whatever the app sends. [method ("*": any change), path,
+// what it is (for the log), what support is told]. Checked before any route runs; the money, ownership and login routes check again
+// themselves (noSupport). tests/support.js checks every route in the API against this list, and tries every one.
+const SUP_NO = "Support can't change this. Ask the owner.";
+const TEAM_NO = "Exit support mode to use the team tools.";
+const SUPPORT_DENY = [
+  ["PATCH", /^\/coach\/gym\/pay$/, "Change the gym's bank details"],
+  ["POST", /^\/coach\/gym\/pay\/new-address$/, "Change the proof-of-payment email address"],
+  ["PUT", /^\/coach\/paystack$/, "Change the card payout account"],
+  ["PUT", /^\/coach\/payfast$/, "Connect a PayFast account"],
+  ["DELETE", /^\/coach\/payfast$/, "Disconnect PayFast"],
+  ["POST", /^\/coach\/payments\/[^/]+\/refund$/, "Refund a card payment"],
+  ["POST", /^\/coach\/payments\/[^/]+\/refunds\/[^/]+\/dismiss$/, "Dismiss a failed refund"],
+  ["POST", /^\/coach\/assistant(\/confirm)?$/, "Use the assistant (it can change bank details)"],
+  ["DELETE", /^\/coach\/gym$/, "Delete the gym"],
+  ["POST", /^\/coach\/head$/, "Change the head coach"],
+  ["POST", /^\/coach\/billing\/checkout$/, "Add a card to the JitsFlow plan"],
+  ["DELETE", /^\/coach\/billing$/, "Cancel the JitsFlow plan"],
+  ["POST", /^\/coach\/beta$/, "Apply for or leave the JitsFlow beta"],
+  ["POST", /^\/coach\/beta\/feedback$/, "Send beta feedback as the owner"],
+  ["POST", /^\/coach\/support\/end$/, "End support access"],
+  // the head coach's own login and account
+  ["*", /^\/auth\//, "Sign in, sign up or sign out"],
+  ["PATCH", /^\/me$/, "Change the owner's own details"],
+  ["DELETE", /^\/me$/, "Delete the owner's account"],
+  ["POST", /^\/me\/sessions\/end$/, "Sign the owner out everywhere"],
+  ["POST", /^\/me\/verify-email$/, "Send the owner an email check"],
+  ["POST", /^\/me\/(join|leave|as|kids|train|claim-gym|plan|book-usual)$/, "Change the owner's own membership"],
+  ["*", /^\/me\/(pay|autopay)(\/|$)/, "Pay as the owner"],
+  ["*", /^\/(progress|logs)(\/|$)/, "Change the owner's own training"],
+  ["GET", /^\/(progress|logs)(\/|$)/, "See the owner's own training"],
+  ["*", /^\/admin\//, "Use the team tools", TEAM_NO],
+  ["GET", /^\/admin\//, "Use the team tools", TEAM_NO],
+];
+// Refused in support mode? null, or { what, msg }. headId: the gym's head coach (their own record can't be changed as a member either).
+function supportDenied(method, path, headId) {
+  const m = method === "HEAD" ? "GET" : method;
+  const hit = SUPPORT_DENY.find(([dm, re]) => (dm === "*" ? m !== "GET" : dm === m) && re.test(path));
+  if (hit) return { what: hit[2], msg: hit[3] || SUP_NO };
+  const own = /^\/coach\/students\/(\d+)(\/|$)/.exec(path);
+  if (own && m !== "GET" && own[1] === String(headId)) return { what: "Change the owner's own account", msg: SUP_NO };
+  return null;
+}
+
 function makeApi(pool, { secureCookies, build }) {
   const api = express.Router();
   const q = (text, params) => pool.query(text, params);
@@ -152,9 +196,10 @@ function makeApi(pool, { secureCookies, build }) {
   // Who is calling?
   api.use(wrap(async (req, res, next) => {
     const tok = cookies(req)[COOKIE];
+    let row = null;
     if (tok && tok.length === 64) {
       // A parent's session books for one of their kids (as_user): everything they do (bookings, fees, journal) is that kid's.
-      const row = await bySession(tok);
+      row = await bySession(tok);
       if (row) {
         const ends = row.session_ends, cap = new Date(row.session_at).getTime() + SESSION_MAX_DAYS * 864e5;
         req.user = row; req.sessionHash = sha(tok);
@@ -168,8 +213,115 @@ function makeApi(pool, { secureCookies, build }) {
         }
       }
     }
+    if (await supportGate(req, res, tok, row)) return; // support mode: the request runs as the gym's head coach (or is refused)
     next();
   }));
+
+  // ---------- support mode: the JitsFlow team helping a gym, as its head coach ----------
+  // A team member (needAdmin) starts it from the dashboard for one claimed gym (POST /admin/gyms/:id/support). It's its own row in
+  // support_sessions with its own cookie (jf_sup), next to their own session (jf_s), which is never changed: exiting (or the 2 hours
+  // running out) just ends the support row, and they're themselves again. While it's on, a request runs as the gym's head coach
+  // (req.user), so every screen and route behaves as theirs, and req.support keeps who is really there. It counts only when:
+  // - the jf_sup token is a live, unended session (2 hours at most, never extended), started from this same jf_s session by this
+  //   same login, who is still on the team (JF_ADMIN_EMAILS, verified), and the gym is claimed with the same head coach;
+  // - and the app says it's in support mode (x-jf-support: the session's id) on every change. A change without it is refused (a tab
+  //   opened before support started must not act on the gym); a change with it after support ended is refused too (never run as the
+  //   team member's own account by accident). Reads without it (images, links) run in support mode.
+  // What support can never do (SUPPORT_DENY) is refused before any route runs, and checked again in those routes (noSupport). Every
+  // change is written to support_log (supLog), and the head coach is emailed when it starts and sees the log in Gym › Support access.
+  const SUP_COOKIE = "jf_sup", SUPPORT_MIN = 120;
+  const SUP_ENDED = "Support mode has ended. You're back in your own account.";
+  const supCookie = () => ({ httpOnly: true, secure: secureCookies, sameSite: "strict", maxAge: 24 * 3600e3, path: "/" });
+  const supOut = (s) => ({ id: String(s.id), gymId: String(s.gym_id), gym: s.gym_name, admin: s.admin_name || s.admin_email, adminEmail: s.admin_email, startedAt: s.created_at, endsAt: s.expires_at });
+  // Logged for the gym: never request bodies, only the route, a short summary and how it went.
+  async function supLog(s, method, path, summary, status) {
+    await q("insert into support_log(gym_id,admin_id,admin_email,session_id,method,path,summary,status) values($1,$2,$3,$4,$5,$6,$7,$8)",
+      [s.gym_id || s.gymId, s.admin_id || s.adminId, s.admin_email || s.adminEmail || "", s.id || s.sessionId, method, clean(path, 200), clean(summary, 200), status || null]);
+  }
+  async function supEnd(s, how, summary) {
+    const r = await q("update support_sessions set ended_at=least(now(), expires_at), ended_how=$2 where id=$1 and ended_at is null returning id", [s.id, how]);
+    if (r.rows[0]) await supLog(s, "END", "", summary, 200);
+  }
+  async function supportGate(req, res, tok, row) {
+    if (req.path === "/admin/support/exit") return false; // it ends the support session itself, whatever state it's in
+    const st = cookies(req)[SUP_COOKIE], hdr = req.headers["x-jf-support"];
+    if (st === undefined && hdr === undefined) return false;
+    const refuse = (status, error, extra) => { res.clearCookie(SUP_COOKIE, { path: "/" }); res.status(status).json({ error, supportEnded: true, ...extra }); return true; };
+    const s = st && /^[0-9a-f]{64}$/.test(st) ? (await q(`select s.*, s.expires_at > now() as live, g.name as gym_name, g.claim is null as claimed, g.head_coach_id
+      from support_sessions s join gyms g on g.id=s.gym_id where s.token_hash=$1`, [sha(st)])).rows[0] : null;
+    let why = null;
+    if (!s || s.ended_at) why = "gone";
+    else if (!s.live) { why = "time"; await supEnd(s, "time", "Support session ended: the 2 hours were up"); }
+    else if (!row || String(row.login_id) !== String(s.admin_id) || s.admin_session !== sha(tok || "") || !isTeam(row)) { why = "signedout"; await supEnd(s, "signedout", "Support session ended: signed out"); }
+    else if (!s.claimed || String(s.head_coach_id) !== String(s.head_id)) { why = "gym"; await supEnd(s, "gym", "Support session ended: the gym's head coach changed"); }
+    let u = null;
+    if (!why) {
+      u = await loadMe(s.head_id);
+      if (!u || !isHead(u) || String(u.gym_id) !== String(s.gym_id) || !u.pass_hash) { why = "gym"; await supEnd(s, "gym", "Support session ended: the gym's head coach changed"); }
+    }
+    if (why) {
+      // The app thought it was in support mode: refused, so nothing meant for the gym runs as the team member's own account.
+      if (hdr !== undefined) return refuse(401, why === "time" ? "Support mode ended: the 2 hours are up. You're back in your own account." : SUP_ENDED);
+      res.clearCookie(SUP_COOKIE, { path: "/" });
+      return false;
+    }
+    // A page left open from an earlier support session: refused (it would act on whichever gym is open now). This one carries on.
+    if (hdr !== undefined && String(hdr) !== String(s.id)) { res.status(409).json({ error: "This page was open for another support session. Reload to carry on.", supportEnded: true }); return true; }
+    if (hdr === undefined && req.method !== "GET" && req.method !== "HEAD") { res.status(409).json({ error: `You're managing ${s.gym_name} as support in another tab. Reload this page.`, supportOther: true }); return true; }
+    req.supportAdmin = row; req.user = u; req.sessionHash = null;
+    req.support = { sessionId: String(s.id), id: s.id, gymId: String(s.gym_id), gym_id: s.gym_id, headId: String(s.head_id), adminId: String(s.admin_id), admin_id: s.admin_id,
+      adminEmail: s.admin_email, admin_email: s.admin_email, adminName: s.admin_name, out: supOut(s) };
+    // Every answer that carries the signed-in person says it's support mode (the app keeps its banner), and never offers team tools.
+    const json = res.json.bind(res);
+    res.json = (j) => { if (j && j.me && typeof j.me === "object") { delete j.me.admin; delete j.me.adminVerify; j.me.support = req.support.out; } return json(j); };
+    return false;
+  }
+  const supDenied = (req) => supportDenied(req.method, req.path, req.support.headId);
+  // The route a request ran (its pattern, never its ids or tokens).
+  const supPath = (req) => (req.route && typeof req.route.path === "string" ? req.route.path
+    : req.path.replace(/\/\d+(?=\/|$)/g, "/:id").replace(/\/[A-Za-z0-9_-]{16,}(?=\/|$)/g, "/:token")).slice(0, 200);
+  // What a change was, in a few words for the owner: by route, plus which fields changed (their names, never what was typed).
+  const SUP_SAYS = {
+    "POST /classes": "Planned a class", "PUT /classes/:id": "Changed a class", "DELETE /classes/:id": "Cancelled a class", "POST /coach/classes/restore": "Brought back a class",
+    "PUT /classes/:id/rsvp": "Changed a booking", "POST /classes/:id/checkin": "Checked in to a class", "PUT /coach/classes/:id/attendance": "Took attendance", "POST /coach/classes/bulk": "Added classes",
+    "POST /coach/students": "Added a member", "POST /coach/students/bulk": "Added members", "POST /coach/students/read-people": "Read a list of members", "POST /coach/students/bill-from": "Changed when members' billing starts",
+    "POST /coach/students/:id/claim-link": "Made a member's invite link", "POST /coach/students/:id/merge": "Merged two members", "POST /coach/students/:id/unlink": "Took a kid off a parent's login",
+    "DELETE /coach/students/:id": "Removed a member", "PATCH /coach/students/:id": "Changed a member",
+    "POST /coach/plans": "Added a plan", "PATCH /coach/plans/:id": "Changed a plan", "POST /coach/plans/from-rates": "Made plans from the website's prices",
+    "POST /coach/competitions/import": "Read a competition's page", "POST /coach/competitions": "Added a competition", "PUT /coach/competitions/:id": "Changed a competition", "DELETE /coach/competitions/:id": "Deleted a competition",
+    "PUT /coach/competitions/:id/competitors/:userId": "Entered a member in a competition", "DELETE /coach/competitions/:id/competitors/:userId": "Took a member off a competition",
+    "POST /coach/message": "Emailed members", "PATCH /coach/gym": "Changed gym settings", "POST /coach/invite": "Sent invites by email", "POST /coach/codes/rotate": "Made a new invite code",
+    "POST /coach/import/start": "Started a website import", "DELETE /coach/import/job": "Cleared the website import", "POST /coach/import": "Read the gym's website", "PUT /coach/gym/profile": "Saved the gym's details",
+    "POST /coach/timetable/apply": "Applied timetable changes", "POST /coach/timetable/slot": "Added a timetable class", "POST /coach/timetable/slot/undo": "Undid a timetable change",
+    "PATCH /coach/gym/pay-soon": "Changed the card payments note", "PATCH /coach/gym/access-fee": "Changed the access fee", "PATCH /coach/gym/private-price": "Changed the private lesson price",
+    "POST /coach/packs": "Added a private lesson pack", "PATCH /coach/packs/:id": "Changed a private lesson pack",
+    "POST /coach/payments": "Recorded a payment", "POST /coach/payments/proof": "Added a proof of payment", "POST /coach/payments/:id/unsplit": "Undid a family payment split", "DELETE /coach/payments/:id": "Deleted a payment",
+    "POST /coach/money/remind": "Sent fee reminders", "PUT /coach/money/auto": "Changed automatic reminders", "POST /coach/idle": "Paused or kept members who stopped coming",
+    "POST /coach/money/card/:id": "Checked a card payment", "POST /coach/money/card/:id/undo": "Undid a card payment check",
+    "PUT /coach/programme/:month": "Changed the programme", "POST /coach/programme/:month/publish": "Published the programme", "POST /coach/programme/:month/copy": "Copied last month's programme", "DELETE /coach/programme/:month": "Deleted a programme month",
+  };
+  const PAY_SAYS = { confirmed: "Confirmed a payment", rejected: "Marked a payment as not received", pending: "Put a payment back to be checked" };
+  // Which fields a change touched, in plain words (fields not listed here aren't named).
+  const FIELD_SAYS = { name: "name", monthlyFeeCents: "standard fee", showAttendees: "who's booked", studentsInvite: "member invites", timezone: "time zone", waPhone: "WhatsApp number",
+    brandAccent: "colour", setup: "setup list", belt: "belt", stripes: "stripes", notes: "notes", feeCents: "fee", planId: "plan", planStatus: "membership status", planStarted: "plan start",
+    pauseMonths: "pause", active: "active", phone: "phone", parentName: "parent's name" };
+  // Read when the request comes in (its body is there then), worded when it's answered (the route it ran is known then).
+  const supSummary = (req) => {
+    const b = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const keys = [...new Set(Object.keys(b).map((k) => FIELD_SAYS[k]).filter(Boolean))].slice(0, 8), n = Array.isArray(b.userIds) ? b.userIds.length : 0, st = typeof b.status === "string" ? b.status : "";
+    return () => {
+      const key = `${req.method} ${supPath(req)}`;
+      let say = key === "PATCH /coach/payments/:id" ? PAY_SAYS[st] || "Changed a payment" : SUP_SAYS[key] || `Changed something (${key})`;
+      if ((key === "PATCH /coach/gym" || key === "PATCH /coach/students/:id") && keys.length) say += ` (${keys.join(", ")})`;
+      if (n && /remind|idle|bill-from/.test(key)) say += ` (${n} member${n === 1 ? "" : "s"})`;
+      return say;
+    };
+  };
+  const noSupport = (req) => { if (req.support) fail(403, SUP_NO, { support: true }); };
+  // Who made a change, in emails about it: in support mode it's JitsFlow support, never worded as if the owner did it.
+  const whoDid = (req, u) => (req.support ? "JitsFlow support" : u.name);
+  // Things the app does by itself that only mark what the owner has seen: in support mode they're skipped, so the owner still sees them.
+  const SUP_NOOP = /^\/(me\/notices\/seen|me\/programme\/caught-up)$/;
   // ---------- the preview of a gym outreach built (the email's link: /app/?gym=<token>) ----------
   // The app sends the link's token in x-jf-preview. It signs nobody in: the request runs as a stand-in head coach of that one
   // unclaimed gym (every route works on req.user.gym_id only, so no other gym can be reached), and only the GET routes a head
@@ -203,6 +355,22 @@ function makeApi(pool, { secureCookies, build }) {
     // Its calendar is filled from its timetable when someone looks (the daily roll leaves unclaimed gyms out).
     if (req.path === "/me" && (await q("select timetable_rolled is distinct from current_date as stale from gyms where id=$1", [u.gym_id])).rows[0].stale) await rollTimetable(pool, u.gym_id);
     req.user = u; req.preview = u.preview;
+    next();
+  }));
+  // Support mode: refused before any route runs (and logged), or logged once it's answered. Never the request's body: the route, a
+  // short summary (supSummary) and how it went.
+  api.use(wrap(async (req, res, next) => {
+    if (!req.support) return next();
+    if (req.headers["x-jf-preview"] !== undefined) return res.status(403).json({ error: "Exit support mode first.", support: true });
+    const no = supDenied(req);
+    if (no) {
+      if (req.method !== "GET" && req.method !== "HEAD") await supLog(req.support, req.method, supPath(req), "Blocked: " + no.what, 403);
+      return res.status(403).json({ error: no.msg, support: true });
+    }
+    if (req.method === "GET" || req.method === "HEAD") return next();
+    if (SUP_NOOP.test(req.path)) { await supLog(req.support, req.method, req.path, "Nothing saved (it only marks what the owner has seen)", 200); return res.json({ ok: true }); }
+    const s = req.support, sum = supSummary(req);
+    res.on("finish", () => { supLog(s, req.method, supPath(req), sum(), res.statusCode).catch((e) => console.warn("support log:", e.message)); });
     next();
   }));
   // The signed-in person for a session token (see AS_USER), or nothing.
@@ -364,6 +532,7 @@ function makeApi(pool, { secureCookies, build }) {
   // ---------- accounts ----------
   // prospect: the token of a gym's preview page (/try/<token>): the gym starts with what the preview showed (see claimProspect).
   api.post("/auth/start-gym", wrap(async (req, res) => {
+    noSupport(req);
     const b = req.body || {};
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     const perIp = "gym:" + limitIp(req); // new gyms per address per day (each one sends a welcome email)
@@ -396,6 +565,7 @@ function makeApi(pool, { secureCookies, build }) {
   }));
 
   api.post("/auth/register", wrap(async (req, res) => {
+    noSupport(req);
     const b = req.body || {};
     checkSignIn(req, clean(b.email, 254).toLowerCase());
     let gymId = null, role = "student";
@@ -460,6 +630,7 @@ function makeApi(pool, { secureCookies, build }) {
   }));
 
   api.post("/auth/login", wrap(async (req, res) => {
+    noSupport(req);
     const email = clean(req.body?.email, 254).toLowerCase();
     const right = checkLogin(req, email);
     const r = await q("select id, pass_hash from users where email=$1", [email]);
@@ -491,6 +662,7 @@ function makeApi(pool, { secureCookies, build }) {
     res.json({ ok: true });
   }));
   api.post("/auth/reset", wrap(async (req, res) => {
+    noSupport(req);
     const tok = clean(req.body?.token, 100), password = String(req.body?.password || "");
     if (!/^[0-9a-f]{64}$/.test(tok)) fail(400, "That reset link isn't right. Ask for a new one.");
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
@@ -519,6 +691,7 @@ function makeApi(pool, { secureCookies, build }) {
   }));
   // "Send verification email" (Me, and wherever a gym email waits on it).
   api.post("/me/verify-email", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), lg = loginOf(u);
     if (verifiedEmail(lg)) return res.json({ ok: true, already: true, me: me(u) });
     if (!lg.email) fail(400, "Add an email to your account first.");
@@ -534,12 +707,14 @@ function makeApi(pool, { secureCookies, build }) {
 
   // "Sign out everywhere else" (Me): every other session of this login ends (a lost phone, a shared computer). all: this one too.
   api.post("/me/sessions/end", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), lg = loginOf(u), all = !!(req.body && req.body.all);
     const r = await q("delete from sessions where user_id=$1 and ($2 or token_hash <> $3)", [u.login_id || lg.id, all, req.sessionHash || ""]);
     if (all) res.clearCookie(COOKIE, { path: "/" });
     res.json({ ended: r.rowCount - (all ? 1 : 0) });
   }));
   api.post("/auth/logout", wrap(async (req, res) => {
+    noSupport(req);
     const tok = cookies(req)[COOKIE];
     if (tok) await q("delete from sessions where token_hash=$1", [sha(tok)]);
     res.clearCookie(COOKIE, { path: "/" });
@@ -549,6 +724,7 @@ function makeApi(pool, { secureCookies, build }) {
   api.get("/me", wrap(async (req, res) => { res.json({ me: req.user ? me(req.user) : null }); }));
 
   api.patch("/me", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), b = req.body || {};
     const name = b.name !== undefined ? clean(b.name, 80) : u.name;
     if (!name) fail(400, "Enter your name.");
@@ -573,6 +749,7 @@ function makeApi(pool, { secureCookies, build }) {
     return [...(isKidLogin(lg) ? [{ id: String(lg.id), name: lg.name, gymId: String(lg.gym_id) }] : []), ...kids]; };
   // "Booking for: Lerato ▾": who this phone books for, pays for and keeps a journal for, until they switch again.
   api.post("/me/as", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), lg = loginOf(u), id = String(req.body?.id || "");
     if (!familyIds(u).includes(id)) fail(404, "That's not one of your kids.");
     await setAs(req, id);
@@ -582,6 +759,7 @@ function makeApi(pool, { secureCookies, build }) {
   // added is only ever linked through its invite link: a name (or a phone number, which anyone can type into their profile) proves
   // nothing. The phone then books for them.
   api.post("/me/kids", once(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), lg = loginOf(u), b = req.body || {}, pname = parentNameOf(lg), firstKid = familyIds(u).length <= 1;
     if (isCoach(lg)) fail(400, "Coaches add their own kids as members in the Members tab.");
     if (familyIds(u).length >= 12) fail(400, "That's a lot of kids on one login. Ask your coach to help.");
@@ -634,6 +812,7 @@ function makeApi(pool, { secureCookies, build }) {
   }));
 
   api.post("/me/join", wrap(async (req, res) => {
+    noSupport(req);
     // A parent booking for a kid: it's the login that joins or moves (and books for itself again).
     const u = loginOf(needUser(req));
     // Wrong codes are limited per account and per address (a code is all it takes to join, and a coach code makes you a coach).
@@ -659,6 +838,7 @@ function makeApi(pool, { secureCookies, build }) {
       fail(400, `You're the head coach of ${u.gym_name}. Hand that role to another coach first, in the Gym tab.`);
   }
   api.post("/me/leave", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req);
     if (!u.gym_id) fail(400, "You're not in a gym.");
     if (isCoach(u)) fail(400, `Coaches can't leave this way. Ask another coach to remove you${isHead(u) ? ", or delete the gym in the Gym tab" : ""}.`);
@@ -669,6 +849,7 @@ function makeApi(pool, { secureCookies, build }) {
   }));
 
   api.delete("/me", wrap(async (req, res) => {
+    noSupport(req);
     const u = loginOf(needUser(req)); // the account that signed in (a parent's kids go back to the coach's list as they were)
     if (!u.pass_hash || !(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
     // The last coach can't walk away from a gym people still use: the gym would be left with nobody in charge of its data.
@@ -1703,7 +1884,7 @@ function makeApi(pool, { secureCookies, build }) {
       await leaveGym(st);
       await q("delete from sessions where user_id=$1", [st.id]);
       await q("update gyms set coach_code=$1 where id=$2", [code(), u.gym_id]);
-      tellCoaches(u.gym_id, "removed", u.name, st.name);
+      tellCoaches(u.gym_id, "removed", whoDid(req, u), st.name);
       return res.json({ ok: true, me: me(await reMe(u)) });
     }
     // A student with their own account keeps it, with no gym. Payments you recorded stay with the gym.
@@ -1762,7 +1943,7 @@ function makeApi(pool, { secureCookies, build }) {
     // Marked inactive: their places in classes still to come go to the people waiting.
     if (st.active !== false && !active) await releaseBookings(st.id, u.gym_id, u);
     // An inactive coach loses coach access straight away: sign them out everywhere.
-    if (st.role === "coach" && st.active !== false && !active) { await q("delete from sessions where user_id=$1", [st.id]); tellCoaches(u.gym_id, "inactive", u.name, st.name); }
+    if (st.role === "coach" && st.active !== false && !active) { await q("delete from sessions where user_id=$1", [st.id]); tellCoaches(u.gym_id, "inactive", whoDid(req, u), st.name); }
     res.json({ ok: true });
   }));
 
@@ -2084,6 +2265,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // The head coach closes the gym. Everything it kept goes: classes and bookings, plans, payments and proofs, competitions, notices,
   // and the students added by a coach who never signed up. People with their own accounts keep them, with no gym.
   api.delete("/coach/gym", wrap(async (req, res) => {
+    noSupport(req);
     const u = needCoach(req); if (!isHead(u)) fail(403, "Only the head coach can delete the gym.");
     if (!u.pass_hash || !(await bcrypt.compare(String(req.body?.password || ""), u.pass_hash))) fail(401, "That password isn't right.");
     await gymGoing(u.gym_id, "the gym was deleted"); // its JitsFlow plan and members' saved cards stop with PayFast
@@ -2142,6 +2324,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // The head coach hands the role (money, payment emails) to another active coach in the gym.
   api.post("/coach/head", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), to = await ownStudent(u, req.body?.userId);
     if (String(to.id) === String(u.id)) fail(400, "You're already the head coach.");
     if (to.role !== "coach" || !to.active || !to.pass_hash) fail(400, "Pick an active coach who's on the app.");
@@ -2208,6 +2391,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   api.delete("/coach/import/job", wrap(async (req, res) => { const u = needCoach(req); await q("update gyms set import_job=null where id=$1", [u.gym_id]); res.json({ ok: true }); }));
   // The coach assistant: plain-language requests ("update my bank details", "add Thabo, blue belt") turned into changes.
   api.post("/coach/assistant", wrap(async (req, res) => {
+    noSupport(req);
     const u = needCoach(req);
     // Switched off in the app for now; JF_ASSISTANT=1 turns the endpoint back on.
     if (process.env.JF_ASSISTANT !== "1" || !ai.getClient()) fail(503, "The assistant isn't switched on yet.");
@@ -2224,6 +2408,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   const astHelpers = (u) => ({ ownStudent, readPaySettings, tellHead, head: isHead(u), bankChanged, todayIn, payRef, cleanPhone, isDay, isEmail, clean, intOr, plansOf, monthly, readClass, CLASS_COLS, classVals, BELTS, METHODS, tzOf, feeIn, feeMonths });
   // The coach tapped Confirm on a change the assistant proposed (money or contact details): only now is it saved.
   api.post("/coach/assistant/confirm", wrap(async (req, res) => {
+    noSupport(req);
     const u = needCoach(req);
     try { res.json(await assistant.confirm({ u, q, id: clean(req.body?.id, 64), helpers: astHelpers(u) })); }
     catch (e) { if (e instanceof assistant.ProposalGone) fail(409, e.message); if (e instanceof HttpError) throw e; if (e && e.code) throw e; fail(400, String(e.message || e).slice(0, 300)); }
@@ -2646,6 +2831,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     res.json({ pay: g.pay || {}, autoRemind: g.auto_remind, popAddress: popAddress(tok), popReady: !!process.env.INBOUND_SECRET, popNotice: g.pop_notice || null, accessFeeCents: u.access_fee_cents || 0, accessMode: u.access_mode || "fee", privatePlanIds: (u.private_plan_ids || []).map(String), privateCents: u.gym_private_cents ?? null });
   }));
   api.patch("/coach/gym/pay", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), pay = readPaySettings(req.body || {});
     const was = (await q("select pay from gyms where id=$1", [u.gym_id])).rows[0].pay || {};
     await q("update gyms set pay = coalesce(pay,'{}'::jsonb) || $1 where id=$2", [pay, u.gym_id]); // keeps switches like cardSoon
@@ -2702,6 +2888,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // A new forwarding address (the old one stops working), e.g. if it leaked.
   api.post("/coach/gym/pay/new-address", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), tok = popToken();
     await q("update gyms set pop_token=$1, pop_notice=null where id=$2", [tok, u.gym_id]);
     res.json({ popAddress: popAddress(tok) });
@@ -3328,6 +3515,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // Card details for the monthly plan. During the free months nothing is charged now; PayFast starts on the first day after them.
   api.post("/coach/billing/checkout", wrap(async (req, res) => {
+    noSupport(req);
     if (payfast.platform().sandbox && process.env.JF_PLAN_CARD_TEST !== "1") fail(400, "Paying for your plan opens soon. Nothing is charged until then.");
     const u = needHead(req), b = await billingOf(u.gym_id, { save: true }), P = payfast.platform(), today = await todayIn(u);
     if (!b.priceCents && !beta.priceFor(b.beta, "9999-12-31", payfast.PRICE_CENTS())) fail(400, "Your beta deal is free: there's nothing to add a card for.");
@@ -3346,6 +3534,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // The head coach stops their JitsFlow plan: cancelled with PayFast, so their card isn't charged again. Nothing in JitsFlow locks.
   api.delete("/coach/billing", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req);
     if (!(await cancelPlan(u.gym_id, "cancelled by the head coach"))) fail(409, "There's no card on your plan to cancel.");
     const b = await billingOf(u.gym_id);
@@ -3542,6 +3731,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       needsPassphrase: !!(p && !p.sandbox && !p.pass) } });
   }));
   api.put("/coach/payfast", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), b = req.body || {};
     let id = String(b.merchantId || "").replace(/\s/g, ""), key = String(b.merchantKey || "").trim(), pass = String(b.passphrase || "").trim();
     if (b.test) { if (!payfast.platform().sandbox) fail(400, "Test payments are switched off."); ({ id, key, pass } = payfast.TEST); }
@@ -3562,6 +3752,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     res.json({ ok: true });
   }));
   api.delete("/coach/payfast", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), was = pfOf((await q("select payfast from gyms where id=$1", [u.gym_id])).rows[0]);
     if (was) await dropAutopay("a.gym_id=$1 and a.provider='payfast'", [u.gym_id], { keys: was, tell: true });
     await q("update gyms set payfast=null where id=$1", [u.gym_id]); res.json({ ok: true });
@@ -3705,6 +3896,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // New details wait for the JitsFlow team to check them, so card payments pause until then (Paystack holds the first payout to a new
   // account until it's verified anyway). The KYC number (company registration or the owner's ID) and the account number are sealed.
   api.put("/coach/paystack", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
     if (paystack.memberCards() !== "paystack") fail(400, "Card payments aren't switched on yet.");
     const b = req.body || {}, bankCode = clean(b.bankCode, 20), account = String(b.account || "").replace(/[\s-]/g, ""), holder = clean(b.holder, 80), business = clean(b.business, 100);
@@ -3916,6 +4108,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   // doesn't answer: it stays on its way (it may have gone through), and Paystack's webhook settles it. Sent twice with the same
   // key (x-jf-key): the first answer again.
   api.post("/coach/payments/:id/refund", once(async (req, res) => {
+    noSupport(req);
     const u = needHead(req); if (!u.id || req.preview) fail(403, CLAIM_FIRST);
     if (!paystack.on()) fail(400, "Card refunds aren't switched on.");
     if (limited("psrefund:" + u.gym_id, 20, 24 * 3600e3)) fail(429, "That's a lot of refunds today. Try again tomorrow, or email us.");
@@ -3951,6 +4144,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // The head coach dealt with a failed refund another way (paid them back by EFT, say): it leaves Home's Needs you.
   api.post("/coach/payments/:id/refunds/:rid/dismiss", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req);
     const r = await q("update paystack_refunds set coach_done_at=coalesce(coach_done_at, now()) where id=$1 and payment_id=$2 and gym_id=$3 and status='failed' returning id", [intOr(req.params.rid, 0), intOr(req.params.id, 0), u.gym_id]);
     if (!r.rows[0]) fail(404, "That refund doesn't exist.");
@@ -4517,6 +4711,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // Signed in with no gym of their own, they claim it straight away and become its head coach.
   api.post("/me/claim-gym", wrap(async (req, res) => {
+    noSupport(req);
     const u = needUser(req), lg = loginOf(u);
     if (outreach.isAdmin(lg.email)) fail(403, TEAM_CLAIM);
     if (lg.gym_id || u.gym_id) fail(409, `You're already in ${u.gym_name || "a gym"}. To claim this gym, sign out and start it with another email.`);
@@ -4732,6 +4927,60 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     res.json({ prospect: await proOut(await proRow(g.prospect_id)) });
   }));
 
+  // ---------- support mode: start, exit, and what the owner sees (see supportGate) ----------
+  const supportMail = () => !/^(0|off|false|no)$/i.test(String(process.env.JF_SUPPORT_EMAIL_OWNER || "").trim());
+  api.post("/admin/gyms/:id/support", wrap(async (req, res) => {
+    const a = needAdmin(req), lg = loginOf(a), tok = cookies(req)[COOKIE] || "";
+    if (limited("support:" + lg.id, 10, 3600e3)) fail(429, "That's a lot of support sessions in an hour. Wait a little.");
+    const g = (await q("select id, name, claim is null as claimed, timezone from gyms where id=$1", [intOr(req.params.id, 0)])).rows[0];
+    if (!g) fail(404, "That gym doesn't exist.");
+    if (!g.claimed) fail(400, "Nobody has claimed this gym yet. Open its preview from Outreach instead.");
+    const h = await headCoach(g.id), hu = h ? (await q("select id, name, email, pass_hash is not null as login from users where id=$1", [h.id])).rows[0] : null;
+    if (!hu || !hu.login) fail(400, "This gym has no head coach on the app yet.");
+    if (String(hu.id) === String(lg.id)) fail(400, "That's your own gym. Open it as yourself.");
+    const st = crypto.randomBytes(32).toString("hex");
+    // One at a time: starting another ends the one before.
+    for (const old of (await q("select * from support_sessions where admin_id=$1 and ended_at is null", [lg.id])).rows) await supEnd(old, "replaced", "Support session ended: they started another");
+    const s = (await q(`insert into support_sessions(token_hash,gym_id,head_id,admin_id,admin_email,admin_name,admin_session,expires_at)
+      values($1,$2,$3,$4,$5,$6,$7,now() + interval '${SUPPORT_MIN} minutes') returning *`, [sha(st), g.id, hu.id, lg.id, lg.email || "", clean(lg.name, 80), sha(tok)])).rows[0];
+    await supLog(s, "START", "/admin/gyms/:id/support", "Support session started", 201);
+    res.cookie(SUP_COOKIE, st, supCookie());
+    // The owner hears about it once, from JitsFlow (replies go to support).
+    if (supportMail() && hu.email) {
+      let when; try { when = new Date().toLocaleString("en-ZA", { timeZone: g.timezone || "Africa/Johannesburg", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (e) { when = new Date().toUTCString(); }
+      mail.sendLater({ to: hu.email, ...mail.templates.supportStarted(first(hu.name), g.name, `${clean(lg.name, 80) || "Someone"} (${lg.email})`, when) });
+    }
+    res.status(201).json({ support: supOut({ ...s, gym_name: g.name }) });
+  }));
+  // Back to their own account: the support session ends (whatever state it's in) and its cookie goes. Their own session is as it was.
+  api.post("/admin/support/exit", wrap(async (req, res) => {
+    const st = cookies(req)[SUP_COOKIE]; let ended = false;
+    if (st && /^[0-9a-f]{64}$/.test(st)) {
+      const s = (await q("select * from support_sessions where token_hash=$1 and ended_at is null", [sha(st)])).rows[0];
+      if (s) { await supEnd(s, s.expires_at > new Date() ? "exit" : "time", s.expires_at > new Date() ? "Support session ended" : "Support session ended: the 2 hours were up"); ended = true; }
+    }
+    res.clearCookie(SUP_COOKIE, { path: "/" });
+    res.json({ ok: true, ended, me: req.user ? me(req.user) : null });
+  }));
+  // The head coach's Gym tab: support sessions in the last 13 months (newest first), each with who, when, and what changed.
+  api.get("/coach/support", wrap(async (req, res) => {
+    const u = needHead(req);
+    const ss = (await q(`select id, admin_name, admin_email, created_at, expires_at, ended_at, ended_how, (ended_at is null and expires_at > now()) as live
+      from support_sessions where gym_id=$1 and created_at > now() - interval '13 months' order by created_at desc limit 20`, [u.gym_id])).rows;
+    const logs = ss.length ? (await q(`select session_id, summary, status, created_at from support_log where session_id = any($1::bigint[]) and method not in ('START','END')
+      and (status < 400 or summary like 'Blocked:%') and summary not like 'Nothing saved%' order by created_at, id`, [ss.map((x) => x.id)])).rows : [];
+    res.json({ sessions: ss.map((x) => ({ id: String(x.id), who: x.admin_name || "JitsFlow support", email: x.admin_email, startedAt: x.created_at, endsAt: x.expires_at,
+      endedAt: x.ended_at || (x.live ? null : x.expires_at), live: !!x.live,
+      changes: logs.filter((l) => String(l.session_id) === String(x.id)).slice(0, 300).map((l) => ({ at: l.created_at, summary: l.summary, blocked: l.status >= 400 })) })) });
+  }));
+  // The head coach ends support access now (a session still running).
+  api.post("/coach/support/end", wrap(async (req, res) => {
+    noSupport(req); const u = needHead(req);
+    const ss = (await q("select * from support_sessions where gym_id=$1 and ended_at is null and expires_at > now()", [u.gym_id])).rows;
+    for (const s of ss) await supEnd(s, "owner", "Support session ended by the owner");
+    res.json({ ended: ss.length });
+  }));
+
   // ---------- the beta ("founding gyms") ----------
   // The head coach applies in one tap (with what they'd want built), sees where it stands, and beta gyms send feedback.
   const betaOf = async (gymId) => (await q("select beta from gyms where id=$1", [gymId])).rows[0].beta || null;
@@ -4742,6 +4991,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
       feedback: fb.map((x) => ({ id: String(x.id), text: x.text, shot: x.shot, done: !!x.done_at, at: x.created_at })) });
   }));
   api.post("/coach/beta", wrap(async (req, res) => {
+    noSupport(req);
     const u = needHead(req), b = await betaOf(u.gym_id) || {}, action = req.body?.action;
     if (action === "apply") {
       if (b.status === "applied" || b.status === "accepted") return res.json({ beta: beta.forGym(b, todayZA(), payfast.PRICE_CENTS()) });
@@ -4762,6 +5012,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }));
   // Feedback from a beta gym: a few words and, if they like, a screenshot (stored like a proof of payment). The team gets an email.
   api.post("/coach/beta/feedback", once(async (req, res) => {
+    noSupport(req);
     const u = needCoach(req), b = await betaOf(u.gym_id);
     if (!beta.active(b)) fail(403, "Feedback here is for gyms in the beta. Email support@jitsflow.com any time.");
     const text = clean(req.body?.text, 4000), f = req.body?.file;
@@ -4838,4 +5089,4 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   return api;
 }
 
-module.exports = { makeApi, clientIp, limitIp, v6net };
+module.exports = { makeApi, clientIp, limitIp, v6net, supportDenied, SUPPORT_DENY, SUP_NO };

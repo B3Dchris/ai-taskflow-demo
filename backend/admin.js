@@ -69,7 +69,7 @@ async function overview(q, { days = 30, bill } = {}) {
     q(`select signup_source->>'ref' as ref, signup_source->>'utm_source' as utm_source, signup_source->>'utm_medium' as utm_medium,
         coalesce(signup_source ? 'click', false) as click, signup_source->>'via' as via, role, count(*) as n
       from users where pass_hash is not null and signed_up_at >= ${since} group by 1,2,3,4,5,6`, [start]),
-    q(`select g.id, g.name, g.created_at, g.claimed_at, g.billing, g.beta, g.currency, h.name as head_name, h.email as head_email,
+    q(`select g.id, g.name, g.created_at, g.claimed_at, g.billing, g.beta, g.currency, h.name as head_name, h.email as head_email, (h.pass_hash is not null and h.gym_id=g.id and h.role='coach' and h.active) as head_login,
         (select p.id from prospects p where p.gym_id=g.id limit 1) as prospect_id,
         coalesce(m.members,0) as members, coalesce(m.on_app,0) as on_app, coalesce(m.active7,0) as active7, coalesce(m.coaches,0) as coaches, m.last_seen,
         coalesce(c.n,0) as classes7, coalesce(b.n,0) as bookings7, coalesce(p.n,0) as pay_n, coalesce(p.cents,0) as pay_cents
@@ -116,7 +116,7 @@ async function overview(q, { days = 30, bill } = {}) {
     campaigns: camps.rows.map((r) => ({ name: r.name, n: n(r.n), ads: !!r.ads })),
     countries: countries.rows.map((r) => ({ code: r.country || "", n: n(r.n) })),
     signupSources: bySource(sSrc.rows, (r) => (r.role === "coach" ? "coaches" : "students")),
-    gyms: gyms.rows.map((g) => ({ id: String(g.id), name: g.name, createdAt: iso(g.claimed_at || g.created_at), outreach: !!g.prospect_id, beta: g.beta && g.beta.status ? g.beta.status : null, head: g.head_name ? { name: g.head_name, email: g.head_email } : null,
+    gyms: gyms.rows.map((g) => ({ id: String(g.id), name: g.name, createdAt: iso(g.claimed_at || g.created_at), outreach: !!g.prospect_id, beta: g.beta && g.beta.status ? g.beta.status : null, head: g.head_name ? { name: g.head_name, email: g.head_email } : null, support: !!g.head_login,
       members: n(g.members), onApp: n(g.on_app), active7: n(g.active7), coaches: n(g.coaches), lastSeen: iso(g.last_seen), classes7: n(g.classes7), bookings7: n(g.bookings7),
       payments: { n: n(g.pay_n), cents: n(g.pay_cents), currency: g.currency || "ZAR" }, billing: bill ? bill(g) : null })),
     recent: recent.rows.map((u) => ({ id: String(u.id), name: u.name, email: u.email, role: u.role, kid: !!u.kid, parent: !!u.parent, gym: u.gym_name || null,

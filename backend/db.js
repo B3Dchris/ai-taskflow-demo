@@ -680,6 +680,41 @@ create table if not exists programme_caught(
 );
 -- Who sees the programme: 'all' members for now (a paid add-on can set something else later; anything but 'all' hides it from members).
 alter table gyms add column if not exists programme_access text not null default 'all';
+-- Support mode (backend/api.js, supportGate): a JitsFlow team member managing a gym as its head coach, for 2 hours at most.
+-- token_hash: its cookie's token (jf_sup), hashed; admin_session: the hash of the team member's own session it was started from.
+-- ended_how: exit, time, signedout, gym (the head coach changed), replaced (they started another), owner (the head coach ended it).
+create table if not exists support_sessions(
+  id bigserial primary key,
+  token_hash text not null unique,
+  gym_id bigint not null references gyms(id) on delete cascade,
+  head_id bigint not null,
+  admin_id bigint not null,
+  admin_email text not null default '',
+  admin_name text not null default '',
+  admin_session text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  ended_at timestamptz,
+  ended_how text
+);
+create index if not exists support_sessions_gym on support_sessions(gym_id, created_at desc);
+create index if not exists support_sessions_admin on support_sessions(admin_id) where ended_at is null;
+-- Every change made in support mode, and each session's start and end: the route (its pattern), a short summary, never what was
+-- typed. Kept 13 months (purgeRejected), also after the gym or the team member's account is gone.
+create table if not exists support_log(
+  id bigserial primary key,
+  gym_id bigint not null,
+  admin_id bigint,
+  admin_email text not null default '',
+  session_id bigint,
+  method text not null,
+  path text not null default '',
+  summary text not null default '',
+  status int,
+  created_at timestamptz not null default now()
+);
+create index if not exists support_log_gym on support_log(gym_id, created_at desc);
+create index if not exists support_log_session on support_log(session_id);
 create or replace function jf_user_gone() returns trigger language plpgsql as $$
 begin update payments set user_gone_at=now() where user_id=old.id; return old; end $$;
 drop trigger if exists users_gone on users;
@@ -759,6 +794,7 @@ const HEAD_FIX = `update gyms g set head_coach_id=${LONGEST("g.id")} where not e
 // - Someone who left a gym still owing: 18 months after they left.
 // - Google Ads click ids on website visits: 90 days (where visitors came from is kept, without the id).
 // - Expired sign-in sessions, password reset and email links; card checkouts (PayFast and Paystack) after 90 days; proposals the assistant made after a day.
+// - Support mode's sessions and their log of changes: 13 months.
 // - AI use is kept 90 days (the admin overview shows today's). gym_mail_stops are kept: they're people's "stop emailing me".
 const SESSION_MAX_DAYS = 180;
 async function purgeRejected(pool) {
@@ -775,6 +811,12 @@ async function purgeRejected(pool) {
   await run("delete from paystack_checkouts where created_at < now() - interval '90 days'");
   await run("delete from assistant_proposals where created_at < now() - interval '1 day'");
   await run("delete from ai_usage where day < current_date - 90");
+  // Support sessions whose 2 hours ran out with nobody there end (and say so in their log); the log and sessions are kept 13 months.
+  await run(`with e as (update support_sessions set ended_at=expires_at, ended_how='time' where ended_at is null and expires_at < now() returning *)
+    insert into support_log(gym_id,admin_id,admin_email,session_id,method,path,summary,status,created_at)
+    select gym_id, admin_id, admin_email, id, 'END', '', 'Support session ended: the 2 hours were up', 200, expires_at from e`);
+  await run("delete from support_log where created_at < now() - interval '13 months'");
+  await run("delete from support_sessions where created_at < now() - interval '13 months'");
 }
 
 // Pauses that have run out end on their own: the member is active again and the head coach (and they) get a note on Home.

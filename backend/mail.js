@@ -277,6 +277,13 @@ const templates = {
   betaFeedback: (gym, who, email, text, shot) => ({ subject: `Beta feedback from ${gym}`, title: `Feedback from ${gym}`,
     paras: [`${who} (${email}) sent feedback${shot ? " with a screenshot" : ""}:`, text || "(No text, just the screenshot.)", "It's in the feedback inbox in the Beta section of the dashboard."],
     button: { label: "Open the dashboard", url: appUrl() + "/app/#me" } }),
+  // To a gym's head coach: someone from the JitsFlow team opened their gym in support mode (backend/api.js, once per session).
+  supportStarted: (name, gym, who, when) => ({ subject: `JitsFlow support is helping with ${gym}`, title: "JitsFlow support is helping",
+    paras: [`Hi ${name},`, `${who} from JitsFlow support opened ${gym} on ${when} to help. They see what you see as head coach, for up to 2 hours.`,
+      "Every change they make is logged. See the list in the app: Gym › Support access.",
+      "Support can't change your bank details, card payouts or PayFast, refund payments, change your login, hand over or delete your gym, or change your JitsFlow plan.",
+      `Questions, or didn't expect this? Reply to this email or write to ${REPLY_TO()}.`],
+    button: { label: "See what changed", url: appUrl() + "/app/#coach-gym" } }),
   // Bank or PayFast details changed (to the head coach), or the coaches changed (to every active coach). Fixed subjects.
   gymChange: (kind, name, who, detail) => { const t = {
       bank: ["Your gym's bank details changed", `${who} changed the bank details your students pay into.`],
