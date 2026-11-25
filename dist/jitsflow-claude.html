@@ -6712,7 +6712,7 @@ function gymSettingsRows(){const g=API.me.gym;
     ${isHead()?navRow("gymsec","support","Support access","Who from JitsFlow opened your gym"):""}
     ${navRow("gymsec","account","Account and appearance",isHead()?"Sign out, dark mode, delete gym":"Sign out, dark mode")}</div></section>`}
 function coachGym(){const g=API.me.gym,rows=gymChecklist(),done=rows.filter(r=>r.st==="ok").length;
-  return `<section class="gymtop">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gymlogo">`:""}<div class="grow"><h1>${esc(g.name)}</h1><p class="small muted">${done===rows.length?"All set up":`${done} of ${rows.length} set up`}</p></div>${ringSVG(done,rows.length,`${done} of ${rows.length} set up`)}</section>
+  return `<section class="gymtop">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gymlogo">`:""}<div class="grow"><h1>${esc(g.name)}${g.beta==="accepted"?` <span class="pill ok betapill">Beta</span>`:""}</h1><p class="small muted">${done===rows.length?"All set up":`${done} of ${rows.length} set up`}</p></div>${ringSVG(done,rows.length,`${done} of ${rows.length} set up`)}</section>
     ${impBanner()}
     <button class="btn primary invitebtn" data-a="invite">Invite members</button>
     <div class="list navrows checklist" id="gymcheck">${rows.map(ckRow).join("")}</div>

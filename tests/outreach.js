@@ -453,8 +453,9 @@ function startSite() {
     { const p = await phone(admin.cookie()); await p.goto(`${BASE}/app/?gym=${F.token}`); await wait(2500);
       const bar = await ev(p, () => (document.getElementById("pvbar") || {}).innerText || "");
       ok(/Team preview — only the owner can claim Fifth Gym/.test(bar) && await ev(p, () => !document.querySelector('[data-a="pvclaim"]') && /Your gym, already set up/i.test(document.getElementById("app").innerText)), "an admin opening the link sees a team preview with no Claim button: " + JSON.stringify(bar));
-      await p.tap('nav.tabs [data-v="coach-gym"]'); await wait(1200); await p.tap('[data-a="copy"]'); await wait(400);
-      ok(await ev(p, () => document.getElementById("sheet").hidden && !!API.preview && API.real && API.real.admin), "a change there opens no claim (just a note), and the admin stays signed in as themselves");
+      // (The invite link's Copy lives in the Gym tab's Invite members sheet since the Gym checklist.)
+      await p.tap('nav.tabs [data-v="coach-gym"]'); await wait(1200); await p.tap('#app [data-a="invite"]'); await wait(600); await p.tap('#sheet [data-a="copy"]'); await wait(400);
+      ok(await ev(p, () => !(S.ui.sheet && S.ui.sheet.k === "claim") && !/Claim (your gym|it free)/.test(document.getElementById("sheet").innerText) && !!API.preview && API.real && API.real.admin), "a change there opens no claim (just a note), and the admin stays signed in as themselves");
       ok((await row(F.id)).status === "draft" && (await gym(gF)).claim && (await row(F.id)).views === 0 && !p.errs.length, "nothing claimed, the team's view isn't counted, no script errors " + p.errs.join(", "));
       await p.context().close(); }
     { const p = await phone(); const beacon = p.waitForRequest((q) => q.url().endsWith(`/try/${F.token}/view`) && q.method() === "POST", { timeout: 6000 }).catch(() => null);
@@ -470,11 +471,14 @@ function startSite() {
       ok(await ev(p, () => (COACH.classes || []).filter((c) => c.title === "MMA").length >= 7), "Schedule: their classes on the calendar");
       await p.tap('nav.tabs [data-v="coach-members"]'); await wait(800); ok(/Your members go here/.test(await ev(p, () => document.getElementById("app").innerText)), "Members: what happens once it's theirs (invites, WhatsApp)");
       await p.tap('nav.tabs [data-v="coach-money"]'); await wait(1200); await p.tap('nav.tabs [data-v="coach-gym"]'); await wait(1200);
-      ok(await ev(p, () => /Your JitsFlow plan/i.test(document.getElementById("app").innerText) && /Join the JitsFlow beta/i.test(document.getElementById("app").innerText)), "Gym: the plan and the beta");
+      // (Since the Gym checklist, the plan and the beta are in the "Your JitsFlow plan" row's sheet.)
+      ok(await ev(p, () => /Your JitsFlow plan/i.test(document.getElementById("app").innerText)), "Gym: the plan row");
+      await p.tap('#app [data-a="gymsec"][data-v="plan"]'); await wait(600);
+      ok(await ev(p, () => /Join the JitsFlow beta/i.test(document.getElementById("sheet").innerText)), "and in it, the beta");
       const nClasses = Number((await pool.query("select count(*) from classes where gym_id=$1", [gF])).rows[0].count);
       await p.tap('#betaform [type=submit]'); await wait(600);
       ok(await ev(p, () => S.ui.sheet && S.ui.sheet.k === "auth" && /Claim Fifth Gym/.test(document.getElementById("sheet").innerText)), "applying for the beta in the preview opens the claim");
-      await ev(p, () => hideSheet()); await p.tap('[data-a="copy"]'); await wait(400); ok(await ev(p, () => S.ui.sheet && S.ui.sheet.k === "auth"), "so does copying the invite link"); await ev(p, () => hideSheet());
+      await ev(p, () => hideSheet()); await wait(300); await p.tap('#app [data-a="invite"]'); await wait(600); await p.tap('#sheet [data-a="copy"]'); await wait(400); ok(await ev(p, () => S.ui.sheet && S.ui.sheet.k === "auth"), "so does copying the invite link"); await ev(p, () => hideSheet());
       await p.tap('nav.tabs [data-v="coach-schedule"]'); await wait(800); await p.tap('[data-a="classnew"]').catch(() => {}); await wait(600);
       if (await ev(p, () => !!document.getElementById("classform"))) { await p.fill("#classform [name=title]", "Sneaky class").catch(() => {}); await p.tap('#sheetbar [type=submit]').catch(() => {}); await wait(800); }
       ok(Number((await pool.query("select count(*) from classes where gym_id=$1", [gF])).rows[0].count) === nClasses && await ev(p, () => S.ui.sheet && S.ui.sheet.k === "auth"), "saving a class asks them to claim instead, and adds nothing");
@@ -534,7 +538,8 @@ function startSite() {
       ok(await ev(p, () => API.me && API.me.gym && API.me.gym.name === "Seventh Gym" && API.me.gym.head && S.ui.sheet && S.ui.sheet.k === "welcome"), "claimed: they're the head coach and land on the normal first-run welcome");
       ok((await row(H.id)).status === "claimed" && (await row(H.id)).gym_id && !(await gym((await row(H.id)).gym_id)).claim && !p.errs.length, "the gym is built at the claim and theirs " + p.errs.join(", "));
       // The beta from the Gym tab.
-      await ev(p, () => { hideSheet(); coachGo("gym"); }); await wait(1500);
+      // (Since the Gym checklist, the beta is in the "Your JitsFlow plan" row's sheet.)
+      await ev(p, () => { hideSheet(); coachGo("gym"); }); await wait(1500); await p.tap('#app [data-a="gymsec"][data-v="plan"]'); await wait(800);
       ok(await ev(p, () => !!document.getElementById("betaform") && /free for your first 6 months in the beta, then R49\/month instead of R99/.test(document.getElementById("betaform").innerText)), "the Gym tab offers the beta, with its deal");
       await p.fill("#betaform [name=note]", "A check-in kiosk."); await p.tap("#betaform [type=submit]"); await wait(1200);
       ok(await ev(p, () => /Applied/.test(document.getElementById("betacard").innerText)) && (await gym((await row(H.id)).gym_id)).beta.note === "A check-in kiosk.", "applied from the Gym tab in one tap");
