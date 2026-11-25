@@ -26,12 +26,16 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
 /* Shared with /coaches/ (build.py copies this block). Motif: the belt bar, white to black, on a navy mat. */
+/* Stand-ins sized to take the same width as the web fonts, so nothing jumps when those arrive on a slow phone. */
+@font-face{font-family:"JF display fb";src:local("Arial Bold"),local("Arial-BoldMT"),local("Helvetica Bold"),local("Helvetica-Bold"),local("Liberation Sans Bold"),local("LiberationSans-Bold");font-weight:500 900;size-adjust:70%}
+@font-face{font-family:"JF body fb";src:local("Arial"),local("ArialMT"),local("Helvetica"),local("Liberation Sans"),local("LiberationSans");font-weight:100 500;size-adjust:93%}
+@font-face{font-family:"JF body fb";src:local("Arial Bold"),local("Arial-BoldMT"),local("Helvetica Bold"),local("Helvetica-Bold"),local("Liberation Sans Bold"),local("LiberationSans-Bold");font-weight:600 900;size-adjust:89%}
 :root{
   --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E3E8EF; --ink:#111722; --ink-2:#4E5869; --line:#D3DAE4;
   --blue:#1D4FB5; --blue-soft:#DCE5F8; --on-blue:#FFFFFF; --warn:#995A00; --good:#1D7748;
   --b-white:#F4F4F0; --b-blue:#1F4FB0; --b-purple:#5E2D8C; --b-brown:#6A4326; --b-black:#151515; --b-red:#B3261E;
-  --f-display:"Saira Condensed","Arial Narrow",Impact,sans-serif;
-  --f-body:"Source Sans 3",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-display:"Saira Condensed","JF display fb","Arial Narrow",Impact,sans-serif;
+  --f-body:"Source Sans 3","JF body fb",-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);

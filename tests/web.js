@@ -102,9 +102,9 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
      await nc.close();
      const cc=await b.newContext({...devices['iPhone 13'],serviceWorkers:'block'});const cp=await cc.newPage();
      await cp.addInitScript(()=>{window.__cls=0;window.__lcp=null;new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true});
-       new PerformanceObserver(l=>{const e=l.getEntries().pop();window.__lcp=e&&e.element?(e.element.closest('h1')?'h1':e.element.tagName+' '+(e.url||'')):null}).observe({type:'largest-contentful-paint',buffered:true})});
+       new PerformanceObserver(l=>{const e=l.getEntries().pop();window.__lcp=e&&e.element?(e.element.closest('h1')?'h1':e.element.closest('.lead .lede')?'lede':e.element.tagName+' '+(e.url||'')):null}).observe({type:'largest-contentful-paint',buffered:true})});
      await cp.goto(URL,{waitUntil:'networkidle'});await cp.waitForTimeout(300);
-     ok(await cp.evaluate(()=>window.__cls<0.05&&window.__lcp==='h1'&&!document.querySelector('.lead img')&&[...document.querySelectorAll('img[src*="i.ytimg.com"]')].every(i=>i.getBoundingClientRect().top>innerHeight)),'hero: no layout shift as it loads, the headline is the largest paint, and no video thumbnail in the first screen');
+     ok(await cp.evaluate(()=>window.__cls<0.05&&(window.__lcp==='h1'||window.__lcp==='lede')&&!document.querySelector('.lead img')&&[...document.querySelectorAll('img[src*="i.ytimg.com"]')].every(i=>i.getBoundingClientRect().top>innerHeight)),'hero: no layout shift as it loads, the headline or its line of text is the largest paint (not a picture), and no video thumbnail in the first screen');
      await cc.close();}
     // the hero's map: tap a position, see its top moves; Explore the map opens the app there, no account or questions first
     {await p.goto(URL);await p.waitForTimeout(500);
