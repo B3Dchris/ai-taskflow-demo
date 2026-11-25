@@ -2291,7 +2291,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
     const tz = b.timezone !== undefined ? await validTz(b.timezone) || tzOf(u) : tzOf(u);
     const wa = b.waPhone !== undefined ? cleanPhone(b.waPhone) : u.wa_phone || "";
     if (b.brandAccent !== undefined) { const a = String(b.brandAccent || ""); await q("update gyms set brand = brand || $1 where id=$2", [{ accent: /^#[0-9a-f]{6}$/i.test(a) ? a.toLowerCase() : null }, u.gym_id]); }
-    if (b.setup && typeof b.setup === "object") { const st = {}; for (const k of ["welcomed", "assistantUsed", "dismissed"]) if (b.setup[k] !== undefined) st[k] = !!b.setup[k]; await q("update gyms set setup = setup || $1 where id=$2", [st, u.gym_id]); }
+    if (b.setup && typeof b.setup === "object") { const st = {}; for (const k of ["welcomed", "assistantUsed", "dismissed", "soloCoach"]) if (b.setup[k] !== undefined) st[k] = !!b.setup[k]; await q("update gyms set setup = setup || $1 where id=$2", [st, u.gym_id]); }
     if (b.waPhone !== undefined && String(b.waPhone).trim() && !wa) fail(400, "That doesn't look like a phone number.");
     await q("update gyms set name=$1, monthly_fee_cents=$2, show_attendees=$3, timezone=$4, students_invite=$5, wa_phone=$6 where id=$7", [name, fee, show, tz, invite, wa, u.gym_id]);
     res.json({ me: me(await reMe(u)) });
@@ -3863,7 +3863,7 @@ h1{font-size:24px;margin:0 0 12px}button{font:inherit;font-weight:700;background
   }
 
   // ---------- Paystack: members pay their gym by card; Paystack pays the gym's share straight into the gym's bank account ----------
-  // Switched on for everyone by PAYSTACK_SECRET_KEY (see backend/paystack.js). Each gym gives its bank account once (Money › Settings ›
+  // Switched on for everyone by PAYSTACK_SECRET_KEY (see backend/paystack.js). Each gym gives its bank account once (Gym › Getting paid ›
   // Get paid by card): JitsFlow makes it a Paystack subaccount, and the JitsFlow team checks it on Paystack's dashboard and marks it
   // verified (team dashboard). From then on members can pay by card, Apple Pay, Capitec Pay or EFT on Paystack's checkout. Each
   // payment's split is set by JitsFlow when the checkout is made (the gym's subaccount, JitsFlow's fee as a flat transaction_charge),

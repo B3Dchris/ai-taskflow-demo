@@ -137,7 +137,7 @@ function mount(api, h) {
     let told = false;
     if (on && !row.notice_id) {
       const n = (await q("insert into notices(gym_id,user_id,kind,title,body) values($1,null,'programme',$2,$3) returning id",
-        [u.gym_id, `${monthName(ym)}'s programme is up: ${row.title}`, row.summary || "See the weeks and videos in Learn."])).rows[0].id;
+        [u.gym_id, `${monthName(ym)}'s programme is up: ${row.title}`, row.summary || "See the weeks and videos in Train."])).rows[0].id;
       row = (await q("update programmes set notice_id=$2 where id=$1 returning *", [row.id, n])).rows[0]; told = true;
     }
     res.json({ programme: out(row), told });

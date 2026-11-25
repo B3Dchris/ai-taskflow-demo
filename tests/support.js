@@ -305,27 +305,37 @@ const refusedAsSupport = (r) => r.s === 403 && !!r.j && (r.j.support === true ||
     ok(await ev(pg, () => !!document.getElementById("supbar") && COACH.view === "money" && /Managing Alpha BJJ/.test(document.getElementById("supbar").innerText)), "the bar stays on Money");
     ok(await noSideways(pg), "Money: no sideways scroll");
     await shot(pg, "3-support-banner-money.png");
-    // Money › Setup: the bank details are switched off, with the reason.
-    await ev(pg, () => { COACH.moneyView = "setup"; S.ui.openG = { ...(S.ui.openG || {}), "m-bank": 1 }; render(); }); await wait(1200);
+    // Gym › Getting paid (from Money's row): the bank details are switched off, with the reason.
+    await ev(pg, () => { S.ui.openG = { ...(S.ui.openG || {}), "m-bank": 1 }; }); await pg.click("#m-gotpaid"); await wait(1200);
+    ok(await ev(pg, () => S.ui.sheet && S.ui.sheet.k === "gymsec" && S.ui.sheet.id === "pay"), "Money's Getting paid row opens Gym › Getting paid");
     const bank = await ev(pg, () => { const f = document.getElementById("bankform"); if (!f) return null; const btn = f.querySelector("[type=submit]"), box = f.closest(".panel,section,details") || f.parentElement;
       return { all: [...f.querySelectorAll("input,select,button")].every((x) => x.disabled), note: ((box.querySelector(".supnote") || f.parentElement.querySelector(".supnote")) || {}).textContent || "", btn: !!btn }; });
-    ok(bank && bank.all && bank.note === SUP_NO, "Money › Setup: the bank details form is switched off, with the reason: " + JSON.stringify(bank));
+    ok(bank && bank.all && bank.note === SUP_NO, "Gym › Getting paid: the bank details form is switched off, with the reason: " + JSON.stringify(bank));
+    ok(await ev(pg, () => { const x = document.getElementById("supbar"), h = document.querySelector("#sheet h1"); return !!x && !!h && x.getBoundingClientRect().bottom <= h.getBoundingClientRect().top + 1; }), "the bar sits above the Gym sheet");
+    ok(await noSideways(pg), "Gym › Getting paid: no sideways scroll");
     await ev(pg, () => { const d = document.getElementById("bankform").closest("details"); window.scrollTo(0, d.getBoundingClientRect().top + window.scrollY - 90); }); await wait(300);
-    await shot(pg, "4-guarded-bank-details.png");
+    await shot(pg, "4-guarded-bank-details.png"); await ev(pg, () => hideSheet());
     // A sheet opens below the bar (the bar never covers its buttons).
     await ev(pg, () => addStudentSheet()); await wait(500);
     ok(await ev(pg, () => { const x = document.getElementById("supbar"), sb = document.getElementById("sheetbar"); return !document.getElementById("sheet").hidden && x.getBoundingClientRect().bottom <= sb.getBoundingClientRect().top; }), "a sheet: the bar stays at the top, its buttons clear");
     await ev(pg, () => hideSheet());
-    // The Gym tab: the owner's login buttons are switched off; a tap on one says why.
+    // The Gym tab: the checklist under the bar; My training (the owner's own) and the owner's login buttons are switched off; a tap on one says why.
     await pg.click('nav.tabs [data-v="coach-gym"]'); await wait(1500);
-    const gym = await ev(pg, () => ["signout", "signoutall", "delacct", "gymdel", "coachmode"].map((a) => { const x = document.querySelector(`[data-a="${a}"]`), box = x && x.closest(".panel,section");
-      return x ? x.disabled && x.title === SUP_NO && !!box && !!box.querySelector(".supnote") && box.querySelectorAll(".supnote").length === 1 : "missing:" + a; }));
-    ok(gym.every((x) => x === true), "Gym: sign out, sign out everywhere, delete account, delete gym and My training are switched off with the reason: " + JSON.stringify(gym));
+    const guarded = (as) => ev(pg, (as) => as.map((a) => { const x = document.querySelector(`[data-a="${a}"]`), box = x && x.closest(".panel,section");
+      return x ? x.disabled && x.title === SUP_NO && !!box && !!box.querySelector(".supnote") && box.querySelectorAll(".supnote").length === 1 : "missing:" + a; }), as);
+    ok(await ev(pg, () => { const x = document.getElementById("supbar"), g = document.querySelector(".gymtop"); return !!g && document.querySelectorAll("#gymcheck .ckrow").length === 6 && x.getBoundingClientRect().bottom <= g.getBoundingClientRect().top; }), "the bar sits above the Gym checklist");
+    const mt = await guarded(["mytrain"]); ok(mt.every((x) => x === true), "Gym: My training is switched off with the reason: " + JSON.stringify(mt));
+    await pg.click('[data-a="mytrain"]', { force: true }).catch(() => {}); await wait(300); ok(await ev(pg, () => S.ui.tab === "coach" && COACH.view === "gym"), "and tapping it anyway stays on Gym");
+    await ev(pg, () => gymSec("account")); await wait(600);
+    const gym = await guarded(["signout", "signoutall", "delacct", "gymdel"]);
+    ok(gym.every((x) => x === true), "Gym › Account: sign out, sign out everywhere, delete account and delete gym are switched off with the reason: " + JSON.stringify(gym));
     ok(await ev(pg, () => { const f = document.getElementById("phoneform"); return !!f && [...f.querySelectorAll("input,button")].every((x) => x.disabled); }), "the owner's own number can't be changed");
-    ok(await ev(pg, () => !!document.getElementById("supportacc") && !document.getElementById("dashpanel")), "support sees the Support access list, and no team tools");
-    ok(await noSideways(pg), "Gym: no sideways scroll");
+    ok(await noSideways(pg), "Gym › Account: no sideways scroll");
     await ev(pg, () => document.querySelector('[data-a="signout"]').scrollIntoView({ block: "center" })); await wait(300);
     await shot(pg, "6-guarded-account-buttons.png");
+    await ev(pg, () => gymSec("support")); await wait(800);
+    ok(await ev(pg, () => !!document.getElementById("supportacc") && !document.getElementById("dashpanel")), "support sees the Support access list, and no team tools");
+    await ev(pg, () => gymSec("profile")); await wait(600);
     // Normal work from the app goes through and is logged.
     const n0 = (await pool.query("select count(*)::int as n from support_log where summary like 'Changed gym settings (name%'")).rows[0].n;
     await ev(pg, () => { document.getElementById("g-name").value = "Alpha BJJ"; document.querySelector("#gymform [type=submit]").click(); }); await wait(1200);
@@ -338,12 +348,12 @@ const refusedAsSupport = (r) => r.s === 403 && !!r.j && (r.j.support === true ||
     // The owner's Support access list.
     const octx = await ctxFor(A), op = await octx.newPage();
     op.on("pageerror", (e) => { fail++; fails.push("page error (owner): " + e.message); });
-    await op.goto(BASE + "/app/#coach-gym"); await wait(2500);
+    await op.goto(BASE + "/app/#coach-gym"); await wait(2500); await op.click('.gymsettings [data-a="gymsec"][data-v="support"]'); await wait(1200);
     const acc = await ev(op, () => { const x = document.getElementById("supportacc"); return x ? x.innerText : ""; });
-    ok(/Support access/i.test(acc) && /Boss Team/.test(acc) && /Added a member/.test(acc) && /Changed gym settings \(name/.test(acc) && /every change shows here/.test(acc), "the owner's Gym tab: Support access, with who and what changed: " + acc.slice(0, 600));
+    ok(/Support access/i.test(acc) && /Boss Team/.test(acc) && /Added a member/.test(acc) && /Changed gym settings \(name/.test(acc) && /every change shows here/.test(acc), "the owner's Gym › Support access: who and what changed: " + acc.slice(0, 600));
     ok(await ev(op, () => !document.getElementById("supbar")), "the owner sees no support bar");
     await ev(op, () => document.getElementById("supportacc").scrollIntoView({ block: "start" })); await wait(300);
-    ok(await noSideways(op), "the owner's Gym tab: no sideways scroll");
+    ok(await noSideways(op), "the owner's Gym › Support access: no sideways scroll");
     await shot(op, "5-owner-support-access.png");
     await octx.close();
 

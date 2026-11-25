@@ -225,15 +225,18 @@ const week = (title, n = 2, ids = ["double_leg"]) => ({ title, note: title + " b
     ok(await ev(pg, () => !document.querySelector("#prg-hint .prguse")), "a date with no programme week offers nothing");
     await pg.context().close();
 
-    // Member: Learn's This month, a week, catch-up, Home.
+    // Member: Train's This month (an old #learn link lands there), a week, catch-up, Home.
     pg = await phone(M); await pg.goto(BASE + "/app/#learn"); await wait(1800); await quiet(pg); await ev(pg, () => render()); await wait(700);
     const lt = await ev(pg, () => { const h = document.querySelector(".prghero"); return h ? { t: h.innerText, chips: document.querySelectorAll(".prgchip").length, now: !!document.querySelector(".prgchip.now"), done: document.querySelectorAll(".prgchip.done").length, miss: document.querySelectorAll(".prgchip.miss").length, first: document.querySelector("#app .stack-lg > *").classList.contains("prgtop") } : null; });
-    ok(lt && /Wrestling for BJJ/.test(lt.t) && lt.chips === nWeeks0 && lt.first, "Learn opens with This month at the top, a chip per week: " + JSON.stringify(lt));
+    ok(lt && /Wrestling for BJJ/.test(lt.t) && lt.chips === nWeeks0 && lt.first, "Train opens with This month at the top, a chip per week: " + JSON.stringify(lt));
     ok(lt && lt.now, "this week's chip says now");
     ok(await ev(pg, () => document.querySelectorAll(".prgweekcard .prgvid").length >= 1 && /This week/.test(document.querySelector(".prgweekcard").textContent)), "this week's videos are one tap away");
     ok(await ev(pg, () => { const c = document.querySelector(".prgcatch"); return !!c && /Catch up/.test(c.textContent) && !!c.querySelector('[data-a="prgcatch"]'); }), "Catch up lists the weeks she missed, with Watch what you missed");
     ok(await ev(pg, (t) => { const n = document.querySelector(".prgnext"); return !!n && n.innerText.includes(t); }, "Guard passing"), "next month's preview card");
-    ok(await noSide(pg), "Learn: no sideways scroll");
+    ok(await ev(pg, () => { const top = document.querySelector(".prgtop"), st = document.querySelectorAll(".trainstats"), sw = document.querySelector(".trainseg");
+      return S.ui.tab === "train" && location.hash === "#train" && !!top && st.length === 1 && !!sw && !!(top.compareDocumentPosition(st[0]) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(st[0].compareDocumentPosition(sw) & Node.DOCUMENT_POSITION_FOLLOWING); }),
+      "#learn opens Train: This month first, then one stats block, then Moves | Map | Log");
+    ok(await noSide(pg), "Train: no sideways scroll");
     await shot(pg, "4-member-this-month", true);
     await pg.click(".prgchip.now"); await wait(600);
     ok(await ev(pg, () => S.ui.sheet && S.ui.sheet.k === "prgweek" && document.querySelectorAll("#sheet .ytbox, #sheet .ytm").length >= 2 && /This week/.test(document.getElementById("sheet").textContent)), "a week opens with its videos ready to play");
@@ -253,7 +256,7 @@ const week = (title, n = 2, ids = ["double_leg"]) => ({ title, note: title + " b
     ok(await ev(pg, () => [...document.querySelectorAll(".notice")].some((n) => /programme is up/.test(n.innerText))), "and the gym update that the month is up");
     await shot(pg, "7-member-home");
     await pg.click(".prghome"); await wait(500);
-    ok(await ev(pg, () => S.ui.tab === "learn" && !!document.querySelector(".prghero")), "the Home card opens Learn's This month");
+    ok(await ev(pg, () => S.ui.tab === "train" && S.ui.trainView === "moves" && !!document.querySelector(".prghero")), "the Home card opens Train's This month");
     await pg.context().close();
     // Dark mode.
     pg = await phone(M, "dark"); await pg.goto(BASE + "/app/#learn"); await wait(1800); await quiet(pg); await ev(pg, () => render()); await wait(700);

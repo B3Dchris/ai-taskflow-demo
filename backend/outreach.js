@@ -301,7 +301,7 @@ function renderPreview(p, { base = "", now = new Date(), nonce = "" } = {}) {
   ${dayHtml || `<p class="empty">Your classes go here. Add them in a minute after you claim.</p>`}${more > 0 ? `<p class="moreline">and ${more} more class${more === 1 ? "" : "es"} this week</p>` : ""}
   ${coaches.length ? `<div class="mono">Coaches</div>${coaches.map((c) => `<div class="coach"><i>${esc(initials(c.name))}</i><div><b>${esc(c.name)}</b>${c.rank ? `<span>${esc(c.rank)}</span>` : ""}</div></div>`).join("")}` : ""}
   ${rates.length ? `<div class="mono">Plans</div>${rates.map((r) => `<div class="plan"><b>${esc(r.name)}</b><span>${esc(priceOf(r))}</span></div>`).join("")}` : ""}
-  <nav class="atabs" aria-hidden="true"><span>Home</span><span class="on">Classes</span><span>Learn</span><span>Journal</span><span>Me</span></nav>
+  <nav class="atabs" aria-hidden="true"><span>Home</span><span class="on">Classes</span><span>Train</span><span>Me</span></nav>
  </div></div></aside>
  <section class="gets"><h2>What you get</h2><ul class="getl">${gets.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join("")}</ul>
   <div class="price"><b>${esc(price.main)}</b><p class="small">${esc(noObligation())} ${esc(price.fee)}</p></div></section>

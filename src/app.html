@@ -318,7 +318,6 @@ details.more{border:1px solid var(--line);border-radius:14px;padding:12px 14px;b
 .howbtn{display:grid;gap:4px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:18px 16px;min-height:84px;color:var(--ink)}
 .howbtn b{font-size:19px}.howbtn span{font-size:14px;color:var(--ink-2)}
 .howbtn:active,.howbtn:focus-visible{border-color:var(--blue)}
-.managebtn{width:100%;min-height:52px;font-size:16px}
 .lprog{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:nowrap}
 .nextclass h3{font-size:24px}
 .vid{display:flex;flex-direction:column;gap:8px}
@@ -865,20 +864,40 @@ details.learn>summary{color:var(--blue);font-weight:700;cursor:pointer;list-styl
 .weeklimit{display:flex;align-items:center;gap:8px;margin:0}
 .moneypage .mcol{grid-template-rows:64px auto}
 .payline{border-top:1px solid var(--line);padding-top:4px}.payline:first-child{border-top:0;padding-top:0}
+/* Gym checklist, Invite members, Train */
+.gymtop{display:flex;align-items:center;gap:12px;min-width:0}.gymtop h1{font-size:30px;line-height:1.05;margin:0;overflow-wrap:anywhere}.gymtop p{margin:2px 0 0}.gymtop .grow{flex:1;min-width:0}.gymtop .gymlogo{width:52px;height:52px}
+svg.ring{width:64px;height:64px;flex:none}svg.ring circle{fill:none;stroke-width:5}svg.ring .rt{stroke:var(--surface-2)}svg.ring .rf{stroke:var(--good);stroke-linecap:round;transition:stroke-dasharray .4s var(--ease)}
+svg.ring text{font-family:var(--f-display);font-weight:700;font-size:15px;fill:var(--ink)}
+.invitebtn{width:100%;min-height:54px;font-size:17px}
+.ckrow{justify-content:flex-start}.ckrow .cktxt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}.ckrow .chev{margin-left:auto}
+.ckmark{flex:none;width:28px;height:28px;border-radius:50%;display:inline-grid;place-items:center;font-weight:800;font-size:15px;border:2px solid var(--line);color:transparent}
+.ckmark.ok{background:var(--good);border-color:var(--good);color:#fff}.ckmark.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.ckrow.ok .cktxt>b{color:var(--ink)}.ckrow.warn .cktxt .small{color:var(--warn)}
+.gymsettings .navrow{min-height:48px;padding-block:9px}
+.gymsheet>.row h1{font-size:28px;margin:0}.gymsheet>.row .pill{flex:none}.gymlogo.big{width:96px;height:96px}
+.invgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.invgrid .btn{min-height:50px}.gymcode{font-size:22px;letter-spacing:.08em}
+.trainstats{gap:12px}.trtop{display:flex;align-items:center;gap:14px}.trtop .grow{display:flex;flex-direction:column;gap:2px;min-width:0}
+.trring{background:none;border:0;padding:0;border-radius:50%;flex:none}.trainstats svg.ring{width:84px;height:84px}.trainstats svg.ring .rt{stroke:rgba(255,255,255,.14)}.trainstats svg.ring .rf{stroke:#7FA4FF}.trainstats svg.ring text{fill:#fff;font-size:13px}
+.trbelt{font-family:var(--f-display);font-size:28px;line-height:1.05;color:#fff}.trainstats .linkbtn{color:#A9C3FF;align-self:flex-start;min-height:32px}
+.trainstats .stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}.trainstats .stat b{color:#fff}.trainstats .stat span{color:#A9B5CC}
+.trainseg{position:sticky;top:0;z-index:3;background:var(--bg);padding-block:6px}
+details.mgrp>summary{grid-template-columns:minmax(0,1fr) 56px auto auto}.mgt{display:flex;flex-direction:column;gap:1px;min-width:0}.mgt .small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mgbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}.mgbar i{display:block;height:100%;background:var(--good);border-radius:3px}
+@media (max-width:359px){.gymtop h1{font-size:26px}details.mgrp>summary{grid-template-columns:minmax(0,1fr) 36px auto auto;gap:8px;padding-inline:12px}}
 </style>
 
 <main class="wrap app" id="app"></main>
 <nav class="tabs" aria-label="Sections"><div class="wrap">
   <button data-a="tab" data-v="home"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5h-6v5H4z"/></svg>Home</button>
   <button data-a="tab" data-v="classes" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg>Classes</button>
-  <button data-a="tab" data-v="learn"><svg viewBox="0 0 24 24"><path d="M4 5h11a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h6"/></svg>Learn</button>
-  <button data-a="tab" data-v="journal"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4v3h6V4M9 12h6M9 16h4"/></svg>Journal</button>
+  <button data-a="tab" data-v="train"><svg viewBox="0 0 24 24"><path d="M4 5h11a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h6"/></svg>Train</button>
   <button data-a="tab" data-v="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>Me</button>
   <button data-a="tab" data-v="coach-home" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>Today</button>
   <button data-a="tab" data-v="coach-schedule" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Schedule</button>
   <button data-a="tab" data-v="coach-members" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.4 4.4 4.3"/></svg>Members</button>
   <button data-a="tab" data-v="coach-money" hidden><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/></svg>Money</button>
   <button data-a="tab" data-v="coach-gym" hidden><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></svg>Gym</button>
+  <button data-a="tab" data-v="coach-me" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>Me</button>
 </div></nav>
 <div class="sheet" id="sheet" hidden></div>
 <div class="sheetbar" id="sheetbar" hidden></div>
@@ -2008,7 +2027,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 function blankProgress(){return {v:1,mastery:{},notes:{},srs:{},settings:{perWeek:2,priorHours:100,targetHours:300,sessionMins:90,cycleStart:today(),hand:"left"},solo:{date:"",done:[]},photos:{},videos:{},comp:{}}}
-const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",learnView:"moves",flowSel:"hg_bot",filterP:"all",filterM:"all",kind:"all",q:""}};
+const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",trainView:"moves",flowSel:"hg_bot",filterP:"all",filterM:"all",kind:"all",q:""}};
 const P=()=>S.progress;
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
@@ -2187,7 +2206,7 @@ function header(){const g=API.me&&API.me.gym;
 function viewToday(){
   autoLog();
   const g=goal(),G=BELT[g],pct=readiness(),b=blockIndex(),blk=curBlocks()[b.i],due=dueList(),st=P().settings;
-  const hrs=(st.priorHours||0)+hoursLogged();
+  const hrs=matHours();
   const m2=monthsTo(st.perWeek||2),m3=monthsTo(Math.max(3,(st.perWeek||2)+1));
   const rq=rateQueue(),rTotal=rateable().length,rDone=rTotal-rq.length;
   const last30=recent(30);
@@ -2213,15 +2232,14 @@ function viewToday(){
   const dname=new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
   const hero=`<section class="hero dk homehero lprog" aria-label="Your progress"><span class="eyebrow">${esc(dname)}</span><div class="hrow"><span class="bignum mono">${pct}%</span><span class="hready">ready for <b>${G.to} belt</b></span></div>
     ${beltSVG(pct)}<p class="small muted">${Math.round(hrs)} mat hours · ${weekStreak()} week streak</p>
-    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log a session</button><button class="btn" data-a="tab" data-v="learn-belt">Your belt</button></div></section>`;
+    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log a session</button><button class="btn" data-a="tab" data-v="train-belt">Your belt</button></div></section>`;
   return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
   ${hero}
-  ${isCoach()?`<button class="btn primary managebtn" data-a="coachmode" data-v="manage">Manage ${esc(API.me.gym.name)}</button>`:""}
   ${typeof noticesCard==="function"?noticesCard():""}${typeof progHomeCard==="function"&&!isCoach()?progHomeCard():""}${inGym&&!isCoach()?feesCard():""}${nextClassCard()}${lastClassCard()}${compTodayCard()}
   <section class="panel today-card"><h2 class="label">Today</h2>
     ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
     <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button></div></div></section>
-  ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what I know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what I know"}</button></section>`:""}
+  ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what you know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what you know"}</button></section>`:""}
   ${weak}
   ${inGym?"":`<section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="me">Training days</button></div>
     <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="home"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>`}
@@ -2236,12 +2254,43 @@ function viewToday(){
   </div>`;
 }
 
-/* Learn: Moves (every technique, by belt), Map (the flow map) and Belt (your progress and each belt's curriculum), behind one switch. */
-function viewLearnTab(){const lv=LEARNV.includes(S.ui.learnView)?S.ui.learnView:"moves";
-  const T={moves:["Every move","Every technique for a belt, grouped by position."],map:["Flow map","Tap a position, then play through what happens next."],belt:["Your belt","Readiness for your next belt and what coaches look for."]}[lv];
-  const v=lv==="map"?viewFlow():lv==="belt"?viewBelt():viewMoves();
-  return `${header()}<div class="stack-lg">${lv!=="map"&&typeof progLearnTop==="function"?progLearnTop():""}<section class="hero dk learnhero${lv==="belt"?" beltwrap":""}" aria-label="Learn"><div class="hero-t"><span class="eyebrow">Learn</span><h1>${T[0]}</h1>${lv==="belt"?"":`<p>${T[1]}</p>`}</div>${seg("Learn","tab",[["learn-moves","Moves"],["learn-map","Map"],["learn-belt","Belt"]],"learn-"+lv,"seg3 learnseg")}${v.hero||""}</section>
-  ${v.body}</div>`}
+/* Train: the gym's programme ("This month"), one block of your stats, then Moves | Map | Log behind one switch. Your belt (each belt's
+   curriculum) opens from the ring. Coaches see the same page as "My training", under Gym (head coach) or Me, with the coach tabs kept. */
+const TRAINV=["moves","map","log","belt"];
+const matHours=()=>(P().settings.priorHours||0)+hoursLogged(); // one number everywhere: hours before the app plus every logged session
+const movesKnown=()=>{const r=rateable();return {n:r.filter(t=>lv(t.id)>=1).length,of:r.length,rated:r.filter(t=>t.id in P().mastery).length}};
+function trainStats(){const g=goal(),pct=readiness(),k=movesKnown(),due=dueList(),left=k.of-k.rated;
+  return `<section class="hero dk trainstats" aria-label="Your progress"><div class="trtop"><button class="trring" data-a="tab" data-v="train-belt" aria-label="Your belt: ${pct}% ready for ${BELT[g].to} belt">${ringSVG(pct,100,`${pct}% ready for ${BELT[g].to} belt`,"belt")}</button>
+    <div class="grow"><span class="eyebrow">Ready for</span><b class="trbelt">${BELT[g].to} belt</b><button class="linkbtn small" data-a="tab" data-v="train-belt">Your belt ›</button></div></div>
+    <div class="stats"><div class="stat"><b>${Math.round(matHours())}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${k.n}/${k.of}</b><span>Moves known</span></div></div>
+    ${left?`<button class="btn primary" data-a="qr">Rate what you know${k.rated?` · ${left} left`:""}</button>`:""}${due.length&&isCoach()?`<button class="btn" data-a="review">Review ${due.length} move${due.length===1?"":"s"}</button>`:""}</section>`}
+function viewTrain(){const tv=TRAINV.includes(S.ui.trainView)?S.ui.trainView:"moves",co=isCoach();
+  const top=co?`<section class="stack" style="gap:4px">${backTo(isHead()?"Gym":"Me","coachgo",isHead()?"gym":"me")}<h1 class="pageh">My training</h1></section>`:"";
+  const sw=seg("Train","tab",[["train-moves","Moves"],["train-map","Map"],["train-log","Log"]],"train-"+tv,"seg3 trainseg");
+  if(tv==="belt"){const v=viewBelt();return `${header()}<div class="stack-lg"><section class="stack" style="gap:4px">${backTo(co?"My training":"Train","tab","train-moves")}</section>${sw}<section class="hero dk learnhero beltwrap" aria-label="Your belt"><div class="hero-t"><span class="eyebrow">Your belt</span></div>${v.hero}</section>${v.body}</div>`}
+  const v=tv==="map"?viewFlow():tv==="log"?viewLogBody():viewMoves();
+  return `${header()}${co?"":`<h1 class="vh">Train</h1>`}<div class="stack-lg">${top}${!co&&tv!=="map"&&typeof progLearnTop==="function"?progLearnTop():""}${trainStats()}
+  ${sw}
+  ${tv==="map"?`<section class="hero dk learnhero" aria-label="Flow map">${v.hero}</section>`:""}${v.body}
+  ${co?`<div class="list navrows"><button class="navrow" data-a="trainset"><span><b>Training settings</b><span class="small muted">Days, belt goal, hours, backup</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}</div>`}
+// Log: the journal's sessions, newest first, with Log a session at the top. The hours and streak are in the block above.
+function viewLogBody(){
+  autoLog();
+  const l30=recent(30),stuck=stuckCounts(60).slice(0,6);const max=stuck.length?stuck[0][1]:1;
+  const tapsBy={};l30.forEach(s=>(s.tapped||[]).forEach(id=>{tapsBy[id]=(tapsBy[id]||0)+1}));
+  const tb=Object.entries(tapsBy).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  const inGym=API.me&&API.me.gym&&!isCoach();
+  return {body:`<section class="stack"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log a session</button>
+  <p class="small muted">${inGym?"Classes you book are added here after they finish.":l30.length?`${l30.length} session${l30.length===1?"":"s"} in the last 30 days.`:"Log each session in ten seconds."}</p></section>
+  ${nextStepsCard()}
+  <section class="stack"><h2 class="label">Sessions</h2>
+  ${S.sessions.length?`<div>${S.sessions.slice().sort(bySess).map(sessCard).join("")}</div>`:`<div class="empty">${inGym?"Nothing yet. Book a class: after it finishes, it shows up here.":"No sessions yet. After your next class, tap + Log a session."}</div>`}
+  </section>
+  ${stuck.length||tb.length?`<details class="more" data-g="log-stats"${(S.ui.openG||{})["log-stats"]?" open":""}><summary><span><b>Where you get stuck · what taps you</b><br><span class="small muted">Last 30–60 days</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
+  ${stuck.length?`<div class="bars">${stuck.map(([p,c])=>`<button class="bar" data-a="pos" data-v="${p}" style="background:none;border:0;padding:0;text-align:left"><span>${esc(POS[p].l)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(100*c/max)}%"></span></span><span class="mono">${c}</span></button>`).join("")}</div><p class="small muted">Tap a bar to open that position in the flow map.</p>`:""}
+  ${tb.length?`<div class="stack"><h2 class="label">Tapped by · 30 days</h2><div class="list">${tb.map(([id,c])=>{const d=defFor(id);return `<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(TM[id]?TM[id].n:id)}</b> <span class="mono small muted">×${c}</span></span>${d?`<button class="btn" data-a="open" data-v="${d.id}">Drill the defense</button>`:""}</div>`}).join("")}</div></div>`:""}
+  </div></details>`:""}`};
+}
 /* Moves: search and one Filter button. The filters (belt, priority, attack/defense, your level) live in a sheet, summed up in one line. */
 const FILTERS=[["filterP","Priority",[["all","All"],["core","Core"],["key","Key"],["plus","Bonus"]]],["kind","Type",[["all","All moves"],["def","Defense & escapes"],["att","Attacks"]]],["filterM","Your level",[["all","Any level"],["gaps","Needs work"],["solid","Solid"]]]];
 function filterSummary(){const u=S.ui,bk=u.belt||goal(),on=FILTERS.filter(([k])=>(u[k]||"all")!=="all");
@@ -2252,7 +2301,7 @@ function viewMoves(){
    <div class="searchrow"><div class="qwrap"><input id="q" type="search" placeholder="Search moves, positions, terms…" value="${esc(u.q)}" aria-label="Search moves, positions or terms (rnc, kimra, half guard…)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
    <div id="qsugg" class="qsugg" role="listbox" aria-label="Suggestions">${u.q?suggestHTML(u.q):""}</div></div>
    <button class="btn filterbtn" data-a="filters" aria-haspopup="dialog" aria-label="Filter: ${esc(f.txt)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>Filter${f.n?` <span class="fcount">${f.n}</span>`:""}</button></div>
-   <p class="fsum"><span>Showing <b>${esc(f.txt)}</b></span>${f.n?`<button class="linkbtn small" data-a="clearq">Reset</button>`:""}<button class="linkbtn small" data-a="qr" style="margin-left:auto">Quick-rate</button></p>
+   <p class="fsum"><span>Showing <b>${esc(f.txt)}</b></span>${f.n?`<button class="linkbtn small" data-a="clearq">Reset</button>`:""}</p>
   </section>
   <div id="learn-groups">${learnGroups()}</div>`};
 }
@@ -2264,14 +2313,14 @@ function filtersSheet(keep){S.ui.sheet={k:"filters"};S.ui.stack=[];const u=S.ui,
    ${FILTERS.map(([k,l,o])=>`<section class="stack"><h2 class="label">${l}</h2><div class="chips" role="group" aria-label="${l}">${o.map(([v,t])=>chip(k,v,t)).join("")}</div></section>`).join("")}
   </div>`,keep,{back:"Done",act:`<button class="btn primary grow" data-a="close">Show ${n} move${n===1?"":"s"}</button>`})}
 function viewBelt(){
-  const g=goal(),bk=S.ui.belt||g,B=BELT[bk],pct=readiness(bk),st=P().settings,hrs=(st.priorHours||0)+hoursLogged();
+  const g=goal(),bk=S.ui.belt||g,B=BELT[bk],pct=readiness(bk);
   const stage=TECH.filter(t=>beltOf(t)===bk),rated=stage.filter(t=>t.p!=="plus"&&Object.prototype.hasOwnProperty.call(P().mastery,t.id)).length;
   const rateableStage=stage.filter(t=>t.p!=="plus"),rTotal=rateableStage.length,rDone=rated,rq=rateQueue(),comp=(P().comp||{})[bk]||[];
   return {hero:`<div class="stack" style="gap:12px" aria-label="Progress">
     <div class="beltpath" role="group" aria-label="Select belt to view">${BELTS.map(b=>{const r=readiness(b.k),selected=b.k===bk;return `<button data-a="belt" data-v="${b.k}" class="bp ${selected?"now":""}" aria-pressed="${selected}"><i style="background:${BCOL[b.k]}"></i><b>${b.to}</b><span class="mono">${r}%</span></button>`}).join("")}</div>
     ${beltSVG(pct,bk)}
     <div class="row between"><div><div class="bignum mono">${pct}%</div><p class="muted small">${B.to}-belt skill readiness (core + key techniques)</p></div>${bk===g&&!rq.length?`<button class="btn" data-a="qr">Re-rate</button>`:""}</div>
-    <div class="stats"><div class="stat"><b>${Math.round(hrs)}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${rDone}/${rTotal}</b><span>Rated</span></div></div>
+    <p class="small muted">${rDone} of ${rTotal} ${B.to}-belt moves rated</p>
     ${(()=>{const a=areaScores(bk);const any=a.some(x=>x.pct>0);const lo=a.slice().sort((x,y)=>x.pct-y.pct)[0];return any?`<p class="small">Weakest area: <b>${esc(lo.n)}</b>.</p>`:""})()}
   </div>`,body:`<section class="stack"><h2 style="font-size:30px">${B.to} belt curriculum</h2>
    <p class="small muted">The requirements for the selected belt. Change belts with the selector above.</p>
@@ -2352,15 +2401,21 @@ function fromHereHTML(t){const mx=flowMax(),nx=(t.nx||[]).filter(n=>TM[n]);
     ${nx.length?`<p class="small muted">Chains into:</p><div class="list">${nx.map(n=>tRow(TM[n])).join("")}</div>`:""}
     ${next.length?`<p class="small muted">${next.every(isDef)?`Be ready to defend in ${esc(POS[end].l.toLowerCase())}:`:`Good next moves from ${esc(POS[end].l.toLowerCase())}:`}</p><div class="chips">${next.map(m=>`<button class="chip" data-a="open" data-v="${m.id}">${esc(m.n)}</button>`).join("")}</div>`:""}`}
 
+// Moves in a few groups by what they do (escapes, guard, passing, pins, back takes, submissions, takedowns), each with how much of it you
+// know and the next move to work on. A search or filter opens the groups that match.
+const areaKey=a=>"a-"+a.n.toLowerCase().replace(/[^a-z]+/g,"-").replace(/-$/,"");
 function learnGroups(){
   const u=S.ui,q=u.q.trim().toLowerCase();
   const bk=u.belt||goal();
   const ATT=["sub","sweep","pass","takedown","back"];
   const hit=q?searchTechIds(q):null;
   const match=t=>(hit?hit.has(t.id):beltOf(t)===bk)&&((u.kind||"all")==="all"||(u.kind==="def"?isDef(t):ATT.includes(t.c)))&&(u.filterP==="all"||t.p===u.filterP)&&(u.filterM==="all"||(u.filterM==="gaps"?lv(t.id)<3:lv(t.id)>=3));
-  const groups=ORDER.map(p=>({p,ts:fromPos(p,0,true).filter(match)})).filter(g=>g.ts.length);
-  return `${groups.length?`<div class="stack">${groups.map(g=>{const open=q||u.filterP!=="all"||u.filterM!=="all"||(u.kind||"all")!=="all"||(S.ui.openG||{})[g.p];const solid=g.ts.filter(t=>lv(t.id)>=3).length;
-    return `<details class="grp" data-g="${g.p}"${open?" open":""}><summary><span><b>${esc(POS[g.p].L)}</b><br><span class="small muted">${g.ts.length} technique${g.ts.length>1?"s":""} · ${solid} solid</span></span><span class="small muted mono">${solid}/${g.ts.length}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><p class="small muted" style="padding-bottom:6px">${gl((PD[g.p]||{}).d||"")}</p><div class="list">${g.ts.map(t=>tRow(t,`<span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)).join("")}</div><button class="linkbtn small" data-a="pos" data-v="${g.p}">Open in flow map ›</button></div></details>`}).join("")}</div>`:`<div class="empty">No techniques match${q?` “${esc(u.q.trim())}”`:""}. <button class="linkbtn" data-a="clearq">Clear search and filters</button></div>`}`;
+  const groups=AREAS.map(a=>({a,ts:[]}));
+  TECH.filter(match).sort((x,y)=>ORDER.indexOf(x.f)-ORDER.indexOf(y.f)||byPos(x,y)).forEach(t=>{const g=groups.find(g=>g.a.f(t));if(g)g.ts.push(t)});
+  const live=groups.filter(g=>g.ts.length),filt=q||u.filterP!=="all"||u.filterM!=="all"||(u.kind||"all")!=="all";
+  return `${live.length?`<div class="stack movegroups">${live.map(g=>{const k=areaKey(g.a),open=filt||(S.ui.openG||{})[k],solid=g.ts.filter(t=>lv(t.id)>=3).length;
+    const nx=g.ts.filter(t=>lv(t.id)<3).sort((a,b)=>(a.p==="core"?0:a.p==="key"?1:2)-(b.p==="core"?0:b.p==="key"?1:2)||lv(a.id)-lv(b.id))[0];
+    return `<details class="grp mgrp" data-g="${k}"${open?" open":""}><summary><span class="mgt"><b>${esc(g.a.n)}</b><span class="small muted">${nx?`Next: ${esc(nx.n)}`:"All solid"}</span></span><span class="mgbar" aria-hidden="true"><i style="width:${Math.round(100*solid/g.ts.length)}%"></i></span><span class="small muted mono" aria-label="${solid} of ${g.ts.length} solid">${solid}/${g.ts.length}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body"><div class="list">${g.ts.map(t=>tRow(t,`<span class="pri" data-p="${t.p}">${PRI[t.p]}</span>`)).join("")}</div></div></details>`}).join("")}</div>`:`<div class="empty">No techniques match${q?` “${esc(u.q.trim())}”`:""}. <button class="linkbtn" data-a="clearq">Clear search and filters</button></div>`}`;
 }
 
 function posKnown(p,max){const ts=fromPos(p,max);if(!ts.length)return null;return ts.reduce((x,t)=>x+Math.min(4,lv(t.id)),0)/(ts.length*4)}
@@ -2505,30 +2560,6 @@ function viewFlow(){
   </div>`};
 }
 
-function viewLog(){
-  autoLog();
-  const st=P().settings,hrs=hoursLogged(),l30=recent(30);
-  const hits=l30.reduce((a,s)=>a+(s.hits||[]).length,0),tapped=l30.reduce((a,s)=>a+(s.tapped||[]).length,0);
-  const stuck=stuckCounts(60).slice(0,6);const max=stuck.length?stuck[0][1]:1;
-  const tapsBy={};l30.forEach(s=>(s.tapped||[]).forEach(id=>{tapsBy[id]=(tapsBy[id]||0)+1}));
-  const tb=Object.entries(tapsBy).sort((a,b)=>b[1]-a[1]).slice(0,4);
-  const inGym=API.me&&API.me.gym&&!isCoach();
-  return `${header()}<div class="stack-lg">
-  <section class="hero dk pagehero" aria-label="Journal"><div class="hero-t"><span class="eyebrow">Journal</span><h1>Your training</h1><p>${hrs?`${Math.round(hrs)} mat hours logged`:"Log each session in ten seconds"}${l30.length?` · ${l30.length} session${l30.length===1?"":"s"} in 30 days`:""}</p></div>
-    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log training</button></div></section>
-  <section class="stack">
-  <div class="stats"><div class="stat"><b>${Math.round((st.priorHours||0)+hrs)}</b><span>Total hours</span></div><div class="stat"><b>${l30.length}</b><span>Sessions · 30d</span></div><div class="stat"><b>${hits}</b><span>Worked · 30d</span></div></div>
-  <p class="small muted">${inGym?"Classes you book are added here automatically after they finish, with what was taught. Tap what worked, what got you and where you got stuck; JitsFlow works out what to study next.":"Join your gym (Me › Your account) and the classes you book are logged here for you. For open mats and privates, tap + Log training."}</p></section>
-  ${nextStepsCard()}
-  <section class="stack"><h2 class="label">Sessions</h2>
-  ${S.sessions.length?`<div>${S.sessions.slice().sort(bySess).map(sessCard).join("")}</div>`:`<div class="empty">${inGym?"Nothing yet. Book a class: after it finishes, it shows up here.":"No sessions yet. After your next class, tap + Log training."}</div>`}
-  </section>
-  ${stuck.length||tb.length?`<details class="more" data-g="log-stats"${(S.ui.openG||{})["log-stats"]?" open":""}><summary><span><b>Where you get stuck · what taps you</b><br><span class="small muted">Last 30–60 days</span></span><span class="chev" aria-hidden="true">›</span></summary><div class="body stack">
-  ${stuck.length?`<div class="bars">${stuck.map(([p,c])=>`<button class="bar" data-a="pos" data-v="${p}" style="background:none;border:0;padding:0;text-align:left"><span>${esc(POS[p].l)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(100*c/max)}%"></span></span><span class="mono">${c}</span></button>`).join("")}</div><p class="small muted">Tap a bar to open that position's escapes in the flow map.</p>`:""}
-  ${tb.length?`<div class="stack"><h2 class="label">Tapped by · 30 days</h2><div class="list">${tb.map(([id,c])=>{const d=defFor(id);return `<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(TM[id]?TM[id].n:id)}</b> <span class="mono small muted">×${c}</span></span>${d?`<button class="btn" data-a="open" data-v="${d.id}">Drill the defense</button>`:""}</div>`}).join("")}</div></div>`:""}
-  </div></details>`:""}
-  </div>`;
-}
 function fmtDate(s){try{return parseD(s).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}catch(e){return s}}
 
 /* ============ SHEETS ============ */
@@ -2556,6 +2587,8 @@ function goBack(){const k=S.ui.sheet&&S.ui.sheet.k;
   if(k==="onboard"||(k==="how"&&S.ui.sheet.step==="pick")){S.ui.fromHow=false;P().settings.onboarded=true;saveProgress();closeSheet();return}
   if(k==="outpro"){OUT.delAsk=null;return outreachSheet()}
   if(k==="student"&&S.ui.sheet.from==="insights")return insightsSheet();
+  if(k==="addstu"&&S.ui.sheet.from==="invite")return inviteSheet();
+  if(k==="gymedit"&&S.ui.gimpFrom&&isCoach()){const f=S.ui.gimpFrom;S.ui.gimpFrom=null;S.ui.gimp=null;return gymSec(f)} // back to the Gym sheet it came from
   if(typeof prgBack==="function"&&prgBack(k))return;
   if(k==="how"||(k==="auth"&&S.ui.fromHow&&!API.me))return howSheet(k==="auth"&&S.ui.authMode==="register"?"gym":"pick");
 const st=S.ui.stack||[];if(S.ui.sheet&&S.ui.sheet.k==="tech"&&st.length>1){st.pop();techSheet(st[st.length-1],true)}else closeSheet()}
@@ -2637,18 +2670,10 @@ function themeNow(){try{const t=localStorage.getItem("jf.theme");return t==="lig
 function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");else localStorage.setItem("jf.theme",t)}catch(e){}
   if(t==="system")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t);
   const dark=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",dark?"#0C0F14":"#1D4FB5")}
-// Me: your account, fees and payments, your gym, inviting friends, then settings.
-function viewMe(){
-  const st=P().settings,b=blockIndex();const hand=st.hand||"left";
-  if(API.me&&API.me.gym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="me"&&!S.ui.sheet)render()})}
-  const meName=API.me&&API.me.name,meGym=API.me&&API.me.gym&&API.me.gym.name;
-  return `${header()}<div class="stack-lg"><section class="hero dk pagehero" aria-label="Me"><div class="hero-t"><span class="eyebrow">Me</span><h1>${meName?esc(meName):"Your settings"}</h1><p>${meGym?`Training at ${esc(meGym)}`:API.me?"Studying on your own":"Your account, belt, appearance and data"}</p></div></section>
-  ${API.me&&API.me.gym&&!isCoach()?`<div class="list navrows"><button class="navrow" data-a="mypay" id="mepay"><span><b>Payments and receipts</b><span class="small muted">${API.pay&&(API.pay.payments||[]).length?`${API.pay.payments.length} payment${API.pay.payments.length>1?"s":""}`:"History"}${API.pay&&(API.pay.packs||[]).length?" · packs":""}${API.pay&&API.pay.autopay?(API.pay.autopay.on?" · paid by card":" · pay automatically"):""}</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}
-  ${accountSection()}
-  ${isCoach()?"":gymCard(false,true)}
-  ${studentWaSection()}
-  ${appearanceSection()}
-  <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on Home follows these days.</p></section>
+// Your own training settings: days, belt goal, reviews, phone hand, hours and focus block, backup. On Me for members; coaches open
+// them from the bottom of My training.
+function trainSettingsHTML(){const st=P().settings,b=blockIndex(),hand=st.hand||"left";
+  return `  <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on Home follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
   <p class="small muted">Sets what Home, ratings and focus blocks aim at.</p>
   <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps</label></section>
@@ -2667,43 +2692,62 @@ function viewMe(){
   ${S.ui.importOpen?`<textarea id="importtxt" placeholder="Paste backup text here"></textarea><div class="row"><button class="btn danger" data-a="importdo">Replace my data</button></div>`:""}
   <textarea id="exporttxt" readonly hidden></textarea></section>
   <section class="stack"><h2 class="label">Reset</h2>${S.ui.confirmReset?`<div class="row"><span class="small">Clear all ratings, reviews and notes? Sessions stay.</span><button class="btn danger" data-a="resetyes">Clear</button><button class="btn" data-a="resetno">Cancel</button></div>`:`<button class="btn danger" data-a="reset">Clear ratings & reviews</button>`}</section>
-  </div></details>
+  </div></details>`}
+function trainSetSheet(redraw){S.ui.sheet={k:"trainset"};S.ui.stack=[];openSheet(`${sheetHead("My training")}<div class="stack-lg"><h1>Training settings</h1>${trainSettingsHTML()}</div>`,!!redraw)}
+// Me: your account, fees and payments, your gym, inviting friends, then settings.
+function viewMe(){
+  const st=P().settings,b=blockIndex();const hand=st.hand||"left";
+  if(API.me&&API.me.gym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="me"&&!S.ui.sheet)render()})}
+  const meName=API.me&&API.me.name,meGym=API.me&&API.me.gym&&API.me.gym.name;
+  return `${header()}<div class="stack-lg"><section class="hero dk pagehero" aria-label="Me"><div class="hero-t"><span class="eyebrow">Me</span><h1>${meName?esc(meName):"Your settings"}</h1><p>${meGym?`Training at ${esc(meGym)}`:API.me?"Studying on your own":"Your account, belt, appearance and data"}</p></div></section>
+  ${API.me&&API.me.gym&&!isCoach()?`<div class="list navrows"><button class="navrow" data-a="mypay" id="mepay"><span><b>Payments and receipts</b><span class="small muted">${API.pay&&(API.pay.payments||[]).length?`${API.pay.payments.length} payment${API.pay.payments.length>1?"s":""}`:"History"}${API.pay&&(API.pay.packs||[]).length?" · packs":""}${API.pay&&API.pay.autopay?(API.pay.autopay.on?" · paid by card":" · pay automatically"):""}</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}
+  ${accountSection()}
+  ${isCoach()?"":gymCard(false,true)}
+  ${studentWaSection()}
+  ${appearanceSection()}
+  ${trainSettingsHTML()}
   <p class="small muted applegal" style="text-align:center;padding-top:8px">${[["Pricing","/pricing/"],["Terms","/terms/"],["Refunds","/refunds/"],["Privacy","/privacy/"],["Contact","/contact/"]].map(([n,u])=>`<a class="link" href="${/^https?:/.test(location.protocol)?"":"https://www.jitsflow.com"}${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")}</p>
   <p class="small muted credit" style="text-align:center;padding-block:8px 4px">Built and developed by <a class="link" href="https://b-3data.com" target="_blank" rel="noopener">b-3data.com</a></p>
   </div>`;
 }
 
 /* ============ ROUTING & EVENTS ============ */
-// Students (and coaches training themselves): Home, Classes, Learn, Journal, Me. Coaches running their gym: Home, Schedule, Members, Money (head coach), Gym.
-const TABS=["home","classes","learn","journal","me"],LEARNV=["moves","map","belt"];
-// Old addresses (bookmarks, links in messages and emails) open the new places.
-const OLDTAB={today:"home",book:"classes",flow:"learn-map",belts:"learn-belt",log:"journal",settings:"me",coach:"coach-home","coach-today":"coach-home","coach-classes":"coach-schedule","coach-students":"coach-members"};
-function route(h){h=OLDTAB[h]||h;if(/^learn-/.test(h)&&LEARNV.includes(h.slice(6)))return {tab:"learn",lv:h.slice(6)};
+// Members: Home, Classes, Train, Me. Coaches: Today, Schedule, Members, Money and Gym (head coach) or Me (other coaches); their own
+// training is the Train page, opened from Gym or Me, with the coach tabs kept.
+const TABS=["home","classes","train","me"];
+// Old addresses (bookmarks, links in messages and emails) open the new places: Learn and Journal are Train now.
+const OLDTAB={today:"home",book:"classes",flow:"train-map",belts:"train-belt",log:"train-log",settings:"me",learn:"train","learn-moves":"train","learn-map":"train-map","learn-belt":"train-belt",journal:"train-log",
+  coach:"coach-home","coach-today":"coach-home","coach-classes":"coach-schedule","coach-students":"coach-members"};
+function route(h){h=OLDTAB[h]||h;if(/^train-/.test(h)&&TRAINV.includes(h.slice(6)))return {tab:"train",tv:h.slice(6)};
   if(h.startsWith("coach-")&&COACH_VIEWS.includes(h.slice(6)))return {tab:"coach",cv:h.slice(6)};return TABS.includes(h)?{tab:h}:null}
-const tabHash=()=>S.ui.tab==="coach"?"coach-"+COACH.view:S.ui.tab==="learn"&&S.ui.learnView!=="moves"?"learn-"+S.ui.learnView:S.ui.tab;
-const isMap=()=>S.ui.tab==="learn"&&S.ui.learnView==="map";
+const tabHash=()=>S.ui.tab==="coach"?"coach-"+COACH.view:S.ui.tab==="train"&&S.ui.trainView!=="moves"?"train-"+S.ui.trainView:S.ui.tab;
+const isMap=()=>S.ui.tab==="train"&&S.ui.trainView==="map";
 function render(){
   const app=document.getElementById("app");
   app.querySelectorAll("details[data-g]").forEach(d=>{const o=S.ui.openG=S.ui.openG||{};if(d.open)o[d.dataset.g]=1;else delete o[d.dataset.g]}); // open folds stay open (the toggle event can come after a quick redraw)
   document.documentElement.classList.toggle("righty",(P().settings.hand||"left")==="right");
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches training themselves) the study tabs.
-  const mg=managing();
-  if(mg&&S.ui.tab!=="coach")return go("coach-"+(COACH.view||"home"),true);
-  if(!mg&&S.ui.tab==="coach"){if(isCoach()){setCoachMode("manage");return render()}return go("home",true)} // a coach page opened in training mode: back to managing
-  if(mg&&!COACH_VIEWS.includes(COACH.view)||(COACH.view==="money"&&mg&&!isHead())){COACH.view="home";try{history.replaceState(null,"","#coach-home")}catch(e){}} // Money is the head coach's only
-  const v=S.ui.tab,inGym=!!(API.me&&API.me.gym&&!isCoach());
-  const show={home:!mg,classes:!mg&&inGym,learn:!mg,journal:!mg,me:!mg,"coach-home":mg,"coach-schedule":mg,"coach-members":mg,"coach-money":mg&&isHead(),"coach-gym":mg};
-  const cur=v==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):v;
+  // Coaches get the coach tabs everywhere, also on their own training (the Train page, under Gym or Me). Nobody else sees a coach page.
+  const mg=managing(),own=mg&&S.ui.tab==="train"&&isCoach()&&!API.preview&&!API.support;
+  if(mg&&S.ui.tab!=="coach"&&!own)return go("coach-"+(COACH.view||"home"),true);
+  if(!mg&&S.ui.tab==="coach")return go("home",true);
+  {const v0=COACH.view,head=isHead()||!!API.preview,fix=!COACH_VIEWS.includes(v0)||v0==="money"&&!isHead()?"home":v0==="gym"&&!head?"me":v0==="me"&&head?"gym":null; // Money and Gym: the head coach's; Me: other coaches'
+    if(mg&&fix){COACH.view=fix;if(S.ui.tab==="coach")try{history.replaceState(null,"","#coach-"+fix)}catch(e){}}}
+  const v=S.ui.tab,inGym=!!(API.me&&API.me.gym&&!isCoach()),hd=isHead()||!!API.preview;
+  const show={home:!mg,classes:!mg&&inGym,train:!mg,me:!mg,"coach-home":mg,"coach-schedule":mg,"coach-members":mg,"coach-money":mg&&isHead(),"coach-gym":mg&&hd,"coach-me":mg&&!hd};
+  const cur=v==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):own?(hd?"coach-gym":"coach-me"):v;
   document.querySelectorAll("nav.tabs [data-v]").forEach(b=>{b.hidden=!show[b.dataset.v];b.setAttribute("aria-current",b.dataset.v===cur?"page":"false")});
   {const b=document.querySelector(`nav.tabs [data-v="${cur}"]`);document.title=(b?b.textContent.trim()+" · ":"")+"JitsFlow"} // the screen reader and the phone's app switcher say which screen this is
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
-  app.innerHTML=v==="coach"?viewCoach():v==="classes"?viewBook():v==="learn"?viewLearnTab():v==="journal"?viewLog():v==="me"?viewMe():viewToday();
+  app.innerHTML=v==="coach"?viewCoach():v==="classes"?viewBook():v==="train"?viewTrain():v==="me"?viewMe():viewToday();
+  if(S.ui.sheet&&!document.getElementById("sheet").hidden){const k=S.ui.sheet.k; // an open Gym or settings sheet shows what just loaded or changed
+    if(GYMSHEETS.has(k)&&isCoach()){if(k==="invite")inviteSheet(true);else gymSec(S.ui.sheet.id,true)}else if(k==="trainset")trainSetSheet(true)}
   if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
 function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
-  const was=tabHash();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;
+  const was=tabHash();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
   render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()
   if(was!==tabHash()&&typeof payFresh==="function"){payFresh(30000);coachFresh(30000)}} // money a tab shows, if it's more than 30 s old
@@ -2713,12 +2757,12 @@ window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.g
   if(!sh.hidden){goBack();if(!sh.hidden)try{history.pushState({sheet:1},"")}catch(e){}return}
   const h=location.hash.slice(1),r=h?route(h):{tab:"home"};if(!r)return;
   // Back on the map steps back along the chain you played (a step left by a closed sheet is skipped as below)
-  if(isMap()&&h==="learn-map"&&Array.isArray(S.ui.trail)&&S.ui.trail.length>1){const st=history.state||{};if(!st.sheet){const want=Math.max(1,st.chain||1);if(want<S.ui.trail.length){chainJump(want-1);return}}}
+  if(isMap()&&h==="train-map"&&Array.isArray(S.ui.trail)&&S.ui.trail.length>1){const st=history.state||{};if(!st.sheet){const want=Math.max(1,st.chain||1);if(want<S.ui.trail.length){chainJump(want-1);return}}}
   if((h||"home")===tabHash()){history.back();return}
-  go(r.tab==="learn"&&!r.lv?"learn-moves":h||"home",true)});
+  if(r.tab==="train"&&!r.tv)r.tv="moves";go(r.tab==="train"?"train-"+r.tv:h||"home",true)});
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="learn"&&!r.lv)r.lv="moves";if(h===tabHash())return;S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="train"&&!r.tv)r.tv="moves";if(h===tabHash())return;S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
@@ -2730,7 +2774,7 @@ document.addEventListener("click",e=>{
   const a=el.dataset.a,v=el.dataset.v;
   switch(a){
     case "tab": if(!document.getElementById("sheet").hidden)hideSheet(); if(v==="coach-money")COACH.moneyView="month"; go(v); break; // a tab opens its main page (Setup and All payments are a row away)
-    case "me": if(isCoach()){setCoachMode("manage");coachGo("gym")}else go("me"); break;
+    case "me": if(isCoach())coachGo(isHead()?"gym":"me");else go("me"); break;
     case "how": howPick(v); break;
     case "open": techSheet(v); break;
     case "close": closeSheet(); break;
@@ -2761,7 +2805,11 @@ document.addEventListener("click",e=>{
     case "attendall": markAllHere();break;
     case "coachview": case "coachgo": if(S.ui.sheet)hideSheet();coachGo(v);break;
     case "stuview": if(v==="insights")insightsSheet();else render();break;
-    case "coachmode": setCoachMode(v);if(v==="study"){go("home");toast(`Your training. Tap Manage ${gymName()} on Home to go back.`);maybeOnboard()}else coachGo("home");break;
+    case "trainset": trainSetSheet();break;
+    case "mytrain": if(S.ui.sheet)hideSheet();go("train");break;
+    case "invite": inviteSheet();break;
+    case "gymsec": gymSec(v);break;
+    case "solocoach": api("PATCH","/coach/gym",{setup:{soloCoach:true}}).then(j=>{API.me=j.me;render();toast("Ticked off. Add a coach any time from here.")}).catch(e=>toast(e.message));break;
     case "classnew": S.ui.cplan=null;classForm(null);break;
     case "classnewday": S.ui.cplan=null;classForm(null,v);break;
     case "calday": { const st=calState(el.dataset.k==="coach"?"coach":"book");st.sel=(el.dataset.k!=="coach"&&st.sel===v)?null:v;st.anchor=v;render();break }
@@ -2890,7 +2938,7 @@ document.addEventListener("click",e=>{
     case "remindsee": remindSheet();break;
     case "remindmoney": hideSheet();COACH.moneyView="month";COACH.moneyFilter="owing";if(COACH.moneyMonth){COACH.moneyMonth=null;COACH.money=null}coachGo("money");break;
     case "moneycsv": moneyCSV();break;
-    case "addstu": addStudentSheet();break;
+    case "addstu": addStudentSheet(v==="invite");break;
     case "studelask": { const p=((COACH.roster||{}).people||[]).find(x=>x.id===v); confirmSheet("Remove this student?",p&&!p.offline?`${esc(first(p.name))} leaves your gym but keeps their JitsFlow account. Their bookings, plan, fee and your notes on them are cleared. Payments you recorded stay.`:"They're taken off your list. Payments you recorded stay, marked as not matched.",["studelyes",v],"Remove");break }
     case "leavegym": leaveSheet();break;
     case "leavegymyes": api("POST","/me/leave",{}).then(j=>{API.me=j.me;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;hideSheet();render();toast("You've left your gym.")}).catch(e=>toast(e.message));break;
@@ -2899,7 +2947,7 @@ document.addEventListener("click",e=>{
     case "coachdelask": { const c=((COACH.roster||{}).people||[]).find(p=>p.id===v); confirmSheet(`Remove ${c?first(c.name):"this coach"}?`,"They lose coach access straight away: no roster, payments or settings. Your coach code changes too, so the old coach link stops working.",["coachdelyes",v],"Remove coach");break }
     case "headask": { const c=((COACH.roster||{}).people||[]).find(p=>p.id===v); confirmSheet(`Make ${c?first(c.name):"them"} the head coach?`,`${c?first(c.name):"They"} will see the Money tab: fees, payments, bank details, PayFast and your JitsFlow plan, and get the payment emails. You'll keep coaching, but won't see the money any more.`,["headyes",v],"Make head coach");break }
     case "headyes": makeHead(v);break;
-    case "coachdelyes": api("DELETE",`/coach/students/${v}`).then(async j=>{if(j.me)API.me=j.me;hideSheet();await coachLoad("roster");render();toast("Coach removed. Your coach code has changed.")}).catch(e=>toast(e.message));break;
+    case "coachdelyes": api("DELETE",`/coach/students/${v}`).then(async j=>{if(j.me)API.me=j.me;hideSheet();await coachLoad("roster");render();if(S.ui.tab==="coach")gymSec("coaches");toast("Coach removed. Your coach code has changed.")}).catch(e=>toast(e.message));break;
     case "mergeask": { const [o,a]=String(v).split(","),nm=x=>(((COACH.roster||{}).people||[]).find(p=>p.id===x)||{}).name||"";
       confirmSheet("Merge these two?",`${esc(nm(o))} (not on the app) goes into ${esc(nm(a))}'s account. Their payments, classes and plan move over. This can't be undone.`,["mergeyes",v],"Merge");break }
     case "mergeyes": { const [o,a]=String(v).split(",");api("POST",`/coach/students/${o}/merge`,{into:a}).then(async()=>{hideSheet();await coachLoad("roster");COACH.money=null;render();toast("Merged.");studentSheet(a)}).catch(e=>toast(e.message));break }
@@ -2910,8 +2958,8 @@ document.addEventListener("click",e=>{
     case "impretry": if(COACH.imp)impStart(COACH.imp.url); break;
     case "impdismiss": COACH.imp=null;api("DELETE","/coach/import/job").catch(()=>{});render(); break;
     case "impreview": impReview(); break;
-    case "setupgo": if(v==="money")COACH.moneyView="setup";coachGo(v);
-      if(v==="gym")setTimeout(()=>{const f=document.getElementById("gymimpform");if(!f)return;f.scrollIntoView({block:"start",behavior:"smooth"});const i=f.querySelector("input");if(i)i.focus({preventScroll:true})},60);break;
+    case "setupgo": if(v==="gym")v="profile";if(GYM_T[v]){if(S.ui.sheet)hideSheet();if(isHead()&&COACH.view!=="gym")coachGo("gym");gymSec(v)}else coachGo(v); // Today's Getting started: the same sheet as the Gym row
+      if(v==="profile")setTimeout(()=>{const f=document.getElementById("gymimpform");if(!f)return;f.scrollIntoView({block:"start",behavior:"smooth"});const i=f.querySelector("input");if(i)i.focus({preventScroll:true})},60);break;
     case "moneygo": COACH.moneyView=v;if(v==="month"){COACH.moneyFilter="owing";if(COACH.moneyMonth){COACH.moneyMonth=null;COACH.money=null}}coachGo("money");break;
     case "setuphide": api("PATCH","/coach/gym",{setup:{dismissed:true}}).then(j=>{API.me=j.me;render()}).catch(e=>toast(e.message)); break;
     case "bulkopen": bulkSheet([]); break;
@@ -2942,7 +2990,7 @@ document.addEventListener("click",e=>{
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
     case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add("in-fade")}break} // tapping the map: stay where you are
-    case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("learn-map"); break;
+    case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("train-map"); break;
     case "chaingo": chainGo(v,el.dataset.k); break;
     case "crumb": chainJump(Number(v)); break;
     case "chainreset": chainJump(0); break;
@@ -2968,7 +3016,7 @@ document.addEventListener("click",e=>{
     case "unpick": { const f=S.ui.form;f[el.dataset.k]=f[el.dataset.k].filter(x=>x!==v);logSheet(true);break }
     case "stuck": { const f=S.ui.form;f.stuck=f.stuck.includes(v)?f.stuck.filter(x=>x!==v):[...f.stuck,v];logSheet(true);break }
     case "phdel": S.ui.phConfirm=v; render(); break;
-    case "openbelt": S.ui.belt=v;S.ui.filterP="all";S.ui.filterM="all";S.ui.q="";go("learn-belt");break;
+    case "openbelt": S.ui.belt=v;S.ui.filterP="all";S.ui.filterM="all";S.ui.q="";go("train-belt");break;
     case "belt": S.ui.belt=v;if(!(S.ui.sheet&&S.ui.sheet.k==="filters")){S.ui.filterP="all";S.ui.filterM="all";S.ui.q=""}render();if(S.ui.sheet&&S.ui.sheet.k==="filters")filtersSheet(true);break;
     case "setgoal": setGoal(v);break;
     case "flowbelt": S.ui.flowBelt=v;render();break;
@@ -3064,7 +3112,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.video&&t.files&&t.files[0]){uploadVideo(t.dataset.video,t.files[0]);return}
   if(t.dataset.f&&S.ui.form){S.ui.form[t.dataset.f]=t.value}
 });
-const FORMS=["outform","outedit","authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","psform","packform","accessform","privpriceform","logform","kidform"];
+const FORMS=["outform","outedit","authform","howcode","classform","studentform","payform","gymform","joinform","delform","gymimpform","gymeditform","inviteform","msgform","planform","privform","compform","compimpform","compreqform","compentryform","phoneform","bankform","popform","gwaform","addstuform","astform","pfform","gymdelform","psform","gymfeeform","packform","accessform","privpriceform","logform","kidform"];
 document.addEventListener("submit",async e=>{
   const fid=e.target.getAttribute("id"),f=e.target; // not e.target.id: a field named "id" (popform's) would shadow it
   if(e.target.id==="aiform"){e.preventDefault();const b=e.target.querySelector("[data-a=ask]");if(b)b.click();return}
@@ -3108,6 +3156,7 @@ async function submitForm(fid,f,submitter){
   if(fid==="compreqform")return sendCompReq(f);
   if(fid==="compentryform")return saveCompEntry(f);
   if(fid==="gymeditform")return gymSave(f);
+  if(fid==="gymfeeform"){try{const j=await api("PATCH","/coach/gym",{monthlyFeeCents:Math.round(Number(f.querySelector("[name=fee]").value||0)*100)});API.me=j.me;await coachLoad("roster");toast("Fee saved.")}catch(err){toast(err.message)}return}
   if(fid==="gymform"){try{const fee=f.querySelector("[name=fee]"),j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,...(fee?{monthlyFeeCents:Math.round(Number(fee.value||0)*100)}:{})});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
   if(fid==="gymdelform")return deleteGym(f);
   if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
@@ -3121,7 +3170,7 @@ async function submitLog(){
   f.hits.forEach(id=>{if(lv(id)<4){P().mastery[id]=4;ensureCard(id)}});
   saveProgress();
   const ok=await addSession(s);if(ok&&!f.editId)jfTrack("log_session",{mins:s.mins,rolls:s.rolls});
-  if(ok){toast(ok==="later"?SAVED_LATER:f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("journal")}
+  if(ok){toast(ok==="later"?SAVED_LATER:f.editId?"Session updated.":"Session saved.");S.ui.form=null;hideSheet();go("train-log")}
 }
 
 /*@@ACCOUNTS@@*/
@@ -3250,7 +3299,7 @@ function confirmSheet(title,text,yes,label){S.ui.sheet={k:"confirm"};S.ui.stack=
 /* ============ BOOT ============ */
 (function boot(){
   if(!lsGet("rtb.progress"))lsSet("rtb.progress",S.progress);
-  {const h=location.hash.slice(1),r=route(h)||{tab:"home"};S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.lv)S.ui.learnView=r.lv;if(h&&h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}}
+  {const h=location.hash.slice(1),r=route(h)||{tab:"home"};S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h&&h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}}
   render();setSync(S.sync,"");connect();
   // Links from the technique pages: /app/?t=kimura opens that technique.
   try{const qs=new URLSearchParams(location.search),t=qs.get("t");if(t){qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash);if(TM[t])setTimeout(()=>{techSheet(t);jfTrack("select_content",{content_type:"technique",item_id:t,from:"web_page"})},60)}}catch(e){}

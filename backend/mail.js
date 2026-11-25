@@ -192,7 +192,7 @@ const templates = {
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
   payfastReconnect: (coach) => ({ subject: "Connect PayFast again", title: "PayFast needs reconnecting",
     paras: [`Hi ${coach},`, "We can't use your gym's PayFast details any more, so card payments in the app are paused. Nothing is wrong with your PayFast account.",
-      "Open Money › Settings › Card and Instant EFT (PayFast) and enter your Merchant ID, Merchant Key and passphrase again. Card payments work again straight away. If a member paid by card in the meantime, check PayFast and record it by hand."],
+      "Open Gym › Getting paid › Card and Instant EFT (PayFast) and enter your Merchant ID, Merchant Key and passphrase again. Card payments work again straight away. If a member paid by card in the meantime, check PayFast and record it by hand."],
     button: { label: "Open Money", url: appUrl() + "/app/#coach-money" } }),
   payfastBrokenAdmin: (gym, id, what) => ({ subject: `PayFast keys can't be read for ${gym}`, title: "PayFast needs reconnecting",
     paras: [`The PayFast keys saved for ${gym} (gym ${id}) can't be decrypted. Usually that means JF_SECRET was changed (or DATABASE_URL, before JF_SECRET was set). Put the old value in JF_SECRET_OLD and restart, or ask the head coach to connect PayFast again (they've been emailed).`,

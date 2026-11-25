@@ -109,9 +109,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await wait(300); ok(sink.mails.some((m) => /Cat Diaz wants to compete/.test(m.subject)) && sink.mails.some((m) => m.to[0] === "cat@race.test" && /on the team/.test(m.subject)), "request and decision emails go out");
     // ---- WhatsApp
     const waText = (href) => { const u = new globalThis.URL(href); return { num: u.pathname.slice(1), text: u.searchParams.get("text") || "" }; };
-    await ev(co, () => { hideSheet(); }); await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(500);
-    let w = waText(await ev(co, () => document.getElementById("wa-go").href));
-    ok(/\/app\/\?join=[A-Z0-9]{8}/.test(w.text), "WhatsApp: the invite message carries the join link: " + w.text.slice(0, 80));
+    await ev(co, () => { hideSheet(); }); await co.tap('nav.tabs [data-v="coach-gym"]'); await co.waitForTimeout(500); await co.tap('#app [data-a="invite"]'); await co.waitForTimeout(300);
+    let w = waText(await ev(co, () => document.querySelector('#sheet a.wa[data-wa="invite"]').href));
+    ok(/\/app\/\?join=[A-Z0-9]{8}/.test(w.text), "WhatsApp: the invite message (Invite members) carries the join link: " + w.text.slice(0, 80));
+    await ev(co, () => gymSec("wa")); await co.waitForTimeout(300); // Gym › Settings › WhatsApp messages
     await co.tap('[data-a="wakind"][data-v="week"]'); await co.waitForTimeout(400);
     w = waText(await ev(co, () => document.getElementById("wa-go").href));
     ok(/classes this week/.test(w.text) && /Starting soon/.test(w.text) && /spots? left|full/.test(w.text) && /\/app\/#classes/.test(w.text), "WhatsApp: this week's classes, with spots left and a booking link");
@@ -121,8 +122,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     w = waText(await ev(co, () => document.getElementById("wa-go").href));
     ok(/Gauteng Open/.test(w.text) && /Our team \(2\)/.test(w.text), "WhatsApp: a competition with the team list");
     ok(await ev(co, () => /coach access/.test(WA_T.coach()) && /join=/.test(WA_T.coach())), "WhatsApp: invite-a-coach message warns it gives coach access");
-    await co.tap('nav.tabs [data-v="coach-home"]'); await co.waitForTimeout(500);
-    ok(await ev(co, () => [...document.querySelectorAll('.quick a[data-wa]')].length === 2), "Today has WhatsApp quick actions");
+    await ev(co, () => hideSheet()); await co.tap('nav.tabs [data-v="coach-home"]'); await co.waitForTimeout(500);
+    ok(await ev(co, () => [...document.querySelectorAll('.quick a[data-wa]')].length === 1 && !!document.querySelector('.quick [data-a="invite"]')), "Today has a WhatsApp quick action, and Invite members opens the one invite sheet");
     // a student's number becomes a direct chat link
     await ev(s1, async () => { hideSheet(); go("settings"); }); await s1.waitForTimeout(400);
     await s1.fill("#a-phone", "082 123 4567"); await s1.tap('#phoneform [type=submit]'); await s1.waitForTimeout(700);
@@ -141,8 +142,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(pageUrl && (await fetch(URL + pageUrl[1])).status === 200, "technique share links to its real public page: " + (pageUrl && pageUrl[1]));
     // --- fees: coach adds bank details, student pays by EFT and sends proof, coach confirms
     for (const p of [s1, co]) if (await ev(p, () => !!S.ui.sheet)) await ev(p, () => hideSheet());
-    await ev(co, () => { COACH.moneyView = "setup"; coachGo("money"); }); await co.waitForTimeout(1200);
-    ok(await ev(co, () => document.querySelector('details[data-g="m-bank"]').open && !!document.getElementById("bankform")), "Money: bank details form is open until they're filled in");
+    await ev(co, () => { coachGo("gym"); gymSec("pay"); }); await co.waitForTimeout(1200);
+    ok(await ev(co, () => document.querySelector('details[data-g="m-bank"]').open && !!document.getElementById("bankform")), "Gym › Getting paid: bank details form is open until they're filled in");
     await co.fill('#bankform [name="bank"]', "FNB"); await co.fill('#bankform [name="account"]', "62123456789"); await co.fill('#bankform [name="branch"]', "250655");
     await co.tap('#bankform [type=submit]'); await co.waitForTimeout(800);
     ok(/Payment details saved/.test(await toast(co)) && await ev(co, () => /FNB · 62123456789/.test(document.querySelector('details[data-g="m-bank"] summary').innerText)), "coach saves bank details");
@@ -162,9 +163,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(await ev(s1, () => !document.querySelector('#sheet [data-a="paysoon"]')), "switched off, the button is gone"); await ev(s1, () => hideSheet());
     await co.tap('[data-a="pftest"]'); await co.waitForTimeout(900);
     ok(/Test account connected/.test(await toast(co)) && await ev(co, () => /Connected/.test(document.querySelector('details[data-g="m-pf"] summary').innerText)), "the coach connects PayFast (test account)");
-    await ev(co, () => coachGo("gym")); await co.waitForTimeout(700);
-    ok(await ev(co, () => { const p = document.querySelector(".planpanel"); return p && /Free until/.test(p.innerText) && /R\s?99/.test(p.innerText) && !!p.querySelector('[data-a="billcard"]'); }), "Gym shows the free months, the R99 plan and Add a card");
-    await ev(co, () => coachGo("money")); await co.waitForTimeout(300);
+    await ev(co, () => { hideSheet(); coachGo("gym"); gymSec("plan"); }); await co.waitForTimeout(700);
+    ok(await ev(co, () => { const p = document.querySelector(".planpanel"); return p && /Free until/.test(p.innerText) && /R\s?99/.test(p.innerText) && !!p.querySelector('[data-a="billcard"]'); }), "Gym › Your JitsFlow plan shows the free months, the R99 plan and Add a card");
+    await ev(co, () => { hideSheet(); coachGo("money"); }); await co.waitForTimeout(300);
     await ev(s1, () => { API.pay = undefined; go("home"); }); await s1.waitForTimeout(1200);
     const ref = await ev(s1, () => API.pay && API.pay.reference);
     ok(/^JF[A-Z2-9]{5}$/.test(ref) && await ev(s1, () => document.querySelectorAll("#app .feecard").length === 1 && /R\s?[\d\s]+ due/.test(document.querySelector(".feecard .pill").innerText) && !!document.querySelector(".feecard .feeamt b") && document.querySelectorAll(".feecard .fd").length === 4 && !!document.querySelector(".feecard .fd.due")), "student's Home shows one fees card: a pill, the amount and a dot a month: " + await ev(s1, () => (document.querySelector("#app .feecard") || {}).innerText));
@@ -212,7 +213,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(s1, () => { S.ui.bookView = "private"; go("book"); }); await s1.waitForTimeout(600);
     w = waText(await ev(s1, () => document.querySelector('a[data-wa="private_ask"]').href));
     ok(w.num === "" && /Could I book a private lesson\?/.test(w.text) && /Day: \nTime: /.test(w.text) && /it's Ana from Race Gym/.test(w.text), "no number set yet: the request opens WhatsApp to pick the coach, with the message written");
-    await ev(co, () => coachGo("gym")); await co.waitForTimeout(600);
+    await ev(co, () => { hideSheet(); coachGo("gym"); gymSec("bookings"); }); await co.waitForTimeout(600);
     await co.fill("#g-wa", "082 555 1234"); await co.tap("#gwaform [type=submit]"); await co.waitForTimeout(700);
     ok(/Lesson requests come to this number/.test(await toast(co)), "coach saves the WhatsApp number for lesson requests");
     await ev(s1, async () => { API.me = (await api("GET", "/me")).me; render(); }); await s1.waitForTimeout(600);
@@ -231,8 +232,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await ev(co, () => { document.querySelector('details[data-g="m-rest"]').open = true; }); await co.waitForTimeout(200); ok(await ev(co, () => /Ana Lima[\s\S]*Paid/.test(document.querySelector('details[data-g="m-rest"]').innerText)), "everyone else (Ana, paid) is one tap away");
     await co.tap('[data-a="moneymonth"][data-v="-1"]'); await co.waitForTimeout(1200); ok(await ev(co, () => COACH.money.month < todayK().slice(0, 7)), "step back a month");
     await co.tap('[data-a="moneymonth"][data-v="1"]'); await co.waitForTimeout(1200);
-    await co.tap('[data-a="moneyview"][data-v="setup"]'); await co.waitForTimeout(300); ok(await ev(co, () => !!document.querySelector('#bankform [name="dueDay"]') && !!document.getElementById("pop-addr")), "Setup: bank details with the due date, and the forwarding address");
-    await co.tap('.backlink[data-a="moneyview"][data-v="month"]'); await co.waitForTimeout(300); ok(await ev(co, () => COACH.moneyView === "month" && !!document.getElementById("owing")), "Setup has a way back to Money");
+    await co.tap('#m-gotpaid'); await co.waitForTimeout(300); ok(await ev(co, () => S.ui.sheet && S.ui.sheet.id === "pay" && !!document.querySelector('#bankform [name="dueDay"]') && !!document.getElementById("pop-addr")), "Money's Getting paid row: Gym › Getting paid, with the due date and the forwarding address");
+    await co.tap('#sheetbar [data-a="back"]'); await co.waitForTimeout(300); ok(await ev(co, () => !S.ui.sheet && COACH.view === "gym"), "it closes back to the Gym checklist");
+    await ev(co, () => coachGo("money")); await co.waitForTimeout(300); ok(await ev(co, () => COACH.moneyView === "month" && !!document.getElementById("owing")), "and Money is one tap away");
     await co.tap('[data-a="moneyview"][data-v="payments"]'); await co.waitForTimeout(300); ok(await ev(co, () => !!document.querySelector('label[for="pop-up"]') && !!document.querySelector('[data-a="paynew"]')), "All payments: upload proof and record a payment");
     await ev(co, () => { COACH.moneyView = "month"; render(); });
     // --- a student who isn't on the app
@@ -339,10 +341,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(await ev(co, () => /Add 2 to the list/.test(document.querySelector('#sheetbar [data-a="cpdone"]').innerText)), "ticks are kept while searching");
     await co.tap('#sheetbar [data-a="cpdone"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => { const r = [...document.querySelectorAll("#sheet .bulkrow")]; return S.ui.sheet.k === "bulk" && r.length === 2 && r.some((x) => /\+27 82 555 1111/.test(x.innerText)) && r.some((x) => x.querySelector("input").value === "Kea" && /Kid/.test(x.innerText)); }), "the picked people go to the list with their numbers (Kea's Mom → the kid Kea)");
-    await ev(co, () => { hideSheet(); COACH.bill = undefined; coachGo("gym"); }); await co.waitForTimeout(800);
+    await ev(co, () => { hideSheet(); COACH.bill = undefined; coachGo("gym"); gymSec("plan"); }); await co.waitForTimeout(800);
     ok(await ev(co, () => { const p = document.querySelector(".planpanel"); return p && !p.querySelector('[data-a="billcard"]') && /managed on the JitsFlow website/.test(p.innerText); }), "in the App Store app there's no card button for the plan (Apple's rules)");
     await ev(co, () => { delete window.Capacitor; COACH.bill = undefined; });
-    await ev(co, () => studentSheet(students().find((s) => s.name === "Aya").id)); await co.waitForTimeout(800);
+    await ev(co, () => { hideSheet(); studentSheet(students().find((s) => s.name === "Aya").id); }); await co.waitForTimeout(800);
     ok(await ev(co, () => { const a = [...document.querySelectorAll('#sheet a[href*="wa.me"]')].map((x) => decodeURIComponent(x.href)).join(" "); return document.getElementById("s-parent").value === "Nomsa Dube" && /Hi Nomsa, join .* for Aya/.test(a); }), "a kid's page shows the parent, and WhatsApp messages greet the parent");
     await ev(co, () => hideSheet());
     // --- with two coaches, the class forms offer a list of coaches
@@ -469,10 +471,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       ok(await ev(co, () => document.querySelector(".planbox summary").getBoundingClientRect().height >= 36), "Lesson plan (optional) is easy to tap");
       // Money has no sub-tab switch (Setup and All payments are rows); settings checkboxes are full size; the WhatsApp button is readable
       await ev(co, () => { hideSheet(); COACH.moneyView = "month"; coachGo("money"); }); await co.waitForTimeout(400);
-      ok(await ev(co, () => !document.querySelector('[role="tablist"]') && !document.querySelector('[aria-label="Money view"]') && !!document.querySelector('.navrow[data-a="moneyview"][data-v="setup"]') && !!document.querySelector('[data-a="moneyview"][data-v="payments"]')), "Money is one page: no sub-tab switch, Setup and All payments are a tap away");
-      await ev(co, () => coachGo("gym")); await co.waitForTimeout(400);
-      ok(await ev(co, () => ["g-show", "g-invite"].every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.width >= 20 && r.height >= 20; })), "the Bookings checkboxes are full size");
+      ok(await ev(co, () => !document.querySelector('[role="tablist"]') && !document.querySelector('[aria-label="Money view"]') && !!document.querySelector('.navrow#m-gotpaid[data-a="setupgo"][data-v="pay"]') && !!document.querySelector('[data-a="moneyview"][data-v="payments"]')), "Money is one page: no sub-tab switch, Getting paid (in Gym) and All payments are a tap away");
+      await ev(co, () => { coachGo("gym"); gymSec("bookings"); }); await co.waitForTimeout(400);
+      ok(await ev(co, () => { const r = document.getElementById("g-show").getBoundingClientRect(); return r.width >= 20 && r.height >= 20; }), "the Bookings checkbox is full size");
+      await ev(co, () => inviteSheet()); await co.waitForTimeout(300);
+      ok(await ev(co, () => { const r = document.getElementById("g-invite").getBoundingClientRect(); return r.width >= 20 && r.height >= 20; }), "Invite members' checkbox is full size");
+      await ev(co, () => gymSec("wa")); await co.waitForTimeout(300);
       ok(await ev(co, () => getComputedStyle(document.getElementById("wa-go")).backgroundColor === "rgb(29, 119, 72)"), "the Open WhatsApp button uses the darker, readable green");
+      await ev(co, () => hideSheet());
       // students: buttons say which class; days say what they are; the avatar's name starts with what it shows
       await ev(s1, async () => { hideSheet(); await loadClasses(true); S.ui.bcal = null; S.ui.bookView = "classes"; go("book"); }); await s1.waitForTimeout(700);
       ok(await ev(s1, () => [...document.querySelectorAll('.bookcard [data-a="rsvp"], .bookcard [data-a="checkin"]')].every((b) => { const c = API.classes.find((x) => x.id === b.dataset.v); return b.getAttribute("aria-label").startsWith(b.textContent.trim() + " " + c.title + ", "); })), "Book and Cancel buttons say which class and when");
@@ -537,12 +543,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       await stu.context().close();
       // The phone's Back button: back through the tabs, a sheet closes, and only then out of the app.
       const nav = await phone("nav"); await nav.goto(URL + "/"); await nav.goto(URL + "/app/"); await nav.waitForTimeout(900); await ev(nav, () => { if (S.ui.sheet) hideSheet(); render(); });
-      for (const t of ["learn", "journal", "me"]) { await nav.tap(`nav.tabs [data-v="${t}"]`); await nav.waitForTimeout(150); }
-      const back = async () => { await nav.goBack().catch(() => {}); await nav.waitForTimeout(300); return nav.evaluate(() => location.pathname === "/app/" ? S.ui.tab + (S.ui.sheet ? "+sheet" : "") : location.pathname).catch(() => "?"); };
+      for (const t of ["train", "train-log", "me"]) { await nav.tap(t === "train-log" ? '.trainseg [data-v="train-log"]' : `nav.tabs [data-v="${t}"]`); await nav.waitForTimeout(150); }
+      const back = async () => { await nav.goBack().catch(() => {}); await nav.waitForTimeout(300); return nav.evaluate(() => location.pathname === "/app/" ? S.ui.tab + (S.ui.tab === "train" ? ":" + S.ui.trainView : "") + (S.ui.sheet ? "+sheet" : "") : location.pathname).catch(() => "?"); };
       const t1 = await back(), t2 = await back();
       await ev(nav, () => techSheet(TECH[0].id)); await nav.waitForTimeout(200); await ev(nav, () => techSheet(TECH[1].id)); await nav.waitForTimeout(200);
       const t3 = await back(), t4 = await back(), t5 = await back(), t6 = await back();
-      ok([t1, t2, t3, t4, t5, t6].join() === "journal,learn,learn+sheet,learn,home,/", "Back goes to the previous tab, closes sheets one step at a time, then leaves: " + [t1, t2, t3, t4, t5, t6].join());
+      ok([t1, t2, t3, t4, t5, t6].join() === "train:log,train:moves,train:moves+sheet,train:moves,home,/", "Back goes to the previous tab, closes sheets one step at a time, then leaves: " + [t1, t2, t3, t4, t5, t6].join());
       // An app left open gets a new version: quietly, and not while a sheet is open.
       await nav.goto(URL + "/app/"); await nav.waitForTimeout(900); await ev(nav, () => { if (S.ui.sheet) hideSheet(); render(); });
       await ev(nav, () => { window.__still = 1; verAt = 0; document.dispatchEvent(new Event("visibilitychange")); }); await nav.waitForTimeout(600);
@@ -590,7 +596,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(/on the calendar every \w+, 8 weeks ahead/.test(await toast(co)) && Number((await pool.query("select count(*) from classes where title='Weekly drills'")).rows[0].count) >= 7, "a new class repeats every week by default, 8 weeks ahead: " + (await toast(co)));
     const wFirst = (await pool.query("select id from classes where title='Weekly drills' order by starts_at limit 1")).rows[0].id, s1id = await ev(s1, () => API.me.id);
     await pool.query("insert into attendance(class_id,user_id,going) values($1,$2,true) on conflict do nothing", [wFirst, s1id]);
-    await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="gymedit"]'); await co.waitForTimeout(300);
+    await ev(co, () => { hideSheet(); coachGo("gym"); gymSec("profile"); }); await co.waitForTimeout(300); await co.tap('#sheet [data-a="gymedit"]'); await co.waitForTimeout(300);
     const wRow = await ev(co, () => [...document.querySelectorAll('#gymeditform [name^="tt-title"]')].findIndex((x) => x.value === "Weekly drills"));
     ok(wRow >= 0, "the weekly class is on the gym's timetable in Gym details");
     const n1 = sink.mails.length, gymTime = "to_char(starts_at at time zone (select timezone from gyms where id=gym_id),'HH24:MI')";
@@ -623,7 +629,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(!(await ev(s4, () => !!document.querySelector('[data-a="bookusual"]'))), "and a cancelled class isn't offered again as 'usual'");
     // --- the gym's colour
     const before = await ev(co, () => getComputedStyle(document.documentElement).getPropertyValue("--blue").trim());
-    await ev(co, () => coachGo("gym")); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);
+    await ev(co, () => { hideSheet(); coachGo("gym"); gymSec("look"); }); await co.waitForTimeout(300); await co.tap('[data-a="brandset"][data-v="#c62828"]'); await co.waitForTimeout(600);
     ok(await ev(co, (b) => { const now = getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(); return now !== b && /^#[0-9a-f]{6}$/.test(now) && API.me.gym.brand.accent === "#c62828"; }, before), "picking a colour restyles the app");
     await ev(s1, async () => { API.me = (await api("GET", "/me")).me; render(); }); await s1.waitForTimeout(300);
     ok(await ev(s1, () => !!document.getElementById("brandcss") && API.me.gym.brand.accent === "#c62828"), "students see the gym's colour too");

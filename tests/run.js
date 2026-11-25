@@ -34,16 +34,19 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.selectOption('#ob-months','9');await p.locator('[data-a="obset"][data-k="hand"][data-v="left"]').tap();await p.tap('#sheetbar [data-a="obdone"]');
   ok(await ev(()=>goal()==='blue'&&P().settings.perWeek===2&&P().settings.onboarded===true&&P().settings.days.join()==='1,3'&&P().settings.priorHours===117),'setup saves belt goal, schedule and hours');
   // --- tabs render
-  ok(await ev(()=>[...document.querySelectorAll('nav.tabs button:not([hidden])')].map(b=>b.textContent.trim()).join()==='Home,Learn,Journal,Me'),'self-study gets 4 plain tabs: Home, Learn, Journal, Me (no Classes without a gym)');
-  for(const t of ['home','learn','journal','me']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
-  await p.tap('nav.tabs [data-v="learn"]');
-  for(const v of ['moves','map','belt']){await p.tap(`.learnseg [data-v="learn-${v}"]`);await p.waitForTimeout(60);ok(await ev(v=>S.ui.learnView===v&&location.hash===(v==='moves'?'#learn':'#learn-'+v)&&document.querySelector(`.learnseg [data-v="learn-${v}"]`).getAttribute('aria-pressed')==='true'&&document.getElementById('app').innerText.length>200,v),`Learn › ${v} renders`);await overflow('learn '+v)}
-  await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="learn"]');ok(await ev(()=>S.ui.learnView==='belt'),'Learn remembers the part you last had open');
+  ok(await ev(()=>[...document.querySelectorAll('nav.tabs button:not([hidden])')].map(b=>b.textContent.trim()).join()==='Home,Train,Me'),'self-study gets 3 plain tabs: Home, Train, Me (no Classes without a gym)');
+  for(const t of ['home','train','me']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
+  await p.tap('nav.tabs [data-v="train"]');
+  for(const v of ['moves','map','log']){const k='train-'+v;await p.tap(`.trainseg [data-v="${k}"]`);await p.waitForTimeout(60);ok(await ev(([v,k])=>S.ui.trainView===v&&location.hash===(v==='moves'?'#train':'#'+k)&&document.querySelector(`.trainseg [data-v="${k}"]`).getAttribute('aria-pressed')==='true'&&document.getElementById('app').innerText.length>200,[v,k]),`Train › ${v} renders`);await overflow('train '+v)}
+  ok(await ev(()=>document.querySelectorAll('.trainstats').length===1&&document.querySelectorAll('#app .stat').length===3&&!document.querySelector('.prghero')),'Train: one stats block, shown once (no programme block without a gym)');
+  await p.tap('.trainstats .trring');await p.waitForTimeout(60);ok(await ev(()=>S.ui.trainView==='belt'&&location.hash==='#train-belt'&&!!document.querySelector('.beltpath')&&!document.querySelector('#app .stat')&&!!document.querySelector('.backlink[data-v="train-moves"]')),'the ring opens Your belt, with no second set of stats and a way back');await overflow('train belt');
+  await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>S.ui.trainView==='belt'),'Train remembers the part you last had open');
+  await p.tap('.backlink[data-v="train-moves"]');ok(await ev(()=>S.ui.trainView==='moves'&&location.hash==='#train'),'back from Your belt to Train');
   // --- old addresses open the new places
-  for(const [h,want,lv] of [['flow','#learn-map','map'],['log','#journal'],['settings','#me'],['today','#home'],['learn','#learn','moves']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.learnView===lv),[want,lv]),`#${h} opens ${want}`)}
+  for(const [h,want,lv] of [['flow','#train-map','map'],['log','#train-log','log'],['settings','#me'],['today','#home'],['learn','#train','moves'],['learn-moves','#train','moves'],['learn-map','#train-map','map'],['learn-belt','#train-belt','belt'],['journal','#train-log','log'],['belts','#train-belt','belt']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.tab==='train'&&S.ui.trainView===lv),[want,lv]),`#${h} opens ${want}`)}
   // --- no tip banners restating the tab (they went: each tab's name says what it is), even on a first visit
   await ev(()=>lsSet('jf.tips.me',{}));
-  for(const t of ['journal','home','learn','me']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')&&!document.querySelector('[data-a="tipx"]')),`no tip banner on ${t}, even the first time`)}
+  for(const t of ['train','home','me']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')&&!document.querySelector('[data-a="tipx"]')),`no tip banner on ${t}, even the first time`)}
   ok(await ev(()=>['pricing','terms','refunds','privacy','contact'].every(u=>!!document.querySelector(`.applegal a[href="https://www.jitsflow.com/${u}/"][target="_blank"]`))),'Me: Pricing, Terms, Refunds, Privacy and Contact links (to the website from the claude.ai version)');
   ok(await ev(()=>!/Your account, payments, gym and settings/.test(document.getElementById('app').innerText)),'Me doesn\'t restate itself');
   // --- every technique sheet
@@ -53,7 +56,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     ok(r.h===r.name&&r.lead.length>40&&r.steps===r.n&&r.fig,`technique sheet ${id} incomplete`);}
   await overflow('technique sheet');await ev(()=>closeSheet());
   // --- every flow node
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');
   const pos=await ev(()=>Object.keys(POS));
   for(const k of pos){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();const r=await ev(k=>({h3:document.querySelector('.poshero h2')?.innerText,want:POS[k].L,d:(document.getElementById('flow-more')?.textContent||'').includes(PD[k].d)&&document.querySelector('.poshero .pgo')?.textContent===POS[k].g,sel:!!document.querySelector(`.flowsvg g.node.sel[data-v="${k}"]`),yt:!!document.querySelector('#flow-more .panel a.yt[href*="youtube.com/results"]')}),k);ok(r.yt,`position ${k} has a YouTube link`);ok(r.h3===r.want&&r.d&&r.sel,`flow node ${k}`)}
   await overflow('flow');
@@ -94,7 +97,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>S.ui.trail.length===2&&!!document.querySelector('.crumbs')),'closing the technique keeps your place in the chain');
   await p.locator('.chainstage .bgo').first().tap();await p.waitForTimeout(500);ok(await ev(()=>S.ui.trail.length===3),'and you can keep playing');
   if(MODE==='local'){await ev(()=>history.back());await p.waitForTimeout(600); // claude.ai pages don't use the browser history
-    ok(await ev(()=>S.ui.trail.length===2&&location.hash==='#learn-map'),"the phone's Back button steps back along the chain");}
+    ok(await ev(()=>S.ui.trail.length===2&&location.hash==='#train-map'),"the phone's Back button steps back along the chain");}
   await overflow('chain explorer');
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
   await p.tap('nav.tabs [data-v="home"]');await p.tap('.panel.accent button[data-a="qr"]');
@@ -129,11 +132,11 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok((await sheetH1())==='Knee cut (knee slice) pass','swipe right goes back one technique');
   await p.tap('#sheetbar .back');ok(await ev(()=>document.getElementById('sheet').hidden),'Close returns to the tab');
   // --- log: new, effects, edit, delete
-  await p.tap('nav.tabs [data-v="journal"]');await p.tap('[data-a="lognew"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await p.tap('[data-a="lognew"]');
   await p.selectOption('#f-taught','over_under');await p.selectOption('#f-hits','triangle');await p.selectOption('#f-tapped','rnc');
   await p.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();await p.locator('#sheet [data-a="stuck"][data-v="sc_bot"]').tap();
   await p.locator('#f-worked').fill('Knee shield held up');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
-  ok(await ev(()=>location.hash==='#journal'&&document.querySelectorAll('.sess').length===1),'session saved and listed');
+  ok(await ev(()=>location.hash==='#train-log'&&document.querySelectorAll('.sess').length===1),'session saved and listed');
   ok(await ev(()=>lv('triangle')===4&&lv('over_under')>=1),'logging updates technique levels');
   ok(await ev(()=>document.body.innerText.includes('Half guard')&&!!document.querySelector('.bar')),'stuck chart shows');
   await p.locator('.linkbtn[data-a="editlog"]').tap();ok((await ev(()=>document.querySelector('.sheettitle').innerText))==='Edit session','edit opens with title');
@@ -142,19 +145,19 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>S.sessions.length===1&&Number(S.sessions[0].mins)===75),'edit updates the same session');
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
   ok(await ev(()=>/1 week streak/.test(document.querySelector('.lprog').innerText)&&weekStreak()===1),'week streak counts this week');
-  await p.tap('nav.tabs [data-v="journal"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
   ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
   await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
   await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
   // --- flow map: tapping a position keeps your place on the page
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
   {const y0=await ev(()=>window.scrollY);await p.locator('.flowsvg g.node[data-v="mount_top"]').tap();await p.waitForTimeout(250);
    ok(await ev(y0=>S.ui.flowSel==='mount_top'&&Math.abs(window.scrollY-y0)<3,y0),'tapping a position on the map doesn\'t jump the page');}
   // --- smart search: typos, slang, initials; suggestions as you type
   ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('rnc')==='rnc'&&/kimura/.test(top('kimra'))&&/triangle/.test(top('trangle'))&&top('dbl leg')==='double_leg'&&/^Armbar/.test((searchAll('arm bar',1)[0]||{}).label)&&searchAll('xyzzy').length===0}),'search forgives typos, knows slang and initials (rnc, kimra, trangle, dbl leg)');
   ok(await ev(()=>{const top=q=>(searchAll(q,1)[0]||{}).id;return top('japanese neck tie')==='japanese_necktie'&&top('peruvian necktie')==='peruvian_necktie'&&searchAll('flag pole guillotine',8).some(x=>x.id==='flying_guillotine')&&!!VIDS.japanese_necktie&&!!VIDS.peruvian_necktie}),'lesser-known moves are in, with videos; an unknown word in a search is skipped');
   ok(await ev(()=>{const r=searchAll('half gaurd',3);return r[0].k==='p'&&/half guard/i.test(r[0].label)}),'a misspelt position finds the position first');
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#q').tap();await p.keyboard.type('kimra');await p.waitForTimeout(400);
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#q').tap();await p.keyboard.type('kimra');await p.waitForTimeout(400);
   ok(await ev(()=>{const rows=[...document.querySelectorAll('#qsugg .qsugg-row')];return rows.length>0&&/Kimura/.test(rows[0].innerText)&&document.activeElement.id==='q'&&[...document.querySelectorAll('#learn-groups .trow .nm')].some(n=>/Kimura/.test(n.innerText))}),'suggestions appear as you type and the list filters, keyboard stays up');
   await p.locator('#qsugg .qsugg-row').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'&&/kimura/.test(S.ui.sheet.id)),'tapping a suggestion opens it');await ev(()=>closeSheet());
   await p.fill('#q','');await p.waitForTimeout(250);ok(await ev(()=>!document.querySelector('#qsugg .qsugg-row')),'clearing the search clears the suggestions');
@@ -164,11 +167,11 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>{techSheet('rnc');return /If they defend, switch to/.test([...document.querySelectorAll('#sheet .flowsec')][1].innerText)}),'a submission says what to switch to if they defend');
   await ev(()=>closeSheet());
   // --- curriculum search keeps keyboard focus; filters; collapsible
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#q').tap();await p.keyboard.type('armbar');await p.waitForTimeout(300);
   ok(await ev(()=>document.activeElement&&document.activeElement.id==='q'),'search keeps focus while typing');
   ok(await ev(()=>{const rows=[...document.querySelectorAll('#learn-groups details.grp[open] .trow')];const ids=searchTechIds('armbar');return rows.length===ids.size&&rows.length>=3&&rows.some(r=>/defense/i.test(r.innerText))&&rows.some(r=>/^Armbar/m.test(r.innerText))}),'search "armbar" finds attacks and defenses, across belts');
   await p.locator('#q').fill('zzzz');await p.waitForTimeout(250);await p.locator('[data-a="clearq"]').tap();
-  ok(await ev(()=>S.ui.q===''&&document.querySelectorAll('#learn-groups details.grp').length===20),'clear search restores 20 groups');
+  ok(await ev(()=>S.ui.q===''&&document.querySelectorAll('#learn-groups details.grp').length===AREAS.length),'clear search restores the 7 groups');
   await p.tap('[data-a="filters"]');await p.locator('[data-a="filter"][data-v="plus"]').tap();ok(await ev(()=>document.querySelectorAll('#learn-groups .trow').length===TECH.filter(t=>t.p==='plus'&&beltOf(t)==='blue').length),'bonus filter');
   ok(await ev(()=>/Show \d+ move/.test(document.getElementById('sheetbar').innerText)&&/Bonus/.test(filterSummary().txt)),'the filter sheet counts what it shows; the summary names the filter');
   await p.locator('[data-a="filter"][data-v="all"]').first().tap();await p.tap('#sheetbar [data-a="close"]');
@@ -186,7 +189,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="importshow"]').tap();await p.locator('#importtxt').fill(backup);await p.locator('[data-a="importdo"]').tap();
   ok(await ev(()=>Object.keys(P().mastery).length>=54),'backup restores ratings');
   // --- photos (account mode only)
-  if(MODE==='db'){await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();await ev(()=>{document.getElementById('flow-more').open=true});
+  if(MODE==='db'){await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();await ev(()=>{document.getElementById('flow-more').open=true});
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
     await p.setInputFiles('#ph-hg_bot',{name:'a.png',mimeType:'image/png',buffer:png});await p.waitForTimeout(800);
     ok(await ev(()=>!!P().photos.hg_bot&&!!document.querySelector('.panel .photo img')&&!document.querySelector('.panel .posfig')),'photo upload replaces diagram');
@@ -197,15 +200,15 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     await p.tap('nav.tabs [data-v="home"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
   }
   // --- belt stages
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');
   await p.tap('[data-a="filters"]');
   for(const k of ['purple','brown','black','blue']){await p.locator(`.beltchips [data-v="${k}"]`).tap();const r=await ev(k=>({n:document.querySelectorAll('#learn-groups .trow').length,want:TECH.filter(t=>beltOf(t)===k).length}),k);ok(r.n===r.want&&r.want>0,`belt stage ${k} lists ${r.n} of ${r.want}`);await overflow('belt '+k)}
-  await p.tap('#sheetbar [data-a="close"]');await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltpath [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
+  await p.tap('#sheetbar [data-a="close"]');await p.tap('.trainstats .trring');await p.locator('.beltpath [data-v="purple"]').tap();await p.locator('[data-a="setgoal"]').tap();
   ok(await ev(()=>goal()==='purple'&&rateable().length>54&&curBlocks()!==BLOCKS&&curBlocks().every(b=>b.ids.every(id=>TM[id]))),'purple goal changes blocks and rating scope');
   await p.locator('.bstage details.grp summary').first().tap();await p.locator('.bstage [data-a="comp"]').first().tap();ok(await ev(()=>(P().comp.purple||[]).length===1),'coach checklist ticks');
   ok(await ev(()=>/Purple-belt skill readiness/.test(document.body.innerText)&&!!document.querySelector('.belt .b.blue')),'Belt shows purple goal on a blue belt');await overflow('belt purple');
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/ready for Purple belt/.test(document.querySelector('.lprog').innerText)),'Home shows a short progress line for the goal');await overflow('home purple');
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
   const upTo=await ev(()=>document.querySelectorAll('.list .trow').length);await p.locator('[data-a="flowbelt"][data-v="black"]').tap();const all=await ev(()=>document.querySelectorAll('.list .trow').length);
   await p.locator('[data-a="flowbelt"][data-v="blue"]').tap();const blueOnly=await ev(()=>document.querySelectorAll('.list .trow').length);ok(all>=upTo&&upTo>=blueOnly&&all>blueOnly,`flow belt filter (${blueOnly} ≤ ${upTo} ≤ ${all})`);
   await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
@@ -215,12 +218,12 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     ok(await ev(()=>/limit is 20 MB/.test(document.getElementById('toast').textContent)&&!P().videos.knee_cut),'oversized video rejected with message');
     await p.setInputFiles('#vid-knee_cut',{name:'clip.mov',mimeType:'video/quicktime',buffer:Buffer.alloc(4096,1)});await p.waitForTimeout(1500);
     ok(await ev(()=>!!P().videos.knee_cut&&!!document.querySelector('#sheet video#vidplayer')&&/Play video/.test(document.getElementById('sheetbar').innerText)),'video uploads and plays in the technique page');
-    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
+    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#learn-groups details.grp[data-g="a-passing"] summary').tap();
     ok(await ev(()=>!!document.querySelector('.trow[data-v="knee_cut"] .thumb .play')),'technique row shows video marker');
     await ev(()=>techSheet('knee_cut'));await p.locator('[data-a="viddel"]').tap();await p.locator('[data-a="viddelyes"]').tap();ok(await ev(()=>!P().videos.knee_cut&&!document.querySelector('#sheet video')),'video removed');await p.tap('#sheetbar .back');
   }
   // --- chains: every attacking position has a tree; mirrors show defenses
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-map"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');
   for(const k of await ev(()=>Object.keys(CHAINS))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
     const r=await ev(k=>({att:document.querySelectorAll('ul.tree.root')[0]?.querySelectorAll('.tnode').length||0,first:document.querySelector('.tree .tnode')?.dataset.v}),k);ok(r.att>0,`attack chain renders for ${k}`)}
   for(const [k,o] of await ev(()=>Object.entries(OPP).filter(([k,o])=>CHAINS[o]))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
@@ -230,17 +233,17 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('#flow-chains > summary').tap();await p.locator('.tnode[data-v="triangle"]').first().tap();ok((await sheetH1())==='Triangle choke','chain node opens technique');await p.tap('#sheetbar .back');
   await overflow('flow chains');
   // --- defense filter and tapped-by -> defense
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.tap('[data-a="filters"]');await p.locator('[data-a="filter"][data-k="kind"][data-v="def"]').tap();
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.tap('[data-a="filters"]');await p.locator('[data-a="filter"][data-k="kind"][data-v="def"]').tap();
   ok(await ev(()=>{const r=[...document.querySelectorAll('#learn-groups .trow')].map(b=>TM[b.dataset.v]);return r.length>15&&r.every(t=>isDef(t))}),'defense filter shows only escapes and defenses');
   await p.locator('[data-a="filter"][data-k="kind"][data-v="all"]').tap();await p.tap('#sheetbar [data-a="close"]');
-  await p.tap('nav.tabs [data-v="journal"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'log links rear-naked choke to its defense');
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
   // --- name, Belts tab, belt path
   ok(await ev(()=>/JitsFlow$/.test(document.title)&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
-  ok(await ev(()=>document.querySelector('nav.tabs [data-v="learn"]').textContent.trim()==='Learn'),'tab is called Learn');
-  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="learn-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
-    ok(await ev(k=>location.hash==='#learn-belt'&&document.querySelector(`.beltpath [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
+  ok(await ev(()=>document.querySelector('nav.tabs [data-v="train"]').textContent.trim()==='Train'),'tab is called Train');
+  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="train-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
+    ok(await ev(k=>location.hash==='#train-belt'&&document.querySelector(`.beltpath [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
   // --- glossary terms
   await ev(()=>techSheet('hg_frames'));const terms=await ev(()=>[...document.querySelectorAll('#sheet .term')].map(b=>b.dataset.v));
   ok(terms.includes('Underhook')&&terms.length>=4,`technique page has tappable terms (${terms.join(', ')})`);
@@ -272,14 +275,14 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(n=>P().settings.days.length===n+1&&P().settings.perWeek===n+1,before),'adding a training day updates the plan');await p.locator('[data-a="day"][data-v="5"]').tap();
   await ev(()=>techSheet('buggy_choke'));ok(await ev(()=>/Check with your coach/.test(document.querySelector('.coachbox').innerText)),'flagged move asks for a coach check');
   await p.locator('[data-a="coachok"]').tap();ok(await ev(()=>coachOK('buggy_choke')&&/Coach checked/.test(document.querySelector('.coachbox').innerText)),'coach check can be ticked');await p.tap('#sheetbar .back');
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-belt"]');await p.locator('.beltpath [data-v="black"]').tap();
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.tap('.trainstats .trring');await p.locator('.beltpath [data-v="black"]').tap();
   ok(await ev(()=>/Coach review list/.test(document.body.innerText)&&/1 of \d+ checked/.test(document.body.innerText)),'belt shows coach review progress');await p.locator('.beltpath [data-v="blue"]').tap();
   await ev(()=>{window.__savedVid=VIDS.knee_cut;VIDS.knee_cut={v:'dQw4w9WgXcQ',title:'Knee cut pass',channel:'Test Channel',nogi:true};techSheet('knee_cut')});
   if(MODE==='local'){
     // opened as a file (no web address), YouTube refuses embedded players ("Error 153"), so the poster opens the video on YouTube; tests/web.js checks the embedded player on the website
     ok(await ev(()=>{const a=document.querySelector('#sheet .shead a.ytm.ytpick');return !!a&&/youtube\.com\/watch\?v=dQw4w9WgXcQ/.test(a.href)&&a.target==='_blank'&&/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault/.test((a.querySelector('img.ytthumb')||{}).src||'')&&/Test Channel/.test(a.querySelector('.ytmeta').innerText)&&!document.querySelector('#sheet iframe')}),'technique page: video at the top as a poster with a play button (no broken embed when opened as a file)');
     ok(await ev(()=>/More Knee cut pass videos on YouTube/.test(document.querySelector('#sheet a.yt:not(.ytpick)').innerText)),'search button stays as "More videos"');
-    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp[data-g="open_top"] summary').tap();
+    await p.tap('#sheetbar .back');await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#learn-groups details.grp[data-g="a-passing"] summary').tap();
     ok(await ev(()=>/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/mqdefault/.test((document.querySelector('.trow[data-v="knee_cut"] .thumb img')||{}).src||'')),'technique list uses the video thumbnail');
   }else{
     ok(await ev(()=>!document.querySelector('#sheet .ytembed,#sheet .ytface')&&/youtube\.com\/watch\?v=dQw4w9WgXcQ/.test((document.querySelector('#sheet a.ytpick')||{}).href||'')),'claude.ai links to the picked video instead of embedding');
@@ -287,15 +290,15 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   }
   await ev(()=>{if(window.__savedVid)VIDS.knee_cut=window.__savedVid;else delete VIDS.knee_cut});
   // --- screens and sheets for screen readers: <main>, a title per tab, a Home heading; a sheet is a named dialog that takes focus and gives it back
-  await p.tap('nav.tabs [data-v="learn"]');ok(await ev(()=>document.querySelector('main#app')&&document.title==='Learn · JitsFlow'),'the screen is a <main> and the title says which tab: '+await ev(()=>document.title));
+  await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>document.querySelector('main#app')&&document.title==='Train · JitsFlow'),'the screen is a <main> and the title says which tab: '+await ev(()=>document.title));
   await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>document.title==='Home · JitsFlow'&&!!document.querySelector('#app h1.vh')&&document.querySelector('#app h1.vh').getBoundingClientRect().width<=1),'Home has a heading for screen readers, not shown on screen');
-  await p.tap('nav.tabs [data-v="learn"]');await p.tap('.learnseg [data-v="learn-moves"]');await p.locator('#learn-groups details.grp:not([open]) summary').first().tap();
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#learn-groups details.grp:not([open]) summary').first().tap();
   {const tid=await ev(()=>document.querySelector('#learn-groups .trow[data-a="open"]').dataset.v);await p.locator(`#learn-groups .trow[data-a="open"][data-v="${tid}"]`).first().focus();await p.keyboard.press('Enter');await p.waitForTimeout(150);
    ok(await ev(()=>{const sh=document.getElementById('sheet'),t=document.getElementById(sh.getAttribute('aria-labelledby'));return sh.getAttribute('role')==='dialog'&&sh.getAttribute('aria-modal')==='true'&&t&&t.tagName==='H1'&&document.activeElement===t}),'a sheet is a dialog named by its title, and focus moves to the title');
    await ev(id=>techSheet(id,true),tid);ok(await ev(()=>document.activeElement===document.getElementById('sheet-t')&&document.activeElement.tagName==='H1'),"a sheet that draws itself again (like a student's once their details load) keeps focus on its title");
    await p.keyboard.press('Escape');await p.waitForTimeout(150);
    ok(await ev(id=>document.activeElement&&document.activeElement.dataset.v===id&&!document.getElementById('sheet').getAttribute('role'),tid),'closing the sheet puts focus back on the row that opened it')}
-  ok(await ev(()=>{const g=document.querySelector('.learnseg');return g.getAttribute('role')==='group'&&g.getAttribute('aria-label')==='Learn'&&[...g.querySelectorAll('button')].every(b=>b.hasAttribute('aria-pressed'))}),'switches are a labelled group of pressed buttons');
+  ok(await ev(()=>{const g=document.querySelector('.trainseg');return g.getAttribute('role')==='group'&&g.getAttribute('aria-label')==='Train'&&[...g.querySelectorAll('button')].every(b=>b.hasAttribute('aria-pressed'))}),'switches are a labelled group of pressed buttons');
   // --- toasts: a polite live region that's always there; Undo stays 10s and waits while it's touched
   ok(await ev(()=>{const t=document.getElementById('toast');return t.getAttribute('role')==='status'&&t.getAttribute('aria-live')==='polite'&&!t.hidden}),'the toast is a polite live region that is always present');
   await ev(()=>toast('Saved.',{label:'Undo',fn:()=>{window.__undone=1}}));ok(await ev(()=>toast._ms===10000&&/Saved\./.test(document.getElementById('toast').textContent)),'a toast with Undo stays up for 10s');

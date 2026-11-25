@@ -1,6 +1,6 @@
 /* ============ THE GYM'S MONTHLY PROGRAMME (backend/programme.js) ============ */
 /* Coaches: Schedule → Programme. A month, its weeks (Mondays), each with a title, a note, YouTube videos and techniques; Publish when ready.
-   Members: "This month" at the top of Learn (week chips, this week's videos, catch-up, next month's preview) and a small card on Home.
+   Members: "This month" at the top of Train (week chips, this week's videos, catch-up, next month's preview) and a small card on Home.
    Everything here is its own: app.html and accounts.js only call progLearnTop, progHomeCard, progSchedRow and progClassHint. */
 const PRG={me:null,meFor:null,meAt:0,meBusy:false,coach:{},view:{},saving:Promise.resolve()};
 const PRG_MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -22,7 +22,7 @@ const prgN=(n,w)=>`${n} ${w}${n===1?"":"s"}`;
 async function prgLoad(force){if(!prgOn()||PRG.meBusy)return;const who=API.me.id;
   if(!force&&PRG.meFor===who&&Date.now()-PRG.meAt<120000)return;PRG.meBusy=true;
   let j=null;try{j=await api("GET","/programme")}catch(e){}finally{PRG.meBusy=false}
-  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="learn")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
+  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="train")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
 const prgMine=()=>{if(!prgOn())return null;if(PRG.meFor!==API.me.id||Date.now()-PRG.meAt>=120000)prgLoad();return PRG.meFor===API.me.id?PRG.me:null};
 // A week's state for this member: now, upcoming, done (trained or caught up) or missed.
 function prgState(d,w){const t=d.today,end=addDays2(w.start,7);if(t>=w.start&&t<end)return "now";if(t<w.start)return "next";
@@ -30,7 +30,7 @@ function prgState(d,w){const t=d.today,end=addDays2(w.start,7);if(t>=w.start&&t<
 const prgLive=d=>d&&d.programme&&d.programme.published?d.programme:null;
 const prgNow=(d,p)=>p.weeks.find(w=>prgState(d,w)==="now")||p.weeks.find(w=>prgState(d,w)==="next");
 function prgVidRows(w,src){return w.videos.map((x,i)=>`<button class="prgvid" data-a="prgweek" data-v="${src}|${w.start}|${i}">${prgThumb(x.v)}<span class="prgvt"><b>${esc(x.title)}</b>${x.note?`<small>${esc(x.note)}</small>`:""}</span></button>`).join("")}
-// The top of Learn: this month's hero, this week's videos, what to catch up on and next month's preview.
+// The top of Train: this month's hero, this week's videos, what to catch up on and next month's preview.
 function progLearnTop(){const d=prgMine();if(!d)return "";const p=prgLive(d),cu=d.catchUp||[];if(!p&&!d.next&&!cu.length)return "";
   let html="";
   if(p){const now=prgNow(d,p);
@@ -45,7 +45,7 @@ function progLearnTop(){const d=prgMine();if(!d)return "";const p=prgLive(d),cu=
       <button class="btn primary" data-a="prgcatch">Watch what you missed</button></section>`}
   if(d.next)html+=`<button class="panel prgnext" data-a="prgmonth" data-v="${d.next.month}"><span class="row between"><span class="label prglab">Next month</span><span class="pill plain">Preview</span></span><b>${esc(prgName(d.next.month))}: ${esc(d.next.title)}</b></button>`;
   return `<div class="stack prgtop">${html}</div>`}
-// Home: one line, this week's topic, linking to Learn.
+// Home: one line, this week's topic, linking to Train.
 function progHomeCard(){const d=prgMine();if(!d)return "";const p=prgLive(d);if(!p)return "";const w=prgNow(d,p);if(!w)return "";const cu=(d.catchUp||[]).length,now=prgState(d,w)==="now";
   return `<button class="panel prghome" data-a="prglearn"><span class="prgdot" aria-hidden="true">▶</span><span class="grow"><small class="prglab">${now?"This week":"Starts "+esc(prgDay(w.start))}</small><b>${esc(w.title||p.title)}</b></span><span class="small muted">${w.videos.length?prgN(w.videos.length,"video"):""}${cu?` <span class="pill due">${cu} to catch up</span>`:""} ›</span></button>`}
 // Where a week comes from: m = this month, c = the catch-up list, or a month opened by itself (YYYY-MM).
@@ -150,7 +150,7 @@ async function prgVidAdd(f){const v=n=>(f.querySelector(`[name="${n}"]`)||{}).va
   try{await prgSave(PRG.sel);prgWeekEdit(S.ui.sheet.i,"add",true);toast("Video added.")}catch(e){w.videos.pop()}}
 async function prgWeekChange(fn){prgWeekFields();const i=S.ui.sheet.i;fn(prgWeek());prgWeekEdit(i,null,true);try{await prgSave(PRG.sel)}catch(e){}}
 function prgAct(a,v,el){switch(a){
-  case "prglearn": go("learn-moves");break;
+  case "prglearn": go("train-moves");break;
   case "prgweek": { const [src,start,vi]=String(v).split("|");prgWeekSheet(src,start,vi);break }
   case "prgcatch": prgCatchSheet();break;
   case "prgcaught": prgCaught(v);break;

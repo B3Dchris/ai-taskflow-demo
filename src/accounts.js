@@ -129,7 +129,7 @@ function checkVersion(){if(inClaude()||!window.JF_BUILD||!API.on||Date.now()-ver
   api("GET","/status").then(x=>{if(x.build&&x.build!==window.JF_BUILD){API.stale=true;reloadIfIdle()}}).catch(()=>{})}
 function reloadIfIdle(){const a=document.activeElement;if(!API.stale||!document.getElementById("sheet").hidden||a&&a.matches("input,textarea,select"))return;API.stale=false;location.reload()}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="visible")return;checkVersion();flushLogs()});
-async function signedIn(me,opts){API.me=me;S.ui.fromHow=false;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();if(isCoach())setCoachMode("manage");else maybeOnboardAfterSync();isCoach()?coachGo("home"):go("home");toast(`Signed in as ${(me.account||me).name}.`)}
+async function signedIn(me,opts){API.me=me;S.ui.fromHow=false;API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;await startSync(opts);hideSheet();if(!isCoach())maybeOnboardAfterSync();isCoach()?coachGo("home"):go("home");toast(`Signed in as ${(me.account||me).name}.`)}
 // A kid on a parent's login isn't asked the study questions: the parent is there to book and pay for them.
 function maybeOnboardAfterSync(){S.ui.obChecked=false;if(API.support)return;const f=API.me&&API.me.family;if(S.ui.claim&&S.ui.authKid)return; // about to offer the kid whose link they opened
   if(f&&!(f.find(x=>x.id===API.me.id)||{}).login)return;if(!P().settings.onboarded)maybeOnboard()}
@@ -332,23 +332,23 @@ async function coachLoad(what,around){
   if(all)API.notices=undefined;
   COACH.loading=false;if(S.ui.tab==="coach")render();
 }
-/* Coaches get their own app. Learn and Journal are for training: a coach opens them with "My training" on the Gym tab,
-   and "Manage <gym>" at the top of Home brings them back. */
-// Coach tabs: Today (route coach-home), Schedule (classes and privates), Members (students; Competitions inside it), Money (head coach), Gym.
-const COACH_VIEWS=["home","schedule","members","comps","money","gym"];
-const coachMode=()=>{try{return localStorage.getItem("jf.coachMode")==="study"?"study":"manage"}catch(e){return "manage"}};
-const managing=()=>isCoach()&&(!!API.preview||!!API.support||coachMode()!=="study");
-function setCoachMode(m){try{if(m==="study")localStorage.setItem("jf.coachMode","study");else localStorage.removeItem("jf.coachMode")}catch(e){}}
+/* Coaches get their own app: Today (route coach-home), Schedule (classes and privates), Members (students; Competitions inside it),
+   then Money and Gym for the head coach, or Me for other coaches. Their own moves and journal are "My training" (the Train page),
+   opened from Gym or Me: the coach tabs stay, and a back link returns. */
+const COACH_VIEWS=["home","schedule","members","comps","money","gym","me"];
+const managing=()=>isCoach();
+try{localStorage.removeItem("jf.coachMode")}catch(e){} // the old "training mode" switch is gone
 function coachGo(v){const legacy={today:["home"],classes:["schedule"],students:["members"],roster:["members","all"],insights:["members","risk"],payments:["money"]};const l=legacy[v];
-  if(l){v=l[0];if(l[1])COACH.memFilter=l[1]}if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
+  if(l){v=l[0];if(l[1])COACH.memFilter=l[1]}const head=isHead()||!!API.preview;if(v==="gym"&&!head)v="me";if(v==="me"&&head)v="gym";
+  if(!COACH_VIEWS.includes(v)||(v==="money"&&!isHead()))v="home";COACH.view=v;go("coach-"+v)}
 function viewCoach(){
   if(!isCoach())return `${header()}<div class="empty">This part is for coaches. Start a gym in Me to use it.</div>`;
   if(!COACH.roster&&!COACH.loading)coachLoad();
   if(!GYM.data)loadGym(); // website timetable, coaches and prices: used by Classes, Money and Today, not just the Gym tab
   const v=COACH_VIEWS.includes(COACH.view)&&(COACH.view!=="money"||isHead())?COACH.view:"home";
-  const title={home:"Today",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Your gym"}[v];
-  const body=!COACH.roster&&!(v==="home"&&COACH.classes)?`<div class="empty">Loading your gym…</div>`:v==="schedule"?coachClasses():v==="members"||v==="comps"?coachMembers(v):v==="money"?coachMoney():v==="gym"?coachGym():coachToday();
-  return `${header()}<div class="stack-lg"><section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}${API.me.gym.beta==="accepted"?` <span class="pill ok betapill">Beta</span>`:""}</h1></div></div></section>${body}</div>`;
+  const title={home:"Today",schedule:"Schedule",members:"Members",comps:"Members",money:"Money",gym:"Gym",me:"Me"}[v];
+  const body=!COACH.roster&&!(v==="home"&&COACH.classes)?`<div class="empty">Loading your gym…</div>`:v==="schedule"?coachClasses():v==="members"||v==="comps"?coachMembers(v):v==="money"?coachMoney():v==="gym"?coachGym():v==="me"?coachMe():coachToday();
+  return `${header()}<div class="stack-lg">${v==="gym"?"":`<section class="stack" style="gap:6px"><div class="gymhead"><div><p class="small muted" style="margin:0">${esc(v==="me"?API.me.name:API.me.gym.name)}</p><h1 style="font-size:34px;margin:0">${esc(title)}${API.me.gym.beta==="accepted"&&v!=="me"?` <span class="pill ok betapill">Beta</span>`:""}</h1></div></div></section>`}${body}</div>`;
 }
 // Members: one list with filter chips. Competitions and the longer insights open from rows at the bottom.
 const backTo=(label,a,v)=>`<button class="linkbtn backlink" data-a="${a}" data-v="${v}">‹ ${esc(label)}</button>`;
@@ -356,7 +356,7 @@ function coachMembers(v){return v==="comps"?`${backTo("Members","coachgo","membe
 /* ----- Money: one page (what came in, who owes, what to check, recent payments). Setup and the full payments list open from rows at
    the bottom, each with a way back. ----- */
 function coachMoney(){const v=COACH.moneyView||"month";
-  if(v==="setup")return `<section class="stack">${backTo("Money","moneyview","month")}<h2 class="pageh">Setup</h2></section>${moneySetup()}${plansPanel()}${privatesPanel()}`;
+  if(v==="setup"){COACH.moneyView="month";setTimeout(()=>gymSec("pay"),0)} // an old way in: Getting paid is in Gym now
   if(v==="payments")return `<section class="stack">${backTo("Money","moneyview","month")}<h2 class="pageh">All payments</h2></section>${coachPayments()}`;
   return moneyMonth()}
 async function loadMoney(month){COACH.moneyLoading=true;try{COACH.money=await api("GET","/coach/money"+(month?`?month=${month}`:""));COACH.payAt=Date.now()}catch(e){toast(e.message)}COACH.moneyLoading=false;if(S.ui.tab==="coach"&&COACH.view==="money")render()}
@@ -445,7 +445,7 @@ function moneyMonth(){
     <section class="stack" id="recentpays"><h2 class="label">Recent payments</h2>${recent.length?`<div class="list">${recent.map(p=>`<div class="mrow"><span class="mrow-main withav">${mav((byId[p.userId]||{}).name,(byId[p.userId]||{}).belt)}<span class="mrow-t"><span class="nm">${esc((byId[p.userId]||{}).name||"Former student")}</span><span class="small muted">${esc(fmtDate(p.paidOn))}${p.method?" · "+esc(PMETH[p.method]||p.method):""}${p.status==="refunded"?" · refunded":""}</span></span></span><b class="mono small">${money(p.amountCents,p.currency)}</b></div>`).join("")}</div>`:`<p class="small muted">No payments yet.</p>`}
       <button class="btn" data-a="moneyview" data-v="payments">All payments</button></section>
     <div class="grid2"><button class="btn primary" data-a="paynew">Record a payment</button><label class="btn" for="pop-up" style="cursor:pointer">Upload proof</label></div><input type="file" id="pop-up" accept="image/*,application/pdf" hidden>
-    <div class="list navrows"><button class="navrow" data-a="moneyview" data-v="setup"><span><b>Setup</b><span class="small muted">Bank details, plans, cards, reminders</span></span><span class="chev" aria-hidden="true">›</span></button>
+    <div class="list navrows"><button class="navrow" data-a="setupgo" data-v="pay" id="m-gotpaid"><span><b>Getting paid</b><span class="small muted">Bank details, cards, reminders · in Gym</span></span><span class="chev" aria-hidden="true">›</span></button>
       <button class="navrow" data-a="moneycsv"><span><b>Download CSV</b><span class="small muted">${esc(monthLabel(M.month))}, for your bookkeeper</span></span><span class="chev" aria-hidden="true">›</span></button></div>
   </section>`}
 // One tap on "Paid": the full amount they owe, today, by cash or EFT (the last one used). Undo takes it off again.
@@ -470,7 +470,7 @@ const remindedTxt=at=>{const d=Math.round((fromYmd(todayK())-fromYmd(dayKey(at))
 let REMINDING=false; // a double tap sends them once
 async function remindAll(auto){const M=COACH.money;if(!M||REMINDING)return;const ids=toRemind(M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0]))).map(s=>s.id);
   REMINDING=true;try{const j=await api("POST","/coach/money/remind",{month:M.month,userIds:ids,...(typeof auto==="boolean"?{auto}:{})});M.autoRemind=j.autoRemind;if(COACH.payInfo)COACH.payInfo.autoRemind=j.autoRemind;hideSheet();
-    toast(`Sent ${j.sent} reminder${j.sent===1?"":"s"}.${auto===true?" From now on they go by themselves. Turn it off in Money › Setup.":""}${(j.recent||[]).length?` ${j.recent.length} already had one this week.`:""}${(j.checking||[]).length?` Not sent to ${j.checking.join(", ")}: their family sent a payment this week, or one is being checked.`:""}${j.noEmail.length?` No email for ${j.noEmail.join(", ")}.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} stopped your gym's emails: WhatsApp them instead.`:""}`);jfTrack("fee_reminders",{count:j.sent,auto:auto===true});
+    toast(`Sent ${j.sent} reminder${j.sent===1?"":"s"}.${auto===true?" From now on they go by themselves. Turn it off in Gym › Getting paid.":""}${(j.recent||[]).length?` ${j.recent.length} already had one this week.`:""}${(j.checking||[]).length?` Not sent to ${j.checking.join(", ")}: their family sent a payment this week, or one is being checked.`:""}${j.noEmail.length?` No email for ${j.noEmail.join(", ")}.`:""}${(j.stopped||[]).length?` ${j.stopped.join(", ")} stopped your gym's emails: WhatsApp them instead.`:""}`);jfTrack("fee_reminders",{count:j.sent,auto:auto===true});
     loadMoney(M.month===M.today.slice(0,7)?null:M.month)}catch(e){toast(e.message)}finally{REMINDING=false}}
 // Who "Remind the N who owe" can't email (no address, stopped your emails, or reminded this week): Remind on their row is WhatsApp.
 const remindGap=M=>{const ow=M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0])),n=ow.length-toRemind(ow).length;return n>0?` ${n} can't be emailed now: use Remind on their row for WhatsApp.`:""};
@@ -478,7 +478,7 @@ const remindGap=M=>{const ow=M.students.filter(s=>["due","late","part"].includes
 function remindAsk(){const M=COACH.money;if(!M)return;const n=remindN(toRemind(M.students.filter(s=>["due","late","part"].includes(moneyStatus(s,M)[0]))));if(!n)return;
   if(M.autoRemind!==null&&M.autoRemind!==undefined||M.month!==M.today.slice(0,7))return confirmSheet(`Email ${n} reminder${n>1?"s":""}?`,`Everyone who still owes ${M.month===M.today.slice(0,7)?"":"for "+esc(monthLabel(M.month))+" "}and has an email gets a friendly reminder with the amount, your bank details and their reference.${remindGap(M)}`,["remindyes",""],"Send reminders");
   S.ui.sheet={k:"confirm"};S.ui.stack=[];
-  openSheet(`${sheetHead(`Email ${n} reminder${n>1?"s":""}`)}<div class="stack-lg"><h1>Send these automatically?</h1><p>We'll email everyone who still owes on the due day (the ${ordinal(M.dueDay||1)}) and 7 days later. Nobody who's paused, on trial, or paid in the last week. You can switch it off in Money › Setup.</p><p class="small muted">Either way, these ${n} go now.${remindGap(M)}</p></div>`,false,
+  openSheet(`${sheetHead(`Email ${n} reminder${n>1?"s":""}`)}<div class="stack-lg"><h1>Send these automatically?</h1><p>We'll email everyone who still owes on the due day (the ${ordinal(M.dueDay||1)}) and 7 days later. Nobody who's paused, on trial, or paid in the last week. You can switch it off in Gym › Getting paid.</p><p class="small muted">Either way, these ${n} go now.${remindGap(M)}</p></div>`,false,
     {act:`<button class="btn grow" data-a="remindyes" data-v="once">Just this once</button><button class="btn primary grow" data-a="remindyes" data-v="auto">Yes, automatically</button>`})}
 function moneyCSV(){const M=COACH.money;if(!M)return;const q=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`,r=c=>(c/100).toFixed(2);
   const rows=[["Student","Plan","Fee","Access fee","Privates","Paid","Checking","Owing","Owing in all","Months owed","Status","Reference","Email","WhatsApp"]].concat(M.students.map(s=>[s.name,s.plan||"",r(s.feeCents),r(s.accessCents||0),r(s.privatesCents||0),r(s.paidCents),r(s.pendingCents),r(Math.max(0,s.feeCents-s.paidCents)),r(s.owedCents||0),(s.owedMonths||[]).map(o=>o.month).join(" "),moneyStatus(s,M)[1],s.reference,s.email,s.phone]));
@@ -488,15 +488,16 @@ function moneyCSV(){const M=COACH.money;if(!M)return;const q=v=>`"${String(v==nu
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"}));a.download=`${gymName().replace(/[^\w]+/g,"-")}-fees-${M.month}.csv`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 
 /* ----- students a coach adds who aren't on the app ----- */
-function addStudentSheet(){const plans=(COACH.roster.plans||[]).filter(p=>p.active);S.ui.sheet={k:"addstu"};S.ui.stack=[];
-  openSheet(`${sheetHead("Add a student")}<form id="addstuform" class="stack-lg" novalidate><button type="button" class="btn primary" data-a="bulkopen">Add several at once</button><p class="small muted" style="margin-top:-12px">From a screenshot of your WhatsApp group${canPickContacts()?", your contacts":""} or a list of names.</p><p class="small">For someone who isn't on the app (yet). You can record their payments, attendance and plan, and send them an invite later; when they sign up, it all carries over.</p>
+// Invite members › Add by hand (also Members › + Add): someone who isn't on the app yet. Back returns to Invite members when it came from there.
+function addStudentSheet(fromInvite){const plans=(COACH.roster.plans||[]).filter(p=>p.active);S.ui.sheet={k:"addstu",from:fromInvite?"invite":null};S.ui.stack=fromInvite?["invite","addstu"]:[];
+  openSheet(`${sheetHead("Invite members")}<form id="addstuform" class="stack-lg" novalidate><h1>Add by hand</h1><button type="button" class="btn primary" data-a="bulkopen">Add several at once</button><p class="small muted" style="margin-top:-12px">From a screenshot of your WhatsApp group${canPickContacts()?", your contacts":""} or a list of names.</p><p class="small">Their payments, classes and plan carry over when they join the app.${fromInvite?"":` <button type="button" class="linkbtn small" data-a="invite">Send an invite link instead</button>`}</p>
     <label class="f">Name<input name="name" autocomplete="off" required></label>
     <label class="f">Parent's name (only for a kid)<input name="parent" autocomplete="off" placeholder="Leave empty for adults"></label>
     <label class="f">WhatsApp number<input name="phone" type="tel" inputmode="tel" placeholder="082 123 4567"></label>
     <label class="f">Email (optional)<input name="email" type="email" inputmode="email" autocomplete="off"></label>
     <div class="grid2"><label class="f">Belt<select name="belt">${["white","blue","purple","brown","black"].map(b=>`<option value="${b}">${cap1(b)}</option>`).join("")}</select></label><label class="f">Stripes<select name="stripes">${[0,1,2,3,4].map(n=>`<option>${n}</option>`).join("")}</select></label></div>
     ${plans.length?`<label class="f">Membership<select name="plan"><option value="">No plan</option>${plans.map(p=>`<option value="${p.id}">${esc(p.name)} · ${money(p.priceCents,COACH.roster.currency)}</option>`).join("")}</select></label>`:""}
-    <label class="f">Notes<input name="notes" placeholder="e.g. pays cash on Mondays"></label></form>`,false,{act:`<button class="btn primary grow" type="submit" form="addstuform">Add student</button>`})}
+    <label class="f">Notes<input name="notes" placeholder="e.g. pays cash on Mondays"></label></form>`,false,{back:fromInvite?"‹ Back":undefined,act:`<button class="btn primary grow" type="submit" form="addstuform">Add student</button>`})}
 async function submitAddStudent(form){const v=n=>(form.querySelector(`[name="${n}"]`)||{}).value||"";
   try{const j=await api("POST","/coach/students",{name:v("name"),parentName:v("parent"),phone:v("phone"),email:v("email"),belt:v("belt"),stripes:Number(v("stripes")||0),planId:v("plan")||null,notes:v("notes")},formKey(form));
     hideSheet();await coachLoad("roster");COACH.money=null;toast("Student added.");studentSheet(j.id)}catch(e){toast(e.message)}}
@@ -542,8 +543,8 @@ function coachToday(){
     <section class="stack"><h2 class="label">Needs you</h2>${!COACH.roster?`<p class="small muted">Loading…</p>`:needs.length?needs.join(""):`<p class="small muted">All clear. Nothing needs you.</p>`}</section>
     <section class="stack"><h2 class="label">This week</h2><div class="stats"><div class="stat"><b>${week.filter(c=>c.kind!=="private").length}</b><span>Classes</span></div><div class="stat"><b>${booked}</b><span>Bookings</span></div><div class="stat"><b>${COACH.roster?ppl.filter(p=>p.active).length:"…"}</b><span>Students</span></div></div></section>
     <section class="stack"><h2 class="label">Quick actions</h2><div class="quick">
-      <button class="btn primary" data-a="classnew">+ Add a class</button>${isHead()?`<button class="btn" data-a="paynew">Record a payment</button>`:`<button class="btn" data-a="addstu">+ Add a student</button>`}
-      ${waBtn(WA_T.invite(),"Invite students on WhatsApp",{kind:"invite"})}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}</div></section>`;
+      <button class="btn primary" data-a="classnew">+ Add a class</button>${isHead()?`<button class="btn" data-a="paynew">Record a payment</button>`:""}
+      ${/data-a="invite"/.test(setupCard())?"":`<button class="btn" data-a="invite">Invite members</button>`}${waBtn(WA_T.week(),"Send this week's classes",{kind:"week"})}</div></section>`; // Invite once: in Getting started while nobody has joined
 }
 const students=()=>(COACH.roster?.people||[]).filter(p=>p.role==="student");
 // Finding someone: by name or parent's name, accents or not ("Ane" finds Ané-Marié), or by a few digits of their phone ("082 001").
@@ -1231,27 +1232,107 @@ async function submitPay(form){const v=n=>(form.querySelector(`[name="${n}"]`)||
 const splitTxt=(sp,cur)=>sp&&sp.length?` More than they owed, so ${sp.map(x=>`${money(x.cents,cur)} went to ${first(x.name)}`).join(" and ")}.`:"";
 function splitToast(msg,j){const sp=j&&j.split,cur=(COACH.roster||{}).currency;if(!sp||!sp.length)return toast(msg);
   toast(msg+splitTxt(sp,cur),{label:"Undo split",fn:async()=>{try{await api("POST",`/coach/payments/${j.payment.id}/unsplit`,{});await coachLoad();toast("Undone. It's all on one kid again.")}catch(e){toast(e.message)}}})}
-function coachGym(){const g=API.me.gym;
-  return `<section class="stack"><section class="panel stack mytraining"><div><h2 class="label">My training</h2><p class="small">Your own moves, flow map, belt goals and training journal. Come back with <b>Manage ${esc(g.name)}</b> at the top of Home.</p></div><button class="btn primary" data-a="coachmode" data-v="study">Open my training</button></section>${isHead()?planPanel()+betaPanel():""}${impBanner()}${waPanel()}${gymCard(true)}${lookPanel()}
-    <div class="panel stack"><h2 class="label">Bookings</h2><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox"${g.showAttendees!==false?" checked":""}> Students can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
-      <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox"${g.studentsInvite!==false?" checked":""}> Students can invite friends to the gym (they get the student invite link to share; never the coach link).</label>
+/* ============ GYM: ONE SETUP CHECKLIST ============ */
+/* The head coach's Gym tab: the gym's name with a ring (how many of six are set up), one Invite members button, six rows that each
+   open a short sheet, and a small Settings group. Today's "Getting started" card reads the same list (gymChecklist), so they agree.
+   Assistant coaches have no Gym tab: their Me tab holds their account, My training and the gym rows they can change. */
+const GYMSHEETS=new Set(["gymsec","invite"]);
+// Redraw the coach screen, and the gym sheet when one is open (its panels load their data after it opens).
+function coachRedraw(){if(S.ui.tab==="coach"&&(!S.ui.sheet||GYMSHEETS.has(S.ui.sheet.k)))render()}
+// A ring: n of max done (the Gym checklist), or a percentage (belt readiness on Train).
+function ringSVG(n,max,label,cls){const r=22,c=+(2*Math.PI*r).toFixed(1),f=+(c*Math.max(0,Math.min(1,n/(max||1)))).toFixed(1);
+  return `<svg class="ring${cls?" "+cls:""}" viewBox="0 0 52 52" role="img" aria-label="${esc(label)}"><circle class="rt" cx="26" cy="26" r="${r}"/>${f>0?`<circle class="rf" cx="26" cy="26" r="${r}" stroke-dasharray="${f} ${c}" transform="rotate(-90 26 26)"/>`:""}<text x="26" y="30.5" text-anchor="middle">${max===100?n+"%":n+"/"+max}</text></svg>`}
+const GYM_ROWS=[["profile","Profile and timetable"],["plans","Plans and prices"],["pay","Getting paid"],["coaches","Coaches"],["look","Look and logo"],["plan","Your JitsFlow plan"]];
+// Each row: done (ok), needs you (warn) or not yet (todo), with one line of status. null data = still loading.
+function gymChecklist(){const g=API.me.gym,p=gymProfile(),R=COACH.roster,pi=COACH.payInfo,bank=(pi&&pi.pay)||{},b=COACH.bill;
+  if(isHead()){if(COACH.payInfo===undefined){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;coachRedraw()}).catch(()=>{})}
+    if(COACH.ps===undefined)cardsPanel();if(COACH.bill===undefined)planPanel();if(COACH.packs===undefined)packsPanel()}
+  if(!GYM.data)loadGym();
+  const ws=weekStart(todayK()),wk=(COACH.classes||[]).filter(c=>c.kind!=="private"&&dayKey(c.startsAt)>=ws&&dayKey(c.startsAt)<=addDays2(ws,6)).length,tt=(p.timetable||[]).length,n=tt||wk;
+  const plans=R?(R.plans||[]).filter(x=>x.active).length:null,packs=(COACH.packs||[]).filter(k=>k.active).length;
+  const coaches=R?(R.people||[]).filter(x=>x.role==="coach"&&x.active!==false).length:null,acct=COACH.ps&&COACH.ps.account,eft=!!(bank.account||bank.link),accent=(g.brand||{}).accent;
+  const s=(st,line)=>({st,line});
+  const rows={
+    profile:n?s("ok",`${n} class${n===1?"":"es"} a week`):hasProfile(p)?s("warn","Add your timetable"):s("todo","Add your details and timetable"),
+    plans:plans===null?s("todo","…"):plans?s("ok",[`${plans} plan${plans===1?"":"s"}`,packs?`${packs} pack${packs===1?"":"s"}`:""].filter(Boolean).join(" · ")):s("todo","Add your membership plans"),
+    pay:!pi?s("todo","…"):(()=>{const card=acct?acct.status==="active"?"Cards on":acct.status==="pending_verification"?"Cards waiting for JitsFlow":"Cards paused":"";
+      const line=[eft?"EFT ✓":"",card].filter(Boolean).join(" · ");
+      if(acct&&acct.status!=="active")return s("warn",line);if(eft||acct)return s("ok",line+(eft&&!acct&&COACH.ps&&COACH.ps.on?" · cards not set up":""));return s("todo","Add your bank details")})(),
+    coaches:coaches===null?s("todo","…"):coaches>1?s("ok",`${coaches} coaches`):(g.setup||{}).soloCoach?s("ok","Just you"):s("todo","Just you · add a coach"),
+    look:g.logo||accent?s("ok",g.logo&&accent?"Logo and colour":g.logo?"Logo":"Colour"):s("todo","Not set"),
+    plan:!b?s("todo","…"):b.status==="active"?s("ok",`${money(b.priceCents,"ZAR")} a month`):b.beta?s("ok","Beta"):b.status==="cancelled"?s("warn","Cancelled"):todayK()<b.trialEnds?s("ok",`Free until ${dayMon(b.trialEnds)}`):s("warn","Free months over")};
+  return GYM_ROWS.filter(([k])=>isHead()||["profile","coaches","look"].includes(k)).map(([k,l])=>({k,l,...rows[k]}))}
+const ckMark=st=>`<span class="ckmark ${st}" aria-hidden="true">${st==="ok"?"✓":st==="warn"?"!":""}</span>`;
+const ckWord={ok:"done",warn:"needs you",todo:"not set up yet"};
+function ckRow(r){return `<button class="navrow ckrow ${r.st}" data-a="gymsec" data-v="${r.k}" aria-label="${esc(r.l)}: ${ckWord[r.st]}. ${esc(r.line)}">${ckMark(r.st)}<span class="cktxt"><b>${esc(r.l)}</b><span class="small muted">${esc(r.line)}</span></span><span class="chev" aria-hidden="true">›</span></button>`}
+const navRow=(a,v,t,sub,id)=>`<button class="navrow" data-a="${a}" data-v="${v}"${id?` id="${id}"`:""}><span><b>${t}</b>${sub?`<span class="small muted">${sub}</span>`:""}</span><span class="chev" aria-hidden="true">›</span></button>`;
+function gymSettingsRows(){const g=API.me.gym;
+  return `<section class="stack gymsettings"><h2 class="label">Settings</h2><div class="list navrows">
+    ${navRow("gymsec","bookings","Bookings",`${g.showAttendees!==false?"Members see who's booked":"Booking lists private"}${g.waPhoneSet?" · WhatsApp for lessons":""}`)}
+    ${navRow("gymsec","wa","WhatsApp messages","This week's classes, fees, competitions")}
+    ${navRow("mytrain","","My training","Your moves, flow map and journal")}
+    ${isHead()?navRow("gymsec","support","Support access","Who from JitsFlow opened your gym"):""}
+    ${navRow("gymsec","account","Account and appearance",isHead()?"Sign out, dark mode, delete gym":"Sign out, dark mode")}</div></section>`}
+function coachGym(){const g=API.me.gym,rows=gymChecklist(),done=rows.filter(r=>r.st==="ok").length;
+  return `<section class="gymtop">${g.logo?`<img src="${esc(g.logo)}" alt="" class="gymlogo">`:""}<div class="grow"><h1>${esc(g.name)}</h1><p class="small muted">${done===rows.length?"All set up":`${done} of ${rows.length} set up`}</p></div>${ringSVG(done,rows.length,`${done} of ${rows.length} set up`)}</section>
+    ${impBanner()}
+    <button class="btn primary invitebtn" data-a="invite">Invite members</button>
+    <div class="list navrows checklist" id="gymcheck">${rows.map(ckRow).join("")}</div>
+    ${gymSettingsRows()}`}
+// Assistant coaches: Me holds their account, their own training, and the parts of the gym they can change.
+function coachMe(){const g=API.me.gym,rows=gymChecklist();
+  return `<button class="btn primary invitebtn" data-a="invite">Invite members</button>
+    <div class="list navrows">${navRow("mytrain","","My training","Your moves, flow map and journal")}</div>
+    <section class="stack"><h2 class="label">${esc(g.name)}</h2><div class="list navrows checklist">${rows.map(ckRow).join("")}</div></section>
+    <section class="stack gymsettings"><h2 class="label">Settings</h2><div class="list navrows">${navRow("gymsec","bookings","Bookings","Who's booked, WhatsApp for lessons")}${navRow("gymsec","wa","WhatsApp messages","This week's classes, competitions")}</div></section>
+    ${accountSection()}${appearanceSection()}`}
+// One sheet per row. A redraw (data loaded, something saved) keeps what's typed in the boxes.
+const GYM_T={profile:"Profile and timetable",plans:"Plans and prices",pay:"Getting paid",coaches:"Coaches",look:"Look and logo",plan:"Your JitsFlow plan",bookings:"Bookings",wa:"WhatsApp messages",support:"Support access",account:"Account and appearance"};
+function gymSecBody(k){const g=API.me.gym;
+  if(k==="profile")return `${impBanner()}${gymCard(true)}${gymImportPanel()}
+    <form id="gymform" class="panel stack"><h2 class="label">Gym name</h2><input id="g-name" name="name" value="${esc(g.name)}" aria-label="Gym name"><button class="btn" type="submit" style="justify-self:start">Save name</button></form>
+    <div class="list navrows">${navRow("coachgo","schedule","Classes on the calendar","Add classes and private slots in Schedule")}</div>`;
+  if(k==="plans")return `${plansPanel()}${isHead()?`<form id="gymfeeform" class="panel stack"><h2 class="label">Standard monthly fee</h2><p class="small muted">For anyone not on a plan.</p><div class="row" style="flex-wrap:nowrap"><input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}" aria-label="Standard monthly fee (${esc(g.currency||"ZAR")})" style="flex:1"><button class="btn" type="submit">Save</button></div></form>`:""}${privatesPanel()}`;
+  if(k==="pay")return `${moneySetup()}`;
+  if(k==="coaches")return `<section class="panel stack">${headLine()}<p class="small">Send this link only to coaches. It gives access to classes and the roster; fees stay with the head coach.</p>
+      <div class="codebox mono">${esc(joinURL(g.coachCode))}</div><div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button>${waBtn(WA_T.coach(),"WhatsApp",{kind:"coach"})}</div>
+      <div class="row between"><span class="small muted">Coach code <b class="mono">${esc(g.coachCode)}</b></span><button class="linkbtn small" data-a="rotate" data-v="coach">New coach code</button></div></section>
+    ${coachesPanel()?`<section class="panel stack"><h2 class="label">Your coaches</h2>${coachesPanel()}</section>`:isHead()&&!(g.setup||{}).soloCoach?`<button class="linkbtn small" data-a="solocoach" style="justify-self:start">It's just me for now</button>`:""}`;
+  if(k==="look")return `${lookPanel()}<div class="panel stack"><h2 class="label">Logo</h2>${g.logo?`<img src="${esc(g.logo)}" alt="Your logo" class="gymlogo big">`:`<p class="small muted">No logo yet.</p>`}<button class="btn" style="justify-self:start" data-a="gymedit">${g.logo?"Change logo":"Add your logo"}</button></div>`;
+  if(k==="plan")return `${planPanel()||`<p class="small muted">Loading…</p>`}${betaPanel()}`;
+  if(k==="bookings")return `<div class="panel stack"><label class="row small" style="flex-wrap:nowrap"><input id="g-show" type="checkbox"${g.showAttendees!==false?" checked":""}> Members can see who else has booked a class (first name, last initial and belt). Private lessons are never shown.</label>
       <form id="gwaform" class="stack" style="gap:6px" novalidate><label class="f">WhatsApp number for lesson requests<span class="row" style="flex-wrap:nowrap"><input id="g-wa" name="wa" type="tel" inputmode="tel" placeholder="082 123 4567" value="${esc(g.waPhoneSet||API.me.phone||"")}" style="flex:1"><button class="btn" type="submit">Save</button></span></label>
-        <span class="small muted">${g.waPhoneSet?"Students' \"Ask for a time\" button opens a chat with this number.":"Not saved yet: students' \"Ask for a time\" button opens WhatsApp without a contact until you save one."}</span></form></div>
-    ${gymImportPanel()}<div class="panel"><h2 class="label">Invite students</h2><p class="small">Send this link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono">${esc(joinURL(g.studentCode))}</div>
-      <div class="row"><button class="btn primary" data-a="copy" data-v="${esc(joinURL(g.studentCode))}">Copy invite link</button><span class="small muted">Code: <b class="mono">${esc(g.studentCode)}</b></span></div></div>
-    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Invite by email</h2>${verifyLine()}<p class="small">Paste your students' emails (one per line or separated by commas). Each gets an email with your invite link.</p><textarea id="inv-emails" name="emails" rows="3" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email"></textarea><button class="btn" type="submit">Send invites</button></form>`:""}
-    <div class="panel stack"><h2 class="label">Coaches</h2>${headLine()}<p class="small">Only share this with coaches: it gives access to classes and the roster. Fees and payments stay with the head coach.</p><div class="row"><span class="mono"><b>${esc(g.coachCode)}</b></span><button class="btn" data-a="copy" data-v="${esc(joinURL(g.coachCode))}">Copy coach link</button></div>${coachesPanel()}</div>
-    <form id="gymform" class="panel stack"><h2 class="label">Gym details</h2><label class="f">Gym name<input id="g-name" name="name" value="${esc(g.name)}"></label>
-      ${isHead()?`<label class="f">Standard monthly fee (${esc(g.currency||"ZAR")})<input id="g-fee" name="fee" type="number" inputmode="decimal" min="0" step="0.01" value="${(g.monthlyFeeCents||0)/100}"></label>`:""}<button class="btn primary" type="submit">Save gym</button></form>
-    <div class="row"><button class="btn" data-a="rotate" data-v="student">New student code</button><button class="btn" data-a="rotate" data-v="coach">New coach code</button></div>
-    <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p>
-    ${accountSection()}${supportPanel()}${appearanceSection()}
-    ${gymDelPanel()}</section>`}
+        <span class="small muted">${g.waPhoneSet?"Members' \"Ask for a time\" button opens a chat with this number.":"Not saved yet: \"Ask for a time\" opens WhatsApp without a contact."}</span></form></div>`;
+  if(k==="wa")return waPanel();
+  if(k==="support")return supportPanel();
+  if(k==="account")return `${accountSection()}${appearanceSection()}${gymDelPanel()}`;
+  return ""}
+function gymSec(k,redraw){if(!GYM_T[k]||!isCoach())return;if(!isHead()&&!["profile","coaches","look","bookings","wa"].includes(k))return;
+  const sh=document.getElementById("sheet"),keep={};
+  if(redraw&&!sh.hidden)sh.querySelectorAll("input,select,textarea").forEach(x=>{const id=x.id||(x.form&&x.form.id&&x.name?x.form.id+"|"+x.name+"|"+(x.type==="radio"||x.type==="checkbox"?x.value:""):"");if(!id)return;
+    if(x.type==="checkbox"||x.type==="radio"){if(x.checked!==x.defaultChecked)keep[id]={c:x.checked}}else if(x.value!==x.defaultValue&&x.type!=="file")keep[id]={v:x.value}});
+  if(!redraw)S.ui.secFrom=null;
+  S.ui.sheet={k:"gymsec",id:k};S.ui.stack=[];
+  const row=gymChecklist().find(r=>r.k===k);
+  openSheet(`${sheetHead(isHead()?"Gym":"Me")}<div class="stack-lg gymsheet"><div class="row between" style="flex-wrap:nowrap"><h1>${GYM_T[k]}</h1>${row?`<span class="pill ${row.st==="ok"?"ok":row.st==="warn"?"due":"plain"}">${row.st==="ok"?"✓ Done":row.st==="warn"?"Needs you":"To do"}</span>`:""}</div>${gymSecBody(k)}</div>`,!!redraw);
+  Object.entries(keep).forEach(([id,v])=>{let x=document.getElementById(id);if(!x&&id.includes("|")){const [f,n,val]=id.split("|");x=document.querySelector(`#sheet #${CSS.escape(f)} [name="${CSS.escape(n)}"]${val?`[value="${CSS.escape(val)}"]`:""}`)}
+    if(!x)return;if("c" in v)x.checked=v.c;else x.value=v.v})}
+/* ----- one Invite members sheet: copy the link, WhatsApp, email, add by hand, the gym code ----- */
+function inviteSheet(redraw){const g=API.me.gym,link=joinURL(g.studentCode),ta=document.getElementById("inv-emails"),typed=redraw&&ta?ta.value:"";
+  S.ui.sheet={k:"invite"};S.ui.stack=[];
+  openSheet(`${sheetHead("Invite members")}<div class="stack-lg invitesheet"><h1>Invite members</h1>
+    <section class="panel stack"><p class="small">Send your link. It opens JitsFlow with your gym code filled in.</p><div class="codebox mono" id="inv-link">${esc(link)}</div>
+      <div class="invgrid"><button class="btn primary" data-a="copy" data-v="${esc(link)}">Copy link</button>${waBtn(WA_T.invite(),"WhatsApp",{kind:"invite"})}</div></section>
+    ${API.status.mail?`<form id="inviteform" class="panel stack"><h2 class="label">Email</h2>${verifyLine()}<textarea id="inv-emails" name="emails" rows="2" placeholder="sam@example.com, lee@example.com" autocapitalize="none" inputmode="email" aria-label="Their emails, one per line or with commas">${esc(typed)}</textarea><button class="btn" type="submit" style="justify-self:start">Send invites</button></form>`:""}
+    <div class="list navrows">${navRow("addstu","invite","Add by hand","For someone not on the app yet: one, or a WhatsApp group screenshot","inv-add")}</div>
+    <section class="panel stack"><div class="row between" style="flex-wrap:nowrap"><span><span class="small muted">Gym code</span><br><b class="mono gymcode">${esc(g.studentCode)}</b></span><button class="linkbtn small" data-a="rotate" data-v="student">New code</button></div>
+      <p class="small muted">A new code stops the old link working. People already in your gym aren't affected.</p>
+      <label class="row small" style="flex-wrap:nowrap"><input id="g-invite" type="checkbox"${g.studentsInvite!==false?" checked":""}> Members can invite friends too</label></section></div>`,!!redraw)}
 // Closing the gym (head coach only): deletes it and everything it keeps. People with their own accounts keep them, with no gym.
 function gymDelPanel(){const g=API.me.gym;if(!isHead())return "";
   return `<section class="panel stack" id="gymdel"><h2 class="label">Delete gym</h2>${S.ui.gymDelOpen?`<form id="gymdelform" class="stack"><p class="small">This permanently deletes ${esc(g.name)}: classes and bookings, plans, payments and proofs of payment, competitions, notices, your notes on students, and students you added who aren't on the app. Students and coaches with their own accounts keep them, with no gym. Type your password to confirm.</p><input name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password"><div class="row"><button class="btn danger" type="submit">Delete gym</button><button class="btn" type="button" data-a="gymdelcancel">Keep my gym</button></div></form>`:`<p class="small">Closing your gym? This deletes it and everything it keeps about your students.</p><button class="btn danger" style="justify-self:start" data-a="gymdel">Delete gym</button>`}</section>`}
 async function deleteGym(f){try{const j=await api("DELETE","/coach/gym",{password:f.querySelector("[name=password]").value});API.me=j.me;S.ui.gymDelOpen=false;
-  Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"home"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;setCoachMode("manage");go("home");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
+  hideSheet();Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"home"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;go("home");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
 // The other coaches in the gym. Removing one ends their coach access straight away and makes a new coach code.
 // The head coach can hand their role to another active coach; nobody can remove the head coach.
 function coachesPanel(){const cs=((COACH.roster||{}).people||[]).filter(p=>p.role==="coach"&&p.id!==API.me.id);if(!cs.length)return "";
@@ -1260,7 +1341,7 @@ function coachesPanel(){const cs=((COACH.roster||{}).people||[]).filter(p=>p.rol
 function headLine(){const h=API.me.gym.headCoach;
   return isHead()?`<p class="small"><span class="pill ok">Head coach</span> You see the money: fees, payments, bank details and PayFast, and payment emails come to you.</p>`
     :`<p class="small">${h?`<b>${esc(h.name)}</b> is the head coach. They`:"The head coach"} handle${h?"":"s"} fees and payments, so you won't see those.</p>`}
-async function makeHead(id){try{const j=await api("POST","/coach/head",{userId:id});API.me=j.me;Object.assign(COACH,{payments:null,money:null,payInfo:undefined,pf:undefined,bill:undefined,packs:undefined});hideSheet();await coachLoad("roster");coachGo("gym");
+async function makeHead(id){try{const j=await api("POST","/coach/head",{userId:id});API.me=j.me;Object.assign(COACH,{payments:null,money:null,payInfo:undefined,pf:undefined,bill:undefined,packs:undefined});hideSheet();await coachLoad("roster");coachGo("gym");gymSec("coaches");
   toast(`${first((j.me.gym.headCoach||{}).name||"They")} is the head coach now.`)}catch(e){toast(e.message)}}
 async function sendInvites(form){const ta=form.querySelector("[name=emails]"),btn=form.querySelector("[type=submit]");btn.disabled=true;btn.textContent="Sending…";
   try{const j=await api("POST","/coach/invite",{emails:ta.value});ta.value="";if(j.sent)jfTrack("share",{method:"email",content_type:"gym_invite",count:j.sent});
@@ -1274,7 +1355,7 @@ const TTD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],TTDL=["Monday","Tuesday","
 const PERL={month:"/ month",week:"/ week",class:"/ class",year:"/ year",term:"/ term",once:"once-off",other:""};
 const dayNow=()=>(new Date().getDay()+6)%7;
 async function loadGym(force){if(!API.me||!API.me.gym||GYM.loading)return;if(!force&&GYM.data&&Date.now()-GYM.at<300000)return;
-  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["me","coach","home"].includes(S.ui.tab)&&!S.ui.sheet)render()}
+  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["me","coach","home"].includes(S.ui.tab)&&(!S.ui.sheet||GYMSHEETS.has(S.ui.sheet.k)))render()}
 const gymProfile=()=>(GYM.data&&GYM.data.profile)||{};
 const hasProfile=p=>!!(p&&((p.timetable||[]).length||(p.coaches||[]).length||(p.rates||[]).length||p.address||p.phone||p.email));
 const priceTxt=(r,cur)=>{const c=r.currency||cur||"ZAR";try{return new Intl.NumberFormat("en-ZA",{style:"currency",currency:c,maximumFractionDigits:r.price%1?2:0}).format(r.price)}catch(e){return c+" "+r.price}};
@@ -1317,7 +1398,7 @@ async function gymImport(form){const url=form.querySelector("[name=url]").value.
 async function gymEditOpen(){await loadGym(true);const p=clone(gymProfile());p.name=p.name||API.me.gym.name;
   ["timetable","coaches","rates"].forEach(k=>p[k]=p[k]||[]);p.socials=p.socials||{};
   S.ui.gimp={profile:p,base:clone(p.timetable),logos:[],logoPick:API.me.gym.logo?"keep":"none",imported:false};drawGymEdit()}
-function drawGymEdit(keep){
+function drawGymEdit(keep){if(!keep&&!(S.ui.sheet&&S.ui.sheet.k==="gymedit"))S.ui.gimpFrom=S.ui.sheet&&S.ui.sheet.k==="gymsec"?S.ui.sheet.id:null; // Back and Save return to that Gym sheet
   const G=S.ui.gimp,p=G.profile,cur=API.me.gym.currency||"ZAR";S.ui.sheet={k:"gymedit"};S.ui.stack=[];
   const sel=(name,opts,v)=>`<select name="${name}">${opts.map(([k,l])=>`<option value="${k}"${k===v?" selected":""}>${l}</option>`).join("")}</select>`;
   const x=(k,i)=>`<button type="button" class="btn ghost rm" data-a="germ" data-k="${k}" data-v="${i}" aria-label="Remove">✕</button>`;
@@ -1403,7 +1484,7 @@ async function gymSave(form){
   const ids=new Set(p.timetable.map(r=>r.id).filter(Boolean)),body={profile:p,logoUrl,removed:(G.base||[]).map(r=>r.id).filter(id=>id&&!ids.has(id)),...(G.base?{ttBase:G.base}:{})};
   if(G.imported){if(ttToAdd(p).length)body.calendar=G.cal!==false;body.plans=isHead()&&G.plans!==false}else if(G.cal)body.calendar=true;
   try{const j=await api("PUT","/coach/gym/profile",body);API.me=j.me;S.ui.gimp=null;if(fromJob){COACH.imp=null;api("DELETE","/coach/import/job").catch(()=>{})}if(API.me.gym.logo&&!(API.me.gym.brand||{}).accent)setTimeout(()=>brandFromLogo(true),600);hideSheet();GYM.data=null;await loadGym(true);
-    if(j.classesAdded||j.moved||(j.held||[]).length)await coachLoad("classes");if(j.plansAdded)await coachLoad("roster");coachGo("gym");
+    if(j.classesAdded||j.moved||(j.held||[]).length)await coachLoad("classes");if(j.plansAdded)await coachLoad("roster");{const f=S.ui.gimpFrom;S.ui.gimpFrom=null;coachGo("gym");if(f)gymSec(f)}
     const did=[j.plansAdded?`${j.plansAdded} membership plan${j.plansAdded===1?"":"s"} added`:"",j.classesAdded?`${j.classesAdded} class${j.classesAdded===1?"":"es"} on the calendar`:"",j.moved?`${j.moved} class${j.moved===1?"":"es"} moved`:""].filter(Boolean);
     toast(j.logoNote||`Saved.${j.feeSet?` Standard fee set to ${money(j.feeSet,API.me.gym.currency)} a month.`:""}${did.length?" "+cap1(did.join(". "))+".":j.feeSet?"":" Your students can see these details now."}`);
     if((j.held||[]).length)ttHeldSheet(j.held)}
@@ -1845,14 +1926,14 @@ const WA_T={
   comp:(c)=>{if(!c)return "";const team=(c.team||[]).filter(x=>x.status==="entered");
     return `*${c.name}*\n${compDates(c)}${c.city?" · "+c.city:""}${c.registerBy?`\nRegistration closes ${fromYmd(c.registerBy).toLocaleDateString(undefined,{day:"numeric",month:"long"})}`:""}${c.fee?`\nEntry: ${c.fee}`:""}${team.length?`\n\nOur team (${team.length}): ${team.map(x=>first(x.name)).join(", ")}`:""}\n\nWant to compete? Ask in JitsFlow: ${appLink("#classes")}`},
 };
-const WA_KINDS=[["invite","Invite students"],["week","This week's classes"],["tomorrow","Tomorrow's classes"],["fees","Fees reminder"],["comp","A competition"],["coach","Invite a coach"]];
-function waPanel(){const st=S.ui.wa=S.ui.wa||{kind:"invite"};const comps=upcomingComps();if(st.kind==="comp"&&!st.comp&&comps[0])st.comp=comps[0].id;
+// Inviting members and coaches have their own places (Invite members, Gym › Coaches); these are the gym's other messages.
+const WA_KINDS=[["week","This week's classes"],["tomorrow","Tomorrow's classes"],["fees","Fees reminder"],["comp","A competition"]];
+function waPanel(){const st=S.ui.wa=S.ui.wa&&WA_KINDS.some(k=>k[0]===S.ui.wa.kind)?S.ui.wa:{kind:"week"};const comps=upcomingComps();if(st.kind==="comp"&&!st.comp&&comps[0])st.comp=comps[0].id;
   if(st.kind==="week"||st.kind==="tomorrow"){if(!COACH.classes)coachLoad("classes")}
   const text=st.kind==="comp"?WA_T.comp(comps.find(c=>c.id===st.comp)):WA_T[st.kind]();
-  return `<section class="panel stack" id="wa-panel"><h2 class="label">WhatsApp</h2><p class="small">Pick a message, change anything you like, then open WhatsApp and choose the chat or group to send it to.</p>
+  return `<section class="panel stack" id="wa-panel"><p class="small">Pick a message, change it if you like, then choose the chat or group in WhatsApp.</p>
     <div class="chips" role="group" aria-label="Message">${WA_KINDS.map(([k,l])=>`<button class="chip" data-a="wakind" data-v="${k}" aria-pressed="${st.kind===k}">${l}</button>`).join("")}</div>
     ${st.kind==="comp"?(comps.length?`<select id="wa-comp" aria-label="Competition">${comps.map(c=>`<option value="${c.id}"${c.id===st.comp?" selected":""}>${esc(c.name)}</option>`).join("")}</select>`:`<p class="small muted">Add a competition in Comps first.</p>`):""}
-    ${st.kind==="coach"?`<p class="small warn-t">This link gives coach access. Send it only to people you trust.</p>`:""}
     <textarea id="wa-text" rows="8" aria-label="Message">${esc(text)}</textarea>
     <div class="row"><a id="wa-go" class="btn wa primary-wa" href="${esc(waURL(text))}" target="_blank" rel="noopener noreferrer" data-wa="${st.kind}">${WA_ICON}<span>Open WhatsApp</span></a><button class="btn" data-a="copytext" data-v="wa-text">Copy text</button></div></section>`}
 function studentWaSection(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";const g=API.me.gym,next=(API.classes||[]).find(c=>c.myGoing&&clsEnd(c)>Date.now());
@@ -1874,7 +1955,7 @@ async function autoLog(force){
     taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id);fresh++}});
     if(await addSession(s))n++}
   if(fresh)saveProgress();
-  if(n){if(["journal","home"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
+  if(n){if(["train","home"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
 }
 /* What to do next, worked out from your last few weeks of training. */
 function nextSteps(){const out=[],seen=new Set();
@@ -1981,8 +2062,8 @@ function impPoll(){clearTimeout(COACH.impT);COACH.impT=setTimeout(async()=>{let 
   const was=COACH.imp&&COACH.imp.status;COACH.imp=j;
   if(j&&j.status==="running"){impPoll();return}
   if(was==="running"&&j){toast(j.status==="done"?"Your website is read. Tap Review to add what we found.":j.error);jfTrack("gym_import",{ok:j.status==="done"})}
-  if(S.ui.tab==="coach"&&!S.ui.sheet)render()},4000)}
-async function impLoad(){if(COACH.imp!==undefined)return;COACH.imp=null;try{COACH.imp=(await api("GET","/coach/import/job")).job;if(COACH.imp&&COACH.imp.status==="running")impPoll();if(COACH.imp&&S.ui.tab==="coach"&&!S.ui.sheet)render()}catch(e){}}
+  coachRedraw()},4000)}
+async function impLoad(){if(COACH.imp!==undefined)return;COACH.imp=null;try{COACH.imp=(await api("GET","/coach/import/job")).job;if(COACH.imp&&COACH.imp.status==="running")impPoll();if(COACH.imp)coachRedraw()}catch(e){}}
 function impBanner(){const j=COACH.imp;if(!j)return "";const host=esc(impHost(j.url));
   if(j.status==="running")return `<div class="impban run"><span class="spin" aria-hidden="true"></span><span><b>Reading ${host}…</b><br><span class="small">Usually under a minute. Keep using the app.</span></span></div>`;
   if(j.status==="error")return `<div class="impban err"><span><b>Couldn't read ${host}</b><br><span class="small">${esc(j.error||"")}</span></span><span class="row"><button class="btn sm" data-a="impretry">Try again</button><button class="linkbtn small" data-a="impdismiss">Hide</button></span></div>`;
@@ -2011,17 +2092,14 @@ function welcomeSheet(){S.ui.sheet={k:"welcome"};S.ui.stack=[];
     <li><span><b>Getting started</b> on Today walks you through the rest.</span></li></ol>
     ${COACH.imp&&COACH.imp.status==="running"?`<p class="small muted">We're reading ${esc(impHost(COACH.imp.url))} in the background. It shows up on Today when it's ready.</p>`:""}</div>`,false,{back:"Let's go"});
   api("PATCH","/coach/gym",{setup:{welcomed:true}}).then(j=>{API.me=j.me}).catch(()=>{})}
-function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roster)return "";
-  if(COACH.payInfo===undefined&&isHead()){COACH.payInfo=null;api("GET","/coach/gym/pay").then(j=>{COACH.payInfo=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{})}
-  const p=gymProfile()||{},pay=((COACH.payInfo||{}).pay)||{},plans=(COACH.roster.plans||[]).length;
-  const items=[["Your gym's details",!!((p.timetable||[]).length||(p.rates||[]).length||API.me.gym.logo),"setupgo","gym","Import your website"],
-    ["Classes on the calendar",(COACH.classes||[]).some(c=>c.kind!=="private"),"setupgo","schedule","Add classes"],
-    ["Plans and bank details",plans>0&&!!(pay.account||pay.link),"setupgo","money","Set up"],
-    ["Your students",students().length>0,"setupgo","members","Add or invite"]].filter(i=>isHead()||i[3]!=="money");
-  const done=items.filter(i=>i[1]).length;if(done===items.length)return "";
-  return `<section class="panel stack setupcard"><div class="row between"><h2 class="label">Getting started · ${done} of ${items.length}</h2><button class="linkbtn small" data-a="setuphide">Hide</button></div>
-    <div class="progress"><i style="width:${Math.round(100*done/items.length)}%"></i></div>
-    ${items.map(([l,ok,a,v,b])=>`<div class="srow${ok?" ok":""}"><span>${ok?"✓":"○"} ${esc(l)}</span>${ok?"":`<button class="btn sm" data-a="${a}" data-v="${v}">${esc(b)}</button>`}</div>`).join("")}</section>`}
+// Today's "Getting started": the Gym checklist's rows still to do (the same list, so the two always agree), and Invite members until
+// someone has joined. Shown to the head coach until it's all done or hidden.
+function setupCard(){const st=API.me.gym.setup||{};if(st.dismissed||!COACH.roster||!isHead())return "";
+  const rows=gymChecklist();if(rows.some(r=>r.line==="…"))return "";
+  const done=rows.filter(r=>r.st==="ok").length,left=rows.filter(r=>r.st!=="ok"),none=!students().length;if(!left.length&&!none)return "";
+  return `<section class="panel stack setupcard"><div class="row between"><h2 class="label">Getting started · ${done} of ${rows.length}</h2><button class="linkbtn small" data-a="setuphide">Hide</button></div>
+    <div class="progress"><i style="width:${Math.round(100*done/rows.length)}%"></i></div>
+    ${left.length?`<div class="list navrows checklist">${left.map(r=>ckRow(r).replace('data-a="gymsec"','data-a="setupgo"')).join("")}</div>`:""}${none?`<button class="btn primary" data-a="invite">Invite members</button>`:""}</section>`}
 
 /* ============ ADD STUDENTS: A WHATSAPP GROUP SCREENSHOT, CONTACTS OR A LIST ============ */
 const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
@@ -2283,7 +2361,7 @@ function planPanel(){
     <p class="small">${line}</p>${b.status==="active"&&b.card&&!NATIVE()?`<button class="linkbtn small" data-a="billcancel" style="justify-self:start">Cancel plan</button>`:""}${!needCard?"":NATIVE()?`<p class="small muted">Your plan is managed on the JitsFlow website.</p>`:`<button class="btn${trial||bt?"":" primary"}" data-a="billcard">Add a card</button><p class="small muted payterms">Once you add a card, Payfast charges the plan price monthly${trial?" from the day after your free months end":""}, until you cancel here. Cancel any time; no part-month refunds. By tapping Add a card, you agree to the ${legalA("/terms/","Terms")} and ${legalA("/refunds/","Refund policy")}. Payments are processed securely by Payfast.</p>`}${b.cardOpen===false&&b.status!=="active"&&b.priceCents>0?`<p class="small muted">Paying for your plan opens soon. We'll email you before anything is due, and nothing is charged until you add a card.</p>`:""}</div>`}
 // Home, head coach only: the calm reminder once the free months are over and there's no card (never shown to members).
 function dueBanner(){if(!isHead()||API.preview)return "";const b=COACH.bill;if(b===undefined){planPanel();return ""}
-  if(!b||!b.due)return "";return `<div class="insight dueline"><div class="row between" style="flex-wrap:nowrap;gap:10px"><span>Your free months ended. Keep JitsFlow for ${money(b.priceCents,"ZAR")}/month.</span><button class="btn sm" data-a="coachgo" data-v="gym">See plan</button></div></div>`}
+  if(!b||!b.due)return "";return `<div class="insight dueline"><div class="row between" style="flex-wrap:nowrap;gap:10px"><span>Your free months ended. Keep JitsFlow for ${money(b.priceCents,"ZAR")}/month.</span><button class="btn sm" data-a="setupgo" data-v="plan">See plan</button></div></div>`}
 async function billCard(){toast("Opening PayFast…");try{const c=await api("POST","/coach/billing/checkout",{});jfTrack("bill_card",{});payfastGo(c)}catch(e){toast(e.message)}}
 
 /* The whole address book in the App Store app: search and tick several people. */
@@ -2444,7 +2522,7 @@ function dashSystem(y){if(!y)return "";const w=[];
   // An open chargeback stays here (no Done) until Paystack resolves it; a resolved one can be marked done.
   for(const d of (x&&x.disputes)||[])w.push(d.status==="resolved"?`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""} resolved:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)}), ${esc(d.resolution||"no resolution given")}.${psSeen("dispute",d.id)}`
     :`<b>Chargeback${d.gym?` at ${esc(d.gym)}`:""}:</b> ${money(d.cents||0,"ZAR")} (Paystack ${esc(d.reference)})${d.dueAt?`, answer by ${esc(outDay(d.dueAt))}`:""}. Answer it in Paystack › Disputes with the gym's evidence (the head coach has been asked). <span class="muted">Stays here until Paystack resolves it.</span>`);
-  for(const m of (x&&x.moveFailed)||[])w.push(`<b>${esc(m.gym)} can't take cards:</b> its payout account couldn't be moved to Paystack's live mode (${esc(m.error||"no reason given")}). JitsFlow tries again every hour; if it keeps failing, ask the head coach to save their bank details again under Money › Setup.`);
+  for(const m of (x&&x.moveFailed)||[])w.push(`<b>${esc(m.gym)} can't take cards:</b> its payout account couldn't be moved to Paystack's live mode (${esc(m.error||"no reason given")}). JitsFlow tries again every hour; if it keeps failing, ask the head coach to save their bank details again under Gym › Getting paid.`);
   for(const r of (x&&x.refundsFailed)||[])w.push(`<b>A refund failed${r.gym?` at ${esc(r.gym)}`:""}:</b> ${money(r.cents,"ZAR")} (Paystack ${esc(r.reference)}): ${esc(r.error||"no reason given")}. The head coach has been told.${psSeen("refund",r.id)}`);
   for(const g of y.planSync||[])w.push(`<b>${esc(g.name)}'s plan amount isn't updated at PayFast yet</b> (still trying): ${esc(g.error)}.`);
   if(pfo.trying)w.push(`${nf(pfo.trying)} PayFast cancel${pfo.trying===1?" is":"s are"} still being tried (every 15 minutes at first).`);
@@ -2527,7 +2605,7 @@ async function betaAfterClaim(){const w=S.ui.wantBeta;S.ui.wantBeta=null;if(!w||
 async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…"}
   const tick=document.getElementById("a-beta");S.ui.wantBeta=tick&&tick.checked?{note:""}:null;
   try{const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();const j=await api("POST","/me/claim-gym",{token:S.ui.claimGym,timezone:tz});
-    pvExit();S.ui.claimGym=null;S.ui.claimInfo=null;API.me=j.me;setCoachMode("manage");hideSheet();coachGo("home");jfTrack("claim_gym",{});await betaAfterClaim();setTimeout(welcomeSheet,250)}
+    pvExit();S.ui.claimGym=null;S.ui.claimInfo=null;API.me=j.me;hideSheet();coachGo("home");jfTrack("claim_gym",{});await betaAfterClaim();setTimeout(welcomeSheet,250)}
   catch(e){toast(e.message);if(el){el.disabled=false;el.textContent="Claim gym"}}}
 
 /* ============ THE PREVIEW OF A GYM OUTREACH BUILT (the email's link: /app/?gym=<token>) ============ */
@@ -2536,7 +2614,7 @@ async function claimGo(el){if(el){el.disabled=true;el.textContent="One moment…
    and here every change (a form, a copy or share, a payment) opens the claim instead. The bar at the top claims it in one step.
    Nothing about the preview is kept on the phone: no account data is synced, and the visitor's own progress stays as it was. */
 const PV_FREE=/^\/(auth\/|me\/claim-gym$|prospects\/)/; // calls that are about the visitor, not the preview
-const PV_BLOCK=new Set(["copy","rotate","signout","signoutall","billcancel","delacct","gymdel","billcard","coachmode","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
+const PV_BLOCK=new Set(["copy","rotate","signout","signoutall","billcancel","delacct","gymdel","billcard","mytrain","solocoach","plansfromrates","attendall","outopen","dashopen","pfremove","pftest","contacts","pickcontacts"]);
 async function previewInit(tok){
   let g;try{g=(await api("GET","/prospects/"+encodeURIComponent(tok))).gym}catch(e){toast(e.message);return}
   if(g.claimed){toast(`${g.name} has been claimed already. If it's yours, sign in.`);if(!API.me){S.ui.authMode="login";authSheet()}return}
@@ -2584,7 +2662,7 @@ document.addEventListener("submit",e=>{if(!API.preview||e.target.id==="authform"
    What support can't do (bank details, payouts, refunds, the owner's login, the gym's ownership and plan) is refused by the server;
    here those buttons are switched off with the reason, before anyone taps them. */
 const SUP_NO="Support can't change this. Ask the owner.";
-const SUP_A=new Set(["billcard","billcancel","pfremove","pftest","psedit","refundask","refundyes","refunddismiss","headask","gymdel","signout","signoutall","delacct","leavegym","verifysend","betaopen","betaleave","betafb","popnewaddr","famswitch","kidclaim","astok","astsay","coachmode","supend"]);
+const SUP_A=new Set(["billcard","billcancel","pfremove","pftest","psedit","refundask","refundyes","refunddismiss","headask","gymdel","signout","signoutall","delacct","leavegym","verifysend","betaopen","betaleave","betafb","popnewaddr","famswitch","kidclaim","astok","astsay","mytrain","supend"]);
 const SUP_F=new Set(["bankform","pfform","psform","delform","gymdelform","phoneform","joinform","kidform","kidsform","betaform","fbform","astform"]);
 const supLeft=()=>{const s=API.support;if(!s)return 0;return Math.max(0,new Date(s.endsAt)-Date.now())};
 const supLeftTxt=()=>{const m=Math.ceil(supLeft()/60000);if(m<=0)return "time's up";const h=Math.floor(m/60),r=m%60;return (h?`${h} h ${r?r+" min":""}`:`${r} min`).trim()+" left"};
@@ -2622,7 +2700,7 @@ async function supGo(id,el){if(el){el.disabled=true;el.textContent="One moment�
 // The head coach's Gym tab: who from JitsFlow support opened the gym, when, and what they changed.
 const SUPP={data:undefined};
 function supportPanel(){if(!isHead())return "";
-  if(SUPP.data===undefined){SUPP.data=null;api("GET","/coach/support").then(j=>{SUPP.data=j;if(S.ui.tab==="coach"&&!S.ui.sheet)render()}).catch(()=>{SUPP.data=undefined})}
+  if(SUPP.data===undefined){SUPP.data=null;api("GET","/coach/support").then(j=>{SUPP.data=j;coachRedraw()}).catch(()=>{SUPP.data=undefined})}
   const ss=(SUPP.data&&SUPP.data.sessions)||[];
   const when=d=>{try{return new Date(d).toLocaleString(undefined,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}catch(e){return d}};
   const tm=d=>{try{return new Date(d).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}catch(e){return ""}};
@@ -2722,7 +2800,7 @@ function moreAct(a,v,el){switch(a){
   case "astno": astConfirm(v,false);break;
   case "signoutall": (async()=>{try{const j=await api("POST","/me/sessions/end",{});toast(j.ended?`Signed out on ${j.ended} other device${j.ended===1?"":"s"}. You're still signed in here.`:"You weren't signed in anywhere else.")}catch(e){toast(e.message)}})();break;
   case "billcancel": confirmSheet("Cancel your JitsFlow plan?","PayFast won't charge your card again. JitsFlow keeps working, and you can add a card again any time.",["billcancelyes",""],"Cancel plan");break;
-  case "billcancelyes": (async()=>{try{await api("DELETE","/coach/billing");hideSheet();COACH.bill=undefined;render();toast("Your plan is cancelled. Your card won't be charged again.")}catch(e){toast(e.message)}})();break;
+  case "billcancelyes": (async()=>{try{await api("DELETE","/coach/billing");hideSheet();COACH.bill=undefined;render();if(S.ui.tab==="coach"&&isHead())gymSec("plan");toast("Your plan is cancelled. Your card won't be charged again.")}catch(e){toast(e.message)}})();break;
 }}
 const MORE_FORMS=["betaform","fbform","betaadm","reassignform"];
 async function moreForm(fid,f,submitter){

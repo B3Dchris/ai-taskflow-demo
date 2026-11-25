@@ -180,7 +180,7 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'service worker controls the page');
     await p.evaluate(()=>{P().mastery.knee_cut=3;saveProgress()});
     await ctx.setOffline(true);await p.reload();await p.waitForTimeout(800);
-    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button:not([hidden])').length===4&&lv('knee_cut')===3),'works offline and keeps your data');
+    ok(await p.evaluate(()=>document.querySelectorAll('nav.tabs button:not([hidden])').length===3&&lv('knee_cut')===3),'works offline and keeps your data');
     await ctx.setOffline(false);
     await p.evaluate(()=>techSheet('knee_cut'));ok(await p.evaluate(()=>/youtube\.com\/results/.test(document.querySelector('#sheet a.yt:not(.ytpick)').href)&&!document.getElementById('explain-box')&&!document.querySelector('label[for^="vid-"]')),'website: YouTube button present, claude.ai-only features hidden');
     ok(await p.evaluate(()=>document.documentElement.scrollWidth<=390),'no sideways scroll');
@@ -224,8 +224,8 @@ let pass=0,fail=0;const fails=[];const ok=(c,m)=>{if(c)pass++;else{fail++;fails.
     ok(bannerAboveTabs,'consent card sits above the tab bar');
     await gp.locator('.jf-consent .yes').tap();await gp.waitForTimeout(600);
     ok(reqs.some(u=>/googletagmanager\.com\/gtag\/js\?id=G-TEST12345/.test(u))&&await gp.evaluate(()=>dataLayer.some(a=>a[0]==='consent'&&a[1]==='update')),'after Allow, Google Analytics loads with consent granted');
-    await gp.evaluate(()=>{go('learn')});await gp.waitForTimeout(200);
-    ok(await gp.evaluate(()=>dataLayer.some(a=>a[0]==='event'&&a[1]==='page_view'&&/\/app\/learn$/.test(a[2].page_location))),'app tab changes are counted as page views');
+    await gp.evaluate(()=>{go('train')});await gp.waitForTimeout(200);
+    ok(await gp.evaluate(()=>dataLayer.some(a=>a[0]==='event'&&a[1]==='page_view'&&/\/app\/train$/.test(a[2].page_location))),'app tab changes are counted as page views');
     await gp.reload();await gp.waitForTimeout(1500);ok(await gp.evaluate(()=>!document.querySelector('.jf-consent')),'the choice is remembered');
     await gp.goto(G+'app/?join=ABCD2345&claim=SECRETTOK1&paid=card');await gp.waitForTimeout(800);
     ok(await gp.evaluate(()=>{const c=dataLayer.find(a=>a[0]==='config');return !!c&&/\/app\//.test(c[2].page_location)&&!/SECRETTOK1|ABCD2345|paid=/.test(c[2].page_location)}),'invite codes, claim tokens and payment results are left out of the address sent to Google');

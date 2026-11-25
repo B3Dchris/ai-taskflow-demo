@@ -326,7 +326,7 @@ function client(base) {
         await ctx.addCookies([{ name: "jf_s", value: I.cookie().replace(/^jf_s=/, ""), url: `http://127.0.0.1:${port}` }]);
         const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message)); const ev = (f, a) => p.evaluate(f, a), toast = () => ev(() => document.getElementById("toast").textContent);
         await p.goto(`http://127.0.0.1:${port}/app/`); await p.waitForTimeout(1200);
-        await ev(() => coachGo("gym")); await p.waitForTimeout(800);
+        await ev(() => coachGo("gym")); await p.waitForTimeout(800); await p.tap('[data-a="gymsec"][data-v="plan"]'); await p.waitForTimeout(800); // Gym › Your JitsFlow plan
         ok(await ev(() => { const x = document.querySelector(".planpanel"); return !!x && !!x.querySelector('[data-a="billcancel"]'); }), "Gym › Your JitsFlow plan has Cancel plan when a card is on it");
         await p.tap('.planpanel [data-a="billcancel"]'); await p.waitForTimeout(300);
         ok(await ev(() => S.ui.sheet && S.ui.sheet.k === "confirm" && /won't charge your card again/.test(document.getElementById("sheet").innerText)), "it asks first, saying what happens");
@@ -339,7 +339,7 @@ function client(base) {
           const d = document.createElement("div"); d.innerHTML = h; return /Change your bank details/.test(d.innerText) && /Account number: 1 → 2/.test(d.innerText) && !!d.querySelector('[data-a="astok"][data-v="x1"]') && !!d.querySelector('[data-a="astno"]'); }), "the assistant's proposal is a card with the exact change, Confirm and Cancel");
         // sign out everywhere else
         const other = client(base); await other("POST", "/auth/login", { email: I.email, password: "coachpass1" });
-        await ev(() => go("me")); await p.waitForTimeout(600);
+        await ev(() => { hideSheet(); go("me"); }); await p.waitForTimeout(600); await p.tap('[data-a="gymsec"][data-v="account"]'); await p.waitForTimeout(400); // a head coach's Me is Gym › Account and appearance
         await p.tap('[data-a="signoutall"]'); await p.waitForTimeout(700);
         ok(/Signed out on 1 other device\./.test(await toast()) && !(await other("GET", "/me")).j.me && await ev(async () => !!(await api("GET", "/me")).me), "Me › Sign out on all your other devices: the other one ends, this one stays: " + (await toast()));
         // the team's dashboard: a PayFast cancel to do by hand, with Done

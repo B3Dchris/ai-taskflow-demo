@@ -55,8 +55,8 @@ function client(base) {
     // ---------- the head coach: Money › Setup › Get paid by card ----------
     const co = await phone(coach);
     await co.goto(URL + "/app/#coach-money"); await co.waitForTimeout(900);
-    await ev(co, () => { COACH.moneyView = "setup"; render(); }); await co.waitForTimeout(900);
-    ok(await ev(co, () => !!document.getElementById("pspanel") && !document.getElementById("pfform") && /Get paid by card/.test(document.getElementById("pspanel").innerText)), "Money › Setup shows Get paid by card (and not PayFast)");
+    await co.tap("#m-gotpaid"); await co.waitForTimeout(900); // Money › Getting paid opens Gym › Getting paid
+    ok(await ev(co, () => !!document.getElementById("pspanel") && !document.getElementById("pfform") && /Get paid by card/.test(document.getElementById("pspanel").innerText)), "Gym › Getting paid shows Get paid by card (and not PayFast)");
     if (!(await ev(co, () => document.getElementById("pspanel").open))) { await co.tap("#pspanel summary"); await co.waitForTimeout(300); }
     await co.waitForFunction(() => document.querySelectorAll('#psform [name="bankCode"] option').length > 2, null, { timeout: 5000 }).catch(() => {});
     ok(await ev(co, () => { const t = document.getElementById("pspanel").innerText; return /Paystack pays your share straight into your bank account/.test(t) && /2 working days/.test(t) && /2% platform fee/.test(t) && /paystack\.com\/za\/pricing/.test(t) && /taken from your share/.test(t) && !/R\s?\d+[.,]\d\d%/.test(t); }),
@@ -73,6 +73,8 @@ function client(base) {
       "saved: “Waiting for JitsFlow to verify your bank account (usually within a day)”");
     ok(await ev(co, () => /•••• 7890/.test(document.getElementById("pspanel").innerText) && !document.body.innerText.includes("1234567890") && !document.body.innerText.includes("123456/07")), "only the last 4 digits show");
     await shot(co, "coach-onboarding-pending.png", "#pspanel");
+    await co.tap('#sheetbar [data-a="back"]'); await co.waitForTimeout(400);
+    ok(await ev(co, () => { const r = document.querySelector('#gymcheck .ckrow[data-v="pay"]'); return COACH.view === "gym" && !!r && r.classList.contains("warn") && /Cards waiting for JitsFlow/.test(r.innerText) && r.querySelector(".ckmark.warn").textContent === "!"; }), "the Gym checklist marks Getting paid with an amber dot: cards waiting for JitsFlow");
 
     // ---------- the member, before it's verified: EFT only ----------
     const am = await phone(amy);
@@ -135,7 +137,7 @@ function client(base) {
 
     // ---------- the head coach refunds part of Amy's payment ----------
     await co.reload(); await co.waitForTimeout(1200);
-    await ev(co, () => { COACH.moneyView = "payments"; return coachLoad("payments").then(render); }); await co.waitForTimeout(700);
+    await ev(co, () => { COACH.moneyView = "payments"; coachGo("money"); return coachLoad("payments").then(render); }); await co.waitForTimeout(700); // the page reloaded on Gym (Getting paid lives there)
     ok(await ev(co, () => /JitsFlow fee R\s?17\b/.test(document.getElementById("app").innerText) && !!document.querySelector('[data-a="refundask"]')), "Money › Payments shows the card payment's fees, with Refund");
     await co.tap('[data-a="refundask"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => /Paystack reverses the payment's split/.test(document.getElementById("sheet").innerText)), "the refund sheet says Paystack reverses the split by its rules");
