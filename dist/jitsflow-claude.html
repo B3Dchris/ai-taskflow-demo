@@ -4529,7 +4529,7 @@ function trainExtras(){
 
 /* ============ THE MAP ============
    The first screen for members, parents and self-study: one line of what's next at the gym (the next class, and fees only
-   when something's owed), "Where are you stuck?", the map of positions, and right below it the selected position with its
+   when something's owed), the map of positions, "Where are you stuck?" under it, then the selected position with its
    moves. "Leads to" walks the chain on the map. Coaches open it as My training. */
 const STUCK=[["standing","Standing"],["mount_bot","I keep getting mounted"],["sc_bot","Stuck under side control"],["back_bot","My back is taken"],["hg_bot","Stuck in half guard (bottom)"],["cg_bot","Someone's in my guard"],["sc_top","I've got side control"],["back_top","I'm on their back"]];
 const mapSet=p=>{S.ui.flowSel=p;S.ui.mapInit=true;lsSet("jf.mapPos",p)};
@@ -4856,9 +4856,9 @@ function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),ins=intoPos(sel,mx),outs=fromPos(sel,mx),fb=S.ui.flowBelt||goal();
   const ds=new Set(flowGroups(sel,mx).map(g=>g.dir)),prog=typeof progMapSet==="function"?progMapSet():new Set();
   const hint=S.ui.mapHint?`<div class="maphint" role="note"><span>Tap any position to see your moves from there</span><button class="mhx" data-a="maphintx" aria-label="Got it, hide this tip">×</button></div>`:"";
-  const hero=`${stuckPick(sel)}<section class="hero dk mapcard" id="mapcard" aria-label="Map of positions">${hint}<div class="mapnav"><div class="jf-classic-map">${flowSVG(sel,prog)}</div>
+  const hero=`<section class="hero dk mapcard" id="mapcard" aria-label="Map of positions">${hint}<div class="mapnav"><div class="jf-classic-map">${flowSVG(sel,prog)}</div>
     <div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span>${prog.size?`<span class="kprog"><i class="k-prog"></i>in this month's programme</span>`:""}</div>
-    <div class="beltfilter"><span>Moves up to</span><div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${fb===b.k}" aria-label="Up to ${b.to}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></div></div></section>`;
+    <div class="beltfilter"><span>Moves up to</span><div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${fb===b.k}" aria-label="Up to ${b.to}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></div></div></section>${stuckPick(sel)}`;
   const og=S.ui.openG||{},fold=(g,title,sub,body)=>`<details class="more fold" id="${g}" data-g="${g}"${og[g]?" open":""}><summary><span>${title}${sub?`<small>${sub}</small>`:""}</span></summary><div class="foldbody">${body}</div></details>`;
   return {hero,body:`
   ${chainStage(sel,mx)}
