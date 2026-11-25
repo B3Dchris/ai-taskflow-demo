@@ -60,7 +60,26 @@ function client(base) {
       const loser = ra.s === 201 ? B : A, me = await loser("GET", "/me");
       ok(me.s === 401 || !me.j.me || String(me.j.me.id) !== String(sid), `round ${round}: the one who lost isn't signed in to that account`);
     }
-    //@@MORE@@
+
+    // ---------- 3. New passwords fit bcrypt's 72 bytes (nothing after that is silently ignored) ----------
+    const emoji19 = "\u{1F94B}".repeat(19); // 76 bytes, 19 characters
+    r = await client(base)("POST", "/auth/register", { code, name: "Long Pass", email: "long@audit.test", password: emoji19 });
+    ok(r.s === 400 && /too long/.test(r.j.error), "sign-up: a password over 72 bytes is refused, not cut short: " + r.s);
+    r = await client(base)("POST", "/auth/register", { code, name: "Long Pass", email: "long2@audit.test", password: "A".repeat(73) });
+    ok(r.s === 400, "sign-up: 73 plain letters are refused too");
+    r = await client(base)("POST", "/auth/register", { code, name: "Max Pass", email: "max@audit.test", password: "A".repeat(72) });
+    ok(r.s === 201, "sign-up: exactly 72 bytes is fine: " + r.s);
+    const z = client(base); r = await z("POST", "/auth/login", { email: "max@audit.test", password: "A".repeat(72) }); ok(r.s === 200, "and signs in with it");
+    const st3 = (await coach("POST", "/coach/students", { name: "Invitee Long", phone: "0825551299" })).j, sid3 = st3.student ? st3.student.id : st3.id;
+    const claim3 = new URL((await coach("POST", `/coach/students/${sid3}/claim-link`)).j.url).searchParams.get("claim");
+    r = await client(base)("POST", "/auth/register", { code, claim: claim3, name: "Invitee Long", email: "inv@audit.test", password: emoji19 });
+    ok(r.s === 400 && /too long/.test(r.j.error), "invite sign-up: refused too: " + r.s);
+    const tok = require("crypto").randomBytes(32).toString("hex"), uid = (await pool.query("select id from users where email='max@audit.test'")).rows[0].id;
+    await pool.query("insert into password_resets(token_hash,user_id,expires_at) values($1,$2,now()+interval '1 hour')", [require("crypto").createHash("sha256").update(tok).digest("hex"), uid]);
+    r = await client(base)("POST", "/auth/reset", { token: tok, password: emoji19 });
+    ok(r.s === 400 && /too long/.test(r.j.error), "password reset: refused too: " + r.s);
+    r = await client(base)("POST", "/auth/reset", { token: tok, password: "newpass1234" });
+    ok(r.s === 200, "and the link still works for a normal password: " + r.s);
   } catch (e) { fail++; fails.push("crashed: " + (e.stack || e.message)); }
   finally { srv.kill(); await pool.end(); }
   console.log(`sec-audit: ${pass} passed, ${fail} failed`);

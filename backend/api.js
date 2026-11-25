@@ -468,13 +468,17 @@ function makeApi(pool, { secureCookies, build }) {
     await q("insert into email_verifications(token_hash,user_id,email,expires_at) values($1,$2,$3,now()+interval '24 hours')", [sha(tok), x.id, x.email]);
     return mail.appUrl() + "/app/?verify=" + tok;
   }
+  // bcrypt only uses a password's first 72 bytes: anything after that would be ignored without a word (18 emoji and "secret" would
+  // be the same password as the 18 emoji). New passwords are kept within 72 bytes; passwords already saved keep working.
+  const pwTooLong = (pw) => Buffer.byteLength(pw, "utf8") > 72;
+  const PW_TOO_LONG = "That password is too long. Keep it to 72 letters and numbers (emoji and accented letters count as more).";
   // source: where they came from before signing up (signup_source; see visits.signupSource).
   async function newUser({ name, email, password, role, gymId, phone, source }) {
     name = clean(name, 80); email = clean(email, 254).toLowerCase(); password = String(password || "");
     if (!name) fail(400, "Enter your name.");
     if (!isEmail(email)) fail(400, "Enter a valid email address.");
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-    if (password.length > 200) fail(400, "That password is too long.");
+    if (pwTooLong(password)) fail(400, PW_TOO_LONG);
     const hash = await bcrypt.hash(password, 11);
     // A coach (any coach, in any gym) may have added this email to someone who isn't on the app. That never stops the owner of the
     // email signing up: the email comes off that record (which keeps its name, payments and history), the new account is theirs, and
@@ -582,7 +586,7 @@ function makeApi(pool, { secureCookies, build }) {
       if (!clean(b.name, 80)) fail(400, "Enter your name.");
       if (!isEmail(email)) fail(400, "Enter a valid email address.");
       if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-      if (password.length > 200) fail(400, "That password is too long.");
+      if (pwTooLong(password)) fail(400, PW_TOO_LONG);
       // (someone else a coach added with this email, not on the app, doesn't count: the email comes off their record, see newUser)
       const taken = (await q("select id from users where email=$1 and id<>$2 and pass_hash is not null", [email, preId])).rows[0];
       // A parent with a login already, opening another kid's link: signing in adds the kid (the app offers it straight after).
@@ -670,7 +674,7 @@ function makeApi(pool, { secureCookies, build }) {
     const tok = clean(req.body?.token, 100), password = String(req.body?.password || "");
     if (!/^[0-9a-f]{64}$/.test(tok)) fail(400, "That reset link isn't right. Ask for a new one.");
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-    if (password.length > 200) fail(400, "That password is too long.");
+    if (pwTooLong(password)) fail(400, PW_TOO_LONG);
     const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
     if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
     const uid = r.rows[0].user_id;
