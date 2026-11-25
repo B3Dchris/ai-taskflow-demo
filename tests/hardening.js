@@ -178,7 +178,7 @@ const healthMs = async (root) => { const t = Date.now(); await new Promise((ok) 
     // 7. Headers and the security policy
     r = await fetch(A.root + "/"); let html = await r.text(), csp = r.headers.get("content-security-policy") || "";
     const scriptSrc = csp.split(";").find((d) => /script-src/.test(d)) || "";
-    const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/src=|ld\+json/.test(m[1])).map((m) => `'sha256-${crypto.createHash("sha256").update(m[2]).digest("base64")}'`);
+    const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/src=|ld\+json|application\/json/.test(m[1])).map((m) => `'sha256-${crypto.createHash("sha256").update(m[2]).digest("base64")}'`);
     ok(!/unsafe-inline/.test(scriptSrc) && inline.length >= 1 && inline.every((h) => scriptSrc.includes(h)), "script-src has no 'unsafe-inline': the page's own inline scripts are allowed by hash: " + scriptSrc.slice(0, 160));
     ok(/style-src 'self' 'unsafe-inline'/.test(csp) && /object-src 'none'/.test(csp), "inline styles stay allowed; plugins aren't");
     ok(r.headers.get("cross-origin-opener-policy") === "same-origin" && r.headers.get("x-frame-options") === "SAMEORIGIN" && !r.headers.get("strict-transport-security"), "COOP and X-Frame-Options on pages; no HSTS outside production");
