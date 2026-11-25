@@ -38,11 +38,14 @@ const money = (s) => { const m = String(s || "").replace(/[\s,](?=\d{3}\b)/g, ""
 const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") && !isNaN(new Date(d + "T00:00:00Z")) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
 
 // Without Claude: the common bank-notification wording ("R650.00 paid ... Ref: JF7KQ3M").
+// Read line by line, each line cut to 300 characters, and no pattern crosses a line: a long or hostile email (it arrives at a public
+// address) can't make a pattern backtrack over the whole text. (Before: "ref" then thousands of newlines froze the server for seconds.)
+const firstLine = (lines, re) => { for (const l of lines) { const m = l.match(re); if (m) return m; } return null; };
 function plainRead(text) {
-  const t = String(text || "");
-  const amt = t.match(/\b(?:R|ZAR)\s?(\d{1,3}(?:[ ,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)/i);
-  const ref = t.match(/\b(?:beneficiary\s+|recipient\s+|their\s+|payment\s+)?ref(?:erence)?\s*(?:no\.?|number)?\s*[:#-]?\s*([^\n\r]{2,40})/i);
-  const d = t.match(/\b(20\d\d)[-/](\d\d)[-/](\d\d)\b/) || null;
+  const t = String(text || "").slice(0, 20000), lines = t.split(/\r?\n|\r/).map((l) => l.slice(0, 300));
+  const amt = firstLine(lines, /\b(?:R|ZAR)[ \t]?(\d{1,3}(?:[ ,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)/i);
+  const ref = firstLine(lines, /\b(?:beneficiary[ \t]+|recipient[ \t]+|their[ \t]+|payment[ \t]+)?ref(?:erence)?[ \t]*(?:no\.?|number)?[ \t]*[:#-]?[ \t]*(\S[^\n\r]{1,39})/i);
+  const d = firstLine(lines, /\b(20\d\d)[-/](\d\d)[-/](\d\d)\b/);
   const date = d && isDay(`${d[1]}-${d[2]}-${d[3]}`) ? `${d[1]}-${d[2]}-${d[3]}` : "";
   return { isPayment: !!amt, amountCents: amt ? money(amt[1]) : 0, currency: amt ? "ZAR" : "", date, reference: ref ? ref[1].trim() : (refsIn(t)[0] || ""), payer: "", bank: "", method: "plain" };
 }
