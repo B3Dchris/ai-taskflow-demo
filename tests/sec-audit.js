@@ -34,7 +34,35 @@ function client(base) {
     ok(r2.amountCents === 125000 && r2.reference === "ABC 123", "and a beneficiary reference with a thousands separator: " + JSON.stringify(r2));
   }
 
-  //@@SERVER@@
+  // ---------- with the server ----------
+  const pool = new Pool({ connectionString: DB });
+  await pool.query("drop schema public cascade; create schema public;");
+  const port = 9500 + Math.floor(Math.random() * 90), BASE = `http://127.0.0.1:${port}`, base = BASE + "/api";
+  const env = { ...process.env, DATABASE_URL: DB, PORT: String(port), APP_URL: "https://www.jitsflow.test", MAIL_GAP_MS: "0" };
+  delete env.ANTHROPIC_API_KEY; delete env.RESEND_API_KEY; delete env.PAYSTACK_SECRET_KEY;
+  const srv = spawn("node", [path.resolve(__dirname, "../server.js")], { env, stdio: ["ignore", "ignore", "inherit"] });
+  for (let i = 0; i < 80; i++) { try { await fetch(BASE + "/healthz"); break; } catch (e) { await wait(150); } }
+  try {
+    const coach = client(base);
+    let r = await coach("POST", "/auth/start-gym", { gym: "Audit BJJ", name: "Coach A", email: "coach@audit.test", password: "coachpass123", timezone: "Africa/Johannesburg" });
+    const code = r.j.me.gym.studentCode;
+
+    // ---------- 2. An invite (claim) link works once, even when two people send it at the same moment ----------
+    for (let round = 0; round < 3; round++) {
+      const st = (await coach("POST", "/coach/students", { name: "Invitee " + round, phone: "08255512" + (30 + round) })).j, sid = st.student ? st.student.id : st.id;
+      const link = (await coach("POST", `/coach/students/${sid}/claim-link`)).j.url, claim = new URL(link).searchParams.get("claim");
+      const A = client(base), B = client(base);
+      const [ra, rb] = await Promise.all([A("POST", "/auth/register", { code, claim, name: "Alice", email: `alice${round}@audit.test`, password: "alicepass123" }),
+        B("POST", "/auth/register", { code, claim, name: "Mallory", email: `mallory${round}@audit.test`, password: "mallorypass1" })]);
+      const codes = [ra.s, rb.s].sort().join(","), row = (await pool.query("select email from users where id=$1", [sid])).rows[0];
+      const winner = ra.s === 201 ? `alice${round}@audit.test` : `mallory${round}@audit.test`;
+      ok(codes === "201,409" && row.email === winner, `round ${round}: one invite link, two sign-ups at once: exactly one gets the account (${codes}, record is ${row.email})`);
+      const loser = ra.s === 201 ? B : A, me = await loser("GET", "/me");
+      ok(me.s === 401 || !me.j.me || String(me.j.me.id) !== String(sid), `round ${round}: the one who lost isn't signed in to that account`);
+    }
+    //@@MORE@@
+  } catch (e) { fail++; fails.push("crashed: " + (e.stack || e.message)); }
+  finally { srv.kill(); await pool.end(); }
   console.log(`sec-audit: ${pass} passed, ${fail} failed`);
   for (const f of fails) console.log("  FAIL", f);
   process.exit(fail ? 1 : 0);

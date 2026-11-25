@@ -614,9 +614,13 @@ function makeApi(pool, { secureCookies, build }) {
       const other = (await q("update users o set email=null from (select id, gym_id, name, parent_name from users where email=$1 and id<>$2 and pass_hash is null for update) x where o.id=x.id returning x.*", [email, pre.id])).rows[0];
       if (other && other.gym_id && !kids.some((k) => String(k.id) === String(other.id))) detached = other; // (a kid they're linking now: nothing to tell)
       // A kid's record (it has a parent's name): the parent signs up for them. The kid keeps their name; the parent's goes in as the parent.
-      await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
-        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now()) where id=$4`,
-        [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code")]);
+      const r0 = await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
+        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now())
+        where id=$4 and pass_hash is null and claim_token=$7`,
+        [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code"), claim]);
+      // Only the first sign-up with an invite link gets the record: the link stops working the moment it's used, so two people sending
+      // it at once can't both end up in one account (the second is told).
+      if (!r0.rowCount) fail(409, "That invite link has just been used. Sign in, or ask your coach for a new link.");
       id = pre.id;
       if (kids.length) await linkKids(id, kids.map((x) => x.id), clean(b.name, 80));
     } else { const nu = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) }); id = nu.id; detached = nu.off; }
