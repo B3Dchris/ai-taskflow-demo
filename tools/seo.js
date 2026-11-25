@@ -303,8 +303,8 @@ ${shareRow("glossary", `BJJ terms explained in plain English: ${SITE}/glossary/`
   // The home and coaches pages' footer lines (build.py fills @@LEGAL_FOOT@@ with it).
   fs.writeFileSync(path.join(ROOT, "dist", "legal-foot.html"), legal.landingFooter());
   fs.writeFileSync(path.join(ROOT, "dist", "site-index.json"), JSON.stringify({
-    tech: D.tech.map((t) => ({ id: t.id, n: t.n, slug: tS[t.id], belt: t.belt, cat: D.cats[t.c] || t.c, f: t.f })),
-    pos: Object.fromEntries(posKeys.map((k) => [k, { l: D.pos[k].l, L: D.pos[k].L, r: D.pos[k].r, slug: pS[k] }])) }, null, 1));
+    tech: D.tech.map((t) => ({ id: t.id, n: t.n, slug: tS[t.id], belt: t.belt, cat: D.cats[t.c] || t.c, f: t.f, t: t.t, p: t.p })),
+    pos: Object.fromEntries(posKeys.map((k) => [k, { l: D.pos[k].l, L: D.pos[k].L, r: D.pos[k].r, g: D.pos[k].g, slug: pS[k] }])) }, null, 1));
   return { pages: all.length, cards };
 }
 

@@ -36,7 +36,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ---- A kid's invite link, signed out: the form says who it's for and asks for the parent's name.
     const peek = await phone("peek"); await peek.goto(URL + "/app/" + ids.claim); await peek.waitForTimeout(1200);
-    ok(await ev(peek, () => /Signing up for\s+Kabelo Dlamini/.test(document.getElementById("a-joining").innerText) && /Your name \(parent\)/.test(document.querySelector("label.f").innerText)), "a kid's link says 'Signing up for Kabelo' and asks for 'Your name (parent)'");
+    ok(await ev(peek, () => /Signing up for\s+Kabelo Dlamini/.test(document.getElementById("a-joining").innerText) && /Your name \(parent\)/.test(document.querySelector("#sheet label.f").innerText)), "a kid's link says 'Signing up for Kabelo' and asks for 'Your name (parent)'");
     await peek.context().close();
 
     // ---- Mom signs up with Lerato's invite link: asked once about Sipho, whom the coach added with the same number.

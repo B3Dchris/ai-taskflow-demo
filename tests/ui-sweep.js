@@ -48,11 +48,11 @@ const XSS = `<img src=x onerror="window.__x=1">`;
     await pool.query("insert into training_logs(user_id,id,date,data) select $1, 'l'||g, current_date-g, jsonb_build_object('date', (current_date-g)::text, 'type','Class','mins',90,'rolls',5,'worked',$2::text) from generate_series(1,40) g", [studs[0].id, "Worked " + XSS]);
 
     const SCREENS = {
-      anon: ["home", "train", "train-map", "train-belt", "train-log", "me"],
-      student: ["home", "train", "train-map", "train-belt", "train-log", "classes", "classes:private", "classes:comps", "me"],
+      anon: ["map", "train", "train-belt", "train-log", "me"],
+      student: ["map", "train", "train-belt", "train-log", "classes", "classes:private", "classes:comps", "me"],
       coach: ["coach-home", "coach-schedule", "coach-schedule:month", "coach-members", "coach-members:insights", "coach-comps", "coach-money", "coach-money:payments", "coach-gym",
         "coach-gym:profile", "coach-gym:plans", "coach-gym:pay", "coach-gym:coaches", "coach-gym:look", "coach-gym:plan", "coach-gym:bookings", "coach-gym:wa", "coach-gym:support", "coach-gym:account", "coach-gym:invite"],
-      study: ["train", "train-map", "train-belt", "train-log"], // a coach's own training (My training), under the coach tabs
+      study: ["map", "train", "train-belt", "train-log"], // a coach's own training (My training), under the coach tabs
       coach2: ["coach-home", "coach-schedule", "coach-members", "coach-members:insights", "coach-comps", "coach-me", "coach-me:profile", "coach-me:invite", "train"],
     };
     const roles = { anon: null, student: studs[0].tok, coach: coach.tok, study: coach.tok, coach2: coach2.tok };
@@ -67,9 +67,9 @@ const XSS = `<img src=x onerror="window.__x=1">`;
       const navOk = await p.evaluate((r) => { const vis = [...document.querySelectorAll("nav.tabs button")].filter((x) => !x.hidden).map((x) => x.dataset.v || x.dataset.a);
         if (r === "coach") return vis.join() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym";
         if (r === "coach2") return vis.join() === "coach-home,coach-schedule,coach-members,coach-me";
-        if (r === "student") return vis.join() === "home,classes,train,me";
+        if (r === "student") return vis.join() === "map,classes,train,me";
         if (r === "study") { go("train"); const v = [...document.querySelectorAll("nav.tabs button")].filter((x) => !x.hidden).map((x) => x.dataset.v).join(); return v === "coach-home,coach-schedule,coach-members,coach-money,coach-gym" && !document.querySelector(".managebtn"); }
-        return vis.join() === "home,train,me"; }, role);
+        return vis.join() === "map,train,me"; }, role);
       ok(navOk, `${tag}: the bottom bar shows the right tabs`);
       ok(await p.evaluate(() => { const h = document.querySelector("header.top"), b = h && h.querySelector(".brand"), r = h && h.querySelector(".row"); if (!b || !r) return false; const A = b.getBoundingClientRect(), B = r.getBoundingClientRect();
         return (A.right <= B.left + 1 || A.bottom <= B.top + 1) && [...document.querySelectorAll("nav.tabs button:not([hidden])")].every((x) => x.scrollWidth <= x.clientWidth + 1); }), `${tag}: header and tab labels fit without overlapping`);

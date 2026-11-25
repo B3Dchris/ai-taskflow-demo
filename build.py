@@ -184,6 +184,43 @@ def media_html(idx):
     return gallery, posmap
 
 
+MINI_START = "mount_bot"  # where the home page's map opens: the spot most people want out of first
+
+
+def mini_map(idx):
+    """The home page's first screen: a small, live map of every position (best at the top, worst at the bottom), built from the
+    app's own positions and moves. Tapping one shows its top three moves and where each leads (the data rides along as JSON,
+    which doesn't run, so the page's script policy is unchanged); "Explore the map" opens the app's map on it, no account needed."""
+    esc = lambda t: str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    src = read("src", "app.html")
+    rows = json.loads(re.search(r"const ROWS=(\[\[.*?\]\]);", src).group(1))
+    tiers = json.loads(re.search(r"const TIERS=(\[.*?\]);", src).group(1))
+    pos, tech = idx["pos"], idx["tech"]
+    order = lambda t: ("core key plus".split().index(t.get("p", "plus")) if t.get("p") in ("core", "key", "plus") else 2,
+                       ["blue", "purple", "brown", "black"].index(t["belt"]) if t["belt"] in ("blue", "purple", "brown", "black") else 4)
+    data = {}
+    for k, v in pos.items():
+        ms = sorted([t for t in tech if t["f"] == k], key=order)
+        lead = lambda t: "Tap" if t.get("t") == "sub" else "Same spot" if t.get("t") == k else pos[t["t"]]["l"] if t.get("t") in pos else ""
+        data[k] = {"L": v["L"], "r": v["r"], "g": v.get("g", ""), "n": len(ms), "m": [[t["n"], lead(t)] for t in ms[:3]],
+                   "to": sorted({t["t"] for t in ms if t.get("t") in pos and t["t"] != k})}
+    sel = MINI_START if MINI_START in data else next(iter(data))
+    d = data[sel]
+    btn = lambda k: '<button type="button" class="t%d%s" data-p="%s" aria-pressed="%s" aria-label="%s: %d moves">%s</button>' % (
+        pos[k]["r"], " to" if k in d["to"] else "", k, "true" if k == sel else "false", esc(pos[k]["L"]), data[k]["n"], esc(pos[k]["l"]))
+    grid = "".join('<div class="mmrow" data-n="%d">%s</div>' % (len(r), "".join(btn(k) for k in r if k in pos)) for r in rows)
+    moves = "".join("<li><b>%s</b><span>&rarr; %s</span></li>" % (esc(n), esc(to)) for n, to in d["m"])
+    html = ('<div class="mm" id="mm" role="group" aria-label="Map of positions, best at the top">%s</div>'
+            '<p class="mmkey"><span>Best</span><i aria-hidden="true"></i><span>Worst</span></p>'
+            '<div class="mmcard" id="mmcard" aria-live="polite"><p class="eyebrow mmt">%s</p><h2>%s</h2><p class="mmg">%s</p>'
+            '<p class="mmn">%d moves from here. Top three:</p><ol>%s</ol>'
+            '<a class="tlink" href="/app/?explore=1&amp;pos=%s#map">Open it in the map &rarr;</a></div>'
+            '<script type="application/json" id="mm-data">%s</script>') % (
+        grid, esc(tiers[d["r"]]), esc(d["L"]), esc(d["g"]), d["n"], moves, sel,
+        json.dumps({"tiers": tiers, "pos": data}, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c"))
+    return html
+
+
 def cards_marks(h):
     """Keeps the "coming soon" and "live" wordings for member card payments (<!--jf:soon-->…) in structured data as {{jf:soon}}…,
     so server.js can keep the one that applies there too (see tools/legal.js)."""
@@ -229,7 +266,7 @@ def build_web(app):
     write(html, "web", "app", "index.html")
     landing = fill_landing(read("src", "landing.html"), img)
     gallery, posmap = media_html(site_index())
-    landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap)
+    landing = landing.replace("@@TECH_GALLERY@@", gallery).replace("@@POS_MAP@@", posmap).replace("@@MINI_MAP@@", mini_map(site_index()))
     counts = json.load(open(os.path.join(ROOT, "dist", "counts.json")))
     landing = landing.replace("@@NPOS@@", str(counts["positions"])).replace("@@NTECH@@", str(counts["techniques"]))
     legal_foot = read("dist", "legal-foot.html")  # Pricing · Terms · Refunds · Privacy · Contact and the business line (tools/legal.js)

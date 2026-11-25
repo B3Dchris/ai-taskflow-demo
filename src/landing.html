@@ -21,8 +21,6 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<!-- wide screens: the hero clip's poster is the largest thing in the first screen, so fetch it first -->
-<link rel="preload" as="image" href="/video/moves-and-map.webp" media="(min-width: 760px)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -178,14 +176,32 @@ h2{font-size:clamp(32px,4.4vw,46px)}
 
 /* hero: the headline and two buttons on the left, the app itself playing in a phone on the right (on phones, below) */
 .lead{padding-block:16px 88px}
-.lead h1{font-size:clamp(44px,14.6vw,94px);font-weight:800;text-transform:uppercase;color:#F4F6FB;line-height:.94;max-width:11.5em;margin-top:12px}
+.lead h1{font-size:clamp(38px,10.6vw,94px);font-weight:800;text-transform:uppercase;color:#F4F6FB;line-height:.94;max-width:11.5em;margin-top:12px}
 .lead h1 span{display:inline}
 .lead h1 em{font-style:normal;color:#8FB0FF}
 .leadgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
 .leadcopy{display:flex;flex-direction:column;gap:16px}
 .lead .lede{margin:0;color:#C9D3E6;font-size:clamp(18px,2vw,21px);max-width:28em}
 .lead .cta{margin-top:8px}
-.heroclip .device{--w:min(272px,70vw)}
+.democlip .device{--w:min(272px,70vw)}
+.demogrid{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:center}
+/* the hero's map: every position, best at the top, as buttons; the one you tap shows its top moves below */
+.minimap{display:flex;flex-direction:column;gap:10px;min-width:0}
+.mm{display:flex;flex-direction:column;gap:6px}
+.mmrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mmrow[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr));padding-inline:calc((100% - 18px) / 4 / 2 + 3px)}
+.mm button{min-height:46px;padding:4px 3px;border-radius:10px;border:1.5px solid rgba(255,255,255,.18);border-left:4px solid var(--tc);background:rgba(255,255,255,.06);color:#E6ECF8;font:600 clamp(12.5px,3.4vw,14px)/1.15 inherit;font-family:inherit;cursor:pointer;overflow-wrap:normal}
+.mm .t0{--tc:#3FBF7F}.mm .t1{--tc:#7CC9A0}.mm .t2{--tc:#5B8CFF}.mm .t3{--tc:#8EA2CC}.mm .t4{--tc:#E6A84C}.mm .t5{--tc:#FF7A6E}
+.mm button.to{border-color:#7FD3A6;border-left-color:var(--tc);background:rgba(91,212,154,.14)}
+.mm button[aria-pressed="true"]{background:#fff;color:#0B1530;border-color:#fff;border-left-color:var(--tc);box-shadow:0 0 18px rgba(147,178,255,.6)}
+.mm button:focus-visible{outline:3px solid #8FB0FF;outline-offset:2px}
+.mmkey{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;color:#9FB0D0}.mmkey i{flex:1;height:4px;border-radius:2px;background:linear-gradient(90deg,#3FBF7F,#5B8CFF,#E6A84C,#FF7A6E)}
+.mmcard{display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:var(--r);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.mmcard h2{font-size:28px;color:#F4F6FB}.mmcard .mmg{margin:0;color:#C9D3E6;font-size:16px}.mmcard .mmn{margin:4px 0 0;font-size:14px;color:#9FB0D0}
+.mmcard ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.mmcard li{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:15px;color:#E6ECF8}.mmcard li span{color:#7FD3A6;font-weight:600}
+.mmcard .tlink{color:#8FB0FF}
+@media (prefers-reduced-motion: no-preference){.mm button{transition:background .15s,box-shadow .2s}}
 .clip figcaption{font-size:15px}
 
 /* two doors, as cards over the hero's edge */
@@ -279,7 +295,8 @@ footer .legalline{font-size:13px}
   .lead h1{margin-top:8px;font-size:clamp(52px,5.7vw,80px)}
   .lead h1 span{display:block}
   .leadgrid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px;align-items:center}
-  .heroclip .device{--w:280px}
+  .democlip .device{--w:280px}
+  .demogrid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px}
   .doors{grid-template-columns:1fr 1fr;gap:24px;margin-top:-64px}
   .door{padding:32px}
   .row{grid-auto-columns:200px}
@@ -307,13 +324,10 @@ footer .legalline{font-size:13px}
       <div class="leadcopy">
         <p class="eyebrow">No-gi Jiu-Jitsu</p>
         <h1 id="hero-h"><span>Know what to do</span> <span>when <em>they react.</em></span></h1>
-        <p class="lede">Your first move rarely works. See what comes next from every position: @@NTECH@@ techniques, white to black belt, each with a video.</p>
-        <div class="cta"><a class="btn primary" href="/app/">Open JitsFlow</a><a class="btn" href="/coaches/">For gyms</a></div>
+        <p class="lede">Tap a position. See your moves from there and where each one leads. @@NTECH@@ techniques, white to black belt, each with a video.</p>
+        <div class="cta"><a class="btn primary" id="explore" href="/app/?explore=1#map">Explore the map</a><a class="btn" href="/coaches/">For gyms</a></div>
       </div>
-      <figure class="clip heroclip">
-        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
-        <figcaption>The Moves library, then the map: one chain played to the tap. (Screen recording, no sound.)</figcaption>
-      </figure>
+      <div class="minimap">@@MINI_MAP@@</div>
     </div>
   </section>
 </div><!-- /night -->
@@ -332,6 +346,21 @@ footer .legalline{font-size:13px}
       <p>Timetable, bookings, fees and reminders, from your phone. R99 a month after 3 free months, and free for your students.</p>
       <div class="go"><a class="btn" href="/coaches/">See JitsFlow for gyms</a><a class="tlink" href="/app/?start=1">Start your gym</a></div>
     </article>
+  </section>
+
+  <section class="block wrap demo" aria-labelledby="demo-h">
+    <div class="demogrid">
+      <div class="head">
+        <p class="eyebrow">In the app</p>
+        <h2 id="demo-h">One chain, played to the tap</h2>
+        <p>Pick a position, tap where a move leads, and keep going. Free, no account needed.</p>
+        <div class="cta"><a class="btn primary" href="/app/?explore=1#map">Explore the map</a></div>
+      </div>
+      <figure class="clip democlip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>The Moves library, then the map. (Screen recording, no sound.)</figcaption>
+      </figure>
+    </div>
   </section>
 
   <section class="block" id="techniques" aria-labelledby="tech-h">
@@ -470,6 +499,19 @@ footer .legalline{font-size:13px}
 /* Technique deck arrows (wide screens; phones swipe). */
 (function(){var r=document.getElementById("tgal");if(!r)return;var smooth=!matchMedia("(prefers-reduced-motion: reduce)").matches;
   [].forEach.call(document.querySelectorAll("[data-rail]"),function(b){b.addEventListener("click",function(){r.scrollBy({left:Number(b.dataset.rail)*r.clientWidth*.8,behavior:smooth?"smooth":"auto"})})})})();
+</script>
+<script id="mm-js">
+/* The hero's map: tap a position to see its top moves and where each leads; the link opens the app's map there. */
+(function(){var box=document.getElementById("mm"),card=document.getElementById("mmcard"),el=document.getElementById("mm-data");if(!box||!card||!el)return;
+  var D=JSON.parse(el.textContent),go=document.getElementById("explore");
+  function pick(k){var p=D.pos[k];if(!p)return;
+    [].forEach.call(box.querySelectorAll("button[data-p]"),function(b){var on=b.getAttribute("data-p")===k;b.setAttribute("aria-pressed",on?"true":"false");b.classList.toggle("to",!on&&p.to.indexOf(b.getAttribute("data-p"))>=0)});
+    card.querySelector(".mmt").textContent=D.tiers[p.r];card.querySelector("h2").textContent=p.L;card.querySelector(".mmg").textContent=p.g;
+    card.querySelector(".mmn").textContent=p.n+" moves from here. Top three:";
+    var ol=card.querySelector("ol");while(ol.firstChild)ol.removeChild(ol.firstChild);
+    p.m.forEach(function(m){var li=document.createElement("li"),b=document.createElement("b"),s=document.createElement("span");b.textContent=m[0];s.textContent="\u2192 "+m[1];li.appendChild(b);li.appendChild(s);ol.appendChild(li)});
+    var u="/app/?explore=1&pos="+encodeURIComponent(k)+"#map";card.querySelector("a").setAttribute("href",u);if(go)go.setAttribute("href",u)}
+  box.addEventListener("click",function(e){var b=e.target.closest("button[data-p]");if(b)pick(b.getAttribute("data-p"))})})();
 </script>
 <script>
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}

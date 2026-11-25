@@ -1,7 +1,8 @@
 /* ============ THE GYM'S MONTHLY PROGRAMME (backend/programme.js) ============ */
 /* Coaches: Schedule → Programme. A month, its weeks (Mondays), each with a title, a note, YouTube videos and techniques; Publish when ready.
-   Members: "This month" at the top of Train (week chips, this week's videos, catch-up, next month's preview) and a small card on Home.
-   Everything here is its own: app.html and accounts.js only call progLearnTop, progHomeCard, progSchedRow and progClassHint. */
+   Members: "This month" at the top of Train (week chips, this week's videos, catch-up, next month's preview), and on the Map the
+   month's positions ringed (and this week's, where the map opens the first time).
+   Everything here is its own: app.html and accounts.js only call progLearnTop, progMapPos, progMapSet, progSchedRow and progClassHint. */
 const PRG={me:null,meFor:null,meAt:0,meBusy:false,coach:{},view:{},saving:Promise.resolve()};
 const PRG_MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const prgName=ym=>PRG_MON[Number(String(ym).slice(5,7))-1]||"";
@@ -22,7 +23,7 @@ const prgN=(n,w)=>`${n} ${w}${n===1?"":"s"}`;
 async function prgLoad(force){if(!prgOn()||PRG.meBusy)return;const who=API.me.id;
   if(!force&&PRG.meFor===who&&Date.now()-PRG.meAt<120000)return;PRG.meBusy=true;
   let j=null;try{j=await api("GET","/programme")}catch(e){}finally{PRG.meBusy=false}
-  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="train")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
+  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="map"||S.ui.tab==="train")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
 const prgMine=()=>{if(!prgOn())return null;if(PRG.meFor!==API.me.id||Date.now()-PRG.meAt>=120000)prgLoad();return PRG.meFor===API.me.id?PRG.me:null};
 // A week's state for this member: now, upcoming, done (trained or caught up) or missed.
 function prgState(d,w){const t=d.today,end=addDays2(w.start,7);if(t>=w.start&&t<end)return "now";if(t<w.start)return "next";
@@ -45,9 +46,13 @@ function progLearnTop(){const d=prgMine();if(!d)return "";const p=prgLive(d),cu=
       <button class="btn primary" data-a="prgcatch">Watch what you missed</button></section>`}
   if(d.next)html+=`<button class="panel prgnext" data-a="prgmonth" data-v="${d.next.month}"><span class="row between"><span class="label prglab">Next month</span><span class="pill plain">Preview</span></span><b>${esc(prgName(d.next.month))}: ${esc(d.next.title)}</b></button>`;
   return `<div class="stack prgtop">${html}</div>`}
-// Home: one line, this week's topic, linking to Train.
-function progHomeCard(){const d=prgMine();if(!d)return "";const p=prgLive(d);if(!p)return "";const w=prgNow(d,p);if(!w)return "";const cu=(d.catchUp||[]).length,now=prgState(d,w)==="now";
-  return `<button class="panel prghome" data-a="prglearn"><span class="prgdot" aria-hidden="true">▶</span><span class="grow"><small class="prglab">${now?"This week":"Starts "+esc(prgDay(w.start))}</small><b>${esc(w.title||p.title)}</b></span><span class="small muted">${w.videos.length?prgN(w.videos.length,"video"):""}${cu?` <span class="pill due">${cu} to catch up</span>`:""} ›</span></button>`}
+// The Map: where this week's moves start (the position most of them start from), so the map can open there. null: none (or no
+// programme); undefined: still loading.
+const prgTop=ids=>{const c={};ids.forEach(id=>{const t=TM[id];if(t&&POS[t.f])c[t.f]=(c[t.f]||0)+1});return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||null};
+function progMapPos(){if(!prgOn()||isCoach())return null;const d=prgMine();if(!d)return PRG.meFor===API.me.id?null:undefined;const p=prgLive(d);if(!p)return null;const w=prgNow(d,p);return w?prgTop(w.ids):null}
+// …and every position this month's weeks work on, ringed on the map.
+function progMapSet(){const out=new Set();if(!prgOn()||isCoach())return out;const d=PRG.meFor===API.me.id?PRG.me:null,p=prgLive(d);if(!p)return out;
+  p.weeks.forEach(w=>w.ids.forEach(id=>{const t=TM[id];if(t&&POS[t.f])out.add(t.f)}));return out}
 // Where a week comes from: m = this month, c = the catch-up list, or a month opened by itself (YYYY-MM).
 function prgFind(src,start){const d=PRG.me||{};
   if(src==="m"){const p=prgLive(d)||(d.programme||null);return p&&p.weeks.find(w=>w.start===start)}

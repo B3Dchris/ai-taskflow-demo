@@ -34,19 +34,39 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.selectOption('#ob-months','9');await p.locator('[data-a="obset"][data-k="hand"][data-v="left"]').tap();await p.tap('#sheetbar [data-a="obdone"]');
   ok(await ev(()=>goal()==='blue'&&P().settings.perWeek===2&&P().settings.onboarded===true&&P().settings.days.join()==='1,3'&&P().settings.priorHours===117),'setup saves belt goal, schedule and hours');
   // --- tabs render
-  ok(await ev(()=>[...document.querySelectorAll('nav.tabs button:not([hidden])')].map(b=>b.textContent.trim()).join()==='Home,Train,Me'),'self-study gets 3 plain tabs: Home, Train, Me (no Classes without a gym)');
-  for(const t of ['home','train','me']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
+  ok(await ev(()=>[...document.querySelectorAll('nav.tabs button:not([hidden])')].map(b=>b.textContent.trim()).join()==='Map,Train,Me'),'self-study gets 3 plain tabs: Map, Train, Me (no Classes without a gym)');
+  // --- the Map is the first screen: it opens on a position (Standing: nothing looked at yet, no gym programme), its card and moves below
+  ok(await ev(()=>S.ui.tab==='map'&&location.hash==='#map'&&document.querySelector('nav.tabs [data-v="map"]').getAttribute('aria-current')==='page'&&S.ui.flowSel==='standing'&&!!document.querySelector('.flowsvg g.node.sel[data-v="standing"][aria-pressed="true"]')&&document.querySelector('.poshero h2').innerText===POS.standing.L&&document.querySelectorAll('.chainstage .branch').length>0),'after setup you land on the Map, open on Standing, with its card and your options below (no tap needed)');
+  ok(await ev(()=>{const g=[...document.querySelectorAll('.flowsvg g.node[data-a="pos"]')];return g.length===20&&g.every(x=>x.getAttribute('role')==='button'&&/^.+: \d+ of \d+ moves? rated/.test(x.getAttribute('aria-label'))&&x.getBoundingClientRect().height>=44)&&g.filter(x=>x.getAttribute('aria-pressed')==='true').length===1}),'every position is a button at least 44px tall, labelled "Name: n of m moves rated", the selected one pressed');
+  ok(await ev(()=>{const h=document.querySelector('.maphint');return !!h&&/Tap any position to see your moves from there/.test(h.innerText)&&lsGet('jf.mapHint')===1}),'first visit: a tip over the map says to tap a position');
+  await p.locator('.maphint [data-a="maphintx"]').tap();ok(await ev(()=>!document.querySelector('.maphint')),'the tip closes with ×');
+  ok(await ev(()=>{const r=[...document.querySelectorAll('.stuckrow [data-a="stuckgo"]')];return r.length>=6&&r.length<=9&&r.every(b=>POS[b.dataset.v])&&/Where are you stuck\?/.test(document.querySelector('.stuckpick').textContent)}),'"Where are you stuck?" offers 6 to 9 plain situations, each a real position');
+  await p.locator('.stuckrow [data-v="mount_bot"]').tap();await p.waitForTimeout(400);
+  ok(await ev(()=>S.ui.flowSel==='mount_bot'&&!!document.querySelector('.flowsvg g.node.sel[data-v="mount_bot"]')&&document.querySelector('.poshero h2').innerText===POS.mount_bot.L&&document.querySelector('.stuckrow [data-v="mount_bot"]').getAttribute('aria-pressed')==='true'&&lsGet('jf.mapPos')==='mount_bot'),'"I keep getting mounted" picks Under mount: highlighted on the map, its escapes below, and remembered');
+  {const to=await ev(()=>{const b=[...document.querySelectorAll('.chainstage .bgo')].find(x=>TM[x.dataset.v].t!=='sub'&&TM[x.dataset.v].t!=='mount_bot');return b&&b.dataset.v});
+   await p.locator(`.chainstage .bgo[data-v="${to}"]`).first().tap();await p.waitForTimeout(700);
+   ok(await ev(to=>{const d=TM[to].t,n=document.querySelector(`.flowsvg g.node.sel[data-v="${d}"]`),r=n&&n.getBoundingClientRect();return S.ui.flowSel===d&&!!n&&r.top>=0&&r.bottom<=innerHeight&&document.querySelector('.poshero h2').innerText===POS[d].L&&/Back to Mounted/.test(document.querySelector('.backtrail').innerText)},to),'"Leads to" walks the chain: the next position is selected and in view on the map, its options below, with ‹ Back to Mounted');
+   const to2=await ev(()=>{const b=[...document.querySelectorAll('.chainstage .bgo')].find(x=>TM[x.dataset.v].t!=='sub'&&TM[x.dataset.v].t!==S.ui.flowSel);return b&&b.dataset.v});
+   if(to2){await p.locator(`.chainstage .bgo[data-v="${to2}"]`).first().tap();await p.waitForTimeout(700);
+     ok(await ev(()=>{const b=[...document.querySelectorAll('.backtrail [data-a="crumb"]')];return b.length>=1&&b.length<=3&&/^‹ Back to /.test(b[0].innerText)}),'the back trail holds the last positions (at most 3), newest first');}
+   await p.locator('.backtrail [data-a="crumb"]',{hasText:'Mounted'}).tap();await p.waitForTimeout(600);
+   ok(await ev(()=>S.ui.flowSel==='mount_bot'&&!!document.querySelector('.flowsvg g.node.sel[data-v="mount_bot"]')),'tapping back retraces to that position');}
+  await ev(()=>{S.ui.mapInit=false;S.ui.trail=null;render()});ok(await ev(()=>S.ui.flowSel==='mount_bot'),'the map opens on the last position you looked at');
+  await ev(()=>{localStorage.removeItem('jf.mapPos');S.ui.mapInit=false;S.ui.trail=null;render()});ok(await ev(()=>S.ui.flowSel==='standing'),'with nothing saved (and no programme), it opens on Standing');
+  await ev(()=>{S.ui.mapHint=undefined;render()});ok(await ev(()=>!document.querySelector('.maphint')),'the tip shows once only');
+  for(const dark of [true,false]){await p.emulateMedia({colorScheme:dark?'dark':'light'});await ev(()=>render());await overflow('map'+(dark?' (dark)':''))}
+  for(const t of ['map','train','me']){await p.tap(`nav.tabs [data-v="${t}"]`);await p.waitForTimeout(60);ok(await ev(()=>document.getElementById('app').innerText.length>200),`tab ${t} renders`);await overflow('tab '+t)}
   await p.tap('nav.tabs [data-v="train"]');
-  for(const v of ['moves','map','log']){const k='train-'+v;await p.tap(`.trainseg [data-v="${k}"]`);await p.waitForTimeout(60);ok(await ev(([v,k])=>S.ui.trainView===v&&location.hash===(v==='moves'?'#train':'#'+k)&&document.querySelector(`.trainseg [data-v="${k}"]`).getAttribute('aria-pressed')==='true'&&document.getElementById('app').innerText.length>200,[v,k]),`Train › ${v} renders`);await overflow('train '+v)}
+  for(const v of ['moves','log']){const k='train-'+v;await p.tap(`.trainseg [data-v="${k}"]`);await p.waitForTimeout(60);ok(await ev(([v,k])=>S.ui.trainView===v&&location.hash===(v==='moves'?'#train':'#'+k)&&document.querySelector(`.trainseg [data-v="${k}"]`).getAttribute('aria-pressed')==='true'&&document.getElementById('app').innerText.length>200,[v,k]),`Train › ${v} renders`);await overflow('train '+v)}
   ok(await ev(()=>document.querySelectorAll('.trainstats').length===1&&document.querySelectorAll('#app .stat').length===3&&!document.querySelector('.prghero')),'Train: one stats block, shown once (no programme block without a gym)');
   await p.tap('.trainstats .trring');await p.waitForTimeout(60);ok(await ev(()=>S.ui.trainView==='belt'&&location.hash==='#train-belt'&&!!document.querySelector('.beltpath')&&!document.querySelector('#app .stat')&&!!document.querySelector('.backlink[data-v="train-moves"]')),'the ring opens Your belt, with no second set of stats and a way back');await overflow('train belt');
-  await p.tap('nav.tabs [data-v="home"]');await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>S.ui.trainView==='belt'),'Train remembers the part you last had open');
+  await p.tap('nav.tabs [data-v="map"]');await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>S.ui.trainView==='belt'),'Train remembers the part you last had open');
   await p.tap('.backlink[data-v="train-moves"]');ok(await ev(()=>S.ui.trainView==='moves'&&location.hash==='#train'),'back from Your belt to Train');
   // --- old addresses open the new places
-  for(const [h,want,lv] of [['flow','#train-map','map'],['log','#train-log','log'],['settings','#me'],['today','#home'],['learn','#train','moves'],['learn-moves','#train','moves'],['learn-map','#train-map','map'],['learn-belt','#train-belt','belt'],['journal','#train-log','log'],['belts','#train-belt','belt']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.tab==='train'&&S.ui.trainView===lv),[want,lv]),`#${h} opens ${want}`)}
+  for(const [h,want,lv] of [['flow','#map'],['home','#map'],['train-map','#map'],['log','#train-log','log'],['settings','#me'],['today','#map'],['learn','#train','moves'],['learn-moves','#train','moves'],['learn-map','#map'],['learn-belt','#train-belt','belt'],['journal','#train-log','log'],['belts','#train-belt','belt']]){await ev(h=>{location.hash=h},h);await p.waitForTimeout(80);ok(await ev(([w,lv])=>location.hash===w&&(!lv||S.ui.tab==='train'&&S.ui.trainView===lv),[want,lv]),`#${h} opens ${want}`)}
   // --- no tip banners restating the tab (they went: each tab's name says what it is), even on a first visit
   await ev(()=>lsSet('jf.tips.me',{}));
-  for(const t of ['train','home','me']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')&&!document.querySelector('[data-a="tipx"]')),`no tip banner on ${t}, even the first time`)}
+  for(const t of ['train','map','me']){await p.tap(`nav.tabs [data-v="${t}"]`);ok(await ev(()=>!document.querySelector('.tip')&&!document.querySelector('[data-a="tipx"]')),`no tip banner on ${t}, even the first time`)}
   ok(await ev(()=>['pricing','terms','refunds','privacy','contact'].every(u=>!!document.querySelector(`.applegal a[href="https://www.jitsflow.com/${u}/"][target="_blank"]`))),'Me: Pricing, Terms, Refunds, Privacy and Contact links (to the website from the claude.ai version)');
   ok(await ev(()=>!/Your account, payments, gym and settings/.test(document.getElementById('app').innerText)),'Me doesn\'t restate itself');
   // --- every technique sheet
@@ -56,7 +76,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     ok(r.h===r.name&&r.lead.length>40&&r.steps===r.n&&r.fig,`technique sheet ${id} incomplete`);}
   await overflow('technique sheet');await ev(()=>closeSheet());
   // --- every flow node
-  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');
+  await p.tap('nav.tabs [data-v="map"]');
   const pos=await ev(()=>Object.keys(POS));
   for(const k of pos){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();const r=await ev(k=>({h3:document.querySelector('.poshero h2')?.innerText,want:POS[k].L,d:(document.getElementById('flow-more')?.textContent||'').includes(PD[k].d)&&document.querySelector('.poshero .pgo')?.textContent===POS[k].g,sel:!!document.querySelector(`.flowsvg g.node.sel[data-v="${k}"]`),yt:!!document.querySelector('#flow-more .panel a.yt[href*="youtube.com/results"]')}),k);ok(r.yt,`position ${k} has a YouTube link`);ok(r.h3===r.want&&r.d&&r.sel,`flow node ${k}`)}
   await overflow('flow');
@@ -75,44 +95,42 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('.routesteps .rmove [data-a="open"]').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'tapping a route move opens it');await ev(()=>closeSheet());
   await p.locator('.panel [data-a="pos"][data-v="hg_top"]').tap();ok(await ev(()=>S.ui.flowSel==='hg_top'),'"See it from the other side" flips to half guard top');
   await overflow('flow route');
-  // --- chain explorer: the selected position, then 3–5 "they do X → you do Y" branches; Go, the path, Start over, Back
-  await p.locator('.flowsvg g.node[data-v="turtle_top"]').tap();
+  // --- chain explorer: the selected position, then 3–5 "they do X → you do Y" branches; Go, the back trail, Back
+  await ev(()=>{S.ui.trail=null});await p.locator('.flowsvg g.node[data-v="turtle_top"]').tap();await ev(()=>{S.ui.trail=null;render()});
   ok(await ev(()=>{const b=[...document.querySelectorAll('.branch')];return b.length>=Math.min(3,fromPos('turtle_top',flowMax()).length)&&b.length<=5&&b.every(x=>x.querySelector('.bcue').innerText.length>5&&x.querySelector('.bmove[data-a="open"]')&&x.querySelector('.bgo[data-a="chaingo"]'))&&!document.querySelector('.crumbs')&&document.querySelector('.poshero h2').innerText===POS.turtle_top.L}),'chain explorer: turtle (top) shows up to 5 branch cards (3+ when the belt filter has them), each a cue, a move and where it leads');
   ok(await ev(()=>[...document.querySelectorAll('.branch .bmove')].some(b=>b.dataset.v==='darce')),"D'Arce is a branch from turtle (top) as well as front headlock");
   ok(await ev(()=>[...document.querySelectorAll('.branch .bmove')].every(b=>RANK[beltOf(TM[b.dataset.v])]<=flowMax())),'branches respect the belt filter');
   ok(await ev(()=>{const pm=CHAINS.turtle_top.map(c=>TM[c.t]).filter(t=>beltOf(t)!=='blue');S.ui.flowBelt='black';render();const all=[...document.querySelectorAll('.branch .bmove')].map(b=>b.dataset.v);S.ui.flowBelt=null;render();return pm.length>0&&pm.every(t=>all.includes(t.id))}),'a higher belt filter adds the purple-and-up branches');
   const first=await ev(()=>{const g=document.querySelector('.branch .bgo');return {id:g.dataset.v,to:TM[g.dataset.v].t}});
   await p.locator('.branch .bgo').first().tap();await p.waitForTimeout(500);
-  ok(await ev(f=>S.ui.trail.length===2&&S.ui.flowSel===(f.to==='sub'?'turtle_top':f.to)&&document.querySelectorAll('.crumbs ol li').length===2&&!!document.querySelector(`.flowsvg g.node.sel[data-v="${S.ui.flowSel}"]`),first),'Go takes the branch: the map moves with you and the path shows two steps');
+  ok(await ev(f=>S.ui.trail.length===2&&S.ui.flowSel===(f.to==='sub'?'turtle_top':f.to)&&(f.to==='sub'||f.to==='turtle_top'||/Back to Turtle \(top\)/.test(document.querySelector('.crumbs').innerText))&&!!document.querySelector(`.flowsvg g.node.sel[data-v="${S.ui.flowSel}"]`),first),'Go takes the branch: the map moves with you, with a way back');
   await p.locator('.branch .bgo').first().tap();await p.waitForTimeout(500);
-  ok(await ev(()=>S.ui.trail.length===3&&document.querySelectorAll('.crumbs ol li').length===3),'a second step adds to the path');
-  await ev(()=>render());ok(await ev(()=>S.ui.trail.length===3&&!!document.querySelector('.crumbs')),'the path survives a redraw');
-  await p.locator('.crumbs [data-a="crumb"][data-v="1"]').tap();await p.waitForTimeout(500);
-  ok(await ev(()=>S.ui.trail.length===2&&document.querySelectorAll('.crumbs ol li').length===2),'tapping a step in the path jumps back to it');
-  await p.locator('.crumbs [data-a="chainreset"]').tap();await p.waitForTimeout(500);
-  ok(await ev(()=>S.ui.trail.length===1&&S.ui.flowSel==='turtle_top'&&!document.querySelector('.crumbs')),'Start over goes back to where you began');
-  await p.locator('.flowsvg g.node[data-v="fhl_top"]').tap();await p.locator('.branch .bgo[data-v="guillotine"]').tap();await p.waitForTimeout(500);
+  ok(await ev(()=>S.ui.trail.length===3),'a second step adds to the trail');
+  await ev(()=>render());ok(await ev(()=>S.ui.trail.length===3),'the trail survives a redraw');
+  await ev(()=>{chainJump(0)});await p.waitForTimeout(500);
+  ok(await ev(()=>S.ui.trail.length===1&&S.ui.flowSel==='turtle_top'&&!document.querySelector('.crumbs')),'going back to the first step leaves no trail');
+  await p.locator('.flowsvg g.node[data-v="fhl_top"]').tap();const n0=await ev(()=>S.ui.trail.length);await p.locator('.branch .bgo[data-v="guillotine"]').tap();await p.waitForTimeout(500);
   ok(await ev(()=>S.ui.flowSel==='fhl_top'&&/Tap/.test(document.querySelector('.finish').textContent)&&[...document.querySelectorAll('.branch .bmove')].some(b=>b.dataset.v==='darce')),'after a submission: Tap, then what to switch to when they defend');
   await p.locator('.branch .bmove').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'tapping the move opens its steps and video');await p.tap('#sheetbar .back');
-  ok(await ev(()=>S.ui.trail.length===2&&!!document.querySelector('.crumbs')),'closing the technique keeps your place in the chain');
-  await p.locator('.chainstage .bgo').first().tap();await p.waitForTimeout(500);ok(await ev(()=>S.ui.trail.length===3),'and you can keep playing');
+  ok(await ev(n=>S.ui.trail.length===n+1&&S.ui.flowSel==='fhl_top'&&!!document.querySelector('.finish'),n0),'closing the technique keeps your place in the chain');
+  await p.locator('.chainstage .bgo').first().tap();await p.waitForTimeout(500);ok(await ev(n=>S.ui.trail.length===n+2,n0),'and you can keep playing');
   if(MODE==='local'){await ev(()=>history.back());await p.waitForTimeout(600); // claude.ai pages don't use the browser history
-    ok(await ev(()=>S.ui.trail.length===2&&location.hash==='#train-map'),"the phone's Back button steps back along the chain");}
+    ok(await ev(n=>S.ui.trail.length===n+1&&S.ui.flowSel==='fhl_top'&&location.hash==='#map',n0),"the phone's Back button steps back along the chain");}
   await overflow('chain explorer');
   // --- quick rate everything via the bottom bar (mix of levels), with one skip
-  await p.tap('nav.tabs [data-v="home"]');await p.tap('.panel.accent button[data-a="qr"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.tap('.trainstats button[data-a="qr"]');
   const total=await ev(()=>S.ui.qr.q.length);const want=await ev(()=>rateable().length);ok(total===want&&total>54,`rate queue is ${total}, expected ${want}`);
   await p.tap('#sheetbar [data-a="qrnext"]');
   for(let i=1;i<total;i++){await p.tap(`#sheetbar [data-a="qrset"][data-v="${i%5}"]`)}
   await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/Rated/.test(document.getElementById('toast').textContent)),'quick rate finishes by itself, no screen to close');
   const rq=await ev(()=>rateQueue().length);ok(rq===1,`one skipped technique left to rate (got ${rq})`);
-  ok(await ev(t=>document.body.innerText.includes(`${t-1}/${t} rated`),total),'rate card shows one left to rate');
+  ok(await ev(()=>/Rate what you know · 1 left/.test(document.querySelector('.trainstats').innerText)),'the rate button shows one left to rate');
   ok(await ev(()=>readiness()>0),'readiness score above 0 after rating');
   if(MODE==='db'){await p.waitForTimeout(800);ok(await ev(()=>window.__writes>0),'db: ratings written to account')}
   // rating still works after a sync round-trip with read-only data (the original bug)
-  await p.tap('.panel.accent button[data-a="qr"]');await p.tap('#sheetbar [data-a="qrset"][data-v="3"]');
+  await p.tap('.trainstats button[data-a="qr"]');await p.tap('#sheetbar [data-a="qrset"][data-v="3"]');
   await p.waitForTimeout(150);ok(await ev(()=>document.getElementById('sheet').hidden&&/Rated/.test(document.getElementById('toast').textContent)),'rating works after data reloads from the account');
-  ok(await ev(()=>!document.querySelector('.panel.accent [data-a="qr"]')||rateQueue().length===0),'rate card hides once everything is rated');
+  ok(await ev(()=>!document.querySelector('.trainstats [data-a="qr"]')||rateQueue().length===0),'rate card hides once everything is rated');
   // --- review
   const due=await ev(()=>dueList().length);ok(due>0,'review queue has cards after rating');
   await p.locator('button[data-a="review"]').tap();
@@ -143,14 +161,14 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>document.getElementById('f-worked').value==='Knee shield held up'),'edit form prefilled');
   await p.locator('#f-mins').fill('75');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>S.sessions.length===1&&Number(S.sessions[0].mins)===75),'edit updates the same session');
-  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/weak spot/i.test(document.body.innerText)),'weak spot card on Today');
-  ok(await ev(()=>/1 week streak/.test(document.querySelector('.lprog').innerText)&&weekStreak()===1),'week streak counts this week');
+  await p.tap('nav.tabs [data-v="map"]');ok(await ev(()=>{const c=document.querySelector('.stuckrow .chip.mine');return !!c&&c.dataset.v==='hg_bot'&&c===document.querySelector('.stuckrow .chip')}),'the weak spot from your log comes first in "Where are you stuck?"');
+  await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>/^1$/.test(document.querySelectorAll('.trainstats .stat b')[1].innerText)&&weekStreak()===1),'week streak counts this week');
   await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);
   ok(await ev(()=>S.sessions.length===0&&/Session deleted/.test(document.getElementById('toast').textContent)),'session deletes in one tap, with Undo');
   await p.locator('#toast [data-a="toastact"]').tap();await p.waitForTimeout(400);ok(await ev(()=>S.sessions.length===1),'Undo brings the session back');
   await p.locator('.linkbtn[data-a="del"]').tap();await p.waitForTimeout(250);ok(await ev(()=>S.sessions.length===0),'and it deletes again');
   // --- flow map: tapping a position keeps your place on the page
-  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
+  await p.tap('nav.tabs [data-v="map"]');await p.waitForTimeout(300);await ev(()=>window.scrollTo(0,120));await p.waitForTimeout(100);
   {const y0=await ev(()=>window.scrollY);await p.locator('.flowsvg g.node[data-v="mount_top"]').tap();await p.waitForTimeout(250);
    ok(await ev(y0=>S.ui.flowSel==='mount_top'&&Math.abs(window.scrollY-y0)<3,y0),'tapping a position on the map doesn\'t jump the page');}
   // --- smart search: typos, slang, initials; suggestions as you type
@@ -176,7 +194,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>/Show \d+ move/.test(document.getElementById('sheetbar').innerText)&&/Bonus/.test(filterSummary().txt)),'the filter sheet counts what it shows; the summary names the filter');
   await p.locator('[data-a="filter"][data-v="all"]').first().tap();await p.tap('#sheetbar [data-a="close"]');
   // --- solo drills
-  await p.tap('nav.tabs [data-v="home"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
+  await p.tap('nav.tabs [data-v="train"]');await ev(()=>{const d=document.querySelector('details[data-g="today-more"]');if(!d.open)d.querySelector('summary').click()});const c=p.locator('.check').first();await c.scrollIntoViewIfNeeded();await c.tap();ok(await ev(()=>P().solo.done.length===1),'solo drill ticks');
   // --- settings: hand, numbers, backup, import, reset
   await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.locator('[data-a="hand"][data-v="right"]').tap();ok(await ev(()=>document.documentElement.classList.contains('righty')),'right-hand mode');
   await p.locator('[data-a="hand"][data-v="left"]').tap();
@@ -189,7 +207,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="importshow"]').tap();await p.locator('#importtxt').fill(backup);await p.locator('[data-a="importdo"]').tap();
   ok(await ev(()=>Object.keys(P().mastery).length>=54),'backup restores ratings');
   // --- photos (account mode only)
-  if(MODE==='db'){await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();await ev(()=>{document.getElementById('flow-more').open=true});
+  if(MODE==='db'){await p.tap('nav.tabs [data-v="map"]');await p.locator('.flowsvg g.node[data-v="hg_bot"]').tap();await ev(()=>{document.getElementById('flow-more').open=true});
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
     await p.setInputFiles('#ph-hg_bot',{name:'a.png',mimeType:'image/png',buffer:png});await p.waitForTimeout(800);
     ok(await ev(()=>!!P().photos.hg_bot&&!!document.querySelector('.panel .photo img')&&!document.querySelector('.panel .posfig')),'photo upload replaces diagram');
@@ -197,7 +215,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     // reload: data comes back from the account
     await p.waitForTimeout(900);await p.reload();await p.waitForTimeout(500);
     ok(await ev(()=>Object.keys(P().mastery).length>=54&&P().notes.knee_cut==='Underhook first!'),'db: progress survives reload');
-    await p.tap('nav.tabs [data-v="home"]');await ev(()=>{const d=document.querySelector('details.more');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
+    await p.tap('nav.tabs [data-v="train"]');await ev(()=>{const d=document.querySelector('details[data-g="today-more"]');if(!d.open)d.querySelector('summary').click()});const c2=p.locator('.check').nth(2);await c2.scrollIntoViewIfNeeded();await c2.tap();ok(await ev(()=>P().solo.done.includes(2)),'db: edits work on reloaded read-only data');
   }
   // --- belt stages
   await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');
@@ -207,8 +225,8 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   ok(await ev(()=>goal()==='purple'&&rateable().length>54&&curBlocks()!==BLOCKS&&curBlocks().every(b=>b.ids.every(id=>TM[id]))),'purple goal changes blocks and rating scope');
   await p.locator('.bstage details.grp summary').first().tap();await p.locator('.bstage [data-a="comp"]').first().tap();ok(await ev(()=>(P().comp.purple||[]).length===1),'coach checklist ticks');
   ok(await ev(()=>/Purple-belt skill readiness/.test(document.body.innerText)&&!!document.querySelector('.belt .b.blue')),'Belt shows purple goal on a blue belt');await overflow('belt purple');
-  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/ready for Purple belt/.test(document.querySelector('.lprog').innerText)),'Home shows a short progress line for the goal');await overflow('home purple');
-  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');ok(await ev(()=>/Purple belt/.test(document.querySelector('.trainstats .trbelt').innerText)),'Train shows the goal belt');await overflow('train purple');
+  await p.tap('nav.tabs [data-v="map"]');await p.locator('.flowsvg g.node[data-v="seated"]').tap();
   const upTo=await ev(()=>document.querySelectorAll('.list .trow').length);await p.locator('[data-a="flowbelt"][data-v="black"]').tap();const all=await ev(()=>document.querySelectorAll('.list .trow').length);
   await p.locator('[data-a="flowbelt"][data-v="blue"]').tap();const blueOnly=await ev(()=>document.querySelectorAll('.list .trow').length);ok(all>=upTo&&upTo>=blueOnly&&all>blueOnly,`flow belt filter (${blueOnly} ≤ ${upTo} ≤ ${all})`);
   await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));await p.selectOption('#s-goal','blue');ok(await ev(()=>goal()==='blue'),'goal back to blue from settings');
@@ -223,7 +241,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     await ev(()=>techSheet('knee_cut'));await p.locator('[data-a="viddel"]').tap();await p.locator('[data-a="viddelyes"]').tap();ok(await ev(()=>!P().videos.knee_cut&&!document.querySelector('#sheet video')),'video removed');await p.tap('#sheetbar .back');
   }
   // --- chains: every attacking position has a tree; mirrors show defenses
-  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-map"]');
+  await p.tap('nav.tabs [data-v="map"]');
   for(const k of await ev(()=>Object.keys(CHAINS))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
     const r=await ev(k=>({att:document.querySelectorAll('ul.tree.root')[0]?.querySelectorAll('.tnode').length||0,first:document.querySelector('.tree .tnode')?.dataset.v}),k);ok(r.att>0,`attack chain renders for ${k}`)}
   for(const [k,o] of await ev(()=>Object.entries(OPP).filter(([k,o])=>CHAINS[o]))){await p.locator(`.flowsvg g.node[data-v="${k}"]`).tap();
@@ -238,11 +256,11 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await p.locator('[data-a="filter"][data-k="kind"][data-v="all"]').tap();await p.tap('#sheetbar [data-a="close"]');
   await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await p.tap('[data-a="lognew"]');await p.selectOption('#f-tapped','rnc');await p.tap('#sheetbar button[type=submit]');await p.waitForTimeout(150);
   ok(await ev(()=>!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'log links rear-naked choke to its defense');
-  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>/tapped most by/i.test(document.body.innerText)&&!!document.querySelector('.trow[data-v="rnc_def"]')),'Today suggests the defense for what tapped you');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-log"]');await ev(()=>{const d=document.querySelector('details[data-g="log-stats"]');if(d)d.open=true});ok(await ev(()=>/Tapped by/i.test(document.body.innerText)&&!!document.querySelector('[data-a="open"][data-v="rnc_def"]')),'Train › Log suggests the defense for what tapped you');
   // --- name, Belts tab, belt path
   ok(await ev(()=>/JitsFlow$/.test(document.title)&&/JitsFlow/i.test(document.querySelector('.brand').textContent)),'app renamed to JitsFlow');
   ok(await ev(()=>document.querySelector('nav.tabs [data-v="train"]').textContent.trim()==='Train'),'tab is called Train');
-  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="home"]');await p.tap('.lprog [data-v="train-belt"]');await p.locator(`.beltpath [data-v="${k}"]`).tap();
+  for(const k of ['purple','brown','black','blue']){await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.tap('.trainstats .trring');await p.locator(`.beltpath [data-v="${k}"]`).tap();
     ok(await ev(k=>location.hash==='#train-belt'&&document.querySelector(`.beltpath [data-v="${k}"]`).getAttribute('aria-pressed')==='true',k),`belt path opens ${k} curriculum`)}
   // --- glossary terms
   await ev(()=>techSheet('hg_frames'));const terms=await ev(()=>[...document.querySelectorAll('#sheet .term')].map(b=>b.dataset.v));
@@ -268,7 +286,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
     await p.tap('#sheetbar .back');
   }else{await p.tap('#sheetbar .back')}
   // --- weekly plan, training days, coach review, video embed
-  await p.tap('nav.tabs [data-v="home"]');
+  await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');
   ok(await ev(()=>document.querySelectorAll('.week .wd').length===7&&document.querySelectorAll('.week .wd.cls').length===(P().settings.days||[]).length&&!!document.querySelector('.week .wd.today')),'this week shows 7 days with class days and today');
   await p.locator('.week .wd.cls').first().tap();ok(await ev(()=>S.ui.sheet&&S.ui.sheet.k==='tech'),'class day opens its technique');await p.tap('#sheetbar .back');
   await p.tap('nav.tabs [data-v="me"]');await p.evaluate(()=>document.querySelectorAll('details.more:not([open]) summary').forEach(x=>x.click()));const before=await ev(()=>P().settings.days.length);await p.locator('[data-a="day"][data-v="5"]').tap();
@@ -291,7 +309,7 @@ const MOCK=()=>{ // simulated claude.ai runtime: per-user db with frozen snapsho
   await ev(()=>{if(window.__savedVid)VIDS.knee_cut=window.__savedVid;else delete VIDS.knee_cut});
   // --- screens and sheets for screen readers: <main>, a title per tab, a Home heading; a sheet is a named dialog that takes focus and gives it back
   await p.tap('nav.tabs [data-v="train"]');ok(await ev(()=>document.querySelector('main#app')&&document.title==='Train · JitsFlow'),'the screen is a <main> and the title says which tab: '+await ev(()=>document.title));
-  await p.tap('nav.tabs [data-v="home"]');ok(await ev(()=>document.title==='Home · JitsFlow'&&!!document.querySelector('#app h1.vh')&&document.querySelector('#app h1.vh').getBoundingClientRect().width<=1),'Home has a heading for screen readers, not shown on screen');
+  await p.tap('nav.tabs [data-v="map"]');ok(await ev(()=>document.title==='Map · JitsFlow'&&!!document.querySelector('#app h1.vh')&&document.querySelector('#app h1.vh').getBoundingClientRect().width<=1),'the Map has a heading for screen readers, not shown on screen');
   await p.tap('nav.tabs [data-v="train"]');await p.tap('.trainseg [data-v="train-moves"]');await p.locator('#learn-groups details.grp:not([open]) summary').first().tap();
   {const tid=await ev(()=>document.querySelector('#learn-groups .trow[data-a="open"]').dataset.v);await p.locator(`#learn-groups .trow[data-a="open"][data-v="${tid}"]`).first().focus();await p.keyboard.press('Enter');await p.waitForTimeout(150);
    ok(await ev(()=>{const sh=document.getElementById('sheet'),t=document.getElementById(sh.getAttribute('aria-labelledby'));return sh.getAttribute('role')==='dialog'&&sh.getAttribute('aria-modal')==='true'&&t&&t.tagName==='H1'&&document.activeElement===t}),'a sheet is a dialog named by its title, and focus moves to the title');

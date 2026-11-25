@@ -884,11 +884,44 @@ svg.ring text{font-family:var(--f-display);font-weight:700;font-size:15px;fill:v
 details.mgrp>summary{grid-template-columns:minmax(0,1fr) 56px auto auto}.mgt{display:flex;flex-direction:column;gap:1px;min-width:0}.mgt .small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mgbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}.mgbar i{display:block;height:100%;background:var(--good);border-radius:3px}
 @media (max-width:359px){.gymtop h1{font-size:26px}details.mgrp>summary{grid-template-columns:minmax(0,1fr) 36px auto auto;gap:8px;padding-inline:12px}}
+/* ============ THE MAP (first tab) ============ */
+.mapview{gap:14px}
+.mapstrip{display:flex;flex-wrap:wrap;gap:8px;min-width:0}.mapstrip .schip:not(.scls){flex:none}
+.schip{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 14px/1.2 var(--f-body);white-space:nowrap;max-width:100%;min-width:0}
+.schip.scls{flex:1 1 0}.schip .sct{overflow:hidden;text-overflow:ellipsis;min-width:0}.schip.scls b{flex:none;color:var(--blue)}.schip.scls.ok b{color:var(--good)}
+.schip.sdue{background:var(--bad);border-color:var(--bad);color:var(--surface);font-weight:700}
+.schip.schk{background:var(--warn-soft);border-color:transparent;color:var(--ink);font-size:13px;padding:0 12px}
+.schip.show{background:var(--blue-soft);border-color:transparent;flex:1 0 100%!important}
+.stuckpick{display:flex;flex-direction:column;gap:6px;min-width:0}
+.stuckrow{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding-bottom:2px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.stuckrow::-webkit-scrollbar{display:none}
+.stuckrow .chip{flex:none;white-space:nowrap;scroll-snap-align:start;font-size:14px}
+.stuckrow .chip:last-child{margin-right:44px}
+.stuckrow .chip.mine i{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
+.mapcard{position:relative;padding:12px 6px 14px;gap:10px}
+.mapcard .mapnav{margin-inline:0}
+.mapcard .jf-classic-map .flowsvg{max-width:560px;margin-inline:auto}
+.mapcard .flowsvg .node text{font-size:12.5px}
+.mapcard .flowkey,.mapcard .beltfilter{padding-inline:8px}
+.flowsvg .node .ring{fill:none!important;stroke:#F2C14E!important;stroke-width:2.2}
+.k-prog{width:16px;height:11px;border-radius:4px;border:2px solid #F2C14E;box-sizing:border-box}
+.flowsvg .node:focus-visible{outline:none}.flowsvg .node:focus-visible rect:not(.ring):not(.kbar):not(.kbar-bg){stroke:#fff;stroke-width:3}
+@keyframes nodepulse{0%{filter:drop-shadow(0 0 0 rgba(147,178,255,0))}35%{filter:drop-shadow(0 0 18px rgba(147,178,255,1))}100%{filter:drop-shadow(0 0 8px rgba(147,178,255,.6))}}
+.flowsvg .node.sel.pulse{animation:nodepulse 1.2s var(--ease) both}
+@media (prefers-reduced-motion:reduce){.flowsvg .node.sel.pulse{animation:none}}
+.maphint{position:absolute;z-index:3;top:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;width:max-content;max-width:calc(100% - 20px);background:#fff;color:#0B1530;border-radius:14px;padding:4px 4px 4px 14px;font-size:14px;font-weight:600;line-height:1.3;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.maphint::after{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:12px;margin-left:-6px;background:#fff;transform:rotate(45deg)}
+.maphint .mhx{flex:none;width:44px;height:44px;border:0;background:none;color:#0B1530;font-size:22px;line-height:1;border-radius:50%}
+.backtrail ol{gap:6px}.backtrail li+li::before{content:none}
+.backtrail ol button{min-height:44px;font-size:13.5px;padding:0 12px}
+.posvid .ymedia>.posfig{background:var(--surface-2);border-radius:var(--r-md);padding:10px}
+.posvid .ymedia>.posfig svg{max-height:170px}
+.trlinks{display:flex;flex-wrap:wrap;gap:4px 14px}
 </style>
 
 <main class="wrap app" id="app"></main>
 <nav class="tabs" aria-label="Sections"><div class="wrap">
-  <button data-a="tab" data-v="home"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5h-6v5H4z"/></svg>Home</button>
+  <button data-a="tab" data-v="map"><svg viewBox="0 0 24 24"><circle cx="6" cy="6.5" r="2.3"/><circle cx="18" cy="6.5" r="2.3"/><circle cx="12" cy="17.5" r="2.3"/><path d="M8.3 6.5h7.4M7.3 8.5l3.5 7M16.7 8.5l-3.5 7"/></svg>Map</button>
   <button data-a="tab" data-v="classes" hidden><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg>Classes</button>
   <button data-a="tab" data-v="train"><svg viewBox="0 0 24 24"><path d="M4 5h11a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h6"/></svg>Train</button>
   <button data-a="tab" data-v="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>Me</button>
@@ -3756,14 +3789,14 @@ const ytThumb=(id,q)=>`https://i.ytimg.com/vi/${encodeURIComponent(id)}/${q||"hq
 const netSlow=()=>{const c=navigator.connection;return !!(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))};
 const canEmbed=()=>{if(inClaude()||!/^https?:$/.test(location.protocol))return false;try{return window.top===window.self}catch(e){return false}}; // not inside someone else's frame (a preview) either
 // key: a technique or position (its picked video), or a video itself ({v,title,channel})
-function ytMedia(key,label,poster){const v=key&&typeof key==="object"?key:vidOf(key);if(!v)return "";const title=v.title||label;
+function ytMedia(key,label,poster,face){const v=key&&typeof key==="object"?key:vidOf(key);if(!v)return "";const title=v.title||label;
   const img=`<img class="ytthumb" src="${ytThumb(v.v,"hqdefault")}" alt="" loading="lazy" decoding="async">`;
   const back=`<span class="ytposter" aria-hidden="true">${poster||""}${img}<span class="ytshade"></span></span>`;
   const meta=`<span class="ytmeta"><b>${esc(title)}</b>${v.channel?`<small>${esc(v.channel)}${v.nogi===false?" · gi video":""}</small>`:""}</span>`;
   const cap=`<div class="ytcap"><span class="ytplay" aria-hidden="true">▶</span><span><b>${esc(title)}</b>${v.channel?`<br><span class="small muted">${esc(v.channel)}${v.nogi===false?" · gi video":""}</span>`:""}</span></div>`;
   if(navigator.onLine===false)return `<div class="ytm off" role="img" aria-label="Video: ${esc(title)}. It needs internet.">${back}<span class="ytnote">Video needs internet</span>${meta}</div>`;
   if(!canEmbed())return `<a class="ytm ytpick" href="${ytWatch(v.v)}" target="_blank" rel="noopener" aria-label="Play on YouTube: ${esc(title)}">${back}<span class="ytbig" aria-hidden="true">▶</span>${meta}<span class="ytout" aria-hidden="true">YouTube ↗</span></a>`;
-  if(netSlow())return `<div class="ytbox"><button class="ytface ytm" data-a="ytplay" data-v="${esc(v.v)}" aria-label="${esc(title)}">${back}<span class="ytbig" aria-hidden="true">▶</span>${meta}</button></div>`;
+  if(face||netSlow())return `<div class="ytbox"><button class="ytface ytm" data-a="ytplay" data-v="${esc(v.v)}" aria-label="${esc(title)}">${back}<span class="ytbig" aria-hidden="true">▶</span>${meta}</button></div>`;
   return `<div class="ytbox"><div class="ytembed">${back}<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.v)}?rel=0&playsinline=1" title="${esc(title)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>${cap}</div>`}
 const ytPlayer=(key,label)=>ytMedia(key,label,"");
 // a thumbnail that can't load (offline, blocked) just goes, leaving the soft poster underneath
@@ -4290,7 +4323,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 function blankProgress(){return {v:1,mastery:{},notes:{},srs:{},settings:{perWeek:2,priorHours:100,targetHours:300,sessionMins:90,cycleStart:today(),hand:"left"},solo:{date:"",done:[]},photos:{},videos:{},comp:{}}}
-const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"home",trainView:"moves",flowSel:"hg_bot",filterP:"all",filterM:"all",kind:"all",q:""}};
+const S={progress:blankProgress(),sessions:[],mode:"local",sync:"Connecting…",syncState:"",ui:{tab:"map",trainView:"moves",flowSel:"standing",filterP:"all",filterM:"all",kind:"all",q:""}};
 const P=()=>S.progress;
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
@@ -4466,75 +4499,87 @@ function header(){const g=API.me&&API.me.gym;
   const who=API.me?`<span class="avatar" role="img" aria-label="${esc(initials(API.me.name))}: signed in as ${esc(API.me.name)}" title="${esc(API.me.name)}">${esc(initials(API.me.name))}</span>`:API.on&&!inClaude()?`<button class="sync who" data-a="auth" data-v="login">Sign in</button>`:"";
   return `<header class="top">${brand}<div class="row"><span class="sync" id="sync" role="status" data-s="${S.syncState}">${esc(S.sync)}</span>${who}</div></header>${pvBar()}${famBar()}`}
 /* ============ VIEWS ============ */
-function viewToday(){
-  autoLog();
-  const g=goal(),G=BELT[g],pct=readiness(),b=blockIndex(),blk=curBlocks()[b.i],due=dueList(),st=P().settings;
-  const hrs=matHours();
-  const m2=monthsTo(st.perWeek||2),m3=monthsTo(Math.max(3,(st.perWeek||2)+1));
-  const rq=rateQueue(),rTotal=rateable().length,rDone=rTotal-rq.length;
-  const last30=recent(30);
-  // mission
+/* What used to be on Home, now under the programme on Train: how the last class went, a competition coming up, a mission for
+   the next class, and (studying on your own) this week's days and the focus block. */
+function trainExtras(){
+  const inGym=!!(API.me&&API.me.gym),st=P().settings,b=blockIndex(),blk=curBlocks()[b.i];
   const cand=blk.ids.map(id=>TM[id]).filter(t=>lv(t.id)<4).sort((a,b)=>lv(a.id)-lv(b.id));
-  const mt=cand[0]||TM[blk.ids[0]];const ml=lv(mt.id);
+  const mt=cand[0]||TM[blk.ids[0]],ml=lv(mt.id);
   const mission=[
-    `Ask a partner for 5 slow reps each side of <b>${esc(mt.n)}</b> before or after class. Read the steps on the way there.`,
+    `Ask a partner for 5 slow reps each side of <b>${esc(mt.n)}</b> before or after class.`,
     `Get 10 drilling reps each side of <b>${esc(mt.n)}</b>. Focus on one detail: ${esc(mt.d[0])}`,
-    `In positional sparring, ask to start in <b>${esc(POS[mt.f].L)}</b> and go for <b>${esc(mt.n)}</b>.`,
+    `In positional sparring, start in <b>${esc(POS[mt.f].L)}</b> and go for <b>${esc(mt.n)}</b>.`,
     `In live rolls, get to <b>${esc(POS[mt.f].L)}</b> and hunt <b>${esc(mt.n)}</b>. One clean attempt per roll.`,
     `Hit <b>${esc(mt.n)}</b> again in a live roll and chain it into ${mt.nx[0]?esc(TM[mt.nx[0]].n):"your next attack"}.`][ml];
-  const stuck=stuckCounts(30);
-  let weak="";
-  if(stuck.length){const [p,c]=stuck[0];const fixes=fromPos(p,RANK[goal()]).filter(t=>isDef(t)||t.c==="sweep"||t.c==="guard"||t.c==="control").slice(0,3);
-    weak=`<section class="panel warnp"><h2 class="label">Weak spot · last 30 days</h2><p>You logged getting stuck in <b>${esc(POS[p].L)}</b> ${c}×. Drill these this week:</p><div class="list">${fixes.map(t=>tRow(t)).join("")}</div></section>`}
-  {const tc={};recent(30).forEach(s=>(s.tapped||[]).forEach(id=>{tc[id]=(tc[id]||0)+1}));const top=Object.entries(tc).sort((a,b)=>b[1]-a[1]).find(([id])=>defFor(id));
-   if(top){const d=defFor(top[0]);weak+=`<section class="panel warnp"><h2 class="label">Tapped most by · last 30 days</h2><p><b>${esc(TM[top[0]].n)}</b> got you ${top[1]}×. Drill the defense this week:</p><div class="list">${tRow(d)}</div></section>`}}
+  const prog=typeof progMapPos==="function"&&progMapPos(); // the gym's programme says what to work on this week: no second mission
   const solo=P().solo.date===today()?P().solo.done:[];
-  const inGym=!!(API.me&&API.me.gym);
-  if(inGym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="home"&&!S.ui.sheet)render()})}
-  const owes=API.pay&&(myOwed(API.pay)>0||API.pay.dueCents>API.pay.paidCents||(!API.pay.plan&&(API.pay.plans||[]).length));
-  const dname=new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
-  const hero=`<section class="hero dk homehero lprog" aria-label="Your progress"><span class="eyebrow">${esc(dname)}</span><div class="hrow"><span class="bignum mono">${pct}%</span><span class="hready">ready for <b>${G.to} belt</b></span></div>
-    ${beltSVG(pct)}<p class="small muted">${Math.round(hrs)} mat hours · ${weekStreak()} week streak</p>
-    <div class="hact"><button class="btn primary logbtn" data-a="lognew"><b aria-hidden="true">+</b> Log a session</button><button class="btn" data-a="tab" data-v="train-belt">Your belt</button></div></section>`;
-  return `${header()}<h1 class="vh">${esc(inGym?API.me.gym.name:"Home")}</h1><div class="stack-lg">
-  ${hero}
-  ${typeof noticesCard==="function"?noticesCard():""}${typeof progHomeCard==="function"&&!isCoach()?progHomeCard():""}${inGym&&!isCoach()?feesCard():""}${nextClassCard()}${lastClassCard()}${compTodayCard()}
-  <section class="panel today-card"><h2 class="label">Today</h2>
-    ${due.length?`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span><b>${due.length}</b> technique${due.length===1?"":"s"} to review, about ${Math.max(1,Math.round(due.length/2))} min</span><button class="btn primary" data-a="review">Review</button></div>`:`<p class="small muted">Nothing to review today.</p>`}
-    <div class="stack" style="gap:6px"><p class="small muted" style="margin:0">Your mission for the next class</p><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open technique</button></div></div></section>
-  ${rq.length?`<section class="panel accent"><div class="row between"><h2 class="label">Rate what you know</h2><span class="small muted mono">${rDone}/${rTotal} rated</span></div><div class="progress"><i style="width:${Math.round(100*rDone/rTotal)}%"></i></div><p>${rDone?"Pick up where you left off.":g==="blue"?"Rate each technique once (about 5–10 minutes). It fills your review queue and shows your gaps, so JitsFlow knows what you should drill next.":"Rate each technique up to "+G.to+" belt once. It fills your review queue and shows your gaps."}</p><button class="btn primary" data-a="qr">${rDone?"Continue rating":"Rate what you know"}</button></section>`:""}
-  ${weak}
+  return `${typeof lastClassCard==="function"?lastClassCard():""}${typeof compTodayCard==="function"?compTodayCard():""}
   ${inGym?"":`<section class="stack"><div class="row between"><h2 class="label">This week</h2><button class="linkbtn small" data-a="tab" data-v="me">Training days</button></div>
-    <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="home"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>`}
+    <div class="week">${weekPlan().map(d=>{const isT=d.date===today();return `<button class="wd${d.cls?" cls":""}${isT?" today":""}" ${d.t?`data-a="open" data-v="${d.t.id}"`:`data-a="tab" data-v="train"`}><span class="dn">${d.n}<small>${Number(d.date.slice(8))}</small></span><span class="small">${d.txt}</span><span class="st">${d.logged?"✓ trained":""}</span></button>`}).join("")}</div></section>`}
+  ${prog?"":`<section class="panel today-card"><h2 class="label">For your next class</h2><p>${mission}</p><div class="row"><button class="btn" data-a="open" data-v="${mt.id}">Open ${esc(mt.n)}</button></div></section>`}
   ${accountNudge()}
-  <details class="more" data-g="today-more"${(S.ui.openG||{})["today-more"]?" open":""}><summary>Focus block and off-day drills</summary><div class="stack-lg" style="padding-top:14px">
+  ${inGym?"":`<details class="more" data-g="today-more"${(S.ui.openG||{})["today-more"]?" open":""}><summary>Focus block and off-day drills</summary><div class="stack-lg" style="padding-top:14px">
   <section class="stack"><div class="row between"><h2 class="label">Focus · block ${b.i+1} of ${b.n}</h2><span class="small muted mono">${b.left} days left</span></div>
     <div><h3>${esc(blk.n)}</h3><p class="muted small">${esc(blk.why)}</p></div>
     <div class="list">${blk.ids.map(id=>tRow(TM[id])).join("")}</div></section>
   <section class="stack"><div class="row between"><h2 class="label">Off-day solo drills</h2><span class="small muted mono">${solo.length}/${SOLO.length}</span></div>
-    <p class="small muted">On the days you don't train, this 10-minute routine on the other days adds mat-free reps.</p>
-    <div>${SOLO.map((d,i)=>`<button class="check" data-a="solo" data-v="${i}" aria-pressed="${solo.includes(i)}"><span class="box">${solo.includes(i)?"✓":""}</span><span><span class="ct"><b>${esc(d.n)}</b> · ${esc(d.r)}</span><br><span class="small muted">${esc(d.why)}</span></span></button>`).join("")}</div></section></div></details>
-  </div>`;
+    <p class="small muted">A 10-minute routine for the days you don't train.</p>
+    <div>${SOLO.map((d,i)=>`<button class="check" data-a="solo" data-v="${i}" aria-pressed="${solo.includes(i)}"><span class="box">${solo.includes(i)?"✓":""}</span><span><span class="ct"><b>${esc(d.n)}</b> · ${esc(d.r)}</span><br><span class="small muted">${esc(d.why)}</span></span></button>`).join("")}</div></section></div></details>`}`;
 }
 
-/* Train: the gym's programme ("This month"), one block of your stats, then Moves | Map | Log behind one switch. Your belt (each belt's
-   curriculum) opens from the ring. Coaches see the same page as "My training", under Gym (head coach) or Me, with the coach tabs kept. */
-const TRAINV=["moves","map","log","belt"];
+/* ============ THE MAP ============
+   The first screen for members, parents and self-study: one line of what's next at the gym (the next class, and fees only
+   when something's owed), "Where are you stuck?", the map of positions, and right below it the selected position with its
+   moves. "Leads to" walks the chain on the map. Coaches open it as My training. */
+const STUCK=[["standing","Standing"],["mount_bot","I keep getting mounted"],["sc_bot","Stuck under side control"],["back_bot","My back is taken"],["hg_bot","Stuck in half guard (bottom)"],["cg_bot","Someone's in my guard"],["sc_top","I've got side control"],["back_top","I'm on their back"]];
+const mapSet=p=>{S.ui.flowSel=p;S.ui.mapInit=true;lsSet("jf.mapPos",p)};
+// Where the map opens: the last position you looked at, else where this week's programme moves start, else Standing.
+function mapStart(){if(S.ui.mapInit)return;const saved=lsGet("jf.mapPos");if(saved&&POS[saved]){S.ui.flowSel=saved;S.ui.mapInit=true;return}
+  if(!API.checked){S.ui.flowSel="standing";return} // not known yet who's signed in
+  const pp=typeof progMapPos==="function"?progMapPos():null;if(pp===undefined){S.ui.flowSel="standing";return} // the programme is still loading
+  S.ui.flowSel=pp&&POS[pp]?pp:"standing";S.ui.mapInit=true}
+function viewMap(){const co=isCoach();if(!co)autoLog();mapStart();
+  if(S.ui.mapHint===undefined){S.ui.mapHint=!lsGet("jf.mapHint");if(S.ui.mapHint)lsSet("jf.mapHint",1)} // the tip shows on the first visit only
+  const v=viewFlow();
+  const top=co?`<section class="stack" style="gap:4px">${backTo(isHead()?"Gym":"Me","coachgo",isHead()?"gym":"me")}<h1 class="pageh">My training</h1></section>${trainSeg("map")}`:`<h1 class="vh">Map</h1>`;
+  return `${header()}<div class="stack-lg mapview">${top}${!co&&typeof mapStrip==="function"?mapStrip():""}${v.hero}${v.body}</div>`}
+function stuckPick(sel){const mine=(stuckCounts(60)[0]||[])[0];let list=STUCK.slice();
+  if(mine){const i=list.findIndex(x=>x[0]===mine);if(i>=0)list.unshift(list.splice(i,1)[0]);else list.unshift([mine,POS[mine].l])}
+  return `<section class="stuckpick" aria-labelledby="stuck-h"><h2 class="label" id="stuck-h">Where are you stuck?</h2><div class="stuckrow" role="group" aria-labelledby="stuck-h">${list.map(([p,l])=>`<button class="chip stuckchip${p===mine?" mine":""}" data-a="stuckgo" data-v="${p}" aria-pressed="${p===sel}"${p===mine?` aria-label="${esc(l)}, from your log"`:""}>${p===mine?`<i aria-hidden="true"></i>`:""}${esc(l)}</button>`).join("")}</div></section>`}
+// Every way the selection moves (a tap on the map, "Where are you stuck?", a link from elsewhere) adds a step you can go back to.
+function mapGo(p,how){if(!POS[p])return;S.ui.mapHint=false;const tr=trailNow(),cur=tr[tr.length-1];
+  if(cur.p!==p){tr.push({p,hs:cur.hs||0});if(tr.length>12)tr.splice(0,tr.length-12)}
+  mapSet(p);const sh=!document.getElementById("sheet").hidden;
+  if(!isMap()||sh){if(sh)hideSheet();go("map");mapFocus("card",true);return}
+  const y=window.scrollY;render();window.scrollTo(0,y);mapFocus(how)}
+/* After a move: the selected position glows, and the page scrolls (gently, unless you've asked for less motion) so it's in view on
+   the map with its card below ("map"), or straight to its card ("card"). */
+function mapFocus(how,now){const calm=reduceMotion(),sm=calm||now?"auto":"smooth",node=document.querySelector(".flowsvg g.node.sel");
+  if(node&&!calm)node.classList.add("pulse");
+  if(how==="map"){const m=document.getElementById("mapcard");if(!m)return;const mt=m.getBoundingClientRect().top+scrollY-8,nt=node?node.getBoundingClientRect().top+scrollY:mt;
+    window.scrollTo({top:Math.max(0,Math.max(mt,nt-innerHeight*.3)),behavior:sm})}
+  else if(how==="card"){const c=document.getElementById("chainstage");if(c)window.scrollTo({top:Math.max(0,c.getBoundingClientRect().top+scrollY-12),behavior:sm})}
+  if(how){const t=document.getElementById("poshero-t");if(t)t.focus({preventScroll:true})}}
+
+/* Train: the gym's programme ("This month"), what used to be on Home, one block of your stats, then Moves | Log behind one switch.
+   Your belt (each belt's curriculum) opens from the ring; the map is its own tab. Coaches see the same page as "My training", under
+   Gym (head coach) or Me, with the coach tabs kept: for them the switch is Map | Moves | Log, and My training opens on the Map. */
+const TRAINV=["moves","log","belt"];
+const trainSeg=cur=>isCoach()?seg("My training","tab",[["map","Map"],["train-moves","Moves"],["train-log","Log"]],cur,"seg3 trainseg"):seg("Train","tab",[["train-moves","Moves"],["train-log","Log"]],cur,"seg trainseg");
 const matHours=()=>(P().settings.priorHours||0)+hoursLogged(); // one number everywhere: hours before the app plus every logged session
 const movesKnown=()=>{const r=rateable();return {n:r.filter(t=>lv(t.id)>=1).length,of:r.length,rated:r.filter(t=>t.id in P().mastery).length}};
 function trainStats(){const g=goal(),pct=readiness(),k=movesKnown(),due=dueList(),left=k.of-k.rated;
   return `<section class="hero dk trainstats" aria-label="Your progress"><div class="trtop"><button class="trring" data-a="tab" data-v="train-belt" aria-label="Your belt: ${pct}% ready for ${BELT[g].to} belt">${ringSVG(pct,100,`${pct}% ready for ${BELT[g].to} belt`,"belt")}</button>
-    <div class="grow"><span class="eyebrow">Ready for</span><b class="trbelt">${BELT[g].to} belt</b><button class="linkbtn small" data-a="tab" data-v="train-belt">Your belt ›</button></div></div>
+    <div class="grow"><span class="eyebrow">Ready for</span><b class="trbelt">${BELT[g].to} belt</b><span class="trlinks"><button class="linkbtn small" data-a="tab" data-v="train-belt">Your belt ›</button>${isCoach()?"":`<button class="linkbtn small" data-a="tab" data-v="map">Open the map ›</button>`}</span></div></div>
     <div class="stats"><div class="stat"><b>${Math.round(matHours())}</b><span>Mat hours</span></div><div class="stat"><b>${weekStreak()}</b><span>Week streak</span></div><div class="stat"><b>${k.n}/${k.of}</b><span>Moves known</span></div></div>
-    ${left?`<button class="btn primary" data-a="qr">Rate what you know${k.rated?` · ${left} left`:""}</button>`:""}${due.length&&isCoach()?`<button class="btn" data-a="review">Review ${due.length} move${due.length===1?"":"s"}</button>`:""}</section>`}
+    ${left?`<button class="btn primary" data-a="qr">Rate what you know${k.rated?` · ${left} left`:""}</button>`:""}${due.length?`<button class="btn" data-a="review">Review ${due.length} move${due.length===1?"":"s"}</button>`:""}</section>`}
 function viewTrain(){const tv=TRAINV.includes(S.ui.trainView)?S.ui.trainView:"moves",co=isCoach();
   const top=co?`<section class="stack" style="gap:4px">${backTo(isHead()?"Gym":"Me","coachgo",isHead()?"gym":"me")}<h1 class="pageh">My training</h1></section>`:"";
-  const sw=seg("Train","tab",[["train-moves","Moves"],["train-map","Map"],["train-log","Log"]],"train-"+tv,"seg3 trainseg");
+  const sw=trainSeg("train-"+tv);
   if(tv==="belt"){const v=viewBelt();return `${header()}<div class="stack-lg"><section class="stack" style="gap:4px">${backTo(co?"My training":"Train","tab","train-moves")}</section>${sw}<section class="hero dk learnhero beltwrap" aria-label="Your belt"><div class="hero-t"><span class="eyebrow">Your belt</span></div>${v.hero}</section>${v.body}</div>`}
-  const v=tv==="map"?viewFlow():tv==="log"?viewLogBody():viewMoves();
-  return `${header()}${co?"":`<h1 class="vh">Train</h1>`}<div class="stack-lg">${top}${!co&&tv!=="map"&&typeof progLearnTop==="function"?progLearnTop():""}${trainStats()}
-  ${sw}
-  ${tv==="map"?`<section class="hero dk learnhero" aria-label="Flow map">${v.hero}</section>`:""}${v.body}
+  const v=tv==="log"?viewLogBody():viewMoves();
+  return `${header()}${co?"":`<h1 class="vh">Train</h1>`}<div class="stack-lg">${top}${co?"":(typeof progLearnTop==="function"?progLearnTop():"")+trainExtras()}${trainStats()}
+  ${sw}${v.body}
   ${co?`<div class="list navrows"><button class="navrow" data-a="trainset"><span><b>Training settings</b><span class="small muted">Days, belt goal, hours, backup</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}</div>`}
 // Log: the journal's sessions, newest first, with Log a session at the top. The hours and streak are in the block above.
 function viewLogBody(){
@@ -4688,9 +4733,15 @@ const FDIR={fin:"Submission",up:"To a better position",side:"Same level",down:"T
 function flowGroups(sel,mx){const g={};fromPos(sel,mx).forEach(t=>{(g[t.t]=g[t.t]||[]).push(t)});const flat=ROWS.flat();
   const rank=d=>d==="sub"?-1:d===sel?999:POS[d].r*100+flat.indexOf(d);
   return Object.keys(g).sort((a,b)=>rank(a)-rank(b)).map(d=>({d,dir:flowDir(sel,d),ts:g[d]}))}
-function flowSVG(sel){
+// A position's name on the map: one line, or two when it's long (split at the space nearest the middle).
+function mapLabel(t){if(t.length<=11||!t.includes(" "))return [t];const sp=[...t].map((c,i)=>c===" "?i:-1).filter(i=>i>0);const i=sp.sort((a,b)=>Math.abs(a-t.length/2)-Math.abs(b-t.length/2))[0];return [t.slice(0,i),t.slice(i+1)]}
+function flowSVG(sel,prog){
   // The ladder: a Finish row on top, then every position from best to worst. Arrows show where the selected one leads.
-  const W=400,NW=92,NH=38,G=8,top=24,RH=62,mx=flowMax();const pos={};
+  // Sized for a phone held in one hand: each position is at least 44px tall at 360px wide.
+  prog=prog||new Set();
+  // as wide as the screen allows (so a position is never under 44px tall on a small phone), up to 360 (it scales up from there)
+  const aw=(document.getElementById("app")||{}).clientWidth||390,W=Math.round(Math.max(256,Math.min(360,aw-32-12-8)));
+  const G=6,NW=(W-3*G)/4,NH=46,top=26,RH=70,mx=flowMax(),own=P().mastery;const pos={};
   ROWS.forEach((r,ri)=>{const tw=r.length*NW+(r.length-1)*G;const x0=(W-tw)/2;r.forEach((p,i)=>{pos[p]={x:x0+i*(NW+G),y:top+(ri+1)*RH}})});
   const FW=150;pos.sub={x:(W-FW)/2,y:top,w:FW};
   const gs=flowGroups(sel,mx).filter(g=>g.d!==sel),cnt={};gs.forEach(g=>cnt[g.d]=g.ts.length);
@@ -4704,16 +4755,16 @@ function flowSVG(sel){
     else{const y=s.y,lift=26;d=`M${x1},${y} C${x1},${y-lift} ${ecx},${y-lift} ${ecx},${y-3}`}
     return `<path class="edge-halo" d="${d}" stroke-width="${(+sw+3).toFixed(1)}"/><path class="edge ${g.dir}" style="--i:${i}" stroke-width="${sw}" d="${d}" marker-end="url(#ah-${g.dir})"/>`}).join("");
   const marks=["fin","up","side","down"].map(k=>`<marker id="ah-${k}" class="ah ${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join("");
-  const labels=["Finish",...TIERS].map((t,i)=>`<text class="tier" x="4" y="${top+i*RH-6}">${t}</text>`).join("");
+  const labels=["Finish",...TIERS].map((t,i)=>`<text class="tier" x="2" y="${top+i*RH-7}">${t}</text>`).join("");
   const any=gs.length>0;let nodes="";
   Object.entries(pos).forEach(([p,c])=>{const w=c.w||NW,n=cnt[p];
-    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":any?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submissions${n?`: ${n} from ${esc(POS[sel].l)}`:""}"><rect x="${c.x}" y="${c.y}" width="${w}" height="${NH}" rx="19"/><text x="${c.x+w/2}" y="${c.y+NH/2+4}" text-anchor="middle">Submission</text></g>`;return}
-    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(any)cls.push("dim");
-    const k=posKnown(p,mx);
-    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-label="${esc(POS[p].L)}${n?`, ${n} move${n>1?"s":""} from ${esc(POS[sel].l)}`:""}${k!==null?`, you know ${Math.round(k*100)}% of its moves`:""}"><rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="7"/>
-      <text x="${c.x+NW/2}" y="${c.y+NH/2+2}" text-anchor="middle">${esc(POS[p].l)}</text>
+    if(p==="sub"){nodes+=`<g class="node fin${n?" dest":any?" dim":""}" data-a="flowfin" role="button" tabindex="0" aria-label="Submissions${n?`: ${n} from ${esc(POS[sel].l)}`:""}"><rect x="${c.x}" y="${c.y}" width="${w}" height="${NH}" rx="23"/><text x="${c.x+w/2}" y="${c.y+NH/2+5}" text-anchor="middle">Submission</text></g>`;return}
+    const cls=["node","t"+POS[p].r];if(p===sel)cls.push("sel");else if(n)cls.push("dest",flowDir(sel,p));else if(any)cls.push("dim");if(prog.has(p))cls.push("prog");
+    const k=posKnown(p,mx),ts=fromPos(p,mx),rated=ts.filter(t=>t.id in own).length,lab=mapLabel(POS[p].l),cx=c.x+NW/2;
+    nodes+=`<g class="${cls.join(" ")}" data-a="pos" data-v="${p}" role="button" tabindex="0" aria-pressed="${p===sel}" aria-label="${esc(POS[p].L)}: ${rated} of ${ts.length} move${ts.length===1?"":"s"} rated${n?`. ${n} move${n>1?"s":""} from ${esc(POS[sel].l)} lead here`:""}${prog.has(p)?". In this month's programme":""}">${prog.has(p)?`<rect class="ring" x="${c.x-3}" y="${c.y-3}" width="${NW+6}" height="${NH+6}" rx="10"/>`:""}<rect x="${c.x}" y="${c.y}" width="${NW}" height="${NH}" rx="8"/>
+      ${lab.length>1?`<text x="${cx}" y="${c.y+17}" text-anchor="middle">${esc(lab[0])}</text><text x="${cx}" y="${c.y+31}" text-anchor="middle">${esc(lab[1])}</text>`:`<text x="${cx}" y="${c.y+NH/2+(k!==null?1:4)}" text-anchor="middle">${esc(lab[0])}</text>`}
       ${k!==null?`<rect class="kbar-bg" x="${c.x+10}" y="${c.y+NH-8}" width="${NW-20}" height="3.5" rx="1.75"/><rect class="kbar" x="${c.x+10}" y="${c.y+NH-8}" width="${Math.max(0,(NW-20)*k)}" height="3.5" rx="1.75"/>`:""}</g>`});
-  return `<svg class="flowsvg" viewBox="0 0 ${W} ${top+6*RH+NH+8}" role="group" aria-label="Position map"><defs>${marks}</defs>${labels}${nodes}<g class="edges" pointer-events="none">${edges}</g></svg>`;
+  return `<svg class="flowsvg" viewBox="-4 0 ${W+8} ${top+6*RH+NH+6}" role="group" aria-label="Position map"><defs>${marks}</defs>${labels}${nodes}<g class="edges" pointer-events="none">${edges}</g></svg>`;
 }
 /* "From here": a transit-map view. Coloured lines leave the position and run down a gutter to each destination, which lists the moves that get you there. */
 function flowFrom(sel){const mx=flowMax(),gs=flowGroups(sel,mx),p=POS[sel];
@@ -4739,7 +4790,8 @@ function drawFlowLines(anim){const box=document.querySelector(".fsk");if(!box)re
     out+=`<path class="fl ${k}" style="--i:${i}" stroke-width="${w}" d="M${x},${y0-2} L${x},${yc-r} Q${x},${yc} ${x+r},${yc} L${gut-3},${yc}" marker-end="url(#fa-${k})"/>`});
   svg.innerHTML=out}
 // iOS fires resize when the toolbar hides on scroll: only redraw when the width really changed, and without the fade.
-addEventListener("resize",()=>{const b=isMap()&&document.querySelector(".fsk");if(b&&Math.abs(b.getBoundingClientRect().width-(b._w||0))>1)drawFlowLines()});
+addEventListener("resize",()=>{const sv=isMap()&&document.querySelector(".mapcard .flowsvg");if(sv&&Math.abs(sv.getBoundingClientRect().width-(sv._w||(sv._w=sv.getBoundingClientRect().width)))>40&&document.getElementById("sheet").hidden){const y=scrollY;render();scrollTo(0,y)}
+const b=isMap()&&document.querySelector(".fsk");if(b&&Math.abs(b.getBoundingClientRect().width-(b._w||0))>1)drawFlowLines()});
 /* Shortest chain of techniques from one position to another (breadth-first over "from → to" moves). */
 function routeFind(from,to,max){if(from===to)return [];const prev={[from]:null},q=[from];
   while(q.length){const p=q.shift();for(const t of fromPos(p,max)){if(t.t==="sub"||t.t===p||t.t in prev)continue;prev[t.t]=t;if(t.t===to){const path=[];let x=to;while(prev[x]){path.unshift(prev[x]);x=prev[x].f}return path}q.push(t.t)}}
@@ -4775,38 +4827,38 @@ function branchCard(b,p){const t=b.t,dir=flowDir(p,t.t),bl=beltOf(t),fin=t.t==="
   return `<article class="branch d-${dir}"><p class="bcue"><b>${esc(when)}</b>${gl(cue[0].toUpperCase()+cue.slice(1))}</p>
    <button class="bmove" data-a="open" data-v="${t.id}" aria-label="${esc(t.n)}: open the steps${vidOf(t.id)?" and video":""}">${techThumb(t)}<span><span class="bname">${esc(t.n)}</span><span class="meta">${cat(t.c)}${bl!=="blue"?`<span class="btag ${bl}">${BELT[bl].to}</span>`:""}${stripes(lv(t.id))}</span></span></button>
    <button class="bgo${fin?" tapgo":""}" data-a="chaingo" data-v="${t.id}" data-k="${b.k}" aria-label="Go: ${esc(t.n)}, leads to ${esc(goesTo(t,p))}"><span><small>${fin?"Finishes with":"Leads to"}</small><b>${esc(goesTo(t,p))}</b></span><i aria-hidden="true">→</i></button></article>`}
-function chainStage(sel,mx){const tr=trailNow(),cur=tr[tr.length-1],p=POS[cur.p],last=cur.t&&TM[cur.t],br=branchesAt(cur,mx),all=fromPos(cur.p,mx).length;
-  const crumbs=tr.length>1?`<nav class="crumbs" aria-label="Your path"><div class="crumbhead"><span class="eyebrow">Your path</span><button class="reset" data-a="chainreset">Start over</button></div><ol>${tr.map((x,i)=>{const here=i===tr.length-1,lab=x.fin?"Tap":i&&x.p===tr[i-1].p&&TM[x.t]?TM[x.t].n:POS[x.p].l;
-      return `<li${x.fin?' class="fin"':""}><button data-a="crumb" data-v="${i}"${here?' aria-current="step"':""} aria-label="${esc(i?`${TM[x.t]?TM[x.t].n:""} to ${lab}`:`Start: ${lab}`)}${here?" (you are here)":", jump back here"}">${esc(lab)}</button></li>`}).join("")}</ol></nav>`:"";
+function chainStage(sel,mx){const tr=trailNow(),cur=tr[tr.length-1],p=POS[cur.p],last=cur.t&&TM[cur.t],br=branchesAt(cur,mx),all=new Set([...fromPos(cur.p,mx),...br.list.map(b=>b.t)].map(t=>t.id)).size;
+  // back to the last three positions you came from (newest first), to retrace your steps
+  const back=[];for(let i=tr.length-2;i>=0&&back.length<3;i--){if(tr[i].p!==cur.p&&!back.some(j=>tr[j].p===tr[i].p))back.push(i)}
+  const crumbs=back.length?`<nav class="crumbs backtrail" aria-label="Back to where you were"><ol>${back.map((i,n)=>`<li><button data-a="crumb" data-v="${i}" aria-label="Back to ${esc(POS[tr[i].p].L)}">‹ ${n?"":"Back to "}${esc(POS[tr[i].p].l)}</button></li>`).join("")}</ol></nav>`:"";
   const vid=vidOf("pos:"+cur.p);
-  const media=vid?ytMedia("pos:"+cur.p,p.L,posVisual(cur.p)):posVisual(cur.p);
+  const media=vid?ytMedia("pos:"+cur.p,p.L,posVisual(cur.p),true):posVisual(cur.p); // the map is the first screen: YouTube loads only when they tap play
   const head=last?(cur.fin?`After ${esc(last.n)}`:`Via ${esc(last.n)}`):esc(TIERS[p.r]);
   const hero=`<section class="panel poshero dk" id="poshero" aria-labelledby="poshero-t">${crumbs}
     <div class="ptop"><div class="hero-t"><span class="eyebrow">${head}</span><h2 id="poshero-t" tabindex="-1">${esc(p.L)}</h2></div>${vid?`<div class="pfig">${posVisual(cur.p,"xs")}</div>`:""}</div>
-    <p class="pgo">${gl(p.g)}</p><div class="ymedia">${media}</div>
+    <p class="pgo">${gl(p.g)}</p>
     ${OPP[cur.p]&&OPP[cur.p]!==cur.p?`<button class="btn flip" data-a="pos" data-v="${OPP[cur.p]}">See it from the other side: ${esc(POS[OPP[cur.p]].l)}</button>`:""}</section>`;
   const fin=cur.fin?`<div class="finish" role="status"><b>Tap</b><span>${esc(last.n)} finishes it.${br.reacts?" If they defend, switch:":" Start over, or step back along your path."}</span></div>`:"";
   return `<div class="chainstage" id="chainstage">${hero}${fin}
    <section class="stack" aria-label="What happens next"><div class="branchhead"><h3>${cur.fin&&br.reacts?"If they defend":tr.length>1&&br.reacts?"They react, you switch":"Your options"}</h3><span class="small muted">${br.list.length} of ${all} move${all===1?"":"s"}</span></div>
    ${br.list.length?`<div class="branches">${br.list.map(b=>branchCard(b,cur.p)).join("")}</div>`:`<div class="empty">No moves from here at this belt filter. Pick a higher belt above.</div>`}
-   <div class="chainmore">${all>br.list.length?`<button class="btn" data-a="flowall">All ${all} moves from here</button>`:""}${tr.length>1?`<button class="btn ghost" data-a="chainreset">Start over</button>`:""}</div></section></div>`}
+   <div class="chainmore">${all>br.list.length?`<button class="btn" data-a="flowall">All ${fromPos(cur.p,mx).length} moves from here</button>`:""}</div></section>
+   <section class="stack posvid" aria-label="Watch ${esc(p.L)}"><h3 class="label">Watch: ${esc(p.l)}</h3><div class="ymedia">${media}</div></section></div>`}
 function chainGo(id,k){const t=TM[id];if(!t)return;const tr=trailNow(),cur=tr[tr.length-1];let root=null,idx=null;
   if(k){const [r,ix]=k.split(":");if(CHAINS[r]&&ix!=null){root=r;idx=ix.split(".").map(Number)}}
-  const fin=t.t==="sub",p=fin||!POS[t.t]?cur.p:t.t;jfTrack("select_content",{content_type:"chain_step",item_id:id});
-  const n=tr.length+1;if(!inClaude())try{history.pushState({chain:n},"")}catch(e){}
-  chainMove(()=>{tr.push({p,t:id,fin,root,idx});S.ui.flowSel=p},1)}
-function chainJump(i){const tr=trailNow();if(i>=tr.length-1||i<0)return;chainMove(()=>{tr.length=i+1;S.ui.flowSel=tr[i].p},-1)}
-/* Slide to the next step: the View Transitions API where there is one, otherwise a CSS slide. The new step is drawn at once either way. */
-function chainMove(fn,dir){const top=()=>{const h=document.getElementById("chainstage");if(!h)return;const r=h.getBoundingClientRect();if(r.top<0||r.top>innerHeight*.45)window.scrollTo(0,window.scrollY+r.top-12);const t=document.getElementById("poshero-t");if(t)t.focus({preventScroll:true})};
-  const apply=()=>{fn();render();top()};
-  if(document.startViewTransition&&!reduceMotion()){document.documentElement.dataset.dir=dir>0?"fwd":"back";try{const vt=document.startViewTransition(apply);vt.finished.finally(()=>{delete document.documentElement.dataset.dir})}catch(e){apply()}return}
-  apply();if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add(dir>0?"in-fwd":"in-back")}}
+  const fin=t.t==="sub",p=fin||!POS[t.t]?cur.p:t.t;jfTrack("select_content",{content_type:"chain_step",item_id:id});S.ui.mapHint=false;
+  const n=(cur.hs||0)+1;if(!inClaude())try{history.pushState({chain:n},"")}catch(e){} // a step the phone's Back button undoes
+  chainMove(()=>{tr.push({p,t:id,fin,root,idx,hs:n});if(tr.length>12)tr.splice(0,tr.length-12);mapSet(p)},p===cur.p?"card":"map")}
+function chainJump(i){const tr=trailNow();if(i>=tr.length-1||i<0)return;chainMove(()=>{tr.length=i+1;mapSet(tr[i].p)},"map")}
+/* The next step: drawn at once, the map scrolls to show where you are (see mapFocus) and the step slides in. */
+function chainMove(fn,how){fn();render();mapFocus(how);if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add("in-fwd")}}
 function viewFlow(){
   const sel=S.ui.flowSel,p=POS[sel],mx=flowMax(),ins=intoPos(sel,mx),outs=fromPos(sel,mx),fb=S.ui.flowBelt||goal();
-  const ds=new Set(flowGroups(sel,mx).map(g=>g.dir));
-  const hero=`<div class="mapnav"><div class="jf-classic-map">${flowSVG(sel)}</div>
-    <div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span></div>
-    <div class="beltfilter"><span>Moves up to</span><div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${fb===b.k}" aria-label="Up to ${b.to}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></div></div>`;
+  const ds=new Set(flowGroups(sel,mx).map(g=>g.dir)),prog=typeof progMapSet==="function"?progMapSet():new Set();
+  const hint=S.ui.mapHint?`<div class="maphint" role="note"><span>Tap any position to see your moves from there</span><button class="mhx" data-a="maphintx" aria-label="Got it, hide this tip">×</button></div>`:"";
+  const hero=`${stuckPick(sel)}<section class="hero dk mapcard" id="mapcard" aria-label="Map of positions">${hint}<div class="mapnav"><div class="jf-classic-map">${flowSVG(sel,prog)}</div>
+    <div class="flowkey small muted">${["up","side","down","fin"].filter(k=>ds.has(k)).map(k=>`<span><i class="lk ${k}"></i>${FDIR[k].toLowerCase()}</span>`).join("")}<span><i class="k-bar"></i>how much of a position's moves you know</span>${prog.size?`<span class="kprog"><i class="k-prog"></i>in this month's programme</span>`:""}</div>
+    <div class="beltfilter"><span>Moves up to</span><div class="chips" role="group" aria-label="Show moves up to">${BELTS.map(b=>`<button class="chip" data-a="flowbelt" data-v="${b.k}" aria-pressed="${fb===b.k}" aria-label="Up to ${b.to}"><i style="background:${BCOL[b.k]}"></i>${b.to}</button>`).join("")}</div></div></div></section>`;
   const og=S.ui.openG||{},fold=(g,title,sub,body)=>`<details class="more fold" id="${g}" data-g="${g}"${og[g]?" open":""}><summary><span>${title}${sub?`<small>${sub}</small>`:""}</span></summary><div class="foldbody">${body}</div></details>`;
   return {hero,body:`
   ${chainStage(sel,mx)}
@@ -4938,7 +4990,7 @@ function setTheme(t){try{if(t==="system")localStorage.removeItem("jf.theme");els
 function trainSettingsHTML(){const st=P().settings,b=blockIndex(),hand=st.hand||"left";
   return `  <section class="stack"><h2 class="label">Training days</h2><div class="seg7">${DN.map((n,i)=>`<button data-a="day" data-v="${i}" aria-pressed="${(P().settings.days||defaultDays(P().settings.perWeek)).includes(i)}">${n}</button>`).join("")}</div><p class="small muted">Your weekly plan on Home follows these days.</p></section>
   <label class="f">Your next belt<select id="s-goal" data-goal="1">${BELTS.map(b=>`<option value="${b.k}"${goal()===b.k?" selected":""}>${b.to} belt (from ${b.from.toLowerCase()})</option>`).join("")}</select></label>
-  <p class="small muted">Sets what Home, ratings and focus blocks aim at.</p>
+  <p class="small muted">Sets what Train, ratings and focus blocks aim at.</p>
   <section class="stack"><h2 class="label">Reviews</h2><label class="row small" style="flex-wrap:nowrap"><input id="set-quiz" type="checkbox"${P().settings.quiz?" checked":""}> Quiz mode: hide the steps until I tap Show steps</label></section>
   <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2>${seg("Phone hand","hand",[["left","Left hand"],["right","Right hand"]],hand,"seg")}<p class="small muted">Back, Close and Log sit on this side.</p></section>
   <details class="more" data-g="set-hours"${(S.ui.openG||{})["set-hours"]?" open":""}><summary>Hours, targets and focus block</summary><div class="stack" style="padding-top:12px">
@@ -4963,7 +5015,7 @@ function viewMe(){
   if(API.me&&API.me.gym&&!isCoach()&&API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="me"&&!S.ui.sheet)render()})}
   const meName=API.me&&API.me.name,meGym=API.me&&API.me.gym&&API.me.gym.name;
   return `${header()}<div class="stack-lg"><section class="hero dk pagehero" aria-label="Me"><div class="hero-t"><span class="eyebrow">Me</span><h1>${meName?esc(meName):"Your settings"}</h1><p>${meGym?`Training at ${esc(meGym)}`:API.me?"Studying on your own":"Your account, belt, appearance and data"}</p></div></section>
-  ${API.me&&API.me.gym&&!isCoach()?`<div class="list navrows"><button class="navrow" data-a="mypay" id="mepay"><span><b>Payments and receipts</b><span class="small muted">${API.pay&&(API.pay.payments||[]).length?`${API.pay.payments.length} payment${API.pay.payments.length>1?"s":""}`:"History"}${API.pay&&(API.pay.packs||[]).length?" · packs":""}${API.pay&&API.pay.autopay?(API.pay.autopay.on?" · paid by card":" · pay automatically"):""}</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}
+  ${API.me&&API.me.gym&&!isCoach()?`<div class="list navrows"><button class="navrow" data-a="mypay" id="mepay"><span><b>Payments and receipts</b><span class="small muted">${API.pay&&myOwed(API.pay)>0?`${money(myOwed(API.pay),API.pay.currency)} due · `:""}${API.pay&&(API.pay.payments||[]).length?`${API.pay.payments.length} payment${API.pay.payments.length>1?"s":""}`:"History"}${API.pay&&(API.pay.packs||[]).length?" · packs":""}${API.pay&&API.pay.autopay?(API.pay.autopay.on?" · paid by card":" · pay automatically"):""}</span></span><span class="chev" aria-hidden="true">›</span></button></div>`:""}
   ${accountSection()}
   ${isCoach()?"":gymCard(false,true)}
   ${studentWaSection()}
@@ -4975,16 +5027,16 @@ function viewMe(){
 }
 
 /* ============ ROUTING & EVENTS ============ */
-// Members: Home, Classes, Train, Me. Coaches: Today, Schedule, Members, Money and Gym (head coach) or Me (other coaches); their own
-// training is the Train page, opened from Gym or Me, with the coach tabs kept.
-const TABS=["home","classes","train","me"];
-// Old addresses (bookmarks, links in messages and emails) open the new places: Learn and Journal are Train now.
-const OLDTAB={today:"home",book:"classes",flow:"train-map",belts:"train-belt",log:"train-log",settings:"me",learn:"train","learn-moves":"train","learn-map":"train-map","learn-belt":"train-belt",journal:"train-log",
+// Members: Map, Classes, Train, Me. Coaches: Today, Schedule, Members, Money and Gym (head coach) or Me (other coaches); their own
+// training (the Map and the Train page) opens from Gym or Me, with the coach tabs kept.
+const TABS=["map","classes","train","me"];
+// Old addresses (bookmarks, links in messages and emails) open the new places: Home is the Map, Learn and Journal are Train.
+const OLDTAB={home:"map",today:"map",book:"classes",flow:"map","train-map":"map","learn-map":"map",belts:"train-belt",log:"train-log",settings:"me",learn:"train","learn-moves":"train","learn-belt":"train-belt",journal:"train-log",
   coach:"coach-home","coach-today":"coach-home","coach-classes":"coach-schedule","coach-students":"coach-members"};
 function route(h){h=OLDTAB[h]||h;if(/^train-/.test(h)&&TRAINV.includes(h.slice(6)))return {tab:"train",tv:h.slice(6)};
   if(h.startsWith("coach-")&&COACH_VIEWS.includes(h.slice(6)))return {tab:"coach",cv:h.slice(6)};return TABS.includes(h)?{tab:h}:null}
 const tabHash=()=>S.ui.tab==="coach"?"coach-"+COACH.view:S.ui.tab==="train"&&S.ui.trainView!=="moves"?"train-"+S.ui.trainView:S.ui.tab;
-const isMap=()=>S.ui.tab==="train"&&S.ui.trainView==="map";
+const isMap=()=>S.ui.tab==="map";
 function render(){
   const app=document.getElementById("app");
   app.querySelectorAll("details[data-g]").forEach(d=>{const o=S.ui.openG=S.ui.openG||{};if(d.open)o[d.dataset.g]=1;else delete o[d.dataset.g]}); // open folds stay open (the toggle event can come after a quick redraw)
@@ -4992,24 +5044,26 @@ function render(){
   applyBrand();
   // Which bottom bar: coaches managing their gym get the coach tabs; everyone else (and coaches training themselves) the study tabs.
   // Coaches get the coach tabs everywhere, also on their own training (the Train page, under Gym or Me). Nobody else sees a coach page.
-  const mg=managing(),own=mg&&S.ui.tab==="train"&&isCoach()&&!API.preview&&!API.support;
+  // (A coach is on the Map only when they asked for it: My training, a position link, or reopening the app on it. Opening the app
+  // anywhere else, or an old Home link, is their Today.)
+  const mg=managing(),own=mg&&(S.ui.tab==="train"||S.ui.tab==="map"&&S.ui.mapAsked)&&isCoach()&&!API.preview&&!API.support;
   if(mg&&S.ui.tab!=="coach"&&!own)return go("coach-"+(COACH.view||"home"),true);
-  if(!mg&&S.ui.tab==="coach")return go("home",true);
+  if(!mg&&S.ui.tab==="coach")return go("map",true);
   {const v0=COACH.view,head=isHead()||!!API.preview,fix=!COACH_VIEWS.includes(v0)||v0==="money"&&!isHead()?"home":v0==="gym"&&!head?"me":v0==="me"&&head?"gym":null; // Money and Gym: the head coach's; Me: other coaches'
     if(mg&&fix){COACH.view=fix;if(S.ui.tab==="coach")try{history.replaceState(null,"","#coach-"+fix)}catch(e){}}}
   const v=S.ui.tab,inGym=!!(API.me&&API.me.gym&&!isCoach()),hd=isHead()||!!API.preview;
-  const show={home:!mg,classes:!mg&&inGym,train:!mg,me:!mg,"coach-home":mg,"coach-schedule":mg,"coach-members":mg,"coach-money":mg&&isHead(),"coach-gym":mg&&hd,"coach-me":mg&&!hd};
+  const show={map:!mg,classes:!mg&&inGym,train:!mg,me:!mg,"coach-home":mg,"coach-schedule":mg,"coach-members":mg,"coach-money":mg&&isHead(),"coach-gym":mg&&hd,"coach-me":mg&&!hd};
   const cur=v==="coach"?"coach-"+(COACH.view==="comps"?"members":COACH.view):own?(hd?"coach-gym":"coach-me"):v;
   document.querySelectorAll("nav.tabs [data-v]").forEach(b=>{b.hidden=!show[b.dataset.v];b.setAttribute("aria-current",b.dataset.v===cur?"page":"false")});
   {const b=document.querySelector(`nav.tabs [data-v="${cur}"]`);document.title=(b?b.textContent.trim()+" · ":"")+"JitsFlow"} // the screen reader and the phone's app switcher say which screen this is
   {const w=document.querySelector("nav.tabs .wrap");if(w)w.dataset.n=Object.values(show).filter(Boolean).length}
-  app.innerHTML=v==="coach"?viewCoach():v==="classes"?viewBook():v==="train"?viewTrain():v==="me"?viewMe():viewToday();
+  app.innerHTML=v==="coach"?viewCoach():v==="classes"?viewBook():v==="train"?viewTrain():v==="me"?viewMe():viewMap();
   if(S.ui.sheet&&!document.getElementById("sheet").hidden){const k=S.ui.sheet.k; // an open Gym or settings sheet shows what just loaded or changed
     if(GYMSHEETS.has(k)&&isCoach()){if(k==="invite")inviteSheet(true);else gymSec(S.ui.sheet.id,true)}else if(k==="trainset")trainSetSheet(true)}
   if(isMap()){drawFlowLines(true);if(document.fonts&&document.fonts.status!=="loaded")document.fonts.ready.then(()=>drawFlowLines())}
 }
 // Moving to another tab is a step the phone's Back button undoes (replace: a correction, not a step).
-function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
+function go(tab,replace){hideTerm();const r=route(tab)||{tab:"map"};if(r.tab==="map"&&!replace)S.ui.mapAsked=true; /* (a redirect isn't asking for the map) */
   const was=tabHash();S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;
   const h=tabHash();if(location.hash!=="#"+h){try{if(replace||inClaude())history.replaceState(null,"","#"+h);else history.pushState(null,"","#"+h)}catch(e){location.hash=h}}
   render();if(was!==tabHash())screenIn();window.scrollTo(0,0);if(was!==tabHash()&&window.jfPage)jfPage();if(API.stale)reloadIfIdle()
@@ -5018,14 +5072,14 @@ function go(tab,replace){hideTerm();const r=route(tab)||{tab:"home"};
 // changes nothing on screen, so it's skipped: every press of Back does something, and Back from the first screen leaves the app.
 window.addEventListener("popstate",()=>{if(inClaude())return;const sh=document.getElementById("sheet");
   if(!sh.hidden){goBack();if(!sh.hidden)try{history.pushState({sheet:1},"")}catch(e){}return}
-  const h=location.hash.slice(1),r=h?route(h):{tab:"home"};if(!r)return;
+  const h=location.hash.slice(1),r=h?route(h):{tab:"map"};if(!r)return;
   // Back on the map steps back along the chain you played (a step left by a closed sheet is skipped as below)
-  if(isMap()&&h==="train-map"&&Array.isArray(S.ui.trail)&&S.ui.trail.length>1){const st=history.state||{};if(!st.sheet){const want=Math.max(1,st.chain||1);if(want<S.ui.trail.length){chainJump(want-1);return}}}
-  if((h||"home")===tabHash()){history.back();return}
-  if(r.tab==="train"&&!r.tv)r.tv="moves";go(r.tab==="train"?"train-"+r.tv:h||"home",true)});
+  if(isMap()&&h==="map"&&Array.isArray(S.ui.trail)&&S.ui.trail.length>1){const st=history.state||{};if(!st.sheet){const m=st.chain||0,tr=S.ui.trail;let i=tr.length-1;while(i>0&&(tr[i].hs||0)>m)i--;if(i<tr.length-1){chainJump(i);return}}}
+  if((h||"map")===tabHash()){history.back();return}
+  if(r.tab==="train"&&!r.tv)r.tv="moves";go(r.tab==="train"?"train-"+r.tv:h||"map",true)});
 /* analytics events: no-ops unless the site has Google Analytics on and the visitor allowed it */
 function jfTrack(n,p){try{if(window.jfTrack&&window.jfTrack!==jfTrack)window.jfTrack(n,p)}catch(e){}}
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="train"&&!r.tv)r.tv="moves";if(h===tabHash())return;S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1),r=route(h);if(!r)return;if(r.tab==="map")S.ui.mapAsked=!["home","today"].includes(h); /* an old Home link is a coach's Today */if(r.tab==="train"&&!r.tv)r.tv="moves";if(h===tabHash())return;S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}render()});
 
 document.addEventListener("click",e=>{
   if(!e.target.closest("#termcard")&&!e.target.closest(".term"))hideTerm();
@@ -5069,7 +5123,7 @@ document.addEventListener("click",e=>{
     case "coachview": case "coachgo": if(S.ui.sheet)hideSheet();coachGo(v);break;
     case "stuview": if(v==="insights")insightsSheet();else render();break;
     case "trainset": trainSetSheet();break;
-    case "mytrain": if(S.ui.sheet)hideSheet();go("train");break;
+    case "mytrain": if(S.ui.sheet)hideSheet();go("map");break; // a coach's own training opens on the map
     case "invite": inviteSheet();break;
     case "gymsec": gymSec(v);break;
     case "solocoach": api("PATCH","/coach/gym",{setup:{soloCoach:true}}).then(j=>{API.me=j.me;render();toast("Ticked off. Add a coach any time from here.")}).catch(e=>toast(e.message));break;
@@ -5252,8 +5306,11 @@ document.addEventListener("click",e=>{
     case "bulkadd": bulkAdd(); break;
     case "brandset": api("PATCH","/coach/gym",{brandAccent:v}).then(j=>{API.me=j.me;applyBrand();render();toast(v?"App colour changed.":"Back to JitsFlow blue.")}).catch(e=>toast(e.message)); break;
     case "brandlogo": brandFromLogo(false); break;
-    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){const y=window.scrollY;S.ui.flowSel=v;render();window.scrollTo(0,y);if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add("in-fade")}break} // tapping the map: stay where you are
-    case "pos": S.ui.flowSel=v; if(!document.getElementById("sheet").hidden)hideSheet(); go("train-map"); break;
+    case "pos": if(isMap()&&el.closest(".flowsvg")&&document.getElementById("sheet").hidden){mapGo(v);if(!reduceMotion()){const st=document.getElementById("chainstage");if(st)st.classList.add("in-fade")}break} // tapping the map: stay where you are
+      mapGo(v,"map"); break;
+    case "stuckgo": mapGo(v,"card"); break;
+    case "howgo": go("train-moves");{const c=document.getElementById("lastclass");if(c)c.scrollIntoView({block:"center"})}break;
+    case "maphintx": {S.ui.mapHint=false;const h=document.querySelector(".maphint");if(h)h.remove();break}
     case "chaingo": chainGo(v,el.dataset.k); break;
     case "crumb": chainJump(Number(v)); break;
     case "chainreset": chainJump(0); break;
@@ -5423,7 +5480,7 @@ async function submitForm(fid,f,submitter){
   if(fid==="gymform"){try{const fee=f.querySelector("[name=fee]"),j=await api("PATCH","/coach/gym",{name:f.querySelector("[name=name]").value,...(fee?{monthlyFeeCents:Math.round(Number(fee.value||0)*100)}:{})});API.me=j.me;await coachLoad("roster");toast("Gym saved.")}catch(err){toast(err.message)}return}
   if(fid==="gymdelform")return deleteGym(f);
   if(fid==="joinform"){try{const j=await api("POST","/me/join",{code:f.querySelector("[name=code]").value});API.me=j.me;S.ui.joinCode="";render();toast("You've joined "+j.me.gym.name+".")}catch(err){toast(err.message)}return}
-  if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("home");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
+  if(fid==="delform"){try{await api("DELETE","/me",{password:f.querySelector("[name=password]").value});API.me=null;wipeLocal();S.ui.delOpen=false;S.mode="local";setSync("Saved on this device","local");go("map");toast("Your account and data are deleted.")}catch(err){toast(err.message)}return}
 }
 async function submitLog(){
   const f=S.ui.form;if(!f)return;if(!f.date){toast("Pick a date for the session.");return}
@@ -5484,11 +5541,12 @@ const beltChip=(b,st)=>`<span class="beltchip" style="--bc:${BCOL[b]||"#F4F4F0"}
 
 /* ----- sign-in state and sync ----- */
 async function acctInit(){
-  if(inClaude()||!/^https?:$/.test(location.protocol))return;
+  if(inClaude()||!/^https?:$/.test(location.protocol)){API.checked=true;return}
   try{const j=await api("GET","/me");API.on=true;API.me=j.me;api("GET","/status").then(x=>{API.status=x}).catch(()=>{});
     if(API.me&&API.me.support){API.support=API.me.support;supStart()}
     else if(API.me)await startSync();else if(lsGet("rtb.owner")){if(pendingLogs().size){S.ui.authMode="login";S.ui.deep=true;setTimeout(()=>{authSheet();toast("Sign in to send the sessions saved on this phone to your account.")},50)}else wipeLocal();S.mode="local"}} // signed out elsewhere or session expired: don't leave their data on the phone (unless it hasn't reached the account yet)
   catch(e){API.on=false}
+  API.checked=true; // who's signed in is known now (the Map waits for it to pick where it opens)
   const qs=new URLSearchParams(location.search),want=qs.has("signin")?"login":qs.has("start")?"gym":null;
   // Into support mode (/app/?support=1, a fresh load as the gym's head coach), and back out (/app/?dash=1: the team's dashboard again).
   if(qs.has("dash")||qs.has("support")){try{const k=new URLSearchParams(location.search);k.delete("dash");k.delete("support");history.replaceState(null,"",location.pathname+(k.toString()?"?"+k:"")+location.hash)}catch(e){}
@@ -5736,22 +5794,26 @@ function accountSection(){
 
 /* ----- next class (students and coaches) ----- */
 async function loadClasses(force){if(!API.me||!API.me.gym)return;if(!force&&API.classes&&Date.now()-API.classesAt<60000)return;
-  try{const j=await api("GET","/classes");API.classes=j.classes;API.usual=j.usual||[];API.privAccess=j.privateAccess||null;API.classesAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="classes")&&(!S.ui.sheet||S.ui.sheet.k==="book"))S.ui.sheet&&S.ui.sheet.k==="book"?bookSheet(S.ui.sheet.id):render()}catch(e){}}
+  try{const j=await api("GET","/classes");API.classes=j.classes;API.usual=j.usual||[];API.privAccess=j.privateAccess||null;API.classesAt=Date.now();if((S.ui.tab==="map"||S.ui.tab==="classes")&&(!S.ui.sheet||S.ui.sheet.k==="book"))S.ui.sheet&&S.ui.sheet.k==="book"?bookSheet(S.ui.sheet.id):render()}catch(e){}}
 const kidsClass=c=>/\b(kids?|juniors?|children|tots)\b/i.test(`${c.level||""} ${c.title||""}`);
-function nextClassCard(){
-  if(inClaude()||!API.me||!API.me.gym)return "";
-  if(!API.classes){loadClasses();return ""}
-  const up=API.classes.filter(c=>clsEnd(c)>Date.now()&&(c.kind!=="private"||c.myGoing||isCoach()));
-  if(!up.length){if(!GYM.data)loadGym();const tu=ttUpcoming(3);
-    return `<section class="panel"><h2 class="label">Next class</h2>${tu.length?`<div class="stack">${tu.map(x=>`<div class="ttline"><span class="mono">${x.k===0?"Today":x.k===1?"Tomorrow":TTD[(x.at.getDay()+6)%7]} ${esc(x.r.start)}</span><span>${esc(x.r.title)}${x.r.coach?` <span class="small muted">· ${esc(x.r.coach)}</span>`:""}</span></div>`).join("")}</div><p class="small muted">From ${esc(API.me.gym.name)}'s timetable.</p>`:`<p class="muted">No classes scheduled yet${isCoach()?". Plan one in Schedule.":"."}</p>`}</section>`}
+/* The line at the top of the Map: the next class (tap it to book or see it), fees only when something's owed (a parent sees the
+   family's total; "Checking" while a payment is being checked; nothing at all when paid up), and after a class, "How did it go?". */
+function mapStrip(){if(inClaude()||!API.me||!API.me.gym||isCoach())return "";
+  if(!API.classes)loadClasses();
+  if(API.pay===undefined){API.pay=null;loadPay().then(()=>{if(S.ui.tab==="map"&&!S.ui.sheet)render()})}
+  const out=[],up=(API.classes||[]).filter(c=>clsEnd(c)>Date.now()&&(c.kind!=="private"||c.myGoing));
   // An adult isn't offered the kids class (and a kid isn't offered the adults' one) when there's one that fits.
-  const c=up.find(x=>x.myGoing||x.myWaitlisted)||up.find(x=>x.kind!=="private"&&kidsClass(x)===!!API.me.kid)||up.find(x=>x.kind!=="private")||up[0],p=c.plan||{};
-  return `<section class="panel nextclass"><div class="row between"><h2 class="label">${c.myGoing?"Your next class":"Next class"}</h2><span class="small muted mono">${esc(spotsTxt(c))}</span></div>
-    <div class="stack" style="gap:6px"><div><h3>${esc(c.title)}</h3><p class="small muted">${esc(fmtWhen(c.startsAt))} · ${c.durationMin} min${c.coach?" · with "+esc(c.coach):""}</p></div>${whoLine(c,4)}</div>
-    ${p.focus||p.ids&&p.ids.length?`<p class="small"><b>Coach's plan${p.focus?": "+esc(p.focus):""}</b>${(p.ids||[]).filter(id=>TM[id]).length?` · <button class="linkbtn small" data-a="bookopen" data-v="${c.id}">${p.ids.filter(id=>TM[id]).length} technique${p.ids.filter(id=>TM[id]).length===1?"":"s"} to study</button>`:""}</p>`:""}
-    ${isCoach()?"":`<div class="row">${bookActions(c)}</div>`}
-    ${isCoach()?"":`<button class="linkbtn small" data-a="tab" data-v="classes">All classes</button>`}</section>`;
-}
+  const c=up.find(x=>x.myGoing||x.myWaitlisted)||up.find(x=>x.kind!=="private"&&kidsClass(x)===!!API.me.kid)||up.find(x=>x.kind!=="private")||up[0];
+  if(c){const day=dayKey(c.startsAt)===todayK()?"Today":new Date(c.startsAt).toLocaleDateString("en-ZA",{weekday:"short"}),st=c.myGoing?"Booked":c.myWaitlisted?"Waiting list":"Book";
+    out.push(`<button class="schip scls${c.myGoing?" ok":""}" data-a="bookopen" data-v="${c.id}" aria-label="Next class: ${esc(c.title)}, ${esc(fmtWhen(c.startsAt))}. ${c.myGoing?"You're booked":c.myWaitlisted?"You're on the waiting list":"Tap to book"}"><span class="sct">${esc(day)} ${esc(fmtHM(c.startsAt))} ${esc(c.title)}</span><b>· ${st}</b></button>`)}
+  const p=API.pay;
+  if(p){const back=owesBack(p),td=!back&&termOwed(p),all=p.owedCents!==undefined?p.owedCents:Math.max(0,p.dueCents-p.paidCents),left=td||all,fam=famPay(p);
+    if((p.plans||[]).length&&!p.plan)out.push(`<button class="schip sdue" data-a="planpick">Pick your plan</button>`);
+    else if((procOf(p)||pend0(p))&&(left>0||fam))out.push(`<button class="schip schk" data-a="mypay" aria-label="Checking your payment. Open payments">Checking</button>`);
+    else if(left>0||fam)out.push(`<button class="schip sdue" data-a="mypay" id="duechip" aria-label="${money(fam?fam.totalCents:left,p.currency)} due${fam?" for your family":""}. Pay">${money(fam?fam.totalCents:left,p.currency)} due · Pay</button>`)}
+  const s=typeof lastClassOpen==="function"&&lastClassOpen();
+  if(s)out.push(`<button class="schip show" data-a="howgo">How did ${esc(s.title||"class")} go?</button>`);
+  return out.length?`<nav class="mapstrip" aria-label="Coming up">${out.join("")}</nav>`:""}
 function accountNudge(){if(inClaude()||!API.on||API.me)return "";
   return `<section class="panel"><h2 class="label">Keep your progress safe</h2><p class="small">Right now it's only on this phone. Create a free account to save it online and join your gym's classes.</p><div class="row"><button class="btn primary" data-a="auth" data-v="register">Create account</button><button class="btn" data-a="auth" data-v="login">Sign in</button></div></section>`}
 
@@ -6505,7 +6567,7 @@ function payFresh(maxAge){if(!API.me||!API.me.gym||isCoach()||API.payBusy||!API.
   const was=JSON.stringify(API.pay);API.payBusy=true;
   loadPay().finally(()=>{API.payBusy=false;if(JSON.stringify(API.pay||null)===was)return;const sh=S.ui.sheet,a=document.activeElement,typing=a&&a.matches&&a.matches("input,textarea,select");
     if(sh&&sh.k==="mypay"){if(!typing&&!document.getElementById("sheet").hidden)myPaySheet(true)}
-    else if(document.getElementById("sheet").hidden&&["home","me","classes"].includes(S.ui.tab))render()})}
+    else if(document.getElementById("sheet").hidden&&["map","me","classes"].includes(S.ui.tab))render()})}
 function coachFresh(maxAge){if(!API.me||!isHead()||COACH.payBusy||!COACH.payments||Date.now()-(COACH.payAt||0)<maxAge)return;COACH.payBusy=true;const M=COACH.money;
   Promise.all([api("GET","/coach/payments").then(j=>{COACH.payments=j.payments;COACH.payAt=Date.now()}),M?api("GET","/coach/money"+(M.month&&M.month!==M.today.slice(0,7)?`?month=${M.month}`:"")).then(j=>{if(COACH.money===M)COACH.money=j}):null])
     .catch(()=>{}).finally(()=>{COACH.payBusy=false;if(S.ui.tab==="coach"&&document.getElementById("sheet").hidden){const a=document.activeElement;if(!(a&&a.matches&&a.matches("input,textarea,select")))render()}})}
@@ -6521,34 +6583,11 @@ const fullDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"num
 // A parent's family (brothers and sisters who share them) when another kid owes too: the family total and a line per kid.
 const famPay=p=>{const f=p&&p.family;return f&&f.totalCents>0&&f.kids.some(k=>!k.me&&k.owedCents>0)?f:null};
 const famLine=(f,cur)=>`Family total: <b>${money(f.totalCents,cur)}</b> (${f.kids.filter(k=>k.owedCents>0).map(k=>`${esc(first(k.name))} ${money(k.owedCents,cur)}`).join(" · ")}).`;
-// The fees card (Home only): a pill for where they stand, the amount, a dot a month (paid, due, checking, processing), one Pay button.
-// Everything else (history, packs, saving a card, the bank details) is on the Pay sheet it opens.
+// Fees live on the Pay sheet (from the Map's "R850 due · Pay" and from Me): where they stand, a dot a month (paid, due, checking,
+// processing), then how to pay, packs, saving a card and the history.
 const DOTL={paid:"Paid",due:"Due",checking:"Checking",processing:"Processing",none:"Nothing due"};
 function feeDots(p){const ds=p.dots||[];if(!ds.some(d=>d.status!=="none"))return ""; // nothing billed in four months: no row of empty dots
   return `<div class="feedots" role="list" aria-label="Your last ${ds.length} months">${ds.map(d=>`<span class="fd ${d.status}" role="listitem" aria-label="${esc(longMon(d.month))}: ${DOTL[d.status]||d.status}"><i aria-hidden="true"></i><small>${esc(shortMon(d.month))}</small></span>`).join("")}</div>`}
-function feesCard(){const p=API.pay;if(!p)return "";const back=owesBack(p),td=!back&&termOwed(p),all=p.owedCents!==undefined?p.owedCents:Math.max(0,p.dueCents-p.paidCents),left=td||all,cur=p.currency,b=p.bank||{},ready=!!(b.account||b.link);
-  const ms=(p.owedMonths||[]).map(o=>o.month),pend=p.pendingAllCents!==undefined?p.pendingAllCents:p.pendingCents,dd=p.dueDay||b.dueDay||1;
-  const pr=procOf(p),fam=famPay(p),noPlan=p.plans&&p.plans.length&&!p.plan,trialFree=p.planStatus==="trial"&&!p.dueCents&&!all;
-  const state=pr&&left>0?`<span class="pill due">${pr.now?"Checking":"Processing"}</span>`:trialFree?`<span class="pill">Free trial</span>`:p.pause&&!left?`<span class="pill plain">Paused</span>`
-    :!p.dueCents&&!all?"":left<=0&&!fam?`<span class="pill ok">Paid</span>`:pend?`<span class="pill chk">Checking</span>`:`<span class="pill ${back?"bad":"due"}">${money(fam?fam.totalCents:left,cur)} due</span>`;
-  const nx=p.next,day=m=>`${dd} ${shortMon(m)}`;
-  // the big number and the one line under it
-  const big=left>0||fam?money(fam?fam.totalCents:left,cur):p.dueCents||p.paidCents?"Paid up":"";
-  const sub=td?`${esc(p.term.name)}: ${termTxt(p.term,cur)}`
-    :left>0?`${esc(monthsTxt(ms.length?ms:[p.month||todayK().slice(0,7)]))}${!back&&Number(todayK().slice(8,10))<=dd?` · due ${esc(day(ms[0]||todayK()))}`:""}${pend?` · ${money(pend,cur)} being checked`:""}`
-    :p.term&&p.term.renews?`${esc(p.term.name)} · renews ${esc(fullDate(p.term.renews))}`
-    :trialFree?`Free trial${p.trialEnds?` to ${esc(fullDate(p.trialEnds))}`:""}${(p.plans||[]).length>1&&p.plan?` · <button class="linkbtn small" data-a="planpick">Change plan</button>`:""}`
-    :p.pause&&p.pause.idle&&!p.dueCents?"On hold while you're away. Book a class to come back."
-    :p.pause&&!p.dueCents?`Paused${p.pause.until?` to end of ${esc(longMon(p.pause.until))}`:""}`
-    :p.billFrom&&!p.dueCents?`Starts in ${esc(longMon(p.billFrom))}`
-    :nx?`${p.plan?esc(p.plan.name)+" · ":""}next ${money(nx.cents,cur)} on ${esc(day(nx.month))}`:p.dueCents?"":"No fee set yet";
-  const lines=[procLine(p,cur),p.creditCents>0&&left<=0?`<p class="small">${money(p.creditCents,cur)} paid ahead.</p>`:"",autoLine(p),fam?`<p class="small">${famLine(fam,cur)}</p>`:"",
-    (td?termLines(p,cur).slice(1):dueLines(p,cur)).length?`<p class="small muted">${(td?termLines(p,cur).slice(1):dueLines(p,cur)).map(esc).join(" · ")}</p>`:"",privLeftLine(p)].join("");
-  return `<section class="panel stack feecard" id="feecard"><div class="row between"><h2 class="label">Fees</h2>${state}</div>
-    ${noPlan?`<div class="stack" id="pickplan" style="gap:6px"><p class="small"><b>Pick your plan</b> to start. It's a free trial until your first payment is confirmed.</p>${planList(p.plans)}</div>`:""}
-    ${big||sub?`<div class="feeamt">${big?`<b class="mono">${big}</b>`:""}${sub?`<span class="small muted">${sub}</span>`:""}</div>`:""}
-    ${feeDots(p)}${lines}
-    <button class="btn full${left>0&&!pend&&!pr||fam?" primary":""}" data-a="mypay">${!(ready||p.card)?"Send proof of payment":left>0||fam?"Pay":"Pay ahead"}</button></section>`}
 // "3 privates left" for students who've bought a pack (or have privates they still owe for).
 function privLeftLine(p){const l=p.privatesLeft||{};if(!l.left&&!l.booked&&!(p.privates||[]).length)return "";
   return `<p class="small"><b>${privN(l.left||0)} left</b>${l.booked?` · ${l.booked} booked`:""}${l.left&&l.expiresOn?` · use by ${esc(fmtDate(l.expiresOn))}`:""}${!l.left&&(p.packs||[]).length?". Buy a pack on the Pay sheet.":""}</p>`}
@@ -6562,8 +6601,10 @@ const autoWait=a=>a&&a.on&&a.last&&a.last.status==="unsure";
 // Who processes card payments for this member's gym: Paystack (JitsFlow's, paying the gym's bank account) or the gym's own PayFast.
 const viaPs=p=>!!p&&p.provider==="paystack";
 const viaName=p=>viaPs(p)?"Paystack":"PayFast";
+// What the Pay sheet says about a saved card when it needs saying: a payment that didn't go through, one still being checked, and
+// months from before the card was saved (the card doesn't pay those).
 function autoLine(p){const a=p.autopay;if(!a||!a.on)return "";const old=(p.owedMonths||[]).filter(o=>a.from&&o.month<a.from),oc=old.reduce((t,o)=>t+o.cents,0);
-  return `<p class="small" id="autoline">${autoBad(a)?`<b>Your card payment for ${esc(longMon(a.last.month))} didn't go through.</b> Please pay it another way. `:autoWait(a)?`We're checking your card payment for ${esc(longMon(a.last.month))} with ${viaName(p)}. There's nothing you need to do. `:""}Paid automatically by card on the ${ordinal(a.dueDay)}${a.names&&a.names.length>1?` for ${esc(autoWho(a))}`:""}. <button class="linkbtn small" data-a="autostop">Stop</button></p>${oc>0?`<p class="small" id="autoold"><b>Your card doesn't pay ${money(oc,p.currency)} for ${esc(monthsLong(old.map(o=>o.month)))}</b>, from before you saved it. Please pay that yourself.</p>`:""}`}
+  return `${autoBad(a)||autoWait(a)?`<p class="small insight warn" id="autowarn">${autoBad(a)?`<b>Your card payment for ${esc(longMon(a.last.month))} didn't go through.</b> Please pay it another way.`:`We're checking your card payment for ${esc(longMon(a.last.month))} with ${viaName(p)}. There's nothing you need to do.`}</p>`:""}${oc>0?`<p class="small" id="autoold"><b>Your card doesn't pay ${money(oc,p.currency)} for ${esc(monthsLong(old.map(o=>o.month)))}</b>, from before you saved it. Please pay that yourself.</p>`:""}`}
 async function autoOn(){toast(`Opening ${viaName(API.pay)}…`);try{const c=await api("POST","/me/autopay",{});jfTrack("autopay_on",{});if(c.url){location.href=c.url;return}payfastGo(c)}catch(e){toast(e.message)}}
 async function autoStop(){try{await api("DELETE","/me/autopay");await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();
   toast("Stopped. Your card won't be charged.",{label:"Undo",fn:async()=>{try{await api("POST","/me/autopay/undo",{});await loadPay();if(S.ui.sheet&&S.ui.sheet.k==="mypay")myPaySheet();else render();toast("Paying automatically again.")}catch(e){toast(e.message)}}})}catch(e){toast(e.message)}}
@@ -6586,10 +6627,17 @@ function myPaySheet(keep){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.
   // ahead, buy a pack or save a card, but never by one tap on an amount they don't owe.
   const upToDate=amt<=0&&!pend0(p)&&!pr,via=viaName(p),a=p.autopay;
   const row=(l,r,cls="")=>`<div class="row between payline${cls}" style="flex-wrap:nowrap"><span class="small">${l}</span><b class="small mono">${r}</b></div>`;
+  // Where they stand, under the amount: the plan and next payment (or trial, pause), a dot a month, credit, privates left, a card problem.
+  const dd=p.dueDay||b.dueDay||1,nx=p.next,trialFree=p.planStatus==="trial"&&!p.dueCents&&!myOwed(p);
+  const plan=p.term&&p.term.renews?`${esc(p.term.name)} · renews ${esc(fullDate(p.term.renews))}`:trialFree?`Free trial${p.trialEnds?` to ${esc(fullDate(p.trialEnds))}`:""}`
+    :p.pause&&p.pause.idle&&!p.dueCents?"On hold while you're away. Book a class to come back.":p.pause&&!p.dueCents?`Paused${p.pause.until?` to end of ${esc(longMon(p.pause.until))}`:""}`
+    :p.billFrom&&!p.dueCents?`Starts in ${esc(longMon(p.billFrom))}`:nx?`${p.plan?esc(p.plan.name)+" · ":""}next ${money(nx.cents,cur)} on ${dd} ${esc(shortMon(nx.month))}`:"";
+  const status=`${upToDate&&plan?`<p class="small muted" id="payplan">${plan}</p>`:""}${feeDots(p)}${p.creditCents>0&&upToDate?`<p class="small">${money(p.creditCents,cur)} paid ahead.</p>`:""}${ks.length?"":privLeftLine(p)}
+${autoLine(p)}`;
   openSheet(`${sheetHead(upToDate?"Pay ahead":"Pay your fees")}<div class="stack-lg">${procLine(p,cur)}
-    ${upToDate?`<section class="stack" id="paidup"><div class="feeamt"><span class="pill ok">Paid</span><b>You're paid up.</b></div><p class="small muted">Pay ahead${ks.length?", buy a pack":""} or send a proof below.</p></section>`
+    ${upToDate?`<section class="stack" id="paidup"><div class="feeamt"><span class="pill ok">Paid</span><b>You're paid up.</b></div>${status}<p class="small muted">Pay ahead${ks.length?", buy a pack":""} or send a proof below.</p></section>`
       :`<section class="stack" id="paydue"><div class="feeamt"><b class="mono">${money(amt,cur)}</b><span class="small muted">${pend0(p)?"Being checked by your coach":fam?"Family total":esc(back?monthsTxt(p.owedMonths.map(o=>o.month)):td?p.term.name:longMon(p.month||todayK().slice(0,7)))}</span></div>
-      ${!fam&&parts.length>1?`<div class="panel stack" style="gap:4px">${parts.map(x=>Array.isArray(x)?row(esc(x[0]),esc(x[1])):`<span class="small">${esc(x)}</span>`).join("")}</div>`:""}</section>`}
+      ${!fam&&parts.length>1?`<div class="panel stack" style="gap:4px">${parts.map(x=>Array.isArray(x)?row(esc(x[0]),esc(x[1])):`<span class="small">${esc(x)}</span>`).join("")}</div>`:""}${status}</section>`}
     ${fam?`<section class="stack" id="payfamily"><div class="panel stack" style="gap:8px">${fam.kids.filter(k=>k.owedCents>0||k.me).map(k=>`<div class="row between" style="flex-wrap:nowrap"><span class="small"><b>${esc(k.name)}</b> · <span class="mono muted">${esc(k.reference)}</span></span><b class="small mono">${money(k.owedCents,cur)}</b></div>`).join("")}
       <div class="row between"><b class="small">Family total</b><b class="small mono">${money(fam.totalCents,cur)}</b></div></div><p class="small muted">Pay it all at once with any one reference. We split it between your kids.</p></section>`:""}
     ${ja&&ja.status?`<section class="stack" id="payjoin"><p class="small"><b>${esc(ja.message)}</b> Once it's active again, you can book privates.</p></section>`
@@ -6612,7 +6660,7 @@ function myPaySheet(keep){const p=API.pay;if(!p)return;const b=p.bank||{},cur=p.
       <label class="f">Amount you paid (${esc(cur)})<input id="mypop-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${amt?amt/100:p.plan&&p.planStatus==="trial"&&pls.length?p.plan.priceCents/100:""}"></label>
       <div class="popzone" id="popzone"><b>Send the proof of payment</b><span class="small muted">A screenshot or your bank's PDF. Your coach checks it.</span>
         <div class="row"><button class="btn" type="button" data-a="poppaste">Paste</button><label class="btn primary" for="mypop" style="cursor:pointer">Choose the proof of payment</label></div></div><input type="file" id="mypop" accept="image/*,application/pdf" hidden></section></div>`:""}
-    ${a?`<section class="stack" id="autopay"><h2 class="label">${a.on?"Paid":"Pay"} automatically</h2>${a.on?`<div class="row between" style="flex-wrap:nowrap"><span class="small">Your card${a.card?` (${esc(a.card)})`:""} pays ${esc(autoWho(a))} on the ${ordinal(a.dueDay)}. Only what's owed.</span><button class="btn sm" data-a="autostop">Stop paying automatically</button></div>`
+    ${a?`<section class="stack" id="autopay"><h2 class="label">${a.on?"Paid":"Pay"} automatically</h2>${a.on?`<div class="row between" id="autoline" style="flex-wrap:nowrap"><span class="small">Your card${a.card?` (${esc(a.card)})`:""} pays ${esc(autoWho(a))} on the ${ordinal(a.dueDay)}. Only what's owed.</span><button class="btn sm" data-a="autostop">Stop paying automatically</button></div>`
       :`<div class="row between" style="flex-wrap:nowrap"><span class="small">Only what you owe, on the ${ordinal(a.dueDay)} of each month. Stop any time.</span><button class="btn sm" data-a="autoon">Save my card and pay automatically</button></div>
       <details class="learn small"><summary>Learn more</summary><p class="small muted">${viaPs(p)?`You pay ${myOwed(p)>=500?`what's due now (${money(myOwed(p),cur)})`:"a month's fees now"} with ${via} and your card is kept. Then each month we charge only what you owe`:`Each month ${via} charges only what you owe`}, and nothing if you've paid or are paused. You get a receipt each time.</p></details>`}</section>`:""}
     ${ks.length?`<section class="stack" id="mypacks"><h2 class="label">Private lesson packs</h2>${privLeftLine(p)}<div class="list">${ks.map(k=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(k.name)}</b><br><span class="small muted">${money(k.priceCents,cur)}${k.expiryMonths?` · ${k.expiryMonths} month${k.expiryMonths>1?"s":""} to use`:""}</span></span>${p.card?`<button class="btn sm" data-a="packcard" data-v="${k.id}">Pay by card</button>`:""}</div>`).join("")}</div>
@@ -6770,7 +6818,7 @@ function inviteSheet(redraw){const g=API.me.gym,link=joinURL(g.studentCode),ta=d
 function gymDelPanel(){const g=API.me.gym;if(!isHead())return "";
   return `<section class="panel stack" id="gymdel"><h2 class="label">Delete gym</h2>${S.ui.gymDelOpen?`<form id="gymdelform" class="stack"><p class="small">This permanently deletes ${esc(g.name)}: classes and bookings, plans, payments and proofs of payment, competitions, notices, your notes on students, and students you added who aren't on the app. Students and coaches with their own accounts keep them, with no gym. Type your password to confirm.</p><input name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password"><div class="row"><button class="btn danger" type="submit">Delete gym</button><button class="btn" type="button" data-a="gymdelcancel">Keep my gym</button></div></form>`:`<p class="small">Closing your gym? This deletes it and everything it keeps about your students.</p><button class="btn danger" style="justify-self:start" data-a="gymdel">Delete gym</button>`}</section>`}
 async function deleteGym(f){try{const j=await api("DELETE","/coach/gym",{password:f.querySelector("[name=password]").value});API.me=j.me;S.ui.gymDelOpen=false;
-  hideSheet();Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"home"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;go("home");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
+  hideSheet();Object.assign(COACH,{roster:null,classes:null,payments:null,money:null,view:"home"});API.classes=null;API.comps=null;API.mem=undefined;GYM.data=null;go("map");toast("Your gym is deleted.")}catch(e){toast(e.message)}}
 // The other coaches in the gym. Removing one ends their coach access straight away and makes a new coach code.
 // The head coach can hand their role to another active coach; nobody can remove the head coach.
 function coachesPanel(){const cs=((COACH.roster||{}).people||[]).filter(p=>p.role==="coach"&&p.id!==API.me.id);if(!cs.length)return "";
@@ -6793,7 +6841,7 @@ const TTD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],TTDL=["Monday","Tuesday","
 const PERL={month:"/ month",week:"/ week",class:"/ class",year:"/ year",term:"/ term",once:"once-off",other:""};
 const dayNow=()=>(new Date().getDay()+6)%7;
 async function loadGym(force){if(!API.me||!API.me.gym||GYM.loading)return;if(!force&&GYM.data&&Date.now()-GYM.at<300000)return;
-  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["me","coach","home"].includes(S.ui.tab)&&(!S.ui.sheet||GYMSHEETS.has(S.ui.sheet.k)))render()}
+  GYM.loading=true;try{const j=await api("GET","/gym");GYM.data=j.gym;GYM.at=Date.now()}catch(e){}GYM.loading=false;if(["me","coach"].includes(S.ui.tab)&&(!S.ui.sheet||GYMSHEETS.has(S.ui.sheet.k)))render()}
 const gymProfile=()=>(GYM.data&&GYM.data.profile)||{};
 const hasProfile=p=>!!(p&&((p.timetable||[]).length||(p.coaches||[]).length||(p.rates||[]).length||p.address||p.phone||p.email));
 const priceTxt=(r,cur)=>{const c=r.currency||cur||"ZAR";try{return new Intl.NumberFormat("en-ZA",{style:"currency",currency:c,maximumFractionDigits:r.price%1?2:0}).format(r.price)}catch(e){return c+" "+r.price}};
@@ -6994,8 +7042,8 @@ function weekLimitLine(){const m=API.mem,p=m&&m.plan;if(!p||!p.classesPerWeek)re
 const cap1=s=>String(s||"").charAt(0).toUpperCase()+String(s||"").slice(1);
 // New members pick their plan: when they join, or from their membership card. It's a trial until the coach confirms their first payment.
 const planList=ps=>{const cur=(API.me.gym||{}).currency;return `<div class="list">${ps.map(p=>`<div class="row between" style="border-top:1px solid var(--line);padding-block:8px;flex-wrap:nowrap"><span><b>${esc(p.name)}</b><br><span class="small muted">${money(p.priceCents,cur)} ${esc(PERL[p.period]||"")}${p.classesPerWeek?` · ${p.classesPerWeek} classes a week`:""}</span></span><button class="btn sm primary" data-a="pickplan" data-v="${p.id}" aria-label="Pick ${esc(p.name)}">Pick</button></div>`).join("")}</div>`};
-function planPickSheet(){const m=API.mem;if(!m||!(m.plans||[]).length)return;S.ui.sheet={k:"planpick"};S.ui.stack=[];
-  openSheet(`${sheetHead("Your plan")}<div class="stack-lg"><h1>Pick your plan</h1><p class="small">Which membership are you joining ${esc(gymName())} on? It starts as a free trial. Once your coach confirms your first payment, you're a member.</p>${planList(m.plans)}</div>`)}
+function planPickSheet(){const m=API.mem&&(API.mem.plans||[]).length?API.mem:API.pay;if(!m||!(m.plans||[]).length)return;S.ui.sheet={k:"planpick"};S.ui.stack=[];
+  openSheet(`${sheetHead("Your plan")}<div class="stack-lg"><h1>Pick your plan</h1><p class="small">Which membership are you joining ${esc(gymName())} on? It starts as a free trial. Once your coach confirms your first payment, you're a member.</p><div id="pickplan">${planList(m.plans)}</div></div>`)}
 async function pickPlan(id){try{const j=await api("POST","/me/plan",{planId:id});API.me=j.me;API.mem=undefined;API.pay=undefined;await Promise.all([loadMembership(),loadPay()]);if(S.ui.sheet&&S.ui.sheet.k==="planpick")hideSheet();render();
   toast(`You picked ${j.plan.name}. Pay with your reference and send the proof to start.`)}catch(e){toast(e.message)}}
 // "Book my usual": one tap books this week's classes like last week's (same day, time and class), with the normal rules, and one toast says how it went.
@@ -7011,8 +7059,8 @@ function viewBook(){
   if(!API.me||!API.me.gym)return `${header()}<div class="empty">Join your gym (Me › Your account) to book classes.</div>`;
   if(!API.classes){loadClasses(true);return `${header()}<div class="empty">Loading classes…</div>`}
   if(API.mem===undefined){API.mem=null;loadMembership().then(()=>{if(S.ui.tab==="classes")render()})}
-  if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(["classes","home"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
-  if(API.pay===undefined){API.pay=null;loadPay().then(()=>{if(["classes","home","me"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
+  if(API.notices===undefined){API.notices=null;loadNotices().then(()=>{if(S.ui.tab==="classes"&&!S.ui.sheet)render()})}
+  if(API.pay===undefined){API.pay=null;loadPay().then(()=>{if(["classes","map","me"].includes(S.ui.tab)&&!S.ui.sheet)render()})}
   const v=S.ui.bookView||"classes",now=Date.now();
   const up=API.classes.filter(c=>clsEnd(c)>now);
   const groups=(list)=>{const g={};list.forEach(c=>{(g[dayKey(c.startsAt)]=g[dayKey(c.startsAt)]||[]).push(c)});return Object.values(g).map(cs=>`<section class="stack"><h2 class="label">${esc(dayLabel(cs[0].startsAt))}</h2>${cs.map(bookCard).join("")}</section>`).join("")};
@@ -7250,7 +7298,7 @@ const kg=w=>w&&/^\d+([.,]\d+)?$/.test(String(w).trim())?String(w).trim()+" kg":w
 const daysTo=d=>Math.round((fromYmd(d)-fromYmd(todayK()))/864e5);
 const regLine=c=>{if(!c.registerBy)return "";const n=daysTo(c.registerBy);return n<0?`<span class="small muted">Registration closed</span>`:n===0?`<span class="small warn-t">Registration closes today</span>`:`<span class="small${n<=7?" warn-t":" muted"}">Registration closes in ${n} day${n===1?"":"s"}</span>`};
 async function loadComps(force){if(!API.me||!API.me.gym)return;if(!force&&API.comps&&Date.now()-API.compsAt<60000)return;
-  try{API.comps=(await api("GET","/competitions")).competitions;API.compsAt=Date.now();if(["classes","coach","home"].includes(S.ui.tab)&&!S.ui.sheet)render();else if(S.ui.sheet&&S.ui.sheet.k==="comp")compSheet(S.ui.sheet.id,true)}catch(e){}}
+  try{API.comps=(await api("GET","/competitions")).competitions;API.compsAt=Date.now();if(["classes","coach","train"].includes(S.ui.tab)&&!S.ui.sheet)render();else if(S.ui.sheet&&S.ui.sheet.k==="comp")compSheet(S.ui.sheet.id,true)}catch(e){}}
 const upcomingComps=()=>(API.comps||[]).filter(c=>(c.endsOn||c.startsOn)>=todayK());
 function teamChips(c,max){const t=(c.team||[]).filter(x=>x.status==="entered");if(!t.length)return "";const n=max||5;
   return `<span class="who-line">${t.slice(0,n).map(x=>`<span class="whochip${x.me?" me":""}"><i style="--bc:${BCOL[x.belt]||"#F4F4F0"}"></i>${esc(x.me?"You":x.name)}</span>`).join("")}${t.length>n?`<span class="small muted">+${t.length-n}</span>`:""}</span>`}
@@ -7393,7 +7441,7 @@ async function autoLog(force){
     taught.forEach(id=>{if(lv(id)<1){P().mastery[id]=1;ensureCard(id);fresh++}});
     if(await addSession(s))n++}
   if(fresh)saveProgress();
-  if(n){if(["train","home"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
+  if(n){if(["train","map"].includes(S.ui.tab)&&!S.ui.sheet)render();toast(`Logged ${n} class${n>1?"es":""} from your bookings${fresh?`; ${fresh} new move${fresh>1?"s":""} added to your reviews`:""}.`)}
 }
 /* What to do next, worked out from your last few weeks of training. */
 function nextSteps(){const out=[],seen=new Set();
@@ -7414,10 +7462,11 @@ function sessCard(s){
     ${tags.length?`<div class="ltags">${tags.join("")}</div>`:""}${note?`<div class="small">${esc(note)}</div>`:""}
     <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">${note?"Note ✎":"+ Note"}</button></div>
     <div class="row" style="justify-content:flex-end;gap:14px"><button class="linkbtn small" data-a="editlog" data-v="${s.id}">Edit</button><button class="linkbtn small" style="color:var(--ink-2)" data-a="del" data-v="${s.id}">Delete</button></div></div>`,{edit:["editlog",s.id],del:["del",s.id]})}
-/* Today: the last class you went to, waiting for a quick tap or two. */
-function lastClassCard(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if(!s)return "";
-  if(Date.now()-new Date(s.time||s.date).getTime()>3*864e5||(s.hits||[]).length||(s.tapped||[]).length||(s.stuck||[]).length||s.worked)return "";
-  return `<section class="panel stack"><div><h2 class="label">How did it go?</h2><b>${esc(s.title||"Class")}</b> <span class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}</span></div>
+/* Train (and a nudge on the Map): the last class you went to, waiting for a quick tap or two. */
+function lastClassOpen(){const s=S.sessions.filter(x=>x.auto).sort(bySess)[0];if(!s)return null;
+  return Date.now()-new Date(s.time||s.date).getTime()>3*864e5||(s.hits||[]).length||(s.tapped||[]).length||(s.stuck||[]).length||s.worked?null:s}
+function lastClassCard(){const s=lastClassOpen();if(!s)return "";
+  return `<section class="panel stack" id="lastclass"><div><h2 class="label">How did it go?</h2><b>${esc(s.title||"Class")}</b> <span class="small muted">${esc(fmtDate(s.date))}${s.time?` · ${esc(fmtTime(s.time))}`:""}</span></div>
     ${(s.taught||[]).filter(i=>TM[i]).length?`<p class="small"><span class="muted">Taught:</span> ${s.taught.filter(i=>TM[i]).map(i=>esc(TM[i].n)).join(", ")}. Already in your reviews.</p>`:""}
     <div class="qtags"><button class="chip" data-a="tag" data-k="hits" data-v="${s.id}" aria-label="What worked">✓ Worked</button><button class="chip" data-a="tag" data-k="tapped" data-v="${s.id}" aria-label="What got you">Tapped</button><button class="chip" data-a="tag" data-k="stuck" data-v="${s.id}" aria-label="Where you got stuck">Stuck</button><button class="chip" data-a="tag" data-k="note" data-v="${s.id}">+ Note</button></div></section>`}
 /* One sheet per tag type; every tap saves straight away. */
@@ -8250,8 +8299,9 @@ async function moreForm(fid,f,submitter){
 
 /* ============ THE GYM'S MONTHLY PROGRAMME (backend/programme.js) ============ */
 /* Coaches: Schedule → Programme. A month, its weeks (Mondays), each with a title, a note, YouTube videos and techniques; Publish when ready.
-   Members: "This month" at the top of Train (week chips, this week's videos, catch-up, next month's preview) and a small card on Home.
-   Everything here is its own: app.html and accounts.js only call progLearnTop, progHomeCard, progSchedRow and progClassHint. */
+   Members: "This month" at the top of Train (week chips, this week's videos, catch-up, next month's preview), and on the Map the
+   month's positions ringed (and this week's, where the map opens the first time).
+   Everything here is its own: app.html and accounts.js only call progLearnTop, progMapPos, progMapSet, progSchedRow and progClassHint. */
 const PRG={me:null,meFor:null,meAt:0,meBusy:false,coach:{},view:{},saving:Promise.resolve()};
 const PRG_MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const prgName=ym=>PRG_MON[Number(String(ym).slice(5,7))-1]||"";
@@ -8272,7 +8322,7 @@ const prgN=(n,w)=>`${n} ${w}${n===1?"":"s"}`;
 async function prgLoad(force){if(!prgOn()||PRG.meBusy)return;const who=API.me.id;
   if(!force&&PRG.meFor===who&&Date.now()-PRG.meAt<120000)return;PRG.meBusy=true;
   let j=null;try{j=await api("GET","/programme")}catch(e){}finally{PRG.meBusy=false}
-  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="home"||S.ui.tab==="train")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
+  if(API.me&&API.me.id===who){const was=PRG.meFor===who?JSON.stringify(PRG.me):"";PRG.me=j;PRG.meFor=who;PRG.meAt=Date.now();if((S.ui.tab==="map"||S.ui.tab==="train")&&!S.ui.sheet&&JSON.stringify(j)!==was)render()}}
 const prgMine=()=>{if(!prgOn())return null;if(PRG.meFor!==API.me.id||Date.now()-PRG.meAt>=120000)prgLoad();return PRG.meFor===API.me.id?PRG.me:null};
 // A week's state for this member: now, upcoming, done (trained or caught up) or missed.
 function prgState(d,w){const t=d.today,end=addDays2(w.start,7);if(t>=w.start&&t<end)return "now";if(t<w.start)return "next";
@@ -8295,9 +8345,13 @@ function progLearnTop(){const d=prgMine();if(!d)return "";const p=prgLive(d),cu=
       <button class="btn primary" data-a="prgcatch">Watch what you missed</button></section>`}
   if(d.next)html+=`<button class="panel prgnext" data-a="prgmonth" data-v="${d.next.month}"><span class="row between"><span class="label prglab">Next month</span><span class="pill plain">Preview</span></span><b>${esc(prgName(d.next.month))}: ${esc(d.next.title)}</b></button>`;
   return `<div class="stack prgtop">${html}</div>`}
-// Home: one line, this week's topic, linking to Train.
-function progHomeCard(){const d=prgMine();if(!d)return "";const p=prgLive(d);if(!p)return "";const w=prgNow(d,p);if(!w)return "";const cu=(d.catchUp||[]).length,now=prgState(d,w)==="now";
-  return `<button class="panel prghome" data-a="prglearn"><span class="prgdot" aria-hidden="true">▶</span><span class="grow"><small class="prglab">${now?"This week":"Starts "+esc(prgDay(w.start))}</small><b>${esc(w.title||p.title)}</b></span><span class="small muted">${w.videos.length?prgN(w.videos.length,"video"):""}${cu?` <span class="pill due">${cu} to catch up</span>`:""} ›</span></button>`}
+// The Map: where this week's moves start (the position most of them start from), so the map can open there. null: none (or no
+// programme); undefined: still loading.
+const prgTop=ids=>{const c={};ids.forEach(id=>{const t=TM[id];if(t&&POS[t.f])c[t.f]=(c[t.f]||0)+1});return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||null};
+function progMapPos(){if(!prgOn()||isCoach())return null;const d=prgMine();if(!d)return PRG.meFor===API.me.id?null:undefined;const p=prgLive(d);if(!p)return null;const w=prgNow(d,p);return w?prgTop(w.ids):null}
+// …and every position this month's weeks work on, ringed on the map.
+function progMapSet(){const out=new Set();if(!prgOn()||isCoach())return out;const d=PRG.meFor===API.me.id?PRG.me:null,p=prgLive(d);if(!p)return out;
+  p.weeks.forEach(w=>w.ids.forEach(id=>{const t=TM[id];if(t&&POS[t.f])out.add(t.f)}));return out}
 // Where a week comes from: m = this month, c = the catch-up list, or a month opened by itself (YYYY-MM).
 function prgFind(src,start){const d=PRG.me||{};
   if(src==="m"){const p=prgLive(d)||(d.programme||null);return p&&p.weeks.find(w=>w.start===start)}
@@ -8448,7 +8502,7 @@ function prgUse(date){const w=prgWeekOn(date),f=document.getElementById("classfo
 
 /* ============ FIRST-RUN SETUP ============ */
 function maybeOnboard(){if(S.ui.obChecked)return;try{if(managing())return}catch(e){}/* coaches running the gym skip the study questions until they open My training */
-  S.ui.obChecked=true;const st=P().settings;if(st.onboarded)return;
+  S.ui.obChecked=true;const st=P().settings;if(st.onboarded||S.ui.explore)return; // exploring the map from the website: no questions first
   if(Object.keys(P().mastery).length||S.sessions.length){st.onboarded=true;saveProgress();return}
   if(!document.getElementById("sheet").hidden)return;
   // A new visitor on the website (no account, nothing saved, not opening an invite or sign-in link) first picks how they use JitsFlow.
@@ -8485,7 +8539,7 @@ function onboardSheet(keep){const o=S.ui.ob;S.ui.sheet={k:"onboard"};S.ui.stack=
   <section class="stack"><h2 class="label">Which hand do you hold your phone in?</h2>${seg("hand",[["left","Left"],["right","Right"]],"seg")}</section></div>`,keep,{back:"Skip",act:`<button class="btn primary grow" data-a="obdone">Start</button>`})}
 function finishOnboard(){const o=S.ui.ob,st=P().settings;const next={white:"blue",blue:"purple",purple:"brown",brown:"black"}[o.belt]||"blue";
   st.goal=next;st.perWeek=o.pw;st.days=defaultDays(o.pw);st.hand=o.hand;st.priorHours=Math.round(Number(o.months)*4.345*o.pw*1.5);st.cycleStart=today();st.onboarded=true;
-  S.ui.belt=next;saveProgress();hideSheet();go("home");toast("All set. Start by rating what you know.")}
+  S.ui.belt=next;saveProgress();hideSheet();go("map");toast("All set. Tap a position to see your moves.")}
 /* ============ GLOSSARY CARD + ASK CLAUDE ============ */
 let AICTL=null,TERMCTL=null;
 function md(t){const out=[];let list=false;const inl=x=>gl(x).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
@@ -8571,7 +8625,9 @@ function confirmSheet(title,text,yes,label){S.ui.sheet={k:"confirm"};S.ui.stack=
 /* ============ BOOT ============ */
 (function boot(){
   if(!lsGet("rtb.progress"))lsSet("rtb.progress",S.progress);
-  {const h=location.hash.slice(1),r=route(h)||{tab:"home"};S.ui.tab=r.tab;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h&&h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}}
+  {const h=location.hash.slice(1),r=route(h)||{tab:"map"};S.ui.tab=r.tab;if(r.tab==="map"&&(OLDTAB[h]||h)==="map"&&!["home","today"].includes(h))S.ui.mapAsked=true;if(r.cv)COACH.view=r.cv;if(r.tv)S.ui.trainView=r.tv;if(h&&h!==tabHash()){try{history.replaceState(null,"","#"+tabHash())}catch(e){}}}
+  // From the website's map (/app/?explore=1&pos=mount_bot#map): straight onto the map at that position, no welcome questions.
+  try{const qs=new URLSearchParams(location.search),ps=qs.get("pos");if(qs.has("explore")||ps){S.ui.explore=qs.has("explore");if(ps&&POS[ps])mapSet(ps);qs.delete("explore");qs.delete("pos");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash)}}catch(e){}
   render();setSync(S.sync,"");connect();
   // Links from the technique pages: /app/?t=kimura opens that technique.
   try{const qs=new URLSearchParams(location.search),t=qs.get("t");if(t){qs.delete("t");history.replaceState(null,"",location.pathname+(qs.toString()?"?"+qs:"")+location.hash);if(TM[t])setTimeout(()=>{techSheet(t);jfTrack("select_content",{content_type:"technique",item_id:t,from:"web_page"})},60)}}catch(e){}

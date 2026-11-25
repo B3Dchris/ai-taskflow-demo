@@ -2,7 +2,7 @@
 // Usage: DATABASE_URL=postgres://.../<something>test node tests/accounts.js   (wipes that database)
 const { chromium, devices } = require("playwright"); const { spawn } = require("child_process"); const path = require("path"); const { Pool } = require("pg"); const { startGymSite, startMailSink } = require("./fixture-gym");
 const DB = process.env.DATABASE_URL; if (!DB || !/test/.test(DB)) { console.error("Set DATABASE_URL to a *test* database."); process.exit(2); }
-let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } };
+let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (process.env.TRACE) console.log(c ? "ok" : "FAIL", m); if (c) pass++; else { fail++; fails.push(m); } };
 (async () => {
   const pool = new Pool({ connectionString: DB });
   await pool.query("drop table if exists payfast_ops, card_checkouts, payfast_flags, assistant_proposals, autopay_charges, autopay, class_skips, plan_breaks, left_owing, packs, pop_files, competitors, competitions, plans, password_resets, payments, attendance, classes, training_logs, progress, sessions, users, gyms cascade"); await pool.end();
@@ -80,12 +80,15 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await ev(co, () => coachGo("gym")); await co.tap('.gymsettings [data-a="mytrain"]'); await co.waitForTimeout(400);
     if (await ev(co, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await ev(co, () => goBack());
     const tabsNow = () => ev(co, () => [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join());
-    ok(await ev(co, () => S.ui.tab === "train" && location.hash === "#train" && document.querySelector("#app h1.pageh").textContent === "My training" && !!document.querySelector(".trainstats") && !!document.querySelector(".trainseg")
-      && document.querySelector('nav.tabs [data-v="coach-gym"]').getAttribute("aria-current") === "page" && !document.querySelector('[data-a="coachmode"]') && !document.querySelector(".managebtn")), "My training opens the Train page under Gym, with no mode switch");
+    ok(await ev(co, () => S.ui.tab === "map" && location.hash === "#map" && document.querySelector("#app h1.pageh").textContent === "My training" && !!document.querySelector(".mapcard .flowsvg") && document.querySelector('.trainseg [data-v="map"]').getAttribute("aria-pressed") === "true"
+      && document.querySelector('nav.tabs [data-v="coach-gym"]').getAttribute("aria-current") === "page" && !document.querySelector('[data-a="coachmode"]') && !document.querySelector(".managebtn")), "My training opens on the map, under Gym, with no mode switch");
     ok(await tabsNow() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym", "My training keeps the coach tabs: " + await tabsNow());
-    for (const v of ["map", "log"]) { await co.tap(`.trainseg [data-v="train-${v}"]`); await co.waitForTimeout(200); ok(await ev(co, (v) => S.ui.trainView === v, v) && await tabsNow() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym", `My training › ${v}: the tab bar stays`); }
+    for (const v of ["moves", "log"]) { await co.tap(`.trainseg [data-v="train-${v}"]`); await co.waitForTimeout(200); ok(await ev(co, (v) => S.ui.tab === "train" && S.ui.trainView === v, v) && await tabsNow() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym", `My training › ${v}: the tab bar stays`); }
+    await co.tap('.trainseg [data-v="map"]'); await co.waitForTimeout(300); ok(await ev(co, () => S.ui.tab === "map" && !!document.querySelector(".mapcard")) && await tabsNow() === "coach-home,coach-schedule,coach-members,coach-money,coach-gym", "My training › Map: the same map, the coach tabs stay");
+    ok(await ev(co, () => !document.querySelector(".mapstrip")), "a coach's own map has no class or fees line");
     await co.tap('.backlink[data-a="coachgo"][data-v="gym"]'); await co.waitForTimeout(300);
     ok(await ev(co, () => S.ui.tab === "coach" && COACH.view === "gym" && location.hash === "#coach-gym"), "‹ Gym goes back");
+    for (const h of ["home", "today", ""]) { await co.goto("about:blank"); await co.goto(URL + "/app/" + (h ? "#" + h : "")); await co.waitForTimeout(1300); ok(await ev(co, () => S.ui.tab === "coach" && COACH.view === "home" && location.hash === "#coach-home"), `a coach opening the app${h ? " on #" + h : ""} still lands on Today`); }
     await ev(co, () => { location.hash = "journal"; }); await co.waitForTimeout(300); ok(await ev(co, () => S.ui.tab === "train" && S.ui.trainView === "log"), "an old #journal link opens a coach's own training log");
     await ev(co, () => coachGo("gym")); await co.waitForTimeout(300);
     const invite = await ev(co, () => { inviteSheet(); return document.getElementById("inv-link").textContent; }); await ev(co, () => hideSheet());
@@ -119,8 +122,9 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
       await nv.tap('#sheetbar [data-a="back"]'); await nv.tap('#sheet [data-a="how"][data-v="signin"]'); ok(await ev(nv, () => S.ui.sheet.k === "auth" && S.ui.authMode === "login"), "Sign in is there for people with an account");
       await nv.tap('#sheetbar [data-a="back"]'); await nv.tap('#sheet [data-a="how"][data-v="solo"]'); ok(await ev(nv, () => S.ui.sheet.k === "onboard" && /Welcome to JitsFlow/.test(document.getElementById("sheet").innerText)), "Just me goes to the study setup questions");
       await nv.tap('#sheetbar [data-a="obdone"]'); await nv.waitForTimeout(300); await nv.reload(); await nv.waitForTimeout(1200);
-      ok(await ev(nv, () => !S.ui.sheet && S.ui.tab === "home" && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join() === "home,train,me"), "once set up, the first screen doesn't come back; self-study gets 3 tabs");
-      ok(await ev(nv, () => !document.querySelector(".tip") && !document.querySelector("#feecard") && !/Classes/.test(document.querySelector("nav.tabs").innerText.replace(/\s+/g, " ").split("Learn")[0])), "their Home has no tip banner, and no fees or classes they don't have");
+      ok(await ev(nv, () => !S.ui.sheet && S.ui.tab === "map" && !!document.querySelector(".mapcard") && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join() === "map,train,me"), "once set up, the first screen doesn't come back; self-study lands on the Map, with 3 tabs");
+      ok(await ev(nv, () => !document.querySelector(".tip") && !document.querySelector("#feecard") && !/Classes/.test(document.querySelector("nav.tabs").innerText.replace(/\s+/g, " ").split("Learn")[0])), "their Map has no tip banner, and no fees or classes they don't have");
+      ok(await ev(nv, () => !document.querySelector(".mapstrip")), "nor a class or fees line");
       await nv.goto(URL + "/app/?start=1"); await nv.waitForTimeout(1200); ok(await ev(nv, () => S.ui.sheet && S.ui.sheet.k === "auth" && S.ui.authMode === "gym"), "?start=1 still opens Start your gym");
       await nc.close(); }
     { const { c: nc, p: nv } = await phone(); await nv.goto(URL + "/app/?signin"); await nv.waitForTimeout(1200);
@@ -133,18 +137,22 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await st.tap('#sheetbar [type=submit]'); await st.waitForTimeout(900);
     ok(await ev(st, () => API.me && API.me.role === "student" && API.me.gym.name === "JPB Martial Arts Academy"), "student account created in the gym");
     if (await ev(st, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await st.tap('#sheetbar [data-a="obdone"]');
-    ok(await ev(st, () => [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.textContent.trim()).join() === "Home,Classes,Train,Me"), "students get Home, Classes, Train, Me (no coach tabs)");
+    ok(await ev(st, () => [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.textContent.trim()).join() === "Map,Classes,Train,Me" && S.ui.tab === "map"), "students get Map, Classes, Train, Me (no coach tabs), and land on the Map");
     ok(await ev(st, () => !document.querySelector("header [data-a]")), "a student's initials aren't a second Me button");
     await st.tap('nav.tabs [data-v="me"]'); ok(await ev(st, () => S.ui.tab === "me" && location.hash === "#me" && /Chris/.test(document.getElementById("app").innerText)), "the Me tab opens Me");
     await ev(st, () => { P().mastery.hg_frames = 2; P().mastery.knee_cut = 3; P().mastery.upa = 1; saveProgress(); });
     await st.waitForTimeout(1200);
-    await st.tap('nav.tabs [data-v="home"]'); await st.waitForTimeout(600);
-    ok(await ev(st, () => /Next class/i.test(document.body.innerText) && /No-gi: half guard/.test(document.querySelector(".nextclass").innerText) && /2 techniques to study/.test(document.querySelector(".nextclass").innerText)), "student sees the next class and the coach's plan");
-    await st.locator('.nextclass [data-a="rsvp"]').tap(); await st.waitForTimeout(700);
-    ok(await ev(st, () => /You're booked/.test(document.querySelector(".nextclass").innerText) && /You/.test(document.querySelector(".nextclass .who-line").innerText)), "student books from Today and shows up in the booked list");
-    await wide(st, "student today");
+    await st.tap('nav.tabs [data-v="map"]'); await st.waitForTimeout(900);
+    ok(await ev(st, () => { const c = document.querySelector(".mapstrip .scls"); return !!c && /No-gi: half guard/.test(c.innerText) && /· Book$/.test(c.innerText.trim()); }), "the Map's top line shows the next class, with Book");
+    await st.tap(".mapstrip .scls"); await st.waitForTimeout(500);
+    ok(await ev(st, () => S.ui.sheet && S.ui.sheet.k === "book" && /No-gi: half guard/.test(document.getElementById("sheet").innerText) && /Coach's plan/i.test(document.getElementById("sheet").innerText) && document.querySelectorAll("#sheet .trow").length === 2), "tapping it opens the class, with the coach's plan");
+    await st.tap('#sheetbar [data-a="rsvp"]'); await st.waitForTimeout(900);
+    ok(await ev(st, () => /You/.test(document.getElementById("sheet").innerText) && API.classes.some((c) => c.myGoing)), "student books it and shows up in the booked list");
+    await ev(st, () => closeSheet()); await st.waitForTimeout(300);
+    ok(await ev(st, () => /· Booked$/.test(document.querySelector(".mapstrip .scls").innerText.trim())), "the top line now says Booked");
+    await wide(st, "student map");
     // student logs a session (goes to the server)
-    await st.tap(".homehero .logbtn"); await st.selectOption("#f-tapped", "rnc"); await st.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();
+    await ev(st, () => go("train-log")); await st.waitForTimeout(300); await st.tap("#app .logbtn"); await st.selectOption("#f-tapped", "rnc"); await st.locator('#sheet [data-a="stuck"][data-v="hg_bot"]').tap();
     await st.tap('#sheetbar button[type=submit]'); await st.waitForTimeout(700);
     ok(await ev(st, async () => (await (await fetch("/api/logs")).json()).logs.length === 1), "logged session is saved on the server");
     // clear the phone: progress comes back from the server
@@ -342,10 +350,11 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.fill("#acc-fee", "150"); await co.tap('#accessform [type=submit]'); await co.waitForTimeout(900);
     ok(/Access fee saved/.test(await toast(co)) && await ev(co, () => /access fee of R\s?150 per month/.test(document.getElementById("accessform").innerText)), "and an access fee for private-only clients");
     await wide(co, "plans and prices with packs"); await ev(co, () => hideSheet());
-    await st.evaluate(async () => { API.pay = undefined; API.classes = null; await loadClasses(true); go("home"); }); await st.waitForTimeout(1200);
-    ok(await ev(st, () => { const c = API.classes.find((x) => x.kind === "private" && x.myGoing), same = dayKey(c.startsAt).slice(0, 7) === todayK().slice(0, 7);
-      return !!document.querySelector(".feecard") && (!same || (/Private lesson, .*R\s?450/.test(document.querySelector(".feecard").innerText) && API.pay.privatesCents === 45000)); }), "with no lessons bought, the booked private's price shows in the student's fees");
-    await st.tap('.feecard [data-a="mypay"]'); await st.waitForTimeout(400);
+    await st.evaluate(async () => { API.pay = undefined; API.classes = null; await loadClasses(true); go("map"); }); await st.waitForTimeout(1200);
+    const privSame = await ev(st, () => { const c = API.classes.find((x) => x.kind === "private" && x.myGoing); return dayKey(c.startsAt).slice(0, 7) === todayK().slice(0, 7); });
+    if (privSame) { ok(await ev(st, () => /R\s?[\d\s]+ due · Pay/.test((document.querySelector("#duechip") || {}).innerText || "")), "owing for the private: the Map's top line says what's due"); await st.tap("#duechip"); }
+    else await ev(st, () => myPaySheet()); await st.waitForTimeout(400);
+    ok(await ev(st, (same) => S.ui.sheet && S.ui.sheet.k === "mypay" && (!same || (/Private lesson, .*R\s?450/.test(document.getElementById("sheet").innerText) && API.pay.privatesCents === 45000)), privSame), "with no lessons bought, the booked private's price shows in the student's fees");
     ok(await ev(st, () => /10 private lessons/.test(document.getElementById("mypacks").innerText) && !!document.querySelector('#mypop-pack option[value]:not([value=""])')), "the Pay sheet offers the pack (by EFT with proof here; by card once PayFast is on)");
     await st.selectOption("#mypop-pack", { index: 1 }); ok(await ev(st, () => document.getElementById("mypop-amt").value === "4500"), "picking the pack fills in its price");
     await st.evaluate(() => hideSheet());
@@ -355,8 +364,8 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.tap("#sheetbar [type=submit]"); await co.waitForTimeout(1000);
     await st.evaluate(() => { API.pay = undefined; go("classes"); }); await st.waitForTimeout(1000); await st.tap('[data-a="bookview"][data-v="private"]'); await st.waitForTimeout(500);
     ok(await ev(st, () => /9 privates left · 1 booked/.test(document.getElementById("app").innerText) && API.pay.privatesCents === 0), "the student sees 9 privates left (one held for the private they booked), and owes nothing for it now");
-    await st.evaluate(() => go("home")); await st.waitForTimeout(300);
-    ok(await ev(st, () => /9 privates left/.test(document.querySelector(".feecard").innerText)), "it shows on their fees card (Home) too");
+    await st.evaluate(() => { go("map"); myPaySheet(); }); await st.waitForTimeout(300);
+    ok(await ev(st, () => /9 privates left/.test(document.getElementById("sheet").innerText)), "it shows on their Pay sheet too"); await st.evaluate(() => hideSheet());
     await st.evaluate(() => go("classes")); await st.waitForTimeout(300);
     const privId = await ev(co, () => COACH.classes.find((c) => c.kind === "private" && c.going).id);
     await ev(co, (id) => classSheet(id), privId); await co.waitForTimeout(900);
@@ -547,7 +556,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
         await ev(k6, () => { hideSheet(); coachGo("gym"); }); await k6.waitForTimeout(500);
         ok(await ev(k6, () => COACH.view === "me" && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join() === "coach-home,coach-schedule,coach-members,coach-me" && !!document.querySelector('#app [data-a="mytrain"]') && !!document.querySelector('#app [data-a="signout"]') && !document.querySelector('#app [data-v="plan"],#app [data-v="pay"]')), "another coach's tabs are Today, Schedule, Members, Me; Me has their account, My training and the gym rows they can change");
         await k6.tap('#app [data-a="mytrain"]'); await k6.waitForTimeout(400); if (await ev(k6, () => S.ui.sheet && S.ui.sheet.k === "onboard")) await ev(k6, () => goBack());
-        ok(await ev(k6, () => S.ui.tab === "train" && document.querySelector('nav.tabs [data-v="coach-me"]').getAttribute("aria-current") === "page" && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join() === "coach-home,coach-schedule,coach-members,coach-me" && !!document.querySelector('.backlink[data-v="me"]')), "their My training opens under Me, with the same tabs and a way back");
+        ok(await ev(k6, () => S.ui.tab === "map" && !!document.querySelector(".mapcard") && document.querySelector('nav.tabs [data-v="coach-me"]').getAttribute("aria-current") === "page" && [...document.querySelectorAll("nav.tabs button:not([hidden])")].map((b) => b.dataset.v).join() === "coach-home,coach-schedule,coach-members,coach-me" && !!document.querySelector('.backlink[data-v="me"]')), "their My training opens under Me, with the same tabs and a way back");
         await k6.tap('.backlink[data-v="me"]'); await k6.waitForTimeout(300); await k6.tap('#app [data-a="gymsec"][data-v="coaches"]'); await k6.waitForTimeout(400);
         ok(await ev(k6, () => /Coach JP is the head coach/.test(document.getElementById("sheet").innerText) && !document.getElementById("g-fee") && !document.querySelector(".planpanel") && !document.querySelector('[data-a="headask"]') && /Head coach/.test(document.getElementById("coach-list").innerText) && !document.querySelector('#coach-list [data-a="coachdelask"]') && !document.getElementById("gymdel")), "Me › Coaches names the head coach, who they can't remove, and has no fee, JitsFlow plan or Delete gym");
         await wide(k6, "second coach Me › Coaches"); await ev(k6, () => hideSheet()); await wide(k6, "second coach Me");
@@ -624,10 +633,12 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
       // a new member picks their plan
       const { p: nm } = await phone(); await nm.goto(URL + "/app/"); await nm.waitForTimeout(500);
       await ev(nm, (c) => api("POST", "/auth/register", { code: c, name: "Nia New", email: "nia@owe.test", password: "niapass11" }), g.studentCode || (await ev(hb, () => API.me.gym.studentCode)));
-      await nm.reload(); await nm.waitForTimeout(900); await ev(nm, () => { hideSheet(); go("home"); }); await nm.waitForTimeout(1200);
-      ok(await ev(nm, () => /Pick your plan/.test(document.getElementById("pickplan").innerText) && /Adult/.test(document.getElementById("pickplan").innerText) && !!document.querySelector("#feecard #pickplan")), "a new member's fees card on Home offers the gym's plans");
+      await nm.reload(); await nm.waitForTimeout(900); await ev(nm, () => { hideSheet(); go("map"); }); await nm.waitForTimeout(1200);
+      ok(await ev(nm, () => /^Pick your plan$/.test((document.querySelector('.mapstrip [data-a="planpick"]') || {}).innerText || "")), "a new member's Map says Pick your plan");
+      await nm.tap('.mapstrip [data-a="planpick"]'); await nm.waitForTimeout(500);
+      ok(await ev(nm, () => /Pick your plan/.test(document.getElementById("sheet").innerText) && /Adult/.test(document.getElementById("pickplan").innerText)), "it opens the gym's plans");
       await nm.tap(`#pickplan [data-a="pickplan"][data-v="${adult.id}"]`); await nm.waitForTimeout(1200);
-      ok(/You picked Adult/.test(await toast(nm)) && await ev(nm, () => API.mem.status === "trial" && /Free trial/.test(document.getElementById("app").innerText)), "picking one starts a free trial");
+      ok(/You picked Adult/.test(await toast(nm)) && await ev(nm, () => API.mem.status === "trial" && !document.querySelector('.mapstrip [data-a="planpick"]')), "picking one starts a free trial");
       await ev(nm, () => myPaySheet()); await nm.waitForTimeout(300);
       ok(await ev(nm, () => [...document.querySelectorAll("#mypop-pack option")].some((o) => /^Joining: Adult/.test(o.textContent) && o.selected) && document.getElementById("mypop-amt").value === "850"), "the proof form's What's it for? has the plan, with its price");
       await nm.context().close(); await hb.context().close(); await pl.end(); }
@@ -745,7 +756,7 @@ let pass = 0, fail = 0; const fails = []; const ok = (c, m) => { if (c) pass++; 
     await co.fill('#gymdelform [name=password]', "wrongpass1"); await co.tap('#gymdelform [type=submit]'); await co.waitForTimeout(700);
     ok(/password isn't right/.test(await toast(co)) && await ev(co, () => !!API.me.gym), "a wrong password keeps the gym");
     await co.fill('#gymdelform [name=password]', "coachpass1"); await co.tap('#gymdelform [type=submit]'); await co.waitForTimeout(1200);
-    ok(/gym is deleted/.test(await toast(co)) && await ev(co, () => API.me && !API.me.gym && !isCoach() && location.hash === "#home"), "deleting the gym keeps the coach's own account, with no gym");
+    ok(/gym is deleted/.test(await toast(co)) && await ev(co, () => API.me && !API.me.gym && !isCoach() && location.hash === "#map"), "deleting the gym keeps the coach's own account, with no gym");
   } catch (e) { fail++; fails.push("CRASH " + (e.stack || e).toString().split("\n").slice(0, 3).join(" ")); }
   ok(errs.length === 0, "page errors: " + errs.join(" | "));
   await b.close(); srv.kill(); site.close(); sink.close();

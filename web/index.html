@@ -23,8 +23,6 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<!-- wide screens: the hero clip's poster is the largest thing in the first screen, so fetch it first -->
-<link rel="preload" as="image" href="/video/moves-and-map.webp" media="(min-width: 760px)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Saira+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -180,14 +178,32 @@ h2{font-size:clamp(32px,4.4vw,46px)}
 
 /* hero: the headline and two buttons on the left, the app itself playing in a phone on the right (on phones, below) */
 .lead{padding-block:16px 88px}
-.lead h1{font-size:clamp(44px,14.6vw,94px);font-weight:800;text-transform:uppercase;color:#F4F6FB;line-height:.94;max-width:11.5em;margin-top:12px}
+.lead h1{font-size:clamp(38px,10.6vw,94px);font-weight:800;text-transform:uppercase;color:#F4F6FB;line-height:.94;max-width:11.5em;margin-top:12px}
 .lead h1 span{display:inline}
 .lead h1 em{font-style:normal;color:#8FB0FF}
 .leadgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
 .leadcopy{display:flex;flex-direction:column;gap:16px}
 .lead .lede{margin:0;color:#C9D3E6;font-size:clamp(18px,2vw,21px);max-width:28em}
 .lead .cta{margin-top:8px}
-.heroclip .device{--w:min(272px,70vw)}
+.democlip .device{--w:min(272px,70vw)}
+.demogrid{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:center}
+/* the hero's map: every position, best at the top, as buttons; the one you tap shows its top moves below */
+.minimap{display:flex;flex-direction:column;gap:10px;min-width:0}
+.mm{display:flex;flex-direction:column;gap:6px}
+.mmrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mmrow[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr));padding-inline:calc((100% - 18px) / 4 / 2 + 3px)}
+.mm button{min-height:46px;padding:4px 3px;border-radius:10px;border:1.5px solid rgba(255,255,255,.18);border-left:4px solid var(--tc);background:rgba(255,255,255,.06);color:#E6ECF8;font:600 clamp(12.5px,3.4vw,14px)/1.15 inherit;font-family:inherit;cursor:pointer;overflow-wrap:normal}
+.mm .t0{--tc:#3FBF7F}.mm .t1{--tc:#7CC9A0}.mm .t2{--tc:#5B8CFF}.mm .t3{--tc:#8EA2CC}.mm .t4{--tc:#E6A84C}.mm .t5{--tc:#FF7A6E}
+.mm button.to{border-color:#7FD3A6;border-left-color:var(--tc);background:rgba(91,212,154,.14)}
+.mm button[aria-pressed="true"]{background:#fff;color:#0B1530;border-color:#fff;border-left-color:var(--tc);box-shadow:0 0 18px rgba(147,178,255,.6)}
+.mm button:focus-visible{outline:3px solid #8FB0FF;outline-offset:2px}
+.mmkey{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;color:#9FB0D0}.mmkey i{flex:1;height:4px;border-radius:2px;background:linear-gradient(90deg,#3FBF7F,#5B8CFF,#E6A84C,#FF7A6E)}
+.mmcard{display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:var(--r);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.mmcard h2{font-size:28px;color:#F4F6FB}.mmcard .mmg{margin:0;color:#C9D3E6;font-size:16px}.mmcard .mmn{margin:4px 0 0;font-size:14px;color:#9FB0D0}
+.mmcard ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.mmcard li{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:15px;color:#E6ECF8}.mmcard li span{color:#7FD3A6;font-weight:600}
+.mmcard .tlink{color:#8FB0FF}
+@media (prefers-reduced-motion: no-preference){.mm button{transition:background .15s,box-shadow .2s}}
 .clip figcaption{font-size:15px}
 
 /* two doors, as cards over the hero's edge */
@@ -281,7 +297,8 @@ footer .legalline{font-size:13px}
   .lead h1{margin-top:8px;font-size:clamp(52px,5.7vw,80px)}
   .lead h1 span{display:block}
   .leadgrid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px;align-items:center}
-  .heroclip .device{--w:280px}
+  .democlip .device{--w:280px}
+  .demogrid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px}
   .doors{grid-template-columns:1fr 1fr;gap:24px;margin-top:-64px}
   .door{padding:32px}
   .row{grid-auto-columns:200px}
@@ -309,13 +326,10 @@ footer .legalline{font-size:13px}
       <div class="leadcopy">
         <p class="eyebrow">No-gi Jiu-Jitsu</p>
         <h1 id="hero-h"><span>Know what to do</span> <span>when <em>they react.</em></span></h1>
-        <p class="lede">Your first move rarely works. See what comes next from every position: 157 techniques, white to black belt, each with a video.</p>
-        <div class="cta"><a class="btn primary" href="/app/">Open JitsFlow</a><a class="btn" href="/coaches/">For gyms</a></div>
+        <p class="lede">Tap a position. See your moves from there and where each one leads. 157 techniques, white to black belt, each with a video.</p>
+        <div class="cta"><a class="btn primary" id="explore" href="/app/?explore=1#map">Explore the map</a><a class="btn" href="/coaches/">For gyms</a></div>
       </div>
-      <figure class="clip heroclip">
-        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
-        <figcaption>The Moves library, then the map: one chain played to the tap. (Screen recording, no sound.)</figcaption>
-      </figure>
+      <div class="minimap"><div class="mm" id="mm" role="group" aria-label="Map of positions, best at the top"><div class="mmrow" data-n="2"><button type="button" class="t0" data-p="back_top" aria-pressed="false" aria-label="Back control (you're behind): 10 moves">Back control</button><button type="button" class="t0" data-p="mount_top" aria-pressed="false" aria-label="Mount (top): 8 moves">Mount</button></div><div class="mmrow" data-n="4"><button type="button" class="t1" data-p="sc_top" aria-pressed="false" aria-label="Side control (top): 10 moves">Side control</button><button type="button" class="t1" data-p="fhl_top" aria-pressed="false" aria-label="Front headlock (you control the head): 8 moves">Front headlock</button><button type="button" class="t1" data-p="turtle_top" aria-pressed="false" aria-label="They're turtled (you're on top): 4 moves">Turtle (top)</button><button type="button" class="t1" data-p="ashi" aria-pressed="false" aria-label="Leg entanglement (you're attacking): 9 moves">Leg entangle</button></div><div class="mmrow" data-n="4"><button type="button" class="t2" data-p="standing" aria-pressed="false" aria-label="Standing: 20 moves">Standing</button><button type="button" class="t2" data-p="open_top" aria-pressed="false" aria-label="Passing their open guard (top): 9 moves">Passing</button><button type="button" class="t2 to" data-p="cg_top" aria-pressed="false" aria-label="In their closed guard (top): 5 moves">In closed guard</button><button type="button" class="t2" data-p="hg_top" aria-pressed="false" aria-label="Half guard (top): 5 moves">Half guard top</button></div><div class="mmrow" data-n="4"><button type="button" class="t3" data-p="seated" aria-pressed="false" aria-label="Seated / open guard (bottom): 15 moves">Seated guard</button><button type="button" class="t3" data-p="bfly_bot" aria-pressed="false" aria-label="Butterfly guard (bottom): 3 moves">Butterfly</button><button type="button" class="t3" data-p="cg_bot" aria-pressed="false" aria-label="Closed guard (bottom): 13 moves">Closed guard</button><button type="button" class="t3 to" data-p="hg_bot" aria-pressed="false" aria-label="Half guard (bottom): 7 moves">Half guard</button></div><div class="mmrow" data-n="4"><button type="button" class="t4" data-p="sc_bot" aria-pressed="false" aria-label="Under side control: 8 moves">Side (bottom)</button><button type="button" class="t4" data-p="fhl_bot" aria-pressed="false" aria-label="In their front headlock: 2 moves">Headlocked</button><button type="button" class="t4" data-p="turtle_bot" aria-pressed="false" aria-label="Turtle (bottom): 6 moves">Turtled</button><button type="button" class="t4" data-p="ashi_def" aria-pressed="false" aria-label="Your leg is entangled: 5 moves">Legs attacked</button></div><div class="mmrow" data-n="2"><button type="button" class="t5" data-p="mount_bot" aria-pressed="true" aria-label="Under mount: 6 moves">Mounted</button><button type="button" class="t5" data-p="back_bot" aria-pressed="false" aria-label="Your back is taken: 4 moves">Back taken</button></div></div><p class="mmkey"><span>Best</span><i aria-hidden="true"></i><span>Worst</span></p><div class="mmcard" id="mmcard" aria-live="polite"><p class="eyebrow mmt">Danger</p><h2>Under mount</h2><p class="mmg">Elbows tight, protect your neck. Trap and roll (upa) or elbow-knee escape to half guard. Never push with straight arms.</p><p class="mmn">6 moves from here. Top three:</p><ol><li><b>Trap &amp; roll (upa)</b><span>&rarr; In closed guard</span></li><li><b>Elbow-knee escape (shrimp)</b><span>&rarr; Half guard</span></li><li><b>Arm triangle defense</b><span>&rarr; Same spot</span></li></ol><a class="tlink" href="/app/?explore=1&amp;pos=mount_bot#map">Open it in the map &rarr;</a></div><script type="application/json" id="mm-data">{"tiers":["Winning","Advantage","Neutral · top","Neutral · bottom","Defending","Danger"],"pos":{"back_top":{"L":"Back control (you're behind)","r":0,"g":"The highest-value position. Seatbelt first, then hooks or a body triangle, then hunt the choke. Fight their hands before you force it.","n":10,"m":[["Back control: seatbelt & hooks","Same spot"],["Rear-naked choke","Tap"],["Armbar from back control when they defend the choke","Tap"]],"to":["mount_top"]},"mount_top":{"L":"Mount (top)","r":0,"g":"Stay low and heavy and widen your base on every bridge. Climb to high mount when they push. Attacks: armbar, arm triangle, back take when they turn.","n":8,"m":[["Mount: stay & climb","Same spot"],["Armbar from mount","Tap"],["Arm triangle (head & arm)","Tap"]],"to":["back_top"]},"sc_top":{"L":"Side control (top)","r":1,"g":"Crossface and far underhook, hips low, near knee blocking their hip. Kill their frames, then go to mount or attack the arms.","n":10,"m":[["Side control: pins & pressure","Same spot"],["Side control to mount","Mount"],["Americana","Tap"]],"to":["back_top","mount_top"]},"fhl_top":{"L":"Front headlock (you control the head)","r":1,"g":"Their head is below yours. Hips back and heavy, control one arm, then choke (guillotine, d'arce) or circle behind.","n":8,"m":[["Guillotine (arm-in / high elbow)","Tap"],["Go-behind from front headlock","Turtle (top)"],["Front headlock chain: guillotine, d'arce, anaconda & go-behind","Tap"]],"to":["turtle_top"]},"turtle_top":{"L":"They're turtled (you're on top)","r":1,"g":"Seatbelt before hooks. Stay chest-to-back so they can't sit out, roll, or stand.","n":4,"m":[["Back take from turtle","Back control"],["Crucifix from turtle and the crucifix choke","Tap"],["Truck entry from turtle to back take","Back control"]],"to":["back_top"]},"ashi":{"L":"Leg entanglement (you're attacking)","r":1,"g":"Control the knee line, keep your own heels hidden, then finish the foot. Know your gym's rules on heel hooks.","n":9,"m":[["Ashi garami / single-leg X control","Same spot"],["Straight ankle lock","Tap"],["Saddle (inside sankaku) control: breaking the knee line","Same spot"]],"to":[]},"standing":{"L":"Standing","r":2,"g":"Stance and hand fighting first. Snap down, shoot, or sit to guard when you choose to, not when they make you.","n":20,"m":[["Stance, motion & hand fighting","Same spot"],["Snap-down to front headlock","Front headlock"],["Sprawl","Front headlock"]],"to":["ashi","back_top","fhl_top","open_top","sc_top","seated"]},"open_top":{"L":"Passing their open guard (top)","r":2,"g":"Control legs or hips before you move. Pass to side control and pin before they recover a frame.","n":9,"m":[["Knee cut (knee slice) pass","Side control"],["Body lock pass","Side control"],["Headquarters position: knee slice and backstep options","Side control"]],"to":["mount_top","sc_top"]},"cg_top":{"L":"In their closed guard (top)","r":2,"g":"Posture first, hands on hips, elbows inside knees. Then stand or wedge to open the legs.","n":5,"m":[["Posture up & open closed guard","Passing"],["Armbar defense: closed guard and mount","Same spot"],["Triangle defense","Same spot"]],"to":["open_top"]},"hg_top":{"L":"Half guard (top)","r":2,"g":"Crossface, flatten, kill their underhook, then free your leg.","n":5,"m":[["Half guard top: crossface & flatten","Same spot"],["Half guard pass: flatten & free the leg","Side control"],["Smash pass from half guard","Side control"]],"to":["sc_top"]},"seated":{"L":"Seated / open guard (bottom)","r":3,"g":"Sit up, frames out, feet active. Keep your guard, then sweep, go for the legs, or wrestle up.","n":15,"m":[["Technical stand-up","Standing"],["Guard retention: frames & hip escape","Same spot"],["Knee cut defense: knee shield and underhook","Half guard"]],"to":["ashi","back_top","fhl_top","hg_bot","open_top","sc_top","standing"]},"bfly_bot":{"L":"Butterfly guard (bottom)","r":3,"g":"Sit up, chest close, one underhook. Pull them forward off balance, then sweep or arm drag to the back.","n":3,"m":[["Butterfly (hook) sweep","Mount"],["Arm drag from butterfly to the back","Back control"],["X-guard entry and technical stand-up sweep","Passing"]],"to":["back_top","mount_top","open_top"]},"cg_bot":{"L":"Closed guard (bottom)","r":3,"g":"Break their posture, control an arm or the head, angle off. Attack: hip bump, kimura, triangle, armbar.","n":13,"m":[["Closed guard: break posture & control","Same spot"],["Hip bump sweep","Mount"],["Kimura from closed guard","Tap"]],"to":["mount_top"]},"hg_bot":{"L":"Half guard (bottom)","r":3,"g":"On your side, never flat. Knee shield plus the underhook. Come up to the dogfight or recover full guard.","n":7,"m":[["Half guard bottom: knee shield & underhook","Same spot"],["Underhook to dogfight to single leg","Side control"],["Kimura trap from half guard bottom: sweep or back take","Half guard top"]],"to":["cg_bot","hg_top","sc_top"]},"sc_bot":{"L":"Under side control","r":4,"g":"Frame with bones, don't push with your arms. Bridge, shrimp, knee in to recover guard, or underhook up to your knees. Keep your near arm in.","n":8,"m":[["Side control escape: frame & re-guard","Seated guard"],["Side control escape: underhook to knees","Side control"],["Kimura and americana defense","Same spot"]],"to":["sc_top","seated","turtle_bot"]},"fhl_bot":{"L":"In their front headlock","r":4,"g":"Hands on the choking wrist, head up, feet back under your hips. Then re-shoot or sit to guard.","n":2,"m":[["Front headlock & guillotine defense","Standing"],["D'Arce and anaconda defense","Same spot"]],"to":["standing"]},"turtle_bot":{"L":"Turtle (bottom)","r":4,"g":"Elbows to knees, no hooks allowed in. Don't stay in turtle: roll, sit out, or stand.","n":6,"m":[["Turtle: defend & recover guard","Seated guard"],["Stopping the back take from turtle or a scramble","Seated guard"],["Stand-up from turtle","Standing"]],"to":["ashi","seated","standing","turtle_top"]},"ashi_def":{"L":"Your leg is entangled","r":4,"g":"Hide the heel, pull your knee out past their hips, then stand or step out. Tap early in training.","n":5,"m":[["Leg lock defense","Passing"],["Straight ankle lock defense","Passing"],["Counter leg lock: clear the knee line into your own attack","Leg entangle"]],"to":["ashi","open_top"]},"mount_bot":{"L":"Under mount","r":5,"g":"Elbows tight, protect your neck. Trap and roll (upa) or elbow-knee escape to half guard. Never push with straight arms.","n":6,"m":[["Trap & roll (upa)","In closed guard"],["Elbow-knee escape (shrimp)","Half guard"],["Arm triangle defense","Same spot"]],"to":["cg_top","hg_bot"]},"back_bot":{"L":"Your back is taken","r":5,"g":"Hands on the choking arm first. Then slide your shoulders to the mat on the choking-arm side, clear the hook, turn in.","n":4,"m":[["Back escape","Half guard top"],["Rear-naked choke defense","Same spot"],["Body triangle escape from the back","Half guard top"]],"to":["hg_top","turtle_bot"]}}}</script></div>
     </div>
   </section>
 </div><!-- /night -->
@@ -334,6 +348,21 @@ footer .legalline{font-size:13px}
       <p>Timetable, bookings, fees and reminders, from your phone. R99 a month after 3 free months, and free for your students.</p>
       <div class="go"><a class="btn" href="/coaches/">See JitsFlow for gyms</a><a class="tlink" href="/app/?start=1">Start your gym</a></div>
     </article>
+  </section>
+
+  <section class="block wrap demo" aria-labelledby="demo-h">
+    <div class="demogrid">
+      <div class="head">
+        <p class="eyebrow">In the app</p>
+        <h2 id="demo-h">One chain, played to the tap</h2>
+        <p>Pick a position, tap where a move leads, and keep going. Free, no account needed.</p>
+        <div class="cta"><a class="btn primary" href="/app/?explore=1#map">Explore the map</a></div>
+      </div>
+      <figure class="clip democlip">
+        <div class="device"><video class="autoclip" muted playsinline loop preload="none" controls width="600" height="1352" poster="/video/moves-and-map.webp" aria-label="Screen recording of JitsFlow: the Moves library with the belt filter, then the flow map: tap a position and play a chain through to the tap"><source src="/video/moves-and-map.mp4" type="video/mp4"></video><button class="vbtn" type="button" hidden></button></div>
+        <figcaption>The Moves library, then the map. (Screen recording, no sound.)</figcaption>
+      </figure>
+    </div>
   </section>
 
   <section class="block" id="techniques" aria-labelledby="tech-h">
@@ -473,6 +502,19 @@ footer .legalline{font-size:13px}
 /* Technique deck arrows (wide screens; phones swipe). */
 (function(){var r=document.getElementById("tgal");if(!r)return;var smooth=!matchMedia("(prefers-reduced-motion: reduce)").matches;
   [].forEach.call(document.querySelectorAll("[data-rail]"),function(b){b.addEventListener("click",function(){r.scrollBy({left:Number(b.dataset.rail)*r.clientWidth*.8,behavior:smooth?"smooth":"auto"})})})})();
+</script>
+<script id="mm-js">
+/* The hero's map: tap a position to see its top moves and where each leads; the link opens the app's map there. */
+(function(){var box=document.getElementById("mm"),card=document.getElementById("mmcard"),el=document.getElementById("mm-data");if(!box||!card||!el)return;
+  var D=JSON.parse(el.textContent),go=document.getElementById("explore");
+  function pick(k){var p=D.pos[k];if(!p)return;
+    [].forEach.call(box.querySelectorAll("button[data-p]"),function(b){var on=b.getAttribute("data-p")===k;b.setAttribute("aria-pressed",on?"true":"false");b.classList.toggle("to",!on&&p.to.indexOf(b.getAttribute("data-p"))>=0)});
+    card.querySelector(".mmt").textContent=D.tiers[p.r];card.querySelector("h2").textContent=p.L;card.querySelector(".mmg").textContent=p.g;
+    card.querySelector(".mmn").textContent=p.n+" moves from here. Top three:";
+    var ol=card.querySelector("ol");while(ol.firstChild)ol.removeChild(ol.firstChild);
+    p.m.forEach(function(m){var li=document.createElement("li"),b=document.createElement("b"),s=document.createElement("span");b.textContent=m[0];s.textContent="\u2192 "+m[1];li.appendChild(b);li.appendChild(s);ol.appendChild(li)});
+    var u="/app/?explore=1&pos="+encodeURIComponent(k)+"#map";card.querySelector("a").setAttribute("href",u);if(go)go.setAttribute("href",u)}
+  box.addEventListener("click",function(e){var b=e.target.closest("button[data-p]");if(b)pick(b.getAttribute("data-p"))})})();
 </script>
 <script>
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}

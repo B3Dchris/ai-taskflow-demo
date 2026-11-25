@@ -262,13 +262,15 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     // ---------- 5. the member's screens update themselves ----------
     const pid5 = await proof(M.ivy, 85000);
     const fp = await phone(M.ivy); await fp.goto(BASE + "/app/#me"); await fp.waitForTimeout(1800);
-    await ev(fp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("home"); }); await fp.waitForTimeout(1200);
-    ok(/Checking/.test(await ev(fp, () => document.querySelector(".feecard").innerText)) && await ev(fp, () => !!document.querySelector(".feecard .fd.checking")), "Home: the fees card says Checking, with the month's dot in Checking");
+    await ev(fp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("map"); }); await fp.waitForTimeout(1200);
+    ok(await ev(fp, () => /^Checking$/.test((document.querySelector(".mapstrip .schk") || {}).innerText || "") && !document.querySelector("#duechip")), "the Map: a small Checking chip, no amount due");
+    await fp.tap(".mapstrip .schk"); await fp.waitForTimeout(600);
+    ok(await ev(fp, () => S.ui.sheet && S.ui.sheet.k === "mypay" && !!document.querySelector("#sheet .fd.checking")), "it opens the Pay sheet, with the month's dot in Checking"); await ev(fp, () => hideSheet());
     await A("PATCH", `/coach/payments/${pid5}`, { status: "rejected", reason: "arrived" });
-    await ev(fp, () => go("me")); await fp.waitForTimeout(300); await ev(fp, () => { API.payAt = Date.now() - 60000; go("home"); }); await fp.waitForTimeout(1200);
-    ok(!/Checking/.test(await ev(fp, () => document.querySelector(".feecard").innerText)) && /R\s?850 due/.test(await ev(fp, () => document.querySelector(".feecard").innerText)), "the coach sets it aside, the member switches tabs: no longer Checking, without a reload");
+    await ev(fp, () => go("me")); await fp.waitForTimeout(300); await ev(fp, () => { API.payAt = Date.now() - 60000; go("map"); }); await fp.waitForTimeout(1200);
+    ok(await ev(fp, () => !document.querySelector(".mapstrip .schk") && /R\s?850 due · Pay/.test((document.querySelector("#duechip") || {}).innerText || "")), "the coach sets it aside, the member switches tabs: no longer Checking, without a reload");
     await A("POST", "/coach/payments", { userId: M.ivy.id, amountCents: 85000, paidOn: new Date().toISOString().slice(0, 10), method: "eft" });
-    await fp.tap('.feecard [data-a="mypay"]'); await fp.waitForTimeout(1500);
+    await fp.tap("#duechip"); await fp.waitForTimeout(1500);
     t = await sheetTxt(fp);
     await shot(fp, "member-paysheet-not-received.png", ".rejnote");
     ok(/You're paid up/.test(t) && /Not received/.test(t) && /hasn't arrived in your gym's account/.test(t), "opening Pay asks again: paid up, and the proof that wasn't received says why: " + t.slice(0, 300));
@@ -313,11 +315,11 @@ const shot = async (pg, name, sel) => { if (!SHOTS) return; require("fs").mkdirS
     ok(/Checking your payment…/.test(await toastTxt(gp)), "Paystack still working on it: “Checking your payment…”");
     await gp.waitForTimeout(3500);
     ok(/still processing/.test(await toastTxt(gp)), "after the checks: it says it's still processing: " + (await toastTxt(gp)));
-    await ev(gp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("home"); }); await gp.waitForTimeout(1200);
-    t = await ev(gp, () => document.querySelector(".feecard").innerText);
-    ok(/Card payment processing \(R\s?200/.test(t) && /it shows here once Paystack confirms/i.test(t) && /Processing/.test(t), "the fees card shows it as processing: " + t);
-    await shot(gp, "member-fees-processing.png", ".feecard");
-    await gp.tap('.feecard [data-a="mypay"]'); await gp.waitForTimeout(800);
+    await ev(gp, () => { if (!document.getElementById("sheet").hidden) hideSheet(); go("map"); }); await gp.waitForTimeout(1200);
+    ok(await ev(gp, () => /^Checking$/.test((document.querySelector(".mapstrip .schk") || {}).innerText || "") && !document.querySelector("#duechip")), "the Map shows a card payment on its way as Checking, not as due");
+    await shot(gp, "member-fees-processing.png", ".mapstrip");
+    await gp.tap(".mapstrip .schk"); await gp.waitForTimeout(800);
+    t = await sheetTxt(gp); ok(/Card payment processing \(R\s?200/.test(t) && /it shows here once Paystack confirms/i.test(t), "the Pay sheet shows it as processing: " + t);
     ok(/Card payment processing/.test(await sheetTxt(gp)) && /no need to pay again/i.test(await sheetTxt(gp)), "so does the Pay sheet");
     await gp.context().close();
     const cp2 = await phone(A); await cp2.goto(BASE + "/app/#coach-money"); await cp2.waitForTimeout(2200);

@@ -235,7 +235,7 @@ const week = (title, n = 2, ids = ["double_leg"]) => ({ title, note: title + " b
     ok(await ev(pg, (t) => { const n = document.querySelector(".prgnext"); return !!n && n.innerText.includes(t); }, "Guard passing"), "next month's preview card");
     ok(await ev(pg, () => { const top = document.querySelector(".prgtop"), st = document.querySelectorAll(".trainstats"), sw = document.querySelector(".trainseg");
       return S.ui.tab === "train" && location.hash === "#train" && !!top && st.length === 1 && !!sw && !!(top.compareDocumentPosition(st[0]) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(st[0].compareDocumentPosition(sw) & Node.DOCUMENT_POSITION_FOLLOWING); }),
-      "#learn opens Train: This month first, then one stats block, then Moves | Map | Log");
+      "#learn opens Train: This month first, then one stats block, then Moves | Log");
     ok(await noSide(pg), "Train: no sideways scroll");
     await shot(pg, "4-member-this-month", true);
     await pg.click(".prgchip.now"); await wait(600);
@@ -250,13 +250,15 @@ const week = (title, n = 2, ids = ["double_leg"]) => ({ title, note: title + " b
     await shot(pg, "6-member-catch-up", true);
     await pg.click('.prgcu [data-a="prgcaught"] >> nth=0'); await wait(800);
     ok(await ev(pg, () => document.querySelectorAll(".prgcu").length) === before - 1 && (await mem(M)).catchUp.length === before - 1, "Caught up takes it off the list (and stays off)");
-    await ev(pg, () => { hideSheet(); go("classes"); }); await wait(1200); // gym updates load with Classes, and show on Home too
-    await ev(pg, () => go("home")); await wait(900);
-    ok(await ev(pg, () => { const c = document.querySelector(".prghome"); return !!c && /This week/i.test(c.textContent); }), "Home has a small This week card");
-    ok(await ev(pg, () => [...document.querySelectorAll(".notice")].some((n) => /programme is up/.test(n.innerText))), "and the gym update that the month is up");
-    await shot(pg, "7-member-home");
-    await pg.click(".prghome"); await wait(500);
-    ok(await ev(pg, () => S.ui.tab === "train" && S.ui.trainView === "moves" && !!document.querySelector(".prghero")), "the Home card opens Train's This month");
+    await ev(pg, () => { hideSheet(); go("classes"); }); await wait(1200); // gym updates load with Classes
+    ok(await ev(pg, () => [...document.querySelectorAll(".notice")].some((n) => /programme is up/.test(n.innerText))), "Classes has the gym update that the month is up");
+    // The Map opens where this week's moves start (nothing looked at yet), and rings this month's positions.
+    await ev(pg, () => go("map")); await wait(900);
+    ok(await ev(pg, () => { const p = TM.double_leg.f; return progMapPos() === p && S.ui.flowSel === p && !!document.querySelector(`.flowsvg g.node.sel.prog[data-v="${p}"]`) && document.querySelectorAll(".flowsvg g.node.prog").length === progMapSet().size && /in this month's programme/.test(document.querySelector(".flowkey").innerText); }),
+      "the Map opens on this week's programme position, with this month's positions ringed (and a key)");
+    ok(await ev(pg, () => /In this month's programme/.test(document.querySelector(".flowsvg g.node.prog").getAttribute("aria-label"))), "a ringed position says so to a screen reader");
+    ok(await noSide(pg), "Map: no sideways scroll");
+    await shot(pg, "7-member-map");
     await pg.context().close();
     // Dark mode.
     pg = await phone(M, "dark"); await pg.goto(BASE + "/app/#learn"); await wait(1800); await quiet(pg); await ev(pg, () => render()); await wait(700);
