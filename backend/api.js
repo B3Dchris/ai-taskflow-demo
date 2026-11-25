@@ -468,13 +468,17 @@ function makeApi(pool, { secureCookies, build }) {
     await q("insert into email_verifications(token_hash,user_id,email,expires_at) values($1,$2,$3,now()+interval '24 hours')", [sha(tok), x.id, x.email]);
     return mail.appUrl() + "/app/?verify=" + tok;
   }
+  // bcrypt only uses a password's first 72 bytes: anything after that would be ignored without a word (18 emoji and "secret" would
+  // be the same password as the 18 emoji). New passwords are kept within 72 bytes; passwords already saved keep working.
+  const pwTooLong = (pw) => Buffer.byteLength(pw, "utf8") > 72;
+  const PW_TOO_LONG = "That password is too long. Keep it to 72 letters and numbers (emoji and accented letters count as more).";
   // source: where they came from before signing up (signup_source; see visits.signupSource).
   async function newUser({ name, email, password, role, gymId, phone, source }) {
     name = clean(name, 80); email = clean(email, 254).toLowerCase(); password = String(password || "");
     if (!name) fail(400, "Enter your name.");
     if (!isEmail(email)) fail(400, "Enter a valid email address.");
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-    if (password.length > 200) fail(400, "That password is too long.");
+    if (pwTooLong(password)) fail(400, PW_TOO_LONG);
     const hash = await bcrypt.hash(password, 11);
     // A coach (any coach, in any gym) may have added this email to someone who isn't on the app. That never stops the owner of the
     // email signing up: the email comes off that record (which keeps its name, payments and history), the new account is theirs, and
@@ -582,7 +586,7 @@ function makeApi(pool, { secureCookies, build }) {
       if (!clean(b.name, 80)) fail(400, "Enter your name.");
       if (!isEmail(email)) fail(400, "Enter a valid email address.");
       if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-      if (password.length > 200) fail(400, "That password is too long.");
+      if (pwTooLong(password)) fail(400, PW_TOO_LONG);
       // (someone else a coach added with this email, not on the app, doesn't count: the email comes off their record, see newUser)
       const taken = (await q("select id from users where email=$1 and id<>$2 and pass_hash is not null", [email, preId])).rows[0];
       // A parent with a login already, opening another kid's link: signing in adds the kid (the app offers it straight after).
@@ -614,9 +618,13 @@ function makeApi(pool, { secureCookies, build }) {
       const other = (await q("update users o set email=null from (select id, gym_id, name, parent_name from users where email=$1 and id<>$2 and pass_hash is null for update) x where o.id=x.id returning x.*", [email, pre.id])).rows[0];
       if (other && other.gym_id && !kids.some((k) => String(k.id) === String(other.id))) detached = other; // (a kid they're linking now: nothing to tell)
       // A kid's record (it has a parent's name): the parent signs up for them. The kid keeps their name; the parent's goes in as the parent.
-      await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
-        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now()) where id=$4`,
-        [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code")]);
+      const r0 = await q(`update users set name=case when parent_name<>'' then name else $1 end, parent_name=case when parent_name<>'' then $1 else parent_name end,
+        email=$2, pass_hash=$3, offline=false, claim_token=null, phone=case when phone='' then $5 else phone end, signup_source=coalesce(signup_source, $6), signed_up_at=coalesce(signed_up_at, now())
+        where id=$4 and pass_hash is null and claim_token=$7`,
+        [clean(b.name, 80), email, await bcrypt.hash(password, 11), pre.id, cleanPhone(b.phone), visits.signupSource(b.source, claim ? "invite" : "code"), claim]);
+      // Only the first sign-up with an invite link gets the record: the link stops working the moment it's used, so two people sending
+      // it at once can't both end up in one account (the second is told).
+      if (!r0.rowCount) fail(409, "That invite link has just been used. Sign in, or ask your coach for a new link.");
       id = pre.id;
       if (kids.length) await linkKids(id, kids.map((x) => x.id), clean(b.name, 80));
     } else { const nu = await newUser({ ...b, role, gymId, source: visits.signupSource(b.source, gymId ? "code" : null) }); id = nu.id; detached = nu.off; }
@@ -666,7 +674,7 @@ function makeApi(pool, { secureCookies, build }) {
     const tok = clean(req.body?.token, 100), password = String(req.body?.password || "");
     if (!/^[0-9a-f]{64}$/.test(tok)) fail(400, "That reset link isn't right. Ask for a new one.");
     if (password.length < 8) fail(400, "Use a password of at least 8 characters.");
-    if (password.length > 200) fail(400, "That password is too long.");
+    if (pwTooLong(password)) fail(400, PW_TOO_LONG);
     const r = await q("delete from password_resets where token_hash=$1 returning user_id, expires_at > now() as live", [sha(tok)]);
     if (!r.rows[0] || !r.rows[0].live) fail(400, "That reset link has expired or was already used. Ask for a new one.");
     const uid = r.rows[0].user_id;
